@@ -1,9 +1,9 @@
 # subweb 现代化执行计划（修订版）
 
-- Status: P2-03a-complete-awaiting-next-task
+- Status: P2-03b-design-complete-awaiting-approved-copy-pass
 - Current task: none
-- Last completed: P2-03a
-- Next task: P2-03b
+- Last completed: P2-03b (design-only)
+- Next task: P3-01 (design assessment)
 
 > 说明：本文是本项目后续现代化改造的**唯一执行台账**。P0 至 P4 的已批准本地变更已完成；仍未执行的 Docker、GitHub Actions、镜像仓库与回滚演练均明确列为外部验证缺口，不得据此宣称生产发布已验证。
 
@@ -550,22 +550,23 @@
   - 退回原布局
 - 复杂度 / 风险：中 / 中
 
-#### [ ] P2-03b 交互与文案微调
-- 目标：在信息架构稳定后再做细粒度体验优化
+#### [x] P2-03b 交互与文案微调（design-only）
+- 目标：在信息架构稳定后评估细粒度体验优化，并维持原功能语义
+
 - 依赖：P2-03a
-- 可能文件：
-  - `/Users/li/Desktop/GitHub/subweb/src/views/home/SubTable.vue`
-  - `/Users/li/Desktop/GitHub/subweb/src/components/notification/index.js`
-- 实施步骤：
-  1. 优化提示文案
-  2. 调整交互反馈节奏
-  3. 维持原功能语义
+
+- 评估结论：当前转换、复制、短链、loading、dialog 与 notification 路径已具备一致的既有反馈；在不改变用户可见文案、交互节奏、业务规则、请求合同或共享反馈组件的前提下，没有额外的、可本地验证且明确有益的生产代码改动。
+- 允许的未来范围：经单独批准后，仅限 `SubTable.vue` 与必要的 notification 文案做 text-only 统一；不得改变 dialog/loading 时序、复制语义、短链请求、路由、runtime config 或依赖。
+- 禁止范围：不引入新的业务规则、交互流程、API、路由、runtime-config 字段、依赖或外部调用。
+
 - 验收标准：
-  - 仅做体验优化，不引入新业务规则
-  - 反馈一致、清晰
-  - 可回退到原文案与交互
+  - 已记录 copy-only 的最小未来范围与禁止项
+  - 当前反馈路径保持不变
+  - 不把 design-only 结论误记为生产代码变更
+
 - 回滚说明：
-  - 恢复旧文案和旧交互节奏
+  - 不适用；本任务未改生产代码
+
 - 复杂度 / 风险：中 / 低
 
 ---
