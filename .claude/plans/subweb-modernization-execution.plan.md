@@ -1,9 +1,9 @@
 # subweb 现代化执行计划（修订版）
 
-- Status: P4-complete-awaiting-external-verification
+- Status: P2-01b-complete-awaiting-next-task
 - Current task: none
-- Last completed: P4-09
-- Next task: external-release-validation
+- Last completed: P2-01b
+- Next task: P2-02 (design/implementation decision)
 
 > 说明：本文是本项目后续现代化改造的**唯一执行台账**。P0 至 P4 的已批准本地变更已完成；仍未执行的 Docker、GitHub Actions、镜像仓库与回滚演练均明确列为外部验证缺口，不得据此宣称生产发布已验证。
 
@@ -160,6 +160,7 @@
 | 2026-07-28 | P2-00 | [x] 已完成 | 已确认现有单一路由 `/`、`App.vue` 根出口、`MainLayout.vue` 布局壳、`HomeView.vue`/`SubTable.vue` 旧 UI 路径；推荐在现有 App/Layout 边界做 shell-level 分支，保持路由不变，缺失/无效/未解析时严格回退旧 UI | 低；仅设计，无生产代码变更 | 回退到现有 `App.vue → router → MainLayout.vue → HomeView.vue → SubTable.vue` 基线路径 | 已否决将 query flag 作为 P2-00 既定机制；当前尚未确定切换源治理方式（build-time、runtime config 或 app-level state），需后续单独批准；未验证真实浏览器切换、容器运行时和外部服务 |
 | 2026-07-28 | P2-02 | [x] 已完成 | 完成新旧 UX 并行切换机制评估；确认当前没有既有的路由、query 或全局 feature-flag 合同，因此不引入 speculative switch plumbing；保留 `window.config` 默认优先和 SubTable 现有本地选择状态作为唯一已验证的 fallback-first 切换来源 | 低；仅设计，无生产代码变更 | 不启用任何新切换源，维持现有 `/` 路由、旧 UI 和 `window.config` 默认路径 | `App.vue`、`MainLayout.vue`、router、runtime config 和 SubTable 状态静态审查完成；未验证真实浏览器、容器运行时或外部服务；若未来要新增部署级 UX flag，必须另行批准配置 schema 和实施任务 |
 | 2026-07-29 | P2-01a | [x] 已完成 | 已将 `SubTable.vue` 的表单输入准备与校验决策边界保持在 `prepareConversion` 辅助层，`getConverter` 仍只负责 UI 侧消息映射与结果赋值；保留现有 conversion、short-link、clipboard、route 与 API 合约不变 | 中；仅进行最小纯逻辑边界分离，未触碰输出/交互分层 | 回退到 `src/views/home/index.js` 与 `src/views/home/SubTable.vue` 的 P2-01a 变更前状态 | `npm run lint`、`npm run build` 和 `git diff --check` 通过；未改 `HomeView.vue`，未新增路由/API/依赖，未改变短链请求形状或复制时序 |
+| 2026-07-29 | P2-01b | [x] 已完成 | 已确认 `SubTable.vue` 在保留单组件边界的前提下分离结果展示与动作入口：`showConversionResult` 负责转换结果复制，`getSubUrl`/`getShortUrl` 只编排既有转换、复制、短链与 loading 路径；不改数据准备、DOM、dialog/store、runtime config、route 或 API 合约 | 中；仅确认既有输出/交互职责边界，未抽取新组件、未新增隐藏状态或改变副作用时序 | 回退到 `src/views/home/SubTable.vue` 的 P2-01b 前版本 | `npm run lint`、`npm run build`、`git diff --check` 与现有行为历史对比通过；短链请求仍为原 `POST {shortUrl}/short` + `FormData.longUrl=btoa(result.subUrl)` 形状，复制仍使用原 DOM fallback/cleanup 路径 |
 | 2026-07-28 | P2-03a | [x] 已完成 | 完成输入区、可选参数区和输出区的信息架构设计评估；确认最小安全方向是保留现有单卡片、DOM 顺序、绑定和动作路径，仅增加语义分组与 label/id 关联；不执行宽泛 UI 重写 | 低；设计-only，无生产代码变更 | 维持现有 `HomeView.vue` → `SubTable.vue` 结构和全部转换/短链/复制行为 | 静态审查完成；确认结果只读化、aria-live、焦点管理、自动清理和大范围布局改造需另行拆分；未验证真实浏览器、屏幕阅读器、容器运行时或外部服务 |
 | 2026-07-28 | P3-01 | [x] 已完成 | 完成配置与模板管理产品化评估；确认当前仅存在公开、部署时 `window.config`/`config.js`/`start.sh` 配置链，没有认证、持久化、管理 API 或多租户能力；将 `siteName`、`menuItem`、`remoteConfigOptions` 评为未来可考虑的 admin-only/local-only 内容，将 `apiUrl`、`shortUrl` 保持 deployment-only | 中；仅评估，无生产代码变更；公开配置、订阅 Token、远程配置 URL 和短链服务存在既有隐私/SSRF/多用户暴露边界 | 维持现有静态默认值、配置文件和容器环境覆盖路径；不启用任何新产品化能力 | 静态事实盘点、产品边界、回滚和安全审查完成；未访问外部服务或实现认证/持久化；未来 runtime-editable/admin-managed 能力必须单独批准并定义 API、auth、source-of-truth、迁移和 allowlist |
 | 2026-07-28 | P3-02a | [x] 已完成 | 定义已实现的 conversion、copy 和 short-link 边界：`result.subUrl` 为 canonical artifact；复制只处理 plain string；短链固定为 `POST {shortUrl}/short` + `FormData.longUrl=btoa(result.subUrl)`；未来 share 必须是独立、可选、版本化扩展 | 中；订阅 URL 是可重放 bearer-like 数据，base64 不是加密，短链/远程配置存在第三方暴露和 SSRF 边界；仅设计，无生产代码变更 | 始终回退到现有 conversion URL、plain-text clipboard 和当前 `/short` v1 合同；未来 share 失败不得阻断现有流程 | 已完成代码事实、兼容性、隐私和安全边界审查；未实现 share endpoint、envelope、存储或新字段；未调用外部短链服务；未来 schema、隐私确认、allowlist 和后端 ownership 需单独批准 |
@@ -489,22 +490,28 @@
   - 恢复原组件边界与 prop / slot 契约
 - 复杂度 / 风险：高 / 中
 
-#### [ ] P2-01b 拆分 SubTable 的输出与交互逻辑
-- 目标：把渲染与动作处理从数据准备中再剥离一层
+#### [x] P2-01b 拆分 SubTable 的输出与交互逻辑
+- 目标：把渲染与动作处理从数据准备中再剥离一层，同时保留现有组件边界、DOM 交互、短链请求、dialog/store 与 runtime config 合约不变
+
 - 依赖：P2-01a
+
 - 可能文件：
   - `/Users/li/Desktop/GitHub/subweb/src/views/home/SubTable.vue`
   - `/Users/li/Desktop/GitHub/subweb/src/views/home/HomeView.vue`
+
 - 实施步骤：
   1. 分离结果展示、按钮动作、提示反馈
   2. 维持现有用户行为
   3. 不改变对外接口
+
 - 验收标准：
   - 转换、短链、复制三条主路径无回退
   - 输出层逻辑可独立维护
   - 不新增隐藏状态
+
 - 回滚说明：
   - 恢复原组件单文件结构
+
 - 复杂度 / 风险：高 / 中
 
 #### [ ] P2-02 建立新旧 UX 并行切换机制
