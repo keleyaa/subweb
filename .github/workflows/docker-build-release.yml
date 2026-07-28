@@ -123,8 +123,11 @@ jobs:
 
           grep -q 'provenance: mode=min' "$WORKFLOW_FILE" || { echo "Missing provenance request" >&2; exit 1; }
           grep -q 'sbom: true' "$WORKFLOW_FILE" || { echo "Missing SBOM request" >&2; exit 1; }
-          grep -Fq 'IMAGE_REF="${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}@${SOURCE_DIGEST}"' "$WORKFLOW_FILE" || { echo "Missing digest-based source image reference" >&2; exit 1; }
-          grep -Fq 'HARBOR_IMAGE="${{ secrets.HARBOR_REGISTRY }}/${{ secrets.HARBOR_USERNAME }}/${{ env.PROJECT }}"' "$WORKFLOW_FILE" || { echo "Missing Harbor image repository wiring" >&2; exit 1; }
+          github_expression_open='$''{{'
+          expected_image_ref="IMAGE_REF=\"${github_expression_open} secrets.DOCKER_USERNAME }}/${github_expression_open} env.PROJECT }}@\${SOURCE_DIGEST}\""
+          grep -Fq "$expected_image_ref" "$WORKFLOW_FILE" || { echo "Missing digest-based source image reference" >&2; exit 1; }
+          expected_harbor_image="HARBOR_IMAGE=\"${github_expression_open} secrets.HARBOR_REGISTRY }}/${github_expression_open} secrets.HARBOR_USERNAME }}/${github_expression_open} env.PROJECT }}\""
+          grep -Fq "$expected_harbor_image" "$WORKFLOW_FILE" || { echo "Missing Harbor image repository wiring" >&2; exit 1; }
           grep -Fq -- '--tag "${HARBOR_IMAGE}:latest"' "$WORKFLOW_FILE" || { echo "Missing Harbor latest tag promotion" >&2; exit 1; }
           grep -Fq -- '--tag "${HARBOR_IMAGE}:${RESOLVED_TAG}"' "$WORKFLOW_FILE" || { echo "Missing Harbor resolved-tag promotion" >&2; exit 1; }
           grep -Fq '[ "$harbor_remote_digest" = "$SOURCE_DIGEST" ]' "$WORKFLOW_FILE" || { echo "Missing strict Harbor digest comparison" >&2; exit 1; }
@@ -133,12 +136,16 @@ jobs:
           grep -Fq "grep -Eq '^[0-9a-f]{64}\$'" "$WORKFLOW_FILE" || { echo "Missing canonical digest validation regex" >&2; exit 1; }
           grep -Fq "jq -e '.release_identity.source_sha and .release_identity.workflow_run.id and .release_identity.workflow_run.number and .release_identity.workflow_run.attempt and .release_identity.resolved_tag and .release_identity.source_digest and .release_identity.destination_digest and (.release_identity.platforms | length > 0) and .release_identity.build_time and .release_identity.source.digest and .release_identity.destination.digest and .release_identity.rollback_target.source_reference and .release_identity.rollback_target.destination_reference'" "$WORKFLOW_FILE" || { echo "Missing rollback manifest field assertions" >&2; exit 1; }
           grep -Fq '"schema_version": "1"' "$WORKFLOW_FILE" || { echo "Missing rollback manifest schema version" >&2; exit 1; }
-          grep -Fq '"source_reference": "docker.io/${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}@$SOURCE_DIGEST"' "$WORKFLOW_FILE" || { echo "Missing rollback manifest source reference" >&2; exit 1; }
-          grep -Fq '"destination_reference": "${{ secrets.HARBOR_REGISTRY }}/${{ secrets.HARBOR_USERNAME }}/${{ env.PROJECT }}@$HARBOR_DIGEST"' "$WORKFLOW_FILE" || { echo "Missing rollback manifest destination reference" >&2; exit 1; }
+          expected_source_reference="--arg source_reference \"docker.io/${github_expression_open} secrets.DOCKER_USERNAME }}/${github_expression_open} env.PROJECT }}@\$SOURCE_DIGEST\""
+          grep -Fq -- "$expected_source_reference" "$WORKFLOW_FILE" || { echo "Missing rollback manifest source reference" >&2; exit 1; }
+          expected_destination_reference="--arg destination_reference \"${github_expression_open} secrets.HARBOR_REGISTRY }}/${github_expression_open} secrets.HARBOR_USERNAME }}/${github_expression_open} env.PROJECT }}@\$HARBOR_DIGEST\""
+          grep -Fq -- "$expected_destination_reference" "$WORKFLOW_FILE" || { echo "Missing rollback manifest destination reference" >&2; exit 1; }
           grep -Fq 'rollback_manifest_path=$RUNNER_TEMP/rollback-manifest.json' "$WORKFLOW_FILE" || { echo "Missing rollback manifest artifact path wiring" >&2; exit 1; }
           grep -Fq 'rollback_manifest_source_digest=$SOURCE_DIGEST' "$WORKFLOW_FILE" || { echo "Missing rollback manifest source digest wiring" >&2; exit 1; }
-          grep -Fq 'name: rollback-manifest-${{ github.run_id }}-${{ steps.harbor_rollback_manifest.outputs.rollback_manifest_source_digest }}' "$WORKFLOW_FILE" || { echo "Missing artifact upload name" >&2; exit 1; }
-          grep -Fq 'path: ${{ steps.harbor_rollback_manifest.outputs.rollback_manifest_path }}' "$WORKFLOW_FILE" || { echo "Missing artifact upload path" >&2; exit 1; }
+          expected_artifact_name="name: rollback-manifest-${github_expression_open} github.run_id }}-${github_expression_open} steps.harbor_rollback_manifest.outputs.rollback_manifest_source_digest }}"
+          grep -Fq "$expected_artifact_name" "$WORKFLOW_FILE" || { echo "Missing artifact upload name" >&2; exit 1; }
+          expected_artifact_path="path: ${github_expression_open} steps.harbor_rollback_manifest.outputs.rollback_manifest_path }}"
+          grep -Fq "$expected_artifact_path" "$WORKFLOW_FILE" || { echo "Missing artifact upload path" >&2; exit 1; }
           grep -Fq 'retention-days: 90' "$WORKFLOW_FILE" || { echo "Missing artifact retention" >&2; exit 1; }
 
           grep -Eq '^\.claude$' "$DOCKERIGNORE_FILE" || { echo "Missing .claude in .dockerignore" >&2; exit 1; }
