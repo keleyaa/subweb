@@ -1,9 +1,9 @@
 # subweb 现代化执行计划（修订版）
 
-- Status: P3-design-complete-awaiting-approved-product-contract
+- Status: local-container-validation-complete-awaiting-remote-release-validation
 - Current task: none
-- Last completed: P3-02b (design-only)
-- Next task: external-release-validation or separately approved product contract
+- Last completed: P4-local-container-validation
+- Next task: GitHub Actions and registry release validation or separately approved product contract
 
 > 说明：本文是本项目后续现代化改造的**唯一执行台账**。P0 至 P4 的已批准本地变更已完成；仍未执行的 Docker、GitHub Actions、镜像仓库与回滚演练均明确列为外部验证缺口，不得据此宣称生产发布已验证。
 
@@ -176,7 +176,7 @@
 | 2026-07-29 | P4-07 | [x] 已完成 | 将 workflow 改为一次 Docker Hub 多架构构建，再以 source digest 通过 `docker buildx imagetools create` promotion 到 Harbor；保留两端 `latest`/resolved tag；promotion 后有限重试 inspect Harbor tag，严格校验并比较 destination manifest digest | 中；真实 registry promotion、manifest parity、blob/referrer 与 provenance/SBOM 保留未执行 | 恢复第二个 Harbor build/push，移除 digest promotion/inspect；不回滚 P4-05/P4-06 identity/evidence 配置 | 静态 YAML、shell、diff gate 和独立审查通过；source 使用 `repo@digest` 不依赖 mutable tag；Docker/GitHub Actions/registry runtime 未执行 |
 | 2026-07-29 | P4-07a | [x] 已完成 | promotion 结果由实际 Harbor inspect digest 记录；严格校验 source/destination digest，并在不相等或不可观测时 fail closed | 中；Harbor eventual consistency、权限、跨仓库复制与实际 parity 未在真实 registry 验证 | 移除 Harbor digest 验证/证据步骤并恢复 P4-07 前发布记录 | 代码含 5 次有限 retry/backoff 和严格 SHA-256 格式/相等性检查；外部 registry 行为未验证 |
 | 2026-07-29 | P4-08 | [x] 已完成 | 通过 `jq -n --arg` 生成并 `jq -e` 验证 rollback manifest；记录 source/destination references/digests、Git SHA、workflow identity、tag、平台和构建时间，并作为 90 天 artifact 上传 | 中；artifact 上传、下载、保留及受控 rollback 演练未实际执行 | 移除 manifest 和 artifact upload 步骤，恢复 P4-07a 前 workflow | 不把多行 JSON 写入 GitHub outputs；本地只验证源文本合同 |
-| 2026-07-29 | P4-09 | [x] 已完成 | 完成并保留最终 textual/static release-control contract gate：校验完整 action SHA pins、单次 build-push、digest-based promotion、严格 digest checks、provenance/SBOM 请求、rollback manifest jq/schema/artifact wiring 和 `.dockerignore` 关键排除项；明确不执行 live registry、Docker runtime、artifact retention 或 secret runtime 检查 | 中；GitHub Actions、Docker Hub/Harbor promotion、attestation/referrer、artifact retention 和 Docker runtime 仍需外部执行验证 | 移除 Verify release-control contracts 步骤并恢复 P4-08 workflow；不改变发布行为 | YAML、`sh -n`、`git diff --check`、`npm run lint`、`npm run build` 通过；静态 gate 已修复 shell literal expansion 问题；最终独立审查通过；live 验证缺口已明确记录 |
+| 2026-07-29 | P4-LOCAL-VALIDATION | [x] 已完成 | 已使用 Docker Desktop 从本地 `Dockerfile` 构建临时镜像，并以 localhost-only 映射启动临时容器；验证默认配置、带引号/反斜杠/`&` 的运行时配置替换、Nginx HTTP 就绪和容器日志 | 低；仅本地、非发布验证；未访问应用外部 API，临时容器和镜像已清理 | 不适用；验证不改仓库代码，临时资源已删除 | `subweb:local-validate` 构建成功；`127.0.0.1:18080` 返回预期页面标题；容器内 `config.js` 保留特殊字符替换值；`subweb-validate` 容器与临时镜像均无残留；GitHub Actions、Docker Hub/Harbor、provenance/SBOM、artifact 和 rollback 仍未验证 |
 
 
 
