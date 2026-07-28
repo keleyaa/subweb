@@ -5,7 +5,6 @@ const showDialog = function (
   callbackFunction = null,
   buttonText = { confirmText: '确认', cancelText: '取消' }
 ) {
-
   const buttonStyle = {
     default: { icon: 'IconSuccess', button: 'ButtonDefault' },
     success: { icon: 'IconSuccess', button: 'ButtonSuccess' },

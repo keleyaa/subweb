@@ -1,14 +1,14 @@
-FROM node:14-alpine AS build
+FROM node:20.15.1-alpine AS build
 LABEL maintainer="Stille <stille@ioiox.com>"
 
 ENV VERSION 2.0
 
 WORKDIR /app
 COPY . /app
-RUN npm install
+RUN npm ci
 RUN npm run build
 
-FROM nginx:1.16-alpine
+FROM nginx:1.26.2-alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY . /app
 EXPOSE 80

@@ -108,7 +108,7 @@
 
 <script>
 import { showLoading, hideLoading } from '@/components/loading';
-import { getSubLink, regexCheck } from './index.js';
+import { prepareConversion, regexCheck } from './index.js';
 import { request } from '@/network';
 import showNotification from '@/components/notification';
 export default {
@@ -150,7 +150,7 @@ export default {
       apiUrl: window.config.apiUrl,
       shortUrl: window.config.shortUrl,
       remoteConfigOptions: window.config.remoteConfigOptions,
-      moreConfig: this.DEFAULT_MORECONFIG,
+      moreConfig: { ...this.DEFAULT_MORECONFIG },
       isShowMoreConfig: false,
       isShowManualApiUrl: false,
       isShowRemoteConfig: false,
@@ -188,82 +188,110 @@ export default {
     },
     toCopy(url, title) {
       if (!url) {
-        this.$showDialog('warning', '注意', '复制失败 内容为空');
+        this.$showDialog('warning', '注意', '复制失败：内容为空');
         return;
       }
-      var copyInput = document.createElement('input');
-      copyInput.setAttribute('value', url);
-      document.body.appendChild(copyInput);
-      copyInput.select();
+
+      let copyInput;
       try {
-        var copyed = document.execCommand('copy');
-        if (copyed) {
-          document.body.removeChild(copyInput);
-          showNotification(title + ' 复制成功', '成功');
+        copyInput = document.createElement('input');
+        copyInput.setAttribute('value', url);
+        document.body.appendChild(copyInput);
+        copyInput.select();
+
+        if (!document.execCommand('copy')) {
+          this.$showDialog('warning', '注意', '复制失败：浏览器不支持此操作');
+          return;
         }
+
+        showNotification(title + ' 复制成功', '成功');
       } catch {
-        this.$showDialog('warning', '注意', '复制失败，请检查浏览器兼容性');
+        this.$showDialog('warning', '注意', '复制失败：请检查浏览器兼容性');
+      } finally {
+        if (copyInput && copyInput.parentNode) {
+          copyInput.parentNode.removeChild(copyInput);
+        }
       }
     },
+    showConversionResult() {
+      this.toCopy(this.result.subUrl, '订阅链接');
+    },
     getConverter() {
-      if (this.urls == '') {
-        this.$showDialog('warning', '注意', '请输入订阅链接或节点');
+      const prepared = prepareConversion({
+        urls: this.urls,
+        api: this.api,
+        apiUrl: this.apiUrl,
+        target: this.target,
+        remoteConfig: this.remoteConfig,
+        isShowManualApiUrl: this.isShowManualApiUrl,
+        isShowRemoteConfig: this.isShowRemoteConfig,
+        isShowMoreConfig: this.isShowMoreConfig,
+        moreConfig: this.moreConfig,
+      });
+
+      if (!prepared.ok) {
+        const messages = {
+          missingUrls: ['warning', '注意', '请先输入订阅链接或节点'],
+          invalidRuntimeApi: ['error', '失败', '后端服务配置无效，请检查运行时配置'],
+          invalidApi: ['warning', '注意', '请检查后端 API 地址，或选择默认后端服务'],
+          missingRemoteConfig: ['warning', '注意', '请先输入远程配置地址，或选择默认配置'],
+        };
+        const [type, title, message] = messages[prepared.error];
+        this.$showDialog(type, title, message);
         return false;
       }
-      if (!regexCheck(this.api)) {
-        this.$showDialog('warning', '注意', '请输入自定义后端 API 地址，或选择默认后端服务。');
-        return false;
-      }
-      if (this.remoteConfig == '' && this.isShowRemoteConfig) {
-        this.$showDialog('warning', '注意', '请输入远程配置地址，或选择默认配置。');
-        return false;
-      }
-      if (this.api.endsWith('/')) {
-        // 自动删除末尾的斜杠
-        this.api = this.api.slice(0, -1);
-      }
-      this.result.subUrl = getSubLink(
-        this.urls,
-        this.api,
-        this.target,
-        this.remoteConfig,
-        this.isShowMoreConfig,
-        this.moreConfig
-      );
+
+      this.api = prepared.api;
+      this.result.subUrl = prepared.subUrl;
       return true;
     },
     getSubUrl() {
       if (!this.getConverter()) {
         return;
       }
-      this.toCopy(this.result.subUrl, '订阅链接');
+      this.showConversionResult();
     },
-    getShortUrl() {
+    async getShortUrl() {
       if (!this.getConverter()) {
         return;
       }
-      let data = new FormData();
-      data.append('longUrl', btoa(this.result.subUrl));
+      if (!regexCheck(this.shortUrl)) {
+        this.$showDialog('error', '失败', '短链服务配置无效，请检查运行时配置');
+        return;
+      }
+
+      let data;
+      try {
+        data = new FormData();
+        data.append('longUrl', btoa(this.result.subUrl));
+      } catch {
+        this.$showDialog('error', '失败', '短链接生成失败，请稍后重试');
+        return;
+      }
+
       showLoading();
-      request({
-        method: 'post',
-        url: this.shortUrl + '/short',
-        header: {
-          'Content-Type': 'application/form-data; charset=utf-8',
-        },
-        data: data,
-      })
-        .then((res) => {
-          if (res.data.Code === 1 && res.data.ShortUrl !== '') {
-            this.result.shortUrl = res.data.ShortUrl;
-            this.toCopy(this.result.shortUrl, '短链接');
-          }
-          hideLoading();
-        })
-        .catch(() => {
-          this.$showDialog('error', '失败', '短链接生成失败 请检查短链接服务是否可用');
-          hideLoading();
+      try {
+        const res = await request({
+          method: 'post',
+          url: this.shortUrl.replace(/\/$/, '') + '/short',
+          header: {
+            'Content-Type': 'application/form-data; charset=utf-8',
+          },
+          data: data,
         });
+
+        if (!res.data || res.data.Code !== 1 || !res.data.ShortUrl) {
+          this.$showDialog('error', '失败', '短链接生成失败，请稍后重试');
+          return;
+        }
+
+        this.result.shortUrl = res.data.ShortUrl;
+        this.toCopy(this.result.shortUrl, '短链接');
+      } catch {
+        this.$showDialog('error', '失败', '短链接生成失败，请稍后重试');
+      } finally {
+        hideLoading();
+      }
     },
   },
 };
