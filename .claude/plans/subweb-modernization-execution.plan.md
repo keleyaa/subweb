@@ -1,9 +1,9 @@
 # subweb 现代化执行计划（修订版）
 
-- Status: P2-03b-design-complete-awaiting-approved-copy-pass
+- Status: P3-design-complete-awaiting-approved-product-contract
 - Current task: none
-- Last completed: P2-03b (design-only)
-- Next task: P3-01 (design assessment)
+- Last completed: P3-02b (design-only)
+- Next task: external-release-validation or separately approved product contract
 
 > 说明：本文是本项目后续现代化改造的**唯一执行台账**。P0 至 P4 的已批准本地变更已完成；仍未执行的 Docker、GitHub Actions、镜像仓库与回滚演练均明确列为外部验证缺口，不得据此宣称生产发布已验证。
 
@@ -573,7 +573,7 @@
 
 ### P3 新产品特性
 
-#### [ ] P3-01 新增配置 / 模板管理能力的产品化评估
+#### [x] P3-01 新增配置 / 模板管理能力的产品化评估（design-only）
 - 目标：评估是否将现有 runtime config 扩展为可管理能力
 - 依赖：独立产品批准，不自动并入现代化主线
 - 可能文件：
@@ -591,7 +591,7 @@
   - 回到 `window.config` 默认值，不启用产品化能力
 - 复杂度 / 风险：中 / 中
 
-#### [ ] P3-02a 定义短链 / 分享载荷边界
+#### [x] P3-02a 定义短链 / 分享载荷边界（design-only）
 - 目标：先定义分享数据、短链数据和复制数据的边界
 - 依赖：P2-01b
 - 可能文件：
@@ -609,7 +609,7 @@
   - 关闭新载荷格式，保留旧短链响应
 - 复杂度 / 风险：中 / 中
 
-#### [ ] P3-02b 短链生成与分享 UI 接入
+#### [x] P3-02b 短链生成与分享 UI 接入（design-only）
 - 目标：把已定义的载荷接入生成与展示路径
 - 依赖：P3-02a
 - 可能文件：
