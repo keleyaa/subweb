@@ -6,10 +6,7 @@ const appUrl = new URL('../../src/App.vue', import.meta.url);
 
 describe('application mount markup', () => {
   it('assigns the app mount id only to the HTML document mount point', async () => {
-    const [indexHtml, appSource] = await Promise.all([
-      readFile(indexUrl, 'utf8'),
-      readFile(appUrl, 'utf8'),
-    ]);
+    const [indexHtml, appSource] = await Promise.all([readFile(indexUrl, 'utf8'), readFile(appUrl, 'utf8')]);
 
     expect(indexHtml.match(/\bid=["']app["']/g)).toHaveLength(1);
     expect(indexHtml).toMatch(/<div\s+id=["']app["']\s*><\/div>/);
