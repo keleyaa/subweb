@@ -14,27 +14,38 @@ const legacyStyleUrls = legacyStyleNames.map(
 describe('MainLayout document structure', () => {
   it('keeps only the navigation and routed view in the layout shell', async () => {
     const source = await readFile(sourceUrl, 'utf8');
-    const footerElement = ['<footer', 'bar />'].join('-');
     const footerComponent = ['Footer', 'Bar'].join('');
+    const templateMatch = source.match(/<template>([\s\S]*?)<\/template>/);
 
     expect(source).not.toMatch(/<html\b/i);
     expect(source).not.toMatch(/<body\b/i);
-    expect(source).toContain('class="main-layout light-style"');
-    expect(source).toContain('dir="ltr"');
-    expect(source).toContain('<nav-bar />');
-    expect(source).toContain('<router-view />');
-    expect(source).not.toContain(footerElement);
+    expect(templateMatch).not.toBeNull();
+    expect(templateMatch[1].replace(/\s+/g, ' ').trim()).toBe(
+      '<div class="main-layout light-style" dir="ltr"> <nav-bar /> <router-view /> </div>',
+    );
     expect(source).not.toContain(footerComponent);
   });
 
   it('does not retain legacy document metadata or scroll synchronization', async () => {
     const source = await readFile(sourceUrl, 'utf8');
+    const legacyTokens = [
+      ['data', 'theme'].join('-'),
+      ['data', 'assets', 'path'].join('-'),
+      ['data', 'template'].join('-'),
+      ['@', 'wheel'].join(''),
+      ['style', 'Facade'].join(''),
+      ['set', 'Nav', 'Active'].join(''),
+    ];
+    const listenerMethods = [
+      ['add', 'Event', 'Listener'].join(''),
+      ['remove', 'Event', 'Listener'].join(''),
+    ];
+    const scrollEvent = ['scr', 'oll'].join('');
 
-    ['data-theme', 'data-assets-path', 'data-template', '@wheel', 'styleFacade', 'setNavActive'].forEach((token) =>
-      expect(source).not.toContain(token),
+    legacyTokens.forEach((token) => expect(source).not.toContain(token));
+    listenerMethods.forEach((method) =>
+      expect(source).not.toMatch(new RegExp(`${method}\\s*\\(\\s*['"]${scrollEvent}['"]`)),
     );
-    expect(source).not.toMatch(/addEventListener\s*\(\s*['"]scroll['"]/);
-    expect(source).not.toMatch(/removeEventListener\s*\(\s*['"]scroll['"]/);
   });
 
   it('uses the minimal system-styled application surface', async () => {
