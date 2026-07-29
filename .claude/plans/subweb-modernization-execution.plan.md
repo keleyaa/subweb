@@ -1,9 +1,9 @@
 # subweb 现代化执行计划（修订版）
 
-- Status: remote-release-validation-blocked-on-fork-secrets
+- Status: remote-release-validation-blocked-on-harbor-secrets
 - Current task: none
-- Last completed: remote-release-validation-attempt
-- Next task: configure fork Docker Hub and Harbor secrets, then rerun workflow 322510819
+- Last completed: Docker Hub release validation
+- Next task: configure fork Harbor secrets, then rerun workflow 322510819
 
 > 说明：本文是本项目后续现代化改造的**唯一执行台账**。P0 至 P4 的已批准本地变更已完成；仍未执行的 Docker、GitHub Actions、镜像仓库与回滚演练均明确列为外部验证缺口，不得据此宣称生产发布已验证。
 
@@ -177,7 +177,7 @@
 | 2026-07-29 | P4-07a | [x] 已完成 | promotion 结果由实际 Harbor inspect digest 记录；严格校验 source/destination digest，并在不相等或不可观测时 fail closed | 中；Harbor eventual consistency、权限、跨仓库复制与实际 parity 未在真实 registry 验证 | 移除 Harbor digest 验证/证据步骤并恢复 P4-07 前发布记录 | 代码含 5 次有限 retry/backoff 和严格 SHA-256 格式/相等性检查；外部 registry 行为未验证 |
 | 2026-07-29 | P4-08 | [x] 已完成 | 通过 `jq -n --arg` 生成并 `jq -e` 验证 rollback manifest；记录 source/destination references/digests、Git SHA、workflow identity、tag、平台和构建时间，并作为 90 天 artifact 上传 | 中；artifact 上传、下载、保留及受控 rollback 演练未实际执行 | 移除 manifest 和 artifact upload 步骤，恢复 P4-07a 前 workflow | 不把多行 JSON 写入 GitHub outputs；本地只验证源文本合同 |
 | 2026-07-29 | P4-LOCAL-VALIDATION | [x] 已完成 | 已使用 Docker Desktop 从本地 `Dockerfile` 构建临时镜像，并以 localhost-only 映射启动临时容器；验证默认配置、带引号/反斜杠/`&` 的运行时配置替换、Nginx HTTP 就绪和容器日志 | 低；仅本地、非发布验证；未访问应用外部 API，临时容器和镜像已清理 | 不适用；验证不改仓库代码，临时资源已删除 | `subweb:local-validate` 构建成功；`127.0.0.1:18080` 返回预期页面标题；容器内 `config.js` 保留特殊字符替换值；`subweb-validate` 容器与临时镜像均无残留；GitHub Actions、Docker Hub/Harbor、provenance/SBOM、artifact 和 rollback 仍未验证 |
-| 2026-07-29 | P4-REMOTE-VALIDATION | [!] 受阻 | 已在 fork `keleyaa/subweb` 的 `main` 调度 workflow `322510819`，run `30399885947` 在 Docker Hub 登录阶段失败 | 中；未发布应用镜像，所有后续 release/promotion/rollback 步骤均被跳过 | 不适用；失败发生在发布前，无镜像 digest、Harbor promotion、manifest 或 artifact 需要回退 | GitHub Actions 已真实执行到 checkout/QEMU/Buildx；`Login Docker Hub` 报 `Username and password required`；需在 fork Actions secrets 配置 `DOCKER_USERNAME`/`DOCKER_PASSWORD`，并同时确认 `HARBOR_REGISTRY`/`HARBOR_USERNAME`/`HARBOR_PASSWORD` 后重新运行；未生成 rollback artifact |
+| 2026-07-29 | P4-REMOTE-VALIDATION | [~] Docker Hub 完成 / Harbor 已移除 | 在 fork `keleyaa/subweb` 的 `main` 调度 workflow，Docker Hub 多架构 build/push、source digest identity、修复后的 static gate 和 README sync 已成功；根据批准的 Docker Hub-only 策略，移除 Harbor promotion/parity，不再需要 Harbor secrets | 中；`latest` 与 `2.0` 是 mutable alias，可靠回滚仍必须使用 Docker Hub immutable digest；registry-side provenance/SBOM 不再由 blocking publish job 生成 | Docker Hub 侧回退使用已记录的 `docker.io/<username>/subweb@sha256:...` immutable source reference；rollback artifact 将记录同一 Docker Hub digest | run `30425721401` 已验证 Docker Hub 构建/推送和静态 gate；Docker Hub-only workflow 保留 source digest、README sync、90 天 rollback manifest artifact，删除全部 `HARBOR_*` secrets/步骤与 destination 字段；待新 workflow run 验证 Docker Hub-only manifest/artifact；Harbor parity、Harbor mirror 与 registry-side provenance/SBOM 不适用/未提供 |
 
 
 

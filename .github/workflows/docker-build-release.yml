@@ -126,27 +126,20 @@ jobs:
           github_expression_open='$''{{'
           expected_image_ref="IMAGE_REF=\"${github_expression_open} secrets.DOCKER_USERNAME }}/${github_expression_open} env.PROJECT }}@\${SOURCE_DIGEST}\""
           grep -Fq "$expected_image_ref" "$WORKFLOW_FILE" || { echo "Missing digest-based source image reference" >&2; exit 1; }
-          expected_harbor_image="HARBOR_IMAGE=\"${github_expression_open} secrets.HARBOR_REGISTRY }}/${github_expression_open} secrets.HARBOR_USERNAME }}/${github_expression_open} env.PROJECT }}\""
-          grep -Fq "$expected_harbor_image" "$WORKFLOW_FILE" || { echo "Missing Harbor image repository wiring" >&2; exit 1; }
-          grep -Fq -- '--tag "${HARBOR_IMAGE}:latest"' "$WORKFLOW_FILE" || { echo "Missing Harbor latest tag promotion" >&2; exit 1; }
-          grep -Fq -- '--tag "${HARBOR_IMAGE}:${RESOLVED_TAG}"' "$WORKFLOW_FILE" || { echo "Missing Harbor resolved-tag promotion" >&2; exit 1; }
-          grep -Fq '[ "$harbor_remote_digest" = "$SOURCE_DIGEST" ]' "$WORKFLOW_FILE" || { echo "Missing strict Harbor digest comparison" >&2; exit 1; }
           grep -Fq '${SOURCE_DIGEST#sha256:}' "$WORKFLOW_FILE" || { echo "Missing source digest suffix validation" >&2; exit 1; }
-          grep -Fq '${HARBOR_DIGEST#sha256:}' "$WORKFLOW_FILE" || { echo "Missing Harbor digest suffix validation" >&2; exit 1; }
           grep -Fq "grep -Eq '^[0-9a-f]{64}\$'" "$WORKFLOW_FILE" || { echo "Missing canonical digest validation regex" >&2; exit 1; }
-          grep -Fq "jq -e '.release_identity.source_sha and .release_identity.workflow_run.id and .release_identity.workflow_run.number and .release_identity.workflow_run.attempt and .release_identity.resolved_tag and .release_identity.source_digest and .release_identity.destination_digest and (.release_identity.platforms | length > 0) and .release_identity.build_time and .release_identity.source.digest and .release_identity.destination.digest and .release_identity.rollback_target.source_reference and .release_identity.rollback_target.destination_reference'" "$WORKFLOW_FILE" || { echo "Missing rollback manifest field assertions" >&2; exit 1; }
+          grep -Fq "jq -e '.release_identity.source_sha and .release_identity.workflow_run.id and .release_identity.workflow_run.number and .release_identity.workflow_run.attempt and .release_identity.resolved_tag and .release_identity.source_digest and (.release_identity.platforms | length > 0) and .release_identity.build_time and .release_identity.source.digest and .release_identity.rollback_target.source_reference and .release_identity.rollback_target.source_digest'" "$WORKFLOW_FILE" || { echo "Missing Docker Hub rollback manifest field assertions" >&2; exit 1; }
           grep -Fq '"schema_version": "1"' "$WORKFLOW_FILE" || { echo "Missing rollback manifest schema version" >&2; exit 1; }
           expected_source_reference="--arg source_reference \"docker.io/${github_expression_open} secrets.DOCKER_USERNAME }}/${github_expression_open} env.PROJECT }}@\$SOURCE_DIGEST\""
           grep -Fq -- "$expected_source_reference" "$WORKFLOW_FILE" || { echo "Missing rollback manifest source reference" >&2; exit 1; }
-          expected_destination_reference="--arg destination_reference \"${github_expression_open} secrets.HARBOR_REGISTRY }}/${github_expression_open} secrets.HARBOR_USERNAME }}/${github_expression_open} env.PROJECT }}@\$HARBOR_DIGEST\""
-          grep -Fq -- "$expected_destination_reference" "$WORKFLOW_FILE" || { echo "Missing rollback manifest destination reference" >&2; exit 1; }
           grep -Fq 'rollback_manifest_path=$RUNNER_TEMP/rollback-manifest.json' "$WORKFLOW_FILE" || { echo "Missing rollback manifest artifact path wiring" >&2; exit 1; }
           grep -Fq 'rollback_manifest_source_digest=$SOURCE_DIGEST' "$WORKFLOW_FILE" || { echo "Missing rollback manifest source digest wiring" >&2; exit 1; }
-          expected_artifact_name="name: rollback-manifest-${github_expression_open} github.run_id }}-${github_expression_open} steps.harbor_rollback_manifest.outputs.rollback_manifest_source_digest }}"
+          expected_artifact_name="name: rollback-manifest-${github_expression_open} github.run_id }}-${github_expression_open} steps.dockerhub_rollback_manifest.outputs.rollback_manifest_source_digest }}"
           grep -Fq "$expected_artifact_name" "$WORKFLOW_FILE" || { echo "Missing artifact upload name" >&2; exit 1; }
-          expected_artifact_path="path: ${github_expression_open} steps.harbor_rollback_manifest.outputs.rollback_manifest_path }}"
+          expected_artifact_path="path: ${github_expression_open} steps.dockerhub_rollback_manifest.outputs.rollback_manifest_path }}"
           grep -Fq "$expected_artifact_path" "$WORKFLOW_FILE" || { echo "Missing artifact upload path" >&2; exit 1; }
           grep -Fq 'retention-days: 90' "$WORKFLOW_FILE" || { echo "Missing artifact retention" >&2; exit 1; }
+          ! grep -Fq 'HARBOR_' <(grep -v "Harbor references must be absent" "$WORKFLOW_FILE") || { echo "Harbor references must be absent for Docker Hub-only release" >&2; exit 1; }
 
           grep -Eq '^\.claude$' "$DOCKERIGNORE_FILE" || { echo "Missing .claude in .dockerignore" >&2; exit 1; }
           grep -Eq '^\.git$' "$DOCKERIGNORE_FILE" || { echo "Missing .git in .dockerignore" >&2; exit 1; }
@@ -165,57 +158,11 @@ jobs:
           repository: ${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}
           readme: "./README.md"
 
-      - name: Login harbor
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
-        with:
-          registry: ${{ secrets.HARBOR_REGISTRY }}
-          username: ${{ secrets.HARBOR_USERNAME }}
-          password: ${{ secrets.HARBOR_PASSWORD }}
-
-      - name: Promote Docker Hub digest to Harbor
-        id: harbor_promote
+      - name: Record Docker Hub rollback manifest
+        id: dockerhub_rollback_manifest
         env:
           RESOLVED_TAG: ${{ steps.tag.outputs.tag }}
           SOURCE_DIGEST: ${{ steps.dockerhub_build.outputs.digest }}
-        run: |
-          [ -n "$SOURCE_DIGEST" ] || { echo "Docker Hub image digest was not produced; refusing Harbor promotion" >&2; exit 1; }
-          case "$SOURCE_DIGEST" in
-            sha256:????????????????????????????????????????????????????????????????)
-              printf '%s' "${SOURCE_DIGEST#sha256:}" | grep -Eq '^[0-9a-f]{64}$' || { echo "Docker Hub image digest is malformed; refusing Harbor promotion" >&2; exit 1; }
-              ;;
-            *) echo "Docker Hub image digest is malformed; refusing Harbor promotion" >&2; exit 1 ;;
-          esac
-          IMAGE_REF="${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}@${SOURCE_DIGEST}"
-          HARBOR_IMAGE="${{ secrets.HARBOR_REGISTRY }}/${{ secrets.HARBOR_USERNAME }}/${{ env.PROJECT }}"
-          docker buildx imagetools create \
-            --tag "${HARBOR_IMAGE}:latest" \
-            --tag "${HARBOR_IMAGE}:${RESOLVED_TAG}" \
-            "$IMAGE_REF"
-          harbor_remote_digest=""
-          for attempt in 1 2 3 4 5; do
-            harbor_remote_digest=$(docker buildx imagetools inspect "${HARBOR_IMAGE}:${RESOLVED_TAG}" --format '{{.Digest}}' 2>/dev/null | tr -d '"[:space:]')
-            case "$harbor_remote_digest" in
-              sha256:????????????????????????????????????????????????????????????????)
-                printf '%s' "${harbor_remote_digest#sha256:}" | grep -Eq '^[0-9a-f]{64}$' || { echo "Harbor digest is malformed after promotion" >&2; exit 1; }
-                break
-                ;;
-            esac
-            if [ "$attempt" -eq 5 ]; then
-              echo "Harbor digest was not observable after promotion" >&2
-              exit 1
-            fi
-            sleep_seconds=$((attempt * 2))
-            sleep "$sleep_seconds"
-          done
-          [ "$harbor_remote_digest" = "$SOURCE_DIGEST" ] || { echo "Harbor digest mismatch after promotion" >&2; echo "source=$SOURCE_DIGEST" >&2; echo "harbor=$harbor_remote_digest" >&2; exit 1; }
-          echo "harbor_digest=${harbor_remote_digest}" >> "$GITHUB_OUTPUT"
-
-      - name: Record Harbor rollback manifest
-        id: harbor_rollback_manifest
-        env:
-          RESOLVED_TAG: ${{ steps.tag.outputs.tag }}
-          SOURCE_DIGEST: ${{ steps.dockerhub_build.outputs.digest }}
-          HARBOR_DIGEST: ${{ steps.harbor_promote.outputs.harbor_digest }}
         run: |
           [ -n "$GITHUB_SHA" ] || { echo "source SHA is required for rollback manifest" >&2; exit 1; }
           [ -n "$GITHUB_RUN_ID" ] || { echo "workflow run id is required for rollback manifest" >&2; exit 1; }
@@ -223,23 +170,32 @@ jobs:
           [ -n "$GITHUB_RUN_ATTEMPT" ] || { echo "workflow run attempt is required for rollback manifest" >&2; exit 1; }
           [ -n "$RESOLVED_TAG" ] || { echo "resolved tag is required for rollback manifest" >&2; exit 1; }
           [ -n "$SOURCE_DIGEST" ] || { echo "Docker Hub image digest was not produced; refusing rollback manifest" >&2; exit 1; }
-          [ -n "$HARBOR_DIGEST" ] || { echo "Harbor digest was not produced; refusing rollback manifest" >&2; exit 1; }
           case "$SOURCE_DIGEST" in
             sha256:????????????????????????????????????????????????????????????????)
               printf '%s' "${SOURCE_DIGEST#sha256:}" | grep -Eq '^[0-9a-f]{64}$' || { echo "Docker Hub image digest is malformed; refusing rollback manifest" >&2; exit 1; }
               ;;
             *) echo "Docker Hub image digest is malformed; refusing rollback manifest" >&2; exit 1 ;;
           esac
-          case "$HARBOR_DIGEST" in
-            sha256:????????????????????????????????????????????????????????????????)
-              printf '%s' "${HARBOR_DIGEST#sha256:}" | grep -Eq '^[0-9a-f]{64}$' || { echo "Harbor digest is malformed; refusing rollback manifest" >&2; exit 1; }
-              ;;
-            *) echo "Harbor digest is malformed; refusing rollback manifest" >&2; exit 1 ;;
-          esac
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           SOURCE_REPO="docker.io/${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}"
-          DESTINATION_REPO="${{ secrets.HARBOR_REGISTRY }}/${{ secrets.HARBOR_USERNAME }}/${{ env.PROJECT }}"
-          jq -n             --arg schema_version "1"             --arg source_sha "$GITHUB_SHA"             --arg workflow_run_id "$GITHUB_RUN_ID"             --arg workflow_run_number "$GITHUB_RUN_NUMBER"             --arg workflow_run_attempt "$GITHUB_RUN_ATTEMPT"             --arg workflow_ref "$GITHUB_REF"             --arg workflow_ref_name "$GITHUB_REF_NAME"             --arg resolved_tag "$RESOLVED_TAG"             --arg build_time "$BUILD_TIME"             --arg source_registry "docker.io"             --arg source_repository "$SOURCE_REPO"             --arg source_reference "docker.io/${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}@$SOURCE_DIGEST"             --arg source_digest "$SOURCE_DIGEST"             --arg destination_registry "${{ secrets.HARBOR_REGISTRY }}"             --arg destination_repository "$DESTINATION_REPO"             --arg destination_reference "${{ secrets.HARBOR_REGISTRY }}/${{ secrets.HARBOR_USERNAME }}/${{ env.PROJECT }}@$HARBOR_DIGEST"             --arg destination_digest "$HARBOR_DIGEST"             --arg rollback_source_reference "docker.io/${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}@$SOURCE_DIGEST"             --arg rollback_destination_reference "${{ secrets.HARBOR_REGISTRY }}/${{ secrets.HARBOR_USERNAME }}/${{ env.PROJECT }}@$HARBOR_DIGEST"             --arg rollback_source_digest "$SOURCE_DIGEST"             --arg rollback_destination_digest "$HARBOR_DIGEST"             '{
+          IMAGE_REF="${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}@${SOURCE_DIGEST}"
+          jq -n \
+            --arg schema_version "1" \
+            --arg source_sha "$GITHUB_SHA" \
+            --arg workflow_run_id "$GITHUB_RUN_ID" \
+            --arg workflow_run_number "$GITHUB_RUN_NUMBER" \
+            --arg workflow_run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg workflow_ref "$GITHUB_REF" \
+            --arg workflow_ref_name "$GITHUB_REF_NAME" \
+            --arg resolved_tag "$RESOLVED_TAG" \
+            --arg build_time "$BUILD_TIME" \
+            --arg source_registry "docker.io" \
+            --arg source_repository "$SOURCE_REPO" \
+            --arg source_reference "docker.io/${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}@$SOURCE_DIGEST" \
+            --arg source_digest "$SOURCE_DIGEST" \
+            --arg rollback_source_reference "docker.io/${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}@$SOURCE_DIGEST" \
+            --arg rollback_source_digest "$SOURCE_DIGEST" \
+            '{
               schema_version: $schema_version,
               release_identity: {
                 source_sha: $source_sha,
@@ -252,7 +208,6 @@ jobs:
                 },
                 resolved_tag: $resolved_tag,
                 source_digest: $source_digest,
-                destination_digest: $destination_digest,
                 platforms: ["linux/amd64", "linux/arm64"],
                 build_time: $build_time,
                 source: {
@@ -261,40 +216,31 @@ jobs:
                   reference: $source_reference,
                   digest: $source_digest
                 },
-                destination: {
-                  registry: $destination_registry,
-                  repository: $destination_repository,
-                  reference: $destination_reference,
-                  digest: $destination_digest
-                },
                 rollback_target: {
                   source_reference: $rollback_source_reference,
-                  destination_reference: $rollback_destination_reference,
                   source_digest: $rollback_source_digest,
-                  destination_digest: $rollback_destination_digest,
                   resolved_tag: $resolved_tag
                 }
               }
             }' > "$RUNNER_TEMP/rollback-manifest.json"
-          jq -e '.release_identity.source_sha and .release_identity.workflow_run.id and .release_identity.workflow_run.number and .release_identity.workflow_run.attempt and .release_identity.resolved_tag and .release_identity.source_digest and .release_identity.destination_digest and (.release_identity.platforms | length > 0) and .release_identity.build_time and .release_identity.source.digest and .release_identity.destination.digest and .release_identity.rollback_target.source_reference and .release_identity.rollback_target.destination_reference' "$RUNNER_TEMP/rollback-manifest.json" >/dev/null
+          jq -e '.release_identity.source_sha and .release_identity.workflow_run.id and .release_identity.workflow_run.number and .release_identity.workflow_run.attempt and .release_identity.resolved_tag and .release_identity.source_digest and (.release_identity.platforms | length > 0) and .release_identity.build_time and .release_identity.source.digest and .release_identity.rollback_target.source_reference and .release_identity.rollback_target.source_digest' "$RUNNER_TEMP/rollback-manifest.json" >/dev/null
           {
             echo "rollback_manifest_path=$RUNNER_TEMP/rollback-manifest.json"
             echo "rollback_manifest_source_digest=$SOURCE_DIGEST"
           } >> "$GITHUB_OUTPUT"
           {
-            echo "### Harbor rollback manifest"
+            echo "### Docker Hub rollback manifest"
             echo "- source SHA: \`${GITHUB_SHA}\`"
             echo "- workflow run: \`${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}\`"
             echo "- resolved tag: \`${RESOLVED_TAG}\`"
             echo "- source digest: \`${SOURCE_DIGEST}\`"
-            echo "- destination digest: \`${HARBOR_DIGEST}\`"
             echo "- manifest path: \`$RUNNER_TEMP/rollback-manifest.json\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload rollback manifest
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
         with:
-          name: rollback-manifest-${{ github.run_id }}-${{ steps.harbor_rollback_manifest.outputs.rollback_manifest_source_digest }}
-          path: ${{ steps.harbor_rollback_manifest.outputs.rollback_manifest_path }}
+          name: rollback-manifest-${{ github.run_id }}-${{ steps.dockerhub_rollback_manifest.outputs.rollback_manifest_source_digest }}
+          path: ${{ steps.dockerhub_rollback_manifest.outputs.rollback_manifest_path }}
           if-no-files-found: error
           retention-days: 90
