@@ -5,6 +5,15 @@ const indexUrl = new URL('../../index.html', import.meta.url);
 const appUrl = new URL('../../src/App.vue', import.meta.url);
 
 describe('application mount markup', () => {
+  it('keeps the required document metadata and application entrypoints', async () => {
+    const indexHtml = await readFile(indexUrl, 'utf8');
+
+    expect(indexHtml).toContain('<html lang="zh-CN">');
+    expect(indexHtml).toContain('<link rel="icon" href="/favicon.ico" />');
+    expect(indexHtml).toContain('<noscript>');
+    expect(indexHtml).toContain('<script type="module" src="/src/main.js"></script>');
+  });
+
   it('keeps a scalable mobile viewport without remote font dependencies', async () => {
     const indexHtml = await readFile(indexUrl, 'utf8');
     const disabledZoomToken = ['user', 'scalable=no'].join('-');
