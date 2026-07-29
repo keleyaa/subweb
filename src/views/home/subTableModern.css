@@ -12,6 +12,12 @@
   border: 0;
 }
 
+.sub-table--modern .configuration-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .sub-table--modern label {
   margin: 0;
   color: #424245;
@@ -56,13 +62,21 @@
 
 .sub-table--modern textarea:focus-visible,
 .sub-table--modern select:focus-visible,
-.sub-table--modern input:focus-visible,
-.sub-table--modern button:focus-visible {
+.sub-table--modern input:focus-visible {
   outline: 3px solid rgba(0, 113, 227, 0.28);
   outline-offset: 2px;
 }
 
-.sub-table--modern .advanced-disclosure.btn-secondary {
+.sub-table--modern .primary-action-button,
+.sub-table--modern .secondary-action-button,
+.sub-table--modern .advanced-disclosure {
+  box-shadow: none;
+  font: inherit;
+  transform: none;
+  transition: background-color 180ms ease-out, border-color 180ms ease-out, color 180ms ease-out;
+}
+
+.sub-table--modern .advanced-disclosure {
   display: flex;
   width: 100%;
   min-height: 44px;
@@ -76,10 +90,29 @@
   background: transparent;
   box-shadow: none;
   color: #1d1d1f;
-  font: inherit;
   font-size: 14px;
   font-weight: 500;
   text-align: left;
+}
+
+.sub-table--modern .advanced-disclosure:hover {
+  background: #f5f5f7;
+  box-shadow: none;
+  transform: none;
+}
+
+.sub-table--modern .advanced-disclosure:active {
+  background: #e8e8ed;
+  box-shadow: none;
+  transform: none;
+}
+
+.sub-table--modern .advanced-disclosure:disabled {
+  background: transparent;
+  color: #8e8e93;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .sub-table--modern .advanced-config {
@@ -105,6 +138,8 @@
   min-height: 40px;
   align-items: center;
   gap: 7px;
+  padding: 0 4px;
+  cursor: pointer;
 }
 
 .sub-table--modern .checkbox-field input {
@@ -112,6 +147,7 @@
   height: 18px;
   margin: 0;
   accent-color: #0071e3;
+  cursor: pointer;
 }
 
 .sub-table--modern .primary-action-row {
@@ -119,7 +155,7 @@
   justify-content: flex-end;
 }
 
-.sub-table--modern .btn-primary {
+.sub-table--modern .primary-action-button {
   min-width: 152px;
   min-height: 44px;
   padding: 0 20px;
@@ -128,8 +164,31 @@
   background: #0071e3;
   box-shadow: none;
   color: #fff;
-  font: inherit;
   font-weight: 500;
+  transform: none;
+}
+
+.sub-table--modern .primary-action-button:hover {
+  border-color: #0077ed;
+  background: #0077ed;
+  box-shadow: none;
+  transform: none;
+}
+
+.sub-table--modern .primary-action-button:active {
+  border-color: #006edb;
+  background: #006edb;
+  box-shadow: none;
+  transform: none;
+}
+
+.sub-table--modern .primary-action-button:disabled {
+  border-color: #a8c7e8;
+  background: #a8c7e8;
+  box-shadow: none;
+  color: #fff;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .sub-table--modern .results-section {
@@ -163,7 +222,7 @@
   gap: 10px;
 }
 
-.sub-table--modern .btn-secondary {
+.sub-table--modern .secondary-action-button {
   min-height: 44px;
   padding: 0 14px;
   border: 1px solid #c7c7cc;
@@ -171,15 +230,38 @@
   background: #fff;
   box-shadow: none;
   color: #1d1d1f;
-  font: inherit;
   font-weight: 500;
+  transform: none;
 }
 
-.sub-table--modern .btn-secondary:disabled {
+.sub-table--modern .secondary-action-button:hover {
+  background: #f5f5f7;
+  box-shadow: none;
+  transform: none;
+}
+
+.sub-table--modern .secondary-action-button:active {
+  background: #e8e8ed;
+  box-shadow: none;
+  transform: none;
+}
+
+.sub-table--modern .secondary-action-button:disabled {
   border-color: #d2d2d7;
   background: #f5f5f7;
+  box-shadow: none;
   color: #8e8e93;
   cursor: not-allowed;
+  transform: none;
+}
+
+.sub-table--modern .primary-action-button:focus-visible,
+.sub-table--modern .secondary-action-button:focus-visible,
+.sub-table--modern .advanced-disclosure:focus-visible {
+  outline: 3px solid rgba(0, 113, 227, 0.28);
+  outline-offset: 2px;
+  box-shadow: none;
+  transform: none;
 }
 
 .sub-table--modern .field-reveal-enter-active,
@@ -202,13 +284,17 @@
     gap: 16px;
   }
 
+  .sub-table--modern .configuration-section {
+    gap: 16px;
+  }
+
   .sub-table--modern .base-config-grid,
   .sub-table--modern .advanced-fields-grid,
   .sub-table--modern .result-control-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .sub-table--modern .btn-primary {
+  .sub-table--modern .primary-action-button {
     width: 100%;
   }
 }

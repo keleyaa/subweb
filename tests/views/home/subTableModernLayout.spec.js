@@ -21,7 +21,16 @@ describe('SubTable modern linear layout', () => {
     expect(source).toContain('转换订阅');
   });
 
-  it('keeps one primary submit action and removes the old framed layout', () => {
+  it('groups subscription input and base configuration in one fieldset', () => {
+    const source = readFileSync(componentPath, 'utf8');
+
+    expect(source).toMatch(
+      /<fieldset class="configuration-section">[\s\S]*?<legend class="visually-hidden">订阅输入与配置<\/legend>[\s\S]*?<div class="subscription-input">[\s\S]*?<div class="base-config-grid">[\s\S]*?<\/fieldset>/,
+    );
+    expect(source).not.toContain('<fieldset class="subscription-input">');
+  });
+
+  it('uses isolated component button classes and removes the old framed layout', () => {
     const source = readFileSync(componentPath, 'utf8');
     const forbiddenMarkers = [
       ['class="', 'card'].join(''),
@@ -30,8 +39,9 @@ describe('SubTable modern linear layout', () => {
       ['template', 'controls'].join('-'),
     ];
 
-    expect(source.match(/btn-primary/g) ?? []).toHaveLength(1);
-    expect(source).toContain('<button type="submit" class="btn btn-primary">转换订阅</button>');
+    expect(source.match(/\bprimary-action-button\b/g) ?? []).toHaveLength(1);
+    expect(source).toContain('<button type="submit" class="primary-action-button">转换订阅</button>');
+    expect(source).not.toMatch(/class="[^"]*\bbtn(?:-primary|-secondary)?\b[^"]*"/);
     for (const marker of forbiddenMarkers) {
       expect(source).not.toContain(marker);
     }
@@ -67,11 +77,37 @@ describe('SubTable modern linear layout', () => {
       'converted-sub-url',
       'short-url-result',
     ];
+    const wrappedCheckboxIds = new Set(['emoji', 'udp', 'sort', 'scv', 'nodelist']);
 
     for (const id of ids) {
       expect(source).toContain(`id="${id}"`);
-      expect(source).toContain(`for="${id}"`);
+      if (!wrappedCheckboxIds.has(id)) {
+        expect(source).toContain(`for="${id}"`);
+      }
     }
+  });
+
+  it('uses each checkbox label as the complete touch target', () => {
+    const source = readFileSync(componentPath, 'utf8');
+    const stylesheet = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
+    const checkboxFields = source.match(/<label class="checkbox-field">[\s\S]*?<\/label>/g) ?? [];
+    const expectedCheckboxes = [
+      ['emoji', 'Emoji'],
+      ['udp', '开启 UDP'],
+      ['sort', '排序节点'],
+      ['scv', '关闭证书检查'],
+      ['nodelist', 'Node List'],
+    ];
+
+    expect(checkboxFields).toHaveLength(expectedCheckboxes.length);
+    for (const [id, text] of expectedCheckboxes) {
+      const field = checkboxFields.find((candidate) => candidate.includes(`id="${id}"`));
+      expect(field).toContain(`<span>${text}</span>`);
+      expect(field).toContain('type="checkbox"');
+    }
+    expect(stylesheet).toMatch(/\.checkbox-field\s*\{[\s\S]*?min-height:\s*40px/);
+    expect(stylesheet).toMatch(/\.checkbox-field\s*\{[\s\S]*?padding:\s*0\s+4px/);
+    expect(stylesheet).toMatch(/\.checkbox-field\s*\{[\s\S]*?cursor:\s*pointer/);
   });
 
   it('provides explicit copy, share, and short-link actions', () => {
@@ -116,5 +152,20 @@ describe('SubTable modern visual constraints', () => {
     for (const declaration of shadowDeclarations) {
       expect(declaration).toMatch(/box-shadow\s*:\s*none$/);
     }
+  });
+
+  it('owns complete primary and secondary button interaction states', () => {
+    const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
+
+    expect(source).toMatch(/\.primary-action-button\s*\{[\s\S]*?background:\s*#0071e3/);
+    expect(source).toMatch(/\.primary-action-button:hover\s*\{[\s\S]*?background:\s*#0077ed/);
+    expect(source).toMatch(/\.primary-action-button:active\s*\{[\s\S]*?background:\s*#006edb/);
+    expect(source).toMatch(/\.primary-action-button:disabled\s*\{/);
+    expect(source).toMatch(/\.secondary-action-button:hover\s*\{[\s\S]*?background:\s*#f5f5f7/);
+    expect(source).toMatch(/\.secondary-action-button:active\s*\{[\s\S]*?background:\s*#e8e8ed/);
+    expect(source).toMatch(/\.secondary-action-button:disabled\s*\{/);
+    expect(source).toMatch(/\.primary-action-button:focus-visible[\s\S]*?\.secondary-action-button:focus-visible/);
+    expect(source).toMatch(/transition:\s*(?:background-color|border-color|color)[^;]*1(?:6|7|8)0ms ease-out/);
+    expect(source).not.toMatch(/transition:\s*all\b/);
   });
 });

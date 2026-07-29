@@ -1,61 +1,63 @@
 <template>
   <form class="sub-table sub-table--modern" :data-ux-mode="mode" @submit.prevent="getSubUrl">
-    <fieldset class="subscription-input">
-      <legend class="visually-hidden">订阅输入</legend>
-      <div class="form-field">
-        <label for="subscription-urls">订阅链接</label>
-        <textarea id="subscription-urls" v-model.trim="urls" :placeholder="placeholder" rows="3"></textarea>
+    <fieldset class="configuration-section">
+      <legend class="visually-hidden">订阅输入与配置</legend>
+      <div class="subscription-input">
+        <div class="form-field">
+          <label for="subscription-urls">订阅链接</label>
+          <textarea id="subscription-urls" v-model.trim="urls" :placeholder="placeholder" rows="3"></textarea>
+        </div>
+      </div>
+
+      <div class="base-config-grid">
+        <div class="form-field">
+          <label for="client">客户端</label>
+          <select id="client" v-model="target">
+            <option v-for="option in targetOptions" :key="option.value" :value="option.value">
+              {{ option.text }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label for="api">后端服务</label>
+          <select id="api" @change="selectApi">
+            <option :value="apiUrl">
+              {{ apiUrl }}
+            </option>
+            <option value="manual">自定义后端 API 地址</option>
+          </select>
+          <Transition name="field-reveal">
+            <div v-if="isShowManualApiUrl" class="conditional-field">
+              <label for="manual-api-url">自定义后端 API 地址</label>
+              <input id="manual-api-url" v-model="api" placeholder="自定义后端 API 地址示例：https://sub.ops.ci" />
+            </div>
+          </Transition>
+        </div>
+
+        <div class="form-field">
+          <label for="remote">远程配置</label>
+          <select id="remote" @change="selectRemoteConfig">
+            <option value="">默认配置</option>
+            <option v-for="option in remoteConfigOptions" :key="option.value" :value="option.value">
+              {{ option.text }}
+            </option>
+            <option value="manual">自定义远程配置地址</option>
+          </select>
+          <Transition name="field-reveal">
+            <div v-if="isShowRemoteConfig" class="conditional-field">
+              <label for="manual-remote-config">自定义远程配置地址</label>
+              <input id="manual-remote-config" v-model="remoteConfig" placeholder="自定义远程配置地址：" />
+            </div>
+          </Transition>
+        </div>
       </div>
     </fieldset>
-
-    <div class="base-config-grid">
-      <div class="form-field">
-        <label for="client">客户端</label>
-        <select id="client" v-model="target">
-          <option v-for="option in targetOptions" :key="option.value" :value="option.value">
-            {{ option.text }}
-          </option>
-        </select>
-      </div>
-
-      <div class="form-field">
-        <label for="api">后端服务</label>
-        <select id="api" @change="selectApi">
-          <option :value="apiUrl">
-            {{ apiUrl }}
-          </option>
-          <option value="manual">自定义后端 API 地址</option>
-        </select>
-        <Transition name="field-reveal">
-          <div v-if="isShowManualApiUrl" class="conditional-field">
-            <label for="manual-api-url">自定义后端 API 地址</label>
-            <input id="manual-api-url" v-model="api" placeholder="自定义后端 API 地址示例：https://sub.ops.ci" />
-          </div>
-        </Transition>
-      </div>
-
-      <div class="form-field">
-        <label for="remote">远程配置</label>
-        <select id="remote" @change="selectRemoteConfig">
-          <option value="">默认配置</option>
-          <option v-for="option in remoteConfigOptions" :key="option.value" :value="option.value">
-            {{ option.text }}
-          </option>
-          <option value="manual">自定义远程配置地址</option>
-        </select>
-        <Transition name="field-reveal">
-          <div v-if="isShowRemoteConfig" class="conditional-field">
-            <label for="manual-remote-config">自定义远程配置地址</label>
-            <input id="manual-remote-config" v-model="remoteConfig" placeholder="自定义远程配置地址：" />
-          </div>
-        </Transition>
-      </div>
-    </div>
 
     <button
       id="more-config-toggle"
       type="button"
-      class="advanced-disclosure btn-secondary"
+      class="advanced-disclosure"
       :aria-expanded="isShowMoreConfig"
       aria-controls="advanced-config"
       @click="showMoreConfig"
@@ -78,32 +80,32 @@
           </div>
         </div>
         <div class="checkbox-group">
-          <div class="checkbox-field">
+          <label class="checkbox-field">
             <input id="emoji" v-model="moreConfig.emoji" type="checkbox" />
-            <label for="emoji">Emoji</label>
-          </div>
-          <div class="checkbox-field">
+            <span>Emoji</span>
+          </label>
+          <label class="checkbox-field">
             <input id="udp" v-model="moreConfig.udp" type="checkbox" />
-            <label for="udp">开启 UDP</label>
-          </div>
-          <div class="checkbox-field">
+            <span>开启 UDP</span>
+          </label>
+          <label class="checkbox-field">
             <input id="sort" v-model="moreConfig.sort" type="checkbox" />
-            <label for="sort">排序节点</label>
-          </div>
-          <div class="checkbox-field">
+            <span>排序节点</span>
+          </label>
+          <label class="checkbox-field">
             <input id="scv" v-model="moreConfig.scv" type="checkbox" />
-            <label for="scv">关闭证书检查</label>
-          </div>
-          <div class="checkbox-field">
+            <span>关闭证书检查</span>
+          </label>
+          <label class="checkbox-field">
             <input id="nodelist" v-model="moreConfig.list" type="checkbox" />
-            <label for="nodelist">Node List</label>
-          </div>
+            <span>Node List</span>
+          </label>
         </div>
       </fieldset>
     </Transition>
 
     <div class="primary-action-row">
-      <button type="submit" class="btn btn-primary">转换订阅</button>
+      <button type="submit" class="primary-action-button">转换订阅</button>
     </div>
 
     <fieldset class="results-section">
@@ -118,13 +120,15 @@
           <input id="converted-sub-url" v-model.trim="result.subUrl" placeholder="点击转换订阅" />
           <button
             type="button"
-            class="btn btn-secondary"
+            class="secondary-action-button"
             :disabled="!result.subUrl"
             @click="toCopy(result.subUrl, '订阅链接')"
           >
             复制
           </button>
-          <button v-if="result.subUrl" type="button" class="btn btn-secondary" @click="shareSubscription">分享</button>
+          <button v-if="result.subUrl" type="button" class="secondary-action-button" @click="shareSubscription">
+            分享
+          </button>
         </div>
       </div>
 
@@ -134,13 +138,13 @@
           <input id="short-url-result" v-model.trim="result.shortUrl" placeholder="点击生成短链" />
           <button
             type="button"
-            class="btn btn-secondary"
+            class="secondary-action-button"
             :disabled="!result.shortUrl"
             @click="toCopy(result.shortUrl, '短链')"
           >
             复制短链
           </button>
-          <button type="button" class="btn btn-secondary" @click="getShortUrl">生成短链</button>
+          <button type="button" class="secondary-action-button" @click="getShortUrl">生成短链</button>
         </div>
       </div>
     </fieldset>
