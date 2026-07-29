@@ -1,168 +1,150 @@
 <template>
-  <div class="row g-4 custom-div sub-table" :class="{ 'sub-table--modern': mode === 'modern' }">
-    <div class="col-12 col-lg-12 pt-4 pt-lg-0">
-      <div class="tab-content p-0">
-        <div class="tab-pane fade show active">
-          <div class="card mb-4">
-            <div class="card-body">
-              <div class="row mb-3 g-3">
-                <fieldset class="col-12 p-0 border-0 m-0">
-                  <legend class="visually-hidden">订阅输入与配置</legend>
-                  <div class="row g-3">
-                    <div class="col-12 col-md-12">
-                      <label class="form-label" for="subscription-urls">订阅链接</label>
-                      <textarea
-                        class="form-control"
-                        id="subscription-urls"
-                        v-model.trim="urls"
-                        :placeholder="placeholder"
-                        rows="3"
-                      ></textarea>
-                    </div>
-                    <div :class="mode === 'modern' ? 'col-12 col-md-6' : 'col-5 col-md-6'">
-                      <label class="form-label" for="client">客户端</label>
-                      <select class="form-select" id="client" v-model="target">
-                        <option v-for="option in targetOptions" :key="option.value" :value="option.value">
-                          {{ option.text }}
-                        </option>
-                      </select>
-                    </div>
-                    <div :class="mode === 'modern' ? 'col-12 col-md-6' : 'col-7 col-md-6'">
-                      <label class="form-label" for="api">后端服务</label>
-                      <select class="form-select" id="api" @change="selectApi">
-                        <option :value="apiUrl">
-                          {{ apiUrl }}
-                        </option>
-                        <option value="manual">自定义后端 API 地址</option>
-                      </select>
-                    </div>
-                    <div class="col-12 col-md-12" v-if="isShowManualApiUrl">
-                      <label class="form-label" for="manual-api-url">自定义后端 API 地址</label>
-                      <input
-                        class="form-control"
-                        id="manual-api-url"
-                        placeholder="自定义后端 API 地址示例：https://sub.ops.ci"
-                        v-model="api"
-                      />
-                    </div>
-                    <div :class="mode === 'modern' ? 'col-12 col-md-10' : 'col-8 col-md-10'">
-                      <label class="form-label" for="remote">远程配置</label>
-                      <select class="form-select" id="remote" @change="selectRemoteConfig">
-                        <option value="">默认配置</option>
-                        <option v-for="option in remoteConfigOptions" :key="option.value" :value="option.value">
-                          {{ option.text }}
-                        </option>
-                        <option value="manual">自定义远程配置地址</option>
-                      </select>
-                    </div>
-                    <div :class="mode === 'modern' ? 'col-12 col-md-2' : 'col-4 col-md-2'">
-                      <label class="form-label" for="more-config-toggle">&nbsp;</label>
-                      <button id="more-config-toggle" type="button" class="btn btn-warning" @click="showMoreConfig">
-                        参数
-                      </button>
-                    </div>
-                    <div class="col-12 col-md-12" v-if="isShowRemoteConfig">
-                      <label class="form-label" for="manual-remote-config">自定义远程配置地址</label>
-                      <input
-                        class="form-control"
-                        id="manual-remote-config"
-                        placeholder="自定义远程配置地址："
-                        v-model="remoteConfig"
-                      />
-                    </div>
-                    <div class="col-12 col-md-12" v-if="isShowMoreConfig">
-                      <fieldset class="border-0 p-0 m-0">
-                        <legend class="visually-hidden">可选参数</legend>
-                        <div class="row g-3">
-                          <div class="col-12 col-md-12">
-                            <label class="form-label" for="more-config-include">Include</label>
-                            <input
-                              class="form-control"
-                              id="more-config-include"
-                              placeholder="Include: 可选"
-                              v-model="moreConfig.include"
-                            />
-                          </div>
-                          <div class="col-12 col-md-12">
-                            <label class="form-label" for="more-config-exclude">Exclude</label>
-                            <input
-                              class="form-control"
-                              id="more-config-exclude"
-                              placeholder="Exclude: 可选"
-                              v-model="moreConfig.exclude"
-                            />
-                          </div>
-                          <div class="col-md check-div" :style="{ display: 'flex', flexWrap: 'wrap' }">
-                            <div class="form-check form-check-inline">
-                              <input class="form-check-input" type="checkbox" id="emoji" v-model="moreConfig.emoji" />
-                              <label class="form-check-label" for="emoji">Emoji</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                              <input class="form-check-input" type="checkbox" id="udp" v-model="moreConfig.udp" />
-                              <label class="form-check-label" for="udp">开启UDP</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                              <input class="form-check-input" type="checkbox" id="sort" v-model="moreConfig.sort" />
-                              <label class="form-check-label" for="sort">排序节点</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                              <input class="form-check-input" type="checkbox" id="scv" v-model="moreConfig.scv" />
-                              <label class="form-check-label" for="scv">关闭证书检查</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                              <input class="form-check-input" type="checkbox" id="nodelist" v-model="moreConfig.list" />
-                              <label class="form-check-label" for="nodelist">Node List</label>
-                            </div>
-                          </div>
-                        </div>
-                      </fieldset>
-                    </div>
-                  </div>
-                </fieldset>
-                <fieldset class="col-12 p-0 border-0 m-0">
-                  <legend class="visually-hidden">订阅输出与操作</legend>
-                  <div class="row g-3">
-                    <div class="col-12 col-md-12">
-                      <div class="divider divider-dashed">
-                        <div class="divider-text"><i class="ti ti-refresh" style="color: gray"></i></div>
-                      </div>
-                    </div>
-                    <div :class="result.subUrl ? 'col-12 col-md-8' : 'col-12 col-md-10'">
-                      <label class="form-label" for="converted-sub-url">转换结果</label>
-                      <input
-                        class="form-control"
-                        id="converted-sub-url"
-                        placeholder="点击转换链接"
-                        v-model.trim="result.subUrl"
-                      />
-                    </div>
-                    <div class="col-12 col-md-2 d-flex align-items-end">
-                      <button type="button" class="btn btn-success" @click="getSubUrl()">转换</button>
-                    </div>
-                    <div v-if="result.subUrl" class="col-12 col-md-2 d-flex align-items-end">
-                      <button type="button" class="btn btn-outline-success" @click="shareSubscription">分享</button>
-                    </div>
-                    <div class="col-12 col-md-10">
-                      <label class="form-label" for="short-url-result">短链结果</label>
-                      <input
-                        class="form-control"
-                        id="short-url-result"
-                        placeholder="点击获取短链"
-                        v-model.trim="result.shortUrl"
-                      />
-                    </div>
-                    <div class="col-12 col-md-2 d-flex align-items-end">
-                      <button type="button" class="btn btn-primary" @click="getShortUrl()">短链</button>
-                    </div>
-                  </div>
-                </fieldset>
-              </div>
-            </div>
+  <form class="sub-table sub-table--modern" :data-ux-mode="mode" @submit.prevent="getSubUrl">
+    <fieldset class="subscription-input">
+      <legend class="visually-hidden">订阅输入</legend>
+      <div class="form-field">
+        <label for="subscription-urls">订阅链接</label>
+        <textarea id="subscription-urls" v-model.trim="urls" :placeholder="placeholder" rows="3"></textarea>
+      </div>
+    </fieldset>
+
+    <div class="base-config-grid">
+      <div class="form-field">
+        <label for="client">客户端</label>
+        <select id="client" v-model="target">
+          <option v-for="option in targetOptions" :key="option.value" :value="option.value">
+            {{ option.text }}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label for="api">后端服务</label>
+        <select id="api" @change="selectApi">
+          <option :value="apiUrl">
+            {{ apiUrl }}
+          </option>
+          <option value="manual">自定义后端 API 地址</option>
+        </select>
+        <Transition name="field-reveal">
+          <div v-if="isShowManualApiUrl" class="conditional-field">
+            <label for="manual-api-url">自定义后端 API 地址</label>
+            <input id="manual-api-url" v-model="api" placeholder="自定义后端 API 地址示例：https://sub.ops.ci" />
           </div>
-        </div>
+        </Transition>
+      </div>
+
+      <div class="form-field">
+        <label for="remote">远程配置</label>
+        <select id="remote" @change="selectRemoteConfig">
+          <option value="">默认配置</option>
+          <option v-for="option in remoteConfigOptions" :key="option.value" :value="option.value">
+            {{ option.text }}
+          </option>
+          <option value="manual">自定义远程配置地址</option>
+        </select>
+        <Transition name="field-reveal">
+          <div v-if="isShowRemoteConfig" class="conditional-field">
+            <label for="manual-remote-config">自定义远程配置地址</label>
+            <input id="manual-remote-config" v-model="remoteConfig" placeholder="自定义远程配置地址：" />
+          </div>
+        </Transition>
       </div>
     </div>
-  </div>
+
+    <button
+      id="more-config-toggle"
+      type="button"
+      class="advanced-disclosure btn-secondary"
+      :aria-expanded="isShowMoreConfig"
+      aria-controls="advanced-config"
+      @click="showMoreConfig"
+    >
+      <span>高级参数</span>
+      <span aria-hidden="true">{{ isShowMoreConfig ? '-' : '+' }}</span>
+    </button>
+
+    <Transition name="advanced-reveal">
+      <fieldset v-if="isShowMoreConfig" id="advanced-config" class="advanced-config">
+        <legend class="visually-hidden">高级参数</legend>
+        <div class="advanced-fields-grid">
+          <div class="form-field">
+            <label for="more-config-include">Include</label>
+            <input id="more-config-include" v-model="moreConfig.include" placeholder="Include: 可选" />
+          </div>
+          <div class="form-field">
+            <label for="more-config-exclude">Exclude</label>
+            <input id="more-config-exclude" v-model="moreConfig.exclude" placeholder="Exclude: 可选" />
+          </div>
+        </div>
+        <div class="checkbox-group">
+          <div class="checkbox-field">
+            <input id="emoji" v-model="moreConfig.emoji" type="checkbox" />
+            <label for="emoji">Emoji</label>
+          </div>
+          <div class="checkbox-field">
+            <input id="udp" v-model="moreConfig.udp" type="checkbox" />
+            <label for="udp">开启 UDP</label>
+          </div>
+          <div class="checkbox-field">
+            <input id="sort" v-model="moreConfig.sort" type="checkbox" />
+            <label for="sort">排序节点</label>
+          </div>
+          <div class="checkbox-field">
+            <input id="scv" v-model="moreConfig.scv" type="checkbox" />
+            <label for="scv">关闭证书检查</label>
+          </div>
+          <div class="checkbox-field">
+            <input id="nodelist" v-model="moreConfig.list" type="checkbox" />
+            <label for="nodelist">Node List</label>
+          </div>
+        </div>
+      </fieldset>
+    </Transition>
+
+    <div class="primary-action-row">
+      <button type="submit" class="btn btn-primary">转换订阅</button>
+    </div>
+
+    <fieldset class="results-section">
+      <legend>转换结果</legend>
+      <p class="results-status" :class="{ 'results-status--success': result.subUrl }" aria-live="polite">
+        {{ result.subUrl ? '转换链接已生成' : '转换后将在此显示结果' }}
+      </p>
+
+      <div class="form-field result-field">
+        <label for="converted-sub-url">转换链接</label>
+        <div class="result-control-row">
+          <input id="converted-sub-url" v-model.trim="result.subUrl" placeholder="点击转换订阅" />
+          <button
+            type="button"
+            class="btn btn-secondary"
+            :disabled="!result.subUrl"
+            @click="toCopy(result.subUrl, '订阅链接')"
+          >
+            复制
+          </button>
+          <button v-if="result.subUrl" type="button" class="btn btn-secondary" @click="shareSubscription">分享</button>
+        </div>
+      </div>
+
+      <div class="form-field result-field">
+        <label for="short-url-result">短链</label>
+        <div class="result-control-row">
+          <input id="short-url-result" v-model.trim="result.shortUrl" placeholder="点击生成短链" />
+          <button
+            type="button"
+            class="btn btn-secondary"
+            :disabled="!result.shortUrl"
+            @click="toCopy(result.shortUrl, '短链')"
+          >
+            复制短链
+          </button>
+          <button type="button" class="btn btn-secondary" @click="getShortUrl">生成短链</button>
+        </div>
+      </div>
+    </fieldset>
+  </form>
 </template>
 
 <script>
@@ -346,94 +328,4 @@ export default {
 };
 </script>
 
-<style scoped>
-.custom-div {
-  width: 100%;
-  margin: 0 auto;
-}
-@media (min-width: 767.98px) {
-  .custom-div {
-    width: 90%;
-    margin: 0 auto;
-  }
-}
-@media (min-width: 991.98px) {
-  .custom-div {
-    width: 80%;
-    margin: 0 auto;
-  }
-}
-@media (min-width: 1199.98px) {
-  .custom-div {
-    width: 70%;
-    margin: 0 auto;
-  }
-}
-
-.btn {
-  width: 100%;
-}
-
-.check-div {
-  display: flex;
-  justify-content: center; /* 水平居中 */
-  align-items: center; /* 垂直居中 */
-  height: 100%; /* 可以设置固定高度或者根据需求调整 */
-}
-
-.divider {
-  margin: 1%;
-}
-
-.sub-table--modern {
-  max-width: 68.75rem;
-}
-
-.sub-table--modern .card {
-  border: 1px solid #d9dee7;
-  box-shadow: none;
-}
-
-.sub-table--modern .card-body {
-  padding: 1.25rem;
-}
-
-.sub-table--modern .form-label {
-  color: #3b4350;
-  font-weight: 600;
-}
-
-.sub-table--modern .form-control,
-.sub-table--modern .form-select {
-  max-width: 100%;
-  min-width: 0;
-}
-
-.sub-table--modern .btn {
-  min-height: 2.5rem;
-}
-
-.sub-table--modern .divider {
-  margin: 1.25rem 0;
-}
-
-@media (min-width: 767.98px) {
-  .sub-table--modern.custom-div {
-    width: calc(100% - 2rem);
-  }
-}
-
-@media (max-width: 575.98px) {
-  .sub-table--modern.custom-div {
-    max-width: 100%;
-  }
-
-  .sub-table--modern .card-body {
-    padding: 1rem;
-  }
-
-  .sub-table--modern .row {
-    --bs-gutter-x: 1rem;
-  }
-}
-</style>
+<style scoped src="./subTableModern.css"></style>
