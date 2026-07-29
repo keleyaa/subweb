@@ -27,6 +27,16 @@ function hasArrayValue(config, key) {
   return Array.isArray(config[key]);
 }
 
+function copyConfigArray(items) {
+  return items.map((item) => {
+    if (Array.isArray(item)) {
+      return [...item];
+    }
+
+    return item && typeof item === 'object' ? { ...item } : item;
+  });
+}
+
 export function normalizeRuntimeConfig(config) {
   const source = config && typeof config === 'object' && !Array.isArray(config) ? config : {};
 
@@ -34,10 +44,14 @@ export function normalizeRuntimeConfig(config) {
     siteName: hasStringValue(source, 'siteName') ? source.siteName : DEFAULT_RUNTIME_CONFIG.siteName,
     apiUrl: hasStringValue(source, 'apiUrl') ? source.apiUrl : DEFAULT_RUNTIME_CONFIG.apiUrl,
     shortUrl: hasStringValue(source, 'shortUrl') ? source.shortUrl : DEFAULT_RUNTIME_CONFIG.shortUrl,
-    menuItem: hasArrayValue(source, 'menuItem') ? source.menuItem : DEFAULT_RUNTIME_CONFIG.menuItem,
-    remoteConfigOptions: hasArrayValue(source, 'remoteConfigOptions')
-      ? source.remoteConfigOptions
-      : DEFAULT_RUNTIME_CONFIG.remoteConfigOptions,
+    menuItem: copyConfigArray(
+      hasArrayValue(source, 'menuItem') ? source.menuItem : DEFAULT_RUNTIME_CONFIG.menuItem,
+    ),
+    remoteConfigOptions: copyConfigArray(
+      hasArrayValue(source, 'remoteConfigOptions')
+        ? source.remoteConfigOptions
+        : DEFAULT_RUNTIME_CONFIG.remoteConfigOptions,
+    ),
     uxMode: source.uxMode === 'modern' || source.uxMode === 'legacy' ? source.uxMode : 'legacy',
   };
 }

@@ -12,6 +12,32 @@ describe('normalizeRuntimeConfig', () => {
     expect(config.uxMode).toBe('legacy');
   });
 
+  it('keeps default option arrays isolated from caller mutations', () => {
+    const firstConfig = normalizeRuntimeConfig();
+
+    firstConfig.menuItem[0].title = 'Changed title';
+    firstConfig.menuItem.push({ title: 'Unexpected menu item' });
+    firstConfig.remoteConfigOptions[0].text = 'Changed option';
+    firstConfig.remoteConfigOptions.pop();
+
+    const nextConfig = normalizeRuntimeConfig();
+
+    expect(nextConfig.menuItem).toEqual([
+      { title: '首页', link: '/', target: '' },
+      { title: 'GitHub', link: 'https://github.com/stilleshan/subweb', target: '_blank' },
+    ]);
+    expect(nextConfig.remoteConfigOptions).toEqual([
+      {
+        value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online.ini',
+        text: 'ACL4SSR Online',
+      },
+      {
+        value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full.ini',
+        text: 'ACL4SSR Online Full',
+      },
+    ]);
+  });
+
   it('keeps the modern UX mode', () => {
     expect(normalizeRuntimeConfig({ uxMode: 'modern' }).uxMode).toBe('modern');
   });
