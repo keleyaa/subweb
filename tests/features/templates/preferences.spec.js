@@ -186,6 +186,7 @@ describe('local conversion templates', () => {
       'javascript:alert(1)',
       'ftp:files.example.test',
       'about:blank',
+      'about:',
       'intent:scan',
       'custom-scheme:opaque',
       '//host.example.test/path',
@@ -240,6 +241,7 @@ describe('local conversion templates', () => {
     };
     const unsafeTemplates = [
       { ...safeTemplate, name: 'about:blank' },
+      { ...safeTemplate, name: 'about:' },
       { ...safeTemplate, moreConfig: { ...completeMoreConfig(), include: 'intent:scan' } },
       { ...safeTemplate, moreConfig: { ...completeMoreConfig(), exclude: 'custom-scheme:opaque' } },
       { ...safeTemplate, moreConfig: { ...completeMoreConfig(), include: '//host.example.test/path' } },
@@ -260,6 +262,7 @@ describe('local conversion templates', () => {
     }
 
     expect(errors).toEqual([
+      'Invalid saved templates',
       'Invalid saved templates',
       'Invalid saved templates',
       'Invalid saved templates',
