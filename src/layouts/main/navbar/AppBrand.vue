@@ -25,6 +25,12 @@ export default {
   text-decoration: none;
 }
 
+.app-brand-link:focus-visible {
+  outline: 3px solid #0066cc;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .app-brand-mark {
   display: grid;
   width: 28px;

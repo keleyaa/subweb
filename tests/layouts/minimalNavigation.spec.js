@@ -10,13 +10,18 @@ const forbidden = (...parts) => parts.join('');
 describe('minimal borderless navigation', () => {
   it('renders a compact text brand that links home without legacy menu controls', async () => {
     const source = await readFile(appBrandUrl, 'utf8');
+    const legacyFocusColor = ['rgba(0, 102, 204, ', '0.24)'].join('');
 
     expect(source).toContain('<router-link to="/" class="app-brand-link" :aria-label="`${siteName}，返回首页`">');
     expect(source).toContain('class="app-brand-mark"');
     expect(source).toContain('{{ siteName }}');
     expect(source).toContain('siteName: window.config.siteName');
     expect(source).toMatch(/\.app-brand-link\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*gap:\s*10px;/s);
+    expect(source).toMatch(
+      /\.app-brand-link:focus-visible\s*\{[^}]*outline:\s*3px solid #0066cc;[^}]*outline-offset:\s*2px;[^}]*border-radius:\s*4px;/s,
+    );
     expect(source).toMatch(/\.app-brand-mark\s*\{[^}]*width:\s*28px;[^}]*height:\s*28px;[^}]*border-radius:\s*7px;[^}]*background:\s*#1d1d1f;[^}]*color:\s*#fff;/s);
+    expect(source).not.toContain(legacyFocusColor);
 
     for (const token of [
       '<' + 'svg',
@@ -31,6 +36,7 @@ describe('minimal borderless navigation', () => {
 
   it('shows only the configured GitHub link with accessible interaction styles', async () => {
     const source = await readFile(navMenuUrl, 'utf8');
+    const legacyFocusColor = ['rgba(0, 102, 204, ', '0.24)'].join('');
 
     expect(source).toContain('<a');
     expect(source).toContain('v-if="githubItem"');
@@ -47,7 +53,8 @@ describe('minimal borderless navigation', () => {
     expect(source).toMatch(/githubItem\(\)\s*\{\s*return getGithubMenuItem\(this\.navBarItem\);\s*\}/);
     expect(source).toMatch(/\.minimal-nav-link\s*\{[^}]*min-height:\s*44px;/s);
     expect(source).toMatch(/\.minimal-nav-link:hover,\s*\.minimal-nav-link:focus-visible\s*\{[^}]*color:\s*#06c;/s);
-    expect(source).toMatch(/\.minimal-nav-link:focus-visible\s*\{[^}]*outline:\s*3px solid rgba\(0,\s*102,\s*204,\s*0\.24\);[^}]*outline-offset:\s*2px;/s);
+    expect(source).toMatch(/\.minimal-nav-link:focus-visible\s*\{[^}]*outline:\s*3px solid #0066cc;[^}]*outline-offset:\s*2px;/s);
+    expect(source).not.toContain(legacyFocusColor);
 
     for (const token of [
       forbidden('landing-nav-', 'menu'),

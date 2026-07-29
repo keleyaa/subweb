@@ -47,7 +47,7 @@ export default {
 
 .minimal-nav-link:focus-visible {
   border-radius: 4px;
-  outline: 3px solid rgba(0, 102, 204, 0.24);
+  outline: 3px solid #0066cc;
   outline-offset: 2px;
 }
 </style>

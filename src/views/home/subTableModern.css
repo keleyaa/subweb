@@ -63,7 +63,7 @@
 .sub-table--modern textarea:focus-visible,
 .sub-table--modern select:focus-visible,
 .sub-table--modern input:focus-visible {
-  outline: 3px solid rgba(0, 113, 227, 0.28);
+  outline: 3px solid #0066cc;
   outline-offset: 2px;
 }
 
@@ -213,7 +213,7 @@
 }
 
 .sub-table--modern .results-status--success {
-  color: #248a3d;
+  color: #1f7a35;
 }
 
 .sub-table--modern .result-control-row {
@@ -258,7 +258,7 @@
 .sub-table--modern .primary-action-button:focus-visible,
 .sub-table--modern .secondary-action-button:focus-visible,
 .sub-table--modern .advanced-disclosure:focus-visible {
-  outline: 3px solid rgba(0, 113, 227, 0.28);
+  outline: 3px solid #0066cc;
   outline-offset: 2px;
   box-shadow: none;
   transform: none;

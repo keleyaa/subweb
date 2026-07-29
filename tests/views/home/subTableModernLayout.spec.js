@@ -156,6 +156,7 @@ describe('SubTable modern visual constraints', () => {
 
   it('owns complete primary and secondary button interaction states', () => {
     const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
+    const legacyFocusColor = ['rgba(0, 113, 227, ', '0.28)'].join('');
 
     expect(source).toMatch(/\.primary-action-button\s*\{[\s\S]*?background:\s*#0071e3/);
     expect(source).toMatch(/\.primary-action-button:hover\s*\{[\s\S]*?background:\s*#0077ed/);
@@ -165,7 +166,20 @@ describe('SubTable modern visual constraints', () => {
     expect(source).toMatch(/\.secondary-action-button:active\s*\{[\s\S]*?background:\s*#e8e8ed/);
     expect(source).toMatch(/\.secondary-action-button:disabled\s*\{/);
     expect(source).toMatch(/\.primary-action-button:focus-visible[\s\S]*?\.secondary-action-button:focus-visible/);
+    expect(source).toMatch(
+      /textarea:focus-visible,[\s\S]*?select:focus-visible,[\s\S]*?input:focus-visible\s*\{[^}]*outline:\s*3px solid #0066cc;/,
+    );
+    expect(source).toMatch(
+      /\.primary-action-button:focus-visible,[\s\S]*?\.secondary-action-button:focus-visible,[\s\S]*?\.advanced-disclosure:focus-visible\s*\{[^}]*outline:\s*3px solid #0066cc;/,
+    );
+    expect(source).not.toContain(legacyFocusColor);
     expect(source).toMatch(/transition:\s*(?:background-color|border-color|color)[^;]*1(?:6|7|8)0ms ease-out/);
     expect(source).not.toMatch(/transition:\s*all\b/);
+  });
+
+  it('uses accessible contrast for successful result status text', () => {
+    const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
+
+    expect(source).toMatch(/\.results-status--success\s*\{[^}]*color:\s*#1f7a35;/);
   });
 });
