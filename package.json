@@ -6,6 +6,7 @@
     "serve": "vite",
     "build": "vite build",
     "lint": "eslint --ext .js,.vue src",
+    "lint:p1-04a": "eslint src/views/home/index.js src/network/index.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },

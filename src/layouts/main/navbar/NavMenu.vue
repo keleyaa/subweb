@@ -1,9 +1,5 @@
 <template>
-  <div
-    class="navbar-collapse landing-nav-menu collapse"
-    :class="{ show: $store.state.style.main.isCollapsed }"
-    style=""
-  >
+  <div class="navbar-collapse landing-nav-menu collapse" :class="{ show: styleFacade.isCollapsed }" style="">
     <button
       class="navbar-toggler border-0 text-heading position-absolute end-0 top-0 scaleX-n1-rtl"
       type="button"
@@ -12,7 +8,7 @@
       aria-controls="navbarSupportedContent"
       aria-expanded="true"
       aria-label="Toggle navigation"
-      @click="$store.commit('MAIN_LAYOUT_MENU_EXPAND')"
+      @click="styleFacade.toggleMenu"
     >
       <i class="ti ti-x ti-sm"></i>
     </button>
@@ -22,12 +18,17 @@
       </li>
     </ul>
   </div>
-  <div class="landing-menu-overlay d-lg-none" @click="collapsedMenu"></div>
+  <div class="landing-menu-overlay d-lg-none" @click="styleFacade.toggleMenu"></div>
 </template>
 
 <script>
+import { useStyleFacadeStore } from '@/stores/styleFacade';
+
 export default {
   name: 'NavMenu',
+  setup() {
+    return { styleFacade: useStyleFacadeStore() };
+  },
   data() {
     return {
       navBarItem: [],
@@ -35,11 +36,6 @@ export default {
   },
   created() {
     this.navBarItem = window.config.menuItem;
-  },
-  methods: {
-    collapsedMenu() {
-      this.$store.commit('MAIN_LAYOUT_MENU_EXPAND');
-    },
   },
 };
 </script>

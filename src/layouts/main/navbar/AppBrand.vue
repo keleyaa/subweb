@@ -9,7 +9,7 @@
       aria-controls="navbarSupportedContent"
       aria-expanded="false"
       aria-label="Toggle navigation"
-      @click="$store.commit('MAIN_LAYOUT_MENU_EXPAND')"
+      @click="styleFacade.toggleMenu"
     >
       <i class="ti ti-menu-2 ti-sm align-middle"></i>
     </button>
@@ -51,8 +51,13 @@
 </template>
 
 <script>
+import { useStyleFacadeStore } from '@/stores/styleFacade';
+
 export default {
   name: 'AppBrand',
+  setup() {
+    return { styleFacade: useStyleFacadeStore() };
+  },
   data() {
     return {
       siteName: '',

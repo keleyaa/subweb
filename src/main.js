@@ -1,4 +1,5 @@
 import { createApp } from 'vue';
+import { createPinia } from 'pinia';
 import App from './App.vue';
 import router from './router';
 import store from './store';
@@ -8,8 +9,9 @@ import { installRuntimeConfig } from './runtime/config';
 
 installRuntimeConfig(window);
 const app = createApp(App);
+const pinia = createPinia();
 app.component('DialogView', DialogView);
-app.use(router).use(store);
+app.use(router).use(store).use(pinia);
 
 app.config.globalProperties.$showDialog = showDialog;
 app.config.globalProperties.$closeDialog = closeDialog;

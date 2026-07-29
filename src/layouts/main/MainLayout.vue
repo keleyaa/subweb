@@ -19,15 +19,19 @@
 <script>
 import NavBar from './navbar/NavBar.vue';
 import FooterBar from './footer/FooterBar.vue';
+import { useStyleFacadeStore } from '@/stores/styleFacade';
 
 export default {
   components: { NavBar, FooterBar },
   name: 'MainLayout',
+  setup() {
+    return { styleFacade: useStyleFacadeStore() };
+  },
   methods: {
     setNavActive() {
       const scrollY = window.scrollY || window.pageYOffset;
       // 设置 MAIN_LAYOUT_NAV_ACTIVE 根据滚动位置
-      this.$store.commit('MAIN_LAYOUT_NAV_ACTIVE', scrollY > 0);
+      this.styleFacade.setNavActive(scrollY > 0);
     },
   },
   mounted() {
