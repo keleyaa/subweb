@@ -11,7 +11,7 @@ describe('minimal borderless navigation', () => {
   it('renders a compact text brand that links home without legacy menu controls', async () => {
     const source = await readFile(appBrandUrl, 'utf8');
 
-    expect(source).toContain('<router-link to="/" class="app-brand-link" aria-label="返回首页">');
+    expect(source).toContain('<router-link to="/" class="app-brand-link" :aria-label="`${siteName}，返回首页`">');
     expect(source).toContain('class="app-brand-mark"');
     expect(source).toContain('{{ siteName }}');
     expect(source).toContain('siteName: window.config.siteName');
@@ -40,8 +40,11 @@ describe('minimal borderless navigation', () => {
     expect(source).toContain('class="minimal-nav-link"');
     expect(source).toContain('rel="noopener noreferrer"');
     expect(source).toContain('{{ githubItem.title }}');
-    expect(source).toMatch(/navBarItem:\s*window\.config\.menuItem/);
-    expect(source).toMatch(/githubItem\(\)\s*\{\s*return this\.navBarItem\.find\(\(item\) => \/github\/i\.test\(`\$\{item\.title\} \$\{item\.link\}`\)\) \|\| null;\s*\}/);
+    expect(source).toContain("import { getGithubMenuItem } from './navigation';");
+    expect(source).toContain(
+      'navBarItem: Array.isArray(window.config?.menuItem) ? window.config.menuItem : []'
+    );
+    expect(source).toMatch(/githubItem\(\)\s*\{\s*return getGithubMenuItem\(this\.navBarItem\);\s*\}/);
     expect(source).toMatch(/\.minimal-nav-link\s*\{[^}]*min-height:\s*44px;/s);
     expect(source).toMatch(/\.minimal-nav-link:hover,\s*\.minimal-nav-link:focus-visible\s*\{[^}]*color:\s*#06c;/s);
     expect(source).toMatch(/\.minimal-nav-link:focus-visible\s*\{[^}]*outline:\s*3px solid rgba\(0,\s*102,\s*204,\s*0\.24\);[^}]*outline-offset:\s*2px;/s);

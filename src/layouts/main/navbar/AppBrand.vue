@@ -1,5 +1,5 @@
 <template>
-  <router-link to="/" class="app-brand-link" aria-label="返回首页">
+  <router-link to="/" class="app-brand-link" :aria-label="`${siteName}，返回首页`">
     <span class="app-brand-mark" aria-hidden="true">S</span>
     <span class="app-brand-text">{{ siteName }}</span>
   </router-link>

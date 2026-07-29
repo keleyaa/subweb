@@ -12,16 +12,18 @@
 </template>
 
 <script>
+import { getGithubMenuItem } from './navigation';
+
 export default {
   name: 'NavMenu',
   data() {
     return {
-      navBarItem: window.config.menuItem,
+      navBarItem: Array.isArray(window.config?.menuItem) ? window.config.menuItem : [],
     };
   },
   computed: {
     githubItem() {
-      return this.navBarItem.find((item) => /github/i.test(`${item.title} ${item.link}`)) || null;
+      return getGithubMenuItem(this.navBarItem);
     },
   },
 };
