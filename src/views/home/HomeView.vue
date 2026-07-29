@@ -1,20 +1,13 @@
 <template>
-  <section id="hero-animation" class="home-view" :class="presentation.rootClass">
-    <div id="landingHero" class="section-py landing-hero position-relative">
-      <div class="container">
-        <div class="hero-text-box">
-          <h1 class="text-primary display-6 fw-bold">{{ presentation.title }}</h1>
-          <p v-if="presentation.description" class="hero-sub-title mb-0">
-            {{ presentation.description }}
-          </p>
-        </div>
-        <div class="hero-animation-img">
-          <SubTable :mode="uxMode" />
-        </div>
-      </div>
+  <main class="home-workspace" :class="presentation.rootClass">
+    <div class="home-workspace__inner">
+      <header class="home-workspace__heading">
+        <h1>{{ presentation.title }}</h1>
+        <p v-if="presentation.description">{{ presentation.description }}</p>
+      </header>
+      <SubTable :mode="uxMode" />
     </div>
-    <div class="landing-hero-blank"></div>
-  </section>
+  </main>
 </template>
 
 <script>
@@ -40,89 +33,47 @@ export default {
 </script>
 
 <style scoped>
-.light-style .landing-hero {
-  background: linear-gradient(338.18deg, #fafaff 0%, #ececec 94.44%);
-}
-.landing-hero .hero-animation-img {
-  margin-bottom: -24rem;
-}
-@media (max-width: 1199.98px) {
-  .landing-hero .hero-animation-img {
-    margin-bottom: -18rem;
-  }
-}
-@media (max-width: 575.98px) {
-  .landing-hero .hero-animation-img {
-    margin-bottom: -10rem;
-  }
+.home-workspace {
+  min-height: calc(100vh - 57px);
 }
 
-/* Landing Hero Blank */
-.landing-hero-blank {
-  padding-top: 20rem;
+.home-workspace__inner {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 48px 20px 64px;
 }
 
-.home-view--legacy .hero-text-box {
-  text-align: center;
+.home-workspace__heading {
+  margin-bottom: 28px;
 }
 
-.home-view--modern .landing-hero {
-  background: #f7f8fa;
-  padding-top: 4rem;
+.home-workspace__heading h1 {
+  margin: 0 0 8px;
+  color: #1d1d1f;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.2;
 }
 
-.home-view--modern .hero-text-box {
-  max-width: 68.75rem;
-  margin: 0 auto 1.5rem;
-  text-align: left;
-}
-
-.home-view--modern .hero-text-box h1 {
-  margin-bottom: 0.375rem;
-  color: #202734 !important;
-  font-size: 1.75rem;
-  line-height: 1.35;
-}
-
-.home-view--modern .hero-sub-title {
+.home-workspace__heading p {
   margin: 0;
-  color: #626b79;
-  font-size: 0.9375rem;
+  color: #6e6e73;
+  font-size: 15px;
   line-height: 1.5;
 }
 
-.home-view--modern .hero-animation-img {
-  margin-bottom: 0;
-}
-
-.home-view--modern .landing-hero-blank {
-  padding-top: 2rem;
-}
-
-@media (min-width: 992px) {
-  .home-view--modern .landing-hero {
-    padding-top: 5rem;
-  }
-}
-
 @media (max-width: 575.98px) {
-  .home-view--modern .hero-text-box {
-    margin-bottom: 1.25rem;
+  .home-workspace__inner {
+    padding: 28px 16px 40px;
   }
 
-  .home-view--modern .landing-hero-blank {
-    padding-top: 1.25rem;
+  .home-workspace__heading {
+    margin-bottom: 20px;
   }
-}
 
-@media (max-width: 1199.98px) {
-  .landing-hero-blank {
-    padding-top: 15rem;
-  }
-}
-@media (max-width: 575.98px) {
-  .landing-hero-blank {
-    padding-top: 7rem;
+  .home-workspace__heading h1 {
+    font-size: 27px;
   }
 }
 </style>
