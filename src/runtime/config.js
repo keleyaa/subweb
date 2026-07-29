@@ -44,13 +44,11 @@ export function normalizeRuntimeConfig(config) {
     siteName: hasStringValue(source, 'siteName') ? source.siteName : DEFAULT_RUNTIME_CONFIG.siteName,
     apiUrl: hasStringValue(source, 'apiUrl') ? source.apiUrl : DEFAULT_RUNTIME_CONFIG.apiUrl,
     shortUrl: hasStringValue(source, 'shortUrl') ? source.shortUrl : DEFAULT_RUNTIME_CONFIG.shortUrl,
-    menuItem: copyConfigArray(
-      hasArrayValue(source, 'menuItem') ? source.menuItem : DEFAULT_RUNTIME_CONFIG.menuItem,
-    ),
+    menuItem: copyConfigArray(hasArrayValue(source, 'menuItem') ? source.menuItem : DEFAULT_RUNTIME_CONFIG.menuItem),
     remoteConfigOptions: copyConfigArray(
       hasArrayValue(source, 'remoteConfigOptions')
         ? source.remoteConfigOptions
-        : DEFAULT_RUNTIME_CONFIG.remoteConfigOptions,
+        : DEFAULT_RUNTIME_CONFIG.remoteConfigOptions
     ),
     uxMode: source.uxMode === 'modern' || source.uxMode === 'legacy' ? source.uxMode : 'legacy',
   };
