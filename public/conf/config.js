@@ -1,34 +1,18 @@
 window.config = {
-  // 网站标题
-  siteName: 'Subconverter Web',
-  // API 地址
+  // 站点名称
+  siteName: 'Subweb',
+  // 转换后端 API 地址
   apiUrl: 'http://127.0.0.1:25500',
-  // 短域名服务地址
-  shortUrl: 'https://s.ops.ci',
-  // 首页 UX 模式
-  uxMode: 'modern',
-  // 首页菜单
+  // 可选短链服务地址。留空时，前端不会显示短链功能。
+  shortUrl: '',
+  // 可选导航链接。
   menuItem: [
     {
-      title: '首页',
-      link: '/',
-      target: '',
-    },
-    {
       title: 'GitHub',
-      link: 'https://github.com/stilleshan/subweb',
+      link: 'https://github.com/keleyaa/subweb',
       target: '_blank',
     },
   ],
-  // 远程配置地址,可以自行按照格式添加。
-  remoteConfigOptions: [
-    {
-      value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online.ini',
-      text: 'ACL4SSR Online',
-    },
-    {
-      value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full.ini',
-      text: 'ACL4SSR Online Full',
-    },
-  ],
+  // 可选远程配置预设。默认不连接第三方服务。
+  remoteConfigOptions: [],
 };

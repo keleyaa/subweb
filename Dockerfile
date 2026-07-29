@@ -1,7 +1,7 @@
 FROM node:20.15.1-alpine AS build
-LABEL maintainer="Stille <stille@ioiox.com>"
-
-ENV VERSION 2.0
+LABEL org.opencontainers.image.title="Subweb" \
+  org.opencontainers.image.description="A minimal frontend for subscription conversion backends" \
+  org.opencontainers.image.source="https://github.com/keleyaa/subweb"
 
 WORKDIR /app
 COPY package*.json ./

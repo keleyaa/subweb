@@ -20,7 +20,7 @@ describe('home workspace layout', () => {
     expect(source).toContain('class="home-workspace"');
     expect(source).toContain('class="home-workspace__inner"');
     expect(source).toContain('class="home-workspace__heading"');
-    expect(source).toContain('<SubTable :mode="uxMode" />');
+    expect(source).toContain('<SubTable />');
     expect(source.match(/<SubTable/g)).toHaveLength(1);
   });
 
@@ -56,14 +56,14 @@ describe('home workspace layout', () => {
     );
   });
 
-  it('keeps presentation and runtime mode wiring', async () => {
+  it('uses one fixed presentation without a retired runtime-UX compatibility layer', async () => {
     const source = await readFile(sourceUrl, 'utf8');
 
-    expect(source).toContain(':class="presentation.rootClass"');
-    expect(source).toContain('{{ presentation.title }}');
-    expect(source).toContain('v-if="presentation.description"');
-    expect(source).toContain('{{ presentation.description }}');
-    expect(source).toContain('uxMode: window.config.uxMode');
-    expect(source).toContain('return getHomePresentation(this.uxMode)');
+    expect(source).toContain('<main class="home-workspace">');
+    expect(source).toContain('<h1>订阅转换</h1>');
+    expect(source).toContain('<p>将订阅链接和节点转换为目标客户端配置。</p>');
+    expect(source).not.toContain('presentation');
+    expect(source).not.toContain('uxMode');
+    expect(source).not.toContain('data-ux-mode');
   });
 });

@@ -10,6 +10,8 @@ describe('application mount markup', () => {
 
     expect(indexHtml).toContain('<html lang="zh-CN">');
     expect(indexHtml).toContain('<link rel="icon" href="/favicon.ico" />');
+    expect(indexHtml).toContain('<title>Subweb</title>');
+    expect(indexHtml).not.toContain('Subconverter Web');
     expect(indexHtml).toContain('<noscript>');
     expect(indexHtml).toContain('<script type="module" src="/src/main.js"></script>');
   });

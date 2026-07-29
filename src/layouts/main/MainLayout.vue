@@ -1,5 +1,5 @@
 <template>
-  <div class="main-layout light-style" dir="ltr">
+  <div class="main-layout" dir="ltr">
     <nav-bar />
     <router-view />
   </div>

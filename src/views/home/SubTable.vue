@@ -1,5 +1,5 @@
 <template>
-  <form class="sub-table sub-table--modern" :data-ux-mode="mode" @submit.prevent="getSubUrl">
+  <form class="sub-table sub-table--modern" @submit.prevent="getSubUrl">
     <fieldset class="configuration-section">
       <legend class="visually-hidden">订阅输入与配置</legend>
       <div class="subscription-input">
@@ -30,7 +30,11 @@
           <Transition name="field-reveal">
             <div v-if="isShowManualApiUrl" class="conditional-field">
               <label for="manual-api-url">自定义后端 API 地址</label>
-              <input id="manual-api-url" v-model="api" placeholder="自定义后端 API 地址示例：https://sub.ops.ci" />
+              <input
+                id="manual-api-url"
+                v-model="api"
+                placeholder="自定义后端 API 地址示例：https://converter.example.com"
+              />
             </div>
           </Transition>
         </div>
@@ -132,7 +136,7 @@
         </div>
       </div>
 
-      <div class="form-field result-field">
+      <div v-if="hasShortUrlService" class="form-field result-field">
         <label for="short-url-result">短链</label>
         <div class="result-control-row">
           <input id="short-url-result" v-model.trim="result.shortUrl" placeholder="点击生成短链" />
@@ -160,12 +164,6 @@ import { request } from '@/network';
 import showNotification from '@/components/notification';
 export default {
   name: 'SubTable',
-  props: {
-    mode: {
-      type: String,
-      default: 'legacy',
-    },
-  },
   data() {
     return {
       placeholder: '多订阅链接或节点请确保每行一条\n支持手动使用"|"分割多链接或节点',
@@ -186,6 +184,11 @@ export default {
       target: 'clash',
       remoteConfig: '',
     };
+  },
+  computed: {
+    hasShortUrlService() {
+      return regexCheck(this.shortUrl);
+    },
   },
   methods: {
     showMoreConfig() {

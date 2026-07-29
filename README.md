@@ -1,61 +1,50 @@
-# subweb
-## 简介
-subweb 是基于 subconverter 订阅转换的前端项目,方便用户快速生成各平台的订阅链接.
+# Subweb
 
-> *subweb 是我个人入门 vuejs 学习时简单做的一个案例,使用还算方便,开源出来,欢迎各路大佬贡献维护.*
+Subweb 是一个独立维护的、单页订阅转换前端。它提供清晰的输入、目标客户端选择与结果复制流程，并把转换请求交给部署者指定的兼容后端处理。
 
-*GitHub [stilleshan/subweb](https://github.com/stilleshan/subweb)  
-Docker [stilleshan/subweb](https://hub.docker.com/r/stilleshan/subweb)*
-> *docker image support for X86 and ARM*
+## 项目边界
 
-## 示例
-[https://sub.ops.ci](https://sub.ops.ci)  
-[https://subweb-demo.vercel.app/](https://subweb-demo.vercel.app/)  
-*`前后端示例,可以直接使用.`*
+- 这是纯前端项目，不包含订阅转换后端、节点服务或账号管理功能。
+- 默认后端地址为本机 `http://127.0.0.1:25500`；生产部署必须由部署者配置自己的后端地址。
+- 短链和远程配置预设默认关闭。启用短链后，转换链接会发送给所配置的短链服务；Base64 编码不是加密。
+- 页面默认只包含当前项目的 GitHub 链接，不会预置第三方短链或远程配置服务。
 
-## 部署
-### docker 本地版
-*适用于本机快速部署使用*
-```shell
-docker run -d --name subweb --restart always \
-  -p 18080:80 \
-  stilleshan/subweb
+## 功能
+
+- 在一个页面内完成订阅链接或节点输入、客户端选择与转换链接生成。
+- 支持可展开的高级转换参数、复制和系统原生分享。
+- 可选短链服务：仅在运行时明确配置有效 HTTP(S) 地址后显示。
+- 可选远程配置预设：由部署者在运行时配置。
+
+## 本地开发
+
+推荐使用 Node.js 20 LTS。
+
+```bash
+npm ci
+npm run serve
 ```
 
-访问 `http://127.0.0.1:18080`
+默认开发服务器会由 Vite 输出本地访问地址。质量检查与生产构建：
 
-### docker 自定义版 + 短链接版
-自定义版可以挂载配置文件来修改`API 地址`,`短链接地址`,`站点名称`,`导航链接`.  
-参考以下命令,修改本地挂载路径,启动容器后会生成`config.js`配置文件,更改后刷新生效.
-
-```shell
-docker run -d --name subweb --restart always \
-  -p 18080:80 \
-  -v /PATH/subweb/public/conf:/usr/share/nginx/html/conf \
-  stilleshan/subweb
+```bash
+npm test
+npm run lint
+npm run build
 ```
 
-同时也可以不挂载目录,直接通过`-e`环境变量来修改`API 地址`,`短链接地址`和`站点名称`,但是无法修改`导航链接`.  
-`注意:以下域名请严格填写 http 或 https 协议,结尾不要 / 斜杠符号.`
-```shell
-docker run -d --name subweb --restart always \
-  -p 18080:80 \
-  -e SITE_NAME=subweb \
-  -e API_URL=https://sub.ops.ci \
-  -e SHORT_URL=https://s.ops.ci \
-  stilleshan/subweb
-```
+构建产物位于 `dist/`，不会被提交到 Git。
 
-访问 `http://127.0.0.1:18080`  
-> *推荐使用 nginx 反向代理部署*
+## 配置与部署
 
-### Vercel 部署
-Vercel 部署请切换至 vercel 分支查看。
+- [运行时配置](docs/configuration.md)：配置后端、站点名称、可选短链和远程配置。
+- [部署说明](docs/deployment.md)：本地 Docker 构建、容器配置和发布前检查。
+- [维护指南](docs/maintenance.md)：分支、远端、清理与推送边界。
 
-### subweb + subconverter + myurls 合并进阶版
-详情查看 [stilleshan/sub](https://github.com/stilleshan/dockerfiles/tree/main/sub)
+## 仓库
 
-## 链接
-- [stilleshan/sub](https://github.com/stilleshan/dockerfiles/tree/main/sub)
-- [stilleshan/subweb](https://github.com/stilleshan/subweb)
-- [stilleshan/subconverter](https://github.com/stilleshan/subconverter)
+当前维护仓库：[keleyaa/subweb](https://github.com/keleyaa/subweb)
+
+## 许可证
+
+本项目遵循仓库中的 [GPL-3.0 许可证](LICENSE)。

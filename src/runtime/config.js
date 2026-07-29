@@ -1,22 +1,9 @@
 export const DEFAULT_RUNTIME_CONFIG = {
-  siteName: 'Subconverter Web',
+  siteName: 'Subweb',
   apiUrl: 'http://127.0.0.1:25500',
-  shortUrl: 'https://s.ops.ci',
-  menuItem: [
-    { title: '首页', link: '/', target: '' },
-    { title: 'GitHub', link: 'https://github.com/stilleshan/subweb', target: '_blank' },
-  ],
-  remoteConfigOptions: [
-    {
-      value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online.ini',
-      text: 'ACL4SSR Online',
-    },
-    {
-      value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full.ini',
-      text: 'ACL4SSR Online Full',
-    },
-  ],
-  uxMode: 'legacy',
+  shortUrl: '',
+  menuItem: [{ title: 'GitHub', link: 'https://github.com/keleyaa/subweb', target: '_blank' }],
+  remoteConfigOptions: [],
 };
 
 function hasStringValue(config, key) {
@@ -50,7 +37,6 @@ export function normalizeRuntimeConfig(config) {
         ? source.remoteConfigOptions
         : DEFAULT_RUNTIME_CONFIG.remoteConfigOptions
     ),
-    uxMode: source.uxMode === 'modern' || source.uxMode === 'legacy' ? source.uxMode : 'legacy',
   };
 }
 

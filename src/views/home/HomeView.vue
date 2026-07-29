@@ -1,33 +1,22 @@
 <template>
-  <main class="home-workspace" :class="presentation.rootClass">
+  <main class="home-workspace">
     <div class="home-workspace__inner">
       <header class="home-workspace__heading">
-        <h1>{{ presentation.title }}</h1>
-        <p v-if="presentation.description">{{ presentation.description }}</p>
+        <h1>订阅转换</h1>
+        <p>将订阅链接和节点转换为目标客户端配置。</p>
       </header>
-      <SubTable :mode="uxMode" />
+      <SubTable />
     </div>
   </main>
 </template>
 
 <script>
 import SubTable from './SubTable.vue';
-import { getHomePresentation } from './presentation';
 
 export default {
-  name: 'SubconverterView',
+  name: 'HomeView',
   components: {
     SubTable,
-  },
-  data() {
-    return {
-      uxMode: window.config.uxMode,
-    };
-  },
-  computed: {
-    presentation() {
-      return getHomePresentation(this.uxMode);
-    },
   },
 };
 </script>

@@ -1,103 +1,159 @@
 <template>
-  <div
-    lang="en"
-    class="light-style layout-navbar-fixed layout-compact layout-menu-fixed swal2-shown swal2-height-auto"
-    dir="ltr"
-  >
-    <div class="dialog-custom swal2-container swal2-center swal2-backdrop-show" style="overflow-y: auto">
-      <div
-        aria-labelledby="swal2-title"
-        aria-describedby="swal2-html-container"
-        class="swal2-popup swal2-modal swal2-icon-success swal2-show"
-        tabindex="-1"
-        role="dialog"
-        aria-live="assertive"
-        aria-modal="true"
-        style="display: grid"
-      >
-        <component :is="$store.state.app.dialog.icon" />
-        <!-- icon -->
-        <h2 class="swal2-title" style="display: block">
-          {{ $store.state.app.dialog.title }}
-        </h2>
-        <!-- title -->
-        <div class="swal2-html-container" style="display: block">
-          {{ $store.state.app.dialog.message }}
-        </div>
-        <!-- message -->
-        <div class="swal2-actions" style="display: flex">
-          <component :is="$store.state.app.dialog.button" />
-        </div>
-        <!-- button -->
+  <div class="dialog-layer" @click.self="closeDialog">
+    <section
+      class="dialog-panel"
+      role="alertdialog"
+      aria-modal="true"
+      aria-live="assertive"
+      aria-labelledby="dialog-title"
+      aria-describedby="dialog-message"
+      tabindex="-1"
+    >
+      <span class="dialog-tone" :class="`dialog-tone--${dialog.tone}`" aria-hidden="true">{{ toneSymbol }}</span>
+      <h2 id="dialog-title">{{ dialog.title }}</h2>
+      <p id="dialog-message">{{ dialog.message }}</p>
+      <div class="dialog-actions">
+        <button
+          v-if="dialog.isConfirmation"
+          type="button"
+          class="dialog-button dialog-button--secondary"
+          @click="closeDialog"
+        >
+          {{ dialog.buttonText.cancelText }}
+        </button>
+        <button type="button" class="dialog-button" @click="confirmDialog">
+          {{ dialog.buttonText.confirmText }}
+        </button>
       </div>
-    </div>
+    </section>
   </div>
 </template>
 
 <script>
-import IconSuccess from './icon/success.vue';
-import IconInfo from './icon/info.vue';
-import IconWarning from './icon/warning.vue';
-import IconError from './icon/error.vue';
-import ButtonDefault from './button/ButtonDefault.vue';
-import ButtonSuccess from './button/ButtonSuccess.vue';
-import ButtonWarning from './button/ButtonWarning.vue';
-import ButtonError from './button/ButtonError.vue';
-import ButtonConfirmDefault from './button/ConfirmDefault.vue';
-import ButtonConfirmSuccess from './button/ConfirmSuccess.vue';
-import ButtonConfirmWarning from './button/ConfirmWarning.vue';
-import ButtonConfirmError from './button/ConfirmError.vue';
+const TONE_SYMBOLS = {
+  error: '×',
+  info: 'i',
+  success: '✓',
+  warning: '!',
+};
+
 export default {
   name: 'DialogView',
-  components: {
-    ButtonConfirmDefault,
-    ButtonConfirmSuccess,
-    ButtonConfirmWarning,
-    ButtonConfirmError,
-    ButtonDefault,
-    ButtonSuccess,
-    ButtonWarning,
-    ButtonError,
-    IconSuccess,
-    IconInfo,
-    IconWarning,
-    IconError,
+  computed: {
+    dialog() {
+      return this.$store.state.app.dialog;
+    },
+    toneSymbol() {
+      return TONE_SYMBOLS[this.dialog.tone] || TONE_SYMBOLS.info;
+    },
+  },
+  methods: {
+    closeDialog() {
+      this.$store.commit('SET_DIALOG_CLOSE');
+    },
+    confirmDialog() {
+      const callback = this.dialog.callbackFunction;
+
+      this.closeDialog();
+      if (callback) {
+        callback();
+      }
+    },
   },
 };
 </script>
 
 <style scoped>
-.dialog-custom {
+.dialog-layer {
   position: fixed;
   inset: 0;
   z-index: 10000;
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(32, 34, 51, 0.45);
+  background: rgba(29, 29, 31, 0.36);
 }
 
-.swal2-popup {
-  width: min(100%, 30rem);
-  gap: 16px;
+.dialog-panel {
+  display: grid;
+  width: min(100%, 28rem);
+  gap: 14px;
   padding: 24px;
-  border-radius: 8px;
+  border: 1px solid #d2d2d7;
+  border-radius: 12px;
   background: #fff;
-  box-shadow: 0 16px 40px rgba(32, 34, 51, 0.24);
+  box-shadow: 0 18px 48px rgba(29, 29, 31, 0.2);
 }
 
-.swal2-title {
+.dialog-tone {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e8e8ed;
+  color: #1d1d1f;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.dialog-tone--error {
+  background: #fce8e6;
+  color: #b3261e;
+}
+
+.dialog-tone--success {
+  background: #e5f4ea;
+  color: #1f7a35;
+}
+
+.dialog-tone--warning {
+  background: #fff3d6;
+  color: #8a5a00;
+}
+
+.dialog-panel h2,
+.dialog-panel p {
   margin: 0;
-  color: #2f3349;
+}
+
+.dialog-panel h2 {
+  color: #1d1d1f;
   font-size: 20px;
+  line-height: 1.3;
 }
 
-.swal2-html-container {
-  color: #5e5873;
+.dialog-panel p {
+  color: #424245;
+  line-height: 1.5;
 }
 
-.swal2-actions {
-  justify-content: center;
-  gap: 12px;
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.dialog-button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid #0071e3;
+  border-radius: 8px;
+  background: #0071e3;
+  color: #fff;
+  font: inherit;
+  font-weight: 500;
+}
+
+.dialog-button--secondary {
+  border-color: #c7c7cc;
+  background: #fff;
+  color: #1d1d1f;
+}
+
+.dialog-button:focus-visible {
+  outline: 3px solid #0066cc;
+  outline-offset: 2px;
 }
 </style>

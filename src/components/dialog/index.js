@@ -1,29 +1,41 @@
-const showDialog = function (
+const DIALOG_TONES = Object.freeze({
+  default: 'info',
+  success: 'success',
+  warning: 'warning',
+  error: 'error',
+  confirmDefault: 'info',
+  confirmSuccess: 'success',
+  confirmWarning: 'warning',
+  confirmError: 'error',
+});
+
+const isConfirmation = (status) => typeof status === 'string' && status.startsWith('confirm');
+
+export const createDialogPayload = function (
   status,
   title,
   message,
   callbackFunction = null,
   buttonText = { confirmText: '确认', cancelText: '取消' }
 ) {
-  const buttonStyle = {
-    default: { icon: 'IconSuccess', button: 'ButtonDefault' },
-    success: { icon: 'IconSuccess', button: 'ButtonSuccess' },
-    warning: { icon: 'IconWarning', button: 'ButtonWarning' },
-    error: { icon: 'IconError', button: 'ButtonError' },
-    confirmDefault: { icon: 'IconSuccess', button: 'ButtonConfirmDefault' },
-    confirmSuccess: { icon: 'IconSuccess', button: 'ButtonConfirmSuccess' },
-    confirmWarning: { icon: 'IconWarning', button: 'ButtonConfirmWarning' },
-    confirmError: { icon: 'IconError', button: 'ButtonConfirmError' },
-  };
-  const payload = {
+  const labels = buttonText && typeof buttonText === 'object' ? buttonText : {};
+
+  return {
     active: true,
-    icon: buttonStyle[status].icon || buttonStyle.default.icon,
-    title,
-    message,
-    button: buttonStyle[status].button || buttonStyle.default.button,
-    callbackFunction,
-    buttonText,
+    tone: DIALOG_TONES[status] || DIALOG_TONES.default,
+    isConfirmation: isConfirmation(status),
+    title: typeof title === 'string' ? title : '',
+    message: typeof message === 'string' ? message : '',
+    callbackFunction: typeof callbackFunction === 'function' ? callbackFunction : null,
+    buttonText: {
+      confirmText: typeof labels.confirmText === 'string' && labels.confirmText ? labels.confirmText : '确认',
+      cancelText: typeof labels.cancelText === 'string' && labels.cancelText ? labels.cancelText : '取消',
+    },
   };
+};
+
+const showDialog = function (...args) {
+  const payload = createDialogPayload(...args);
 
   this.$store.commit('SET_DIALOG_ACTIVE', payload);
 };

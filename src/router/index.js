@@ -4,7 +4,7 @@ const routes = [
   {
     path: '/',
     component: () => import('@/layouts/main/MainLayout.vue'),
-    name: 'LayoutView',
+    name: 'workspace',
     children: [
       {
         path: '',

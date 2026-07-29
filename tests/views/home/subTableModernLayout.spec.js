@@ -10,7 +10,7 @@ describe('SubTable modern linear layout', () => {
     const source = readFileSync(componentPath, 'utf8');
 
     expect(source).toContain(
-      '<form class="sub-table sub-table--modern" :data-ux-mode="mode" @submit.prevent="getSubUrl">',
+      '<form class="sub-table sub-table--modern" @submit.prevent="getSubUrl">',
     );
     expect(source).toContain('class="subscription-input"');
     expect(source).toContain('class="base-config-grid"');
@@ -112,13 +112,24 @@ describe('SubTable modern linear layout', () => {
 
   it('provides explicit copy, share, and short-link actions', () => {
     const source = readFileSync(componentPath, 'utf8');
+    const resultsSection = source.slice(
+      source.indexOf('<fieldset class="results-section">'),
+      source.indexOf('</fieldset>', source.indexOf('<fieldset class="results-section">')),
+    );
 
     expect(source).toContain(`@click="toCopy(result.subUrl, '订阅链接')"`);
+    expect(resultsSection).toMatch(
+      /<div class="form-field result-field">\s*<label for="converted-sub-url">转换链接<\/label>/,
+    );
+    expect(resultsSection).toMatch(
+      /<div v-if="hasShortUrlService" class="form-field result-field">\s*<label for="short-url-result">短链<\/label>/,
+    );
     expect(source).toContain(`@click="toCopy(result.shortUrl, '短链')"`);
     expect(source).toMatch(/<button[^>]*v-if="result\.subUrl"[^>]*@click="shareSubscription"/);
     expect(source).toContain('@click="getShortUrl"');
     expect(source).toContain(':disabled="!result.subUrl"');
     expect(source).toContain(':disabled="!result.shortUrl"');
+    expect(source).toContain('hasShortUrlService()');
   });
 });
 

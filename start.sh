@@ -51,16 +51,16 @@ if [ -n "${API_URL:-}" ]; then
   replace_config_value 'http://127.0.0.1:25500' "$API_URL"
 else
   printf '%s\n' '当前为默认本地 API 地址: http://127.0.0.1:25500'
-  printf '%s\n' "如需修改请在容器启动时使用 -e API_URL='https://sub.ops.ci' 传递环境变量"
+  printf '%s\n' "如需修改请在容器启动时使用 -e API_URL='https://converter.example.com' 传递环境变量"
 fi
 
 if [ -n "${SHORT_URL:-}" ]; then
   printf '当前短链接地址为: %s\n' "$SHORT_URL"
-  replace_config_value 'https://s.ops.ci' "$SHORT_URL"
+  replace_config_value "shortUrl: ''" "shortUrl: '$SHORT_URL'"
 fi
 
 if [ -n "${SITE_NAME:-}" ]; then
-  replace_config_value 'Subconverter Web' "$SITE_NAME"
+  replace_config_value 'Subweb' "$SITE_NAME"
 fi
 
 exec nginx -g 'daemon off;'

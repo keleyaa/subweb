@@ -3,6 +3,13 @@ node_modules
 /dist
 /shell
 /.worktrees
+/.claude
+/output
+/prototypes
+/coverage
+/playwright-report
+/test-results
+.eslintcache
 
 
 # local env files

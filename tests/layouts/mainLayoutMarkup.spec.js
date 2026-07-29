@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { access, readFile, stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 
 const sourceUrl = new URL('../../src/layouts/main/MainLayout.vue', import.meta.url);
 const removedFooterUrl = new URL(`../../src/layouts/main/footer/${['Footer', 'Bar.vue'].join('')}`, import.meta.url);
@@ -21,9 +21,10 @@ describe('MainLayout document structure', () => {
     expect(source).not.toMatch(/<body\b/i);
     expect(templateMatch).not.toBeNull();
     expect(templateMatch[1].replace(/\s+/g, ' ').trim()).toBe(
-      '<div class="main-layout light-style" dir="ltr"> <nav-bar /> <router-view /> </div>',
+      '<div class="main-layout" dir="ltr"> <nav-bar /> <router-view /> </div>',
     );
     expect(source).not.toContain(footerComponent);
+    expect(source).not.toContain(['light', 'style'].join('-'));
   });
 
   it('does not retain legacy document metadata or scroll synchronization', async () => {
@@ -66,11 +67,9 @@ describe('MainLayout document structure', () => {
     legacyStyleNames.forEach((stylesheet) => expect(source).not.toContain(stylesheet));
   });
 
-  it('removes the footer component without deleting shared vendor styles', async () => {
+  it('removes the footer component and obsolete landing-page styles together', async () => {
     await expect(stat(removedFooterUrl)).rejects.toMatchObject({ code: 'ENOENT' });
-    await expect(Promise.all(legacyStyleUrls.map((stylesheetUrl) => access(stylesheetUrl)))).resolves.toEqual([
-      undefined,
-      undefined,
-    ]);
+    await expect(stat(legacyStyleUrls[0])).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(legacyStyleUrls[1])).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });

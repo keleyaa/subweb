@@ -1,11 +1,18 @@
 .git
 .github
 .claude
+.worktrees
 
 node_modules
 /dist
 build
 coverage
+docs
+tests
+output
+prototypes
+playwright-report
+test-results
 
 *.log
 npm-debug.log*
@@ -27,6 +34,7 @@ pnpm-debug.log*
 *.bak
 *.orig
 *.rej
+.eslintcache
 
 .env
 .env.*

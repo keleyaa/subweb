@@ -1,17 +1,15 @@
 import { createApp } from 'vue';
-import { createPinia } from 'pinia';
 import App from './App.vue';
 import router from './router';
 import store from './store';
 import DialogView from '@/components/dialog/DialogView.vue';
-import { showDialog, closeDialog } from 'components/dialog';
+import { showDialog, closeDialog } from '@/components/dialog';
 import { installRuntimeConfig } from './runtime/config';
 
 installRuntimeConfig(window);
 const app = createApp(App);
-const pinia = createPinia();
 app.component('DialogView', DialogView);
-app.use(router).use(store).use(pinia);
+app.use(router).use(store);
 
 app.config.globalProperties.$showDialog = showDialog;
 app.config.globalProperties.$closeDialog = closeDialog;

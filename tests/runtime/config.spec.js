@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { installRuntimeConfig, normalizeRuntimeConfig } from '../../src/runtime/config';
 
 describe('normalizeRuntimeConfig', () => {
-  it('uses the existing default site name and legacy UX mode by default', () => {
-    const config = normalizeRuntimeConfig();
-
-    expect(config.siteName).toBe('Subconverter Web');
-    expect(config.uxMode).toBe('legacy');
+  it('uses neutral current-project defaults when configuration is absent', () => {
+    expect(normalizeRuntimeConfig()).toEqual({
+      siteName: 'Subweb',
+      apiUrl: 'http://127.0.0.1:25500',
+      shortUrl: '',
+      menuItem: [{ title: 'GitHub', link: 'https://github.com/keleyaa/subweb', target: '_blank' }],
+      remoteConfigOptions: [],
+    });
   });
 
   it('keeps default option arrays isolated from caller mutations', () => {
@@ -14,33 +17,18 @@ describe('normalizeRuntimeConfig', () => {
 
     firstConfig.menuItem[0].title = 'Changed title';
     firstConfig.menuItem.push({ title: 'Unexpected menu item' });
-    firstConfig.remoteConfigOptions[0].text = 'Changed option';
-    firstConfig.remoteConfigOptions.pop();
+    firstConfig.remoteConfigOptions.push({ value: 'https://unexpected.example.test', text: 'Unexpected option' });
 
     const nextConfig = normalizeRuntimeConfig();
 
     expect(nextConfig.menuItem).toEqual([
-      { title: '首页', link: '/', target: '' },
-      { title: 'GitHub', link: 'https://github.com/stilleshan/subweb', target: '_blank' },
+      { title: 'GitHub', link: 'https://github.com/keleyaa/subweb', target: '_blank' },
     ]);
-    expect(nextConfig.remoteConfigOptions).toEqual([
-      {
-        value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online.ini',
-        text: 'ACL4SSR Online',
-      },
-      {
-        value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full.ini',
-        text: 'ACL4SSR Online Full',
-      },
-    ]);
+    expect(nextConfig.remoteConfigOptions).toEqual([]);
   });
 
-  it('keeps the modern UX mode', () => {
-    expect(normalizeRuntimeConfig({ uxMode: 'modern' }).uxMode).toBe('modern');
-  });
-
-  it('falls back to legacy for an unknown UX mode', () => {
-    expect(normalizeRuntimeConfig({ uxMode: 'experimental' }).uxMode).toBe('legacy');
+  it('does not expose the retired UX-mode compatibility switch', () => {
+    expect(normalizeRuntimeConfig({ uxMode: 'modern' })).not.toHaveProperty('uxMode');
   });
 
   it('keeps only supported fields and replaces invalid array values with defaults', () => {
@@ -59,7 +47,6 @@ describe('normalizeRuntimeConfig', () => {
       'shortUrl',
       'menuItem',
       'remoteConfigOptions',
-      'uxMode',
     ]);
     expect(config.siteName).toBe('Custom Subweb');
     expect(config.apiUrl).toBe('https://api.example.test');
@@ -74,6 +61,6 @@ describe('normalizeRuntimeConfig', () => {
     const config = installRuntimeConfig(globalObject);
 
     expect(globalObject.config).toBe(config);
-    expect(config.uxMode).toBe('modern');
+    expect(config).not.toHaveProperty('uxMode');
   });
 });

@@ -4,6 +4,7 @@
  * 当调一次hideLoading，则次数-1; 当次数为0时，则结束loading
  */
 import { ElLoading } from 'element-plus';
+import 'element-plus/es/components/loading/style/css';
 // 定义一个请求次数的变量，用来记录当前页面总共请求的次数
 let loadingRequestCount = 0;
 // 初始化loading
