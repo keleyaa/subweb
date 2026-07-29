@@ -33,7 +33,8 @@ export default defineConfig({
     'process.env.BASE_URL': JSON.stringify('/'),
   },
   build: {
-    outDir: 'dist-vite',
+    outDir: 'dist',
+    target: 'es2015',
     sourcemap: false,
   },
   test: {
