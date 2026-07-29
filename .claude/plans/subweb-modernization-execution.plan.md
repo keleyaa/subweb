@@ -1,11 +1,11 @@
 # subweb 现代化执行计划（修订版）
 
-- Status: immutable-digest-rollback-runtime-rehearsal-complete
+- Status: isolated-mutable-tag-lifecycle-rehearsal-complete
 - Current task: none
-- Last completed: P4-Docker-Hub-immutable-digest-runtime-rehearsal
-- Next task: separately approved mutable-tag restoration rehearsal, production deployment rollback, or product contract
+- Last completed: P4-Docker-Hub-isolated-mutable-tag-lifecycle-rehearsal
+- Next task: production-tag restoration only after a known, different historical digest and explicit production authorization; or a separately approved production deployment rollback/product contract
 
-> 说明：本文是本项目后续现代化改造的**唯一执行台账**。P0 至 P4 的已批准本地变更、fork 上的 Docker Hub 发布验证和 immutable-digest 本地运行演练已完成；mutable tag 改写、生产部署回滚及真实外部服务行为仍是外部验证缺口，不得据此宣称生产发布已验证。
+> 说明：本文是本项目后续现代化改造的**唯一执行台账**。P0 至 P4 的已批准本地变更、fork 上的 Docker Hub 发布验证、immutable-digest 本地运行演练和隔离 mutable-tag 生命周期演练已完成；生产 tag 改写、生产部署回滚及真实外部服务行为仍是外部验证缺口，不得据此宣称生产发布已验证。
 
 ## 1. Scope Lock
 
@@ -179,6 +179,7 @@
 | 2026-07-29 | P4-LOCAL-VALIDATION | [x] 已完成 | 已使用 Docker Desktop 从本地 `Dockerfile` 构建临时镜像，并以 localhost-only 映射启动临时容器；验证默认配置、带引号/反斜杠/`&` 的运行时配置替换、Nginx HTTP 就绪和容器日志 | 低；仅本地、非发布验证；未访问应用外部 API，临时容器和镜像已清理 | 不适用；验证不改仓库代码，临时资源已删除 | `subweb:local-validate` 构建成功；`127.0.0.1:18080` 返回预期页面标题；容器内 `config.js` 保留特殊字符替换值；`subweb-validate` 容器与临时镜像均无残留；后续 P4-REMOTE-VALIDATION 已验证 fork workflow、Docker Hub 和 artifact；Harbor/provenance/SBOM 按 Docker Hub-only 策略不适用/未提供，实际 tag/部署回滚仍未验证 |
 | 2026-07-29 | P4-REMOTE-VALIDATION | [x] Docker Hub-only 完成 | fork `keleyaa/subweb` 的 workflow run `30429765120` 成功完成 Docker Hub 多架构 build/push、source digest identity、static gate、README sync、Docker Hub-only rollback manifest 与 artifact 上传 | 中；`latest` 与 `2.0` 仍是 mutable alias，回滚必须使用 immutable Docker Hub digest；Harbor mirror/parity 与 registry-side provenance/SBOM 已按 Docker Hub-only 策略移除/未提供 | 回退目标为 artifact 记录的 `docker.io/keleyaa/subweb@sha256:15bc1d7971132725a0605c36ca88bf6a172a58d2c44734061cb0193074f5e216`；未实际执行 tag 改写或部署回滚演练 | run `30429765120` 成功；`latest` 与 `2.0` 均解析为同一 OCI index digest `sha256:15bc1d7971132725a0605c36ca88bf6a172a58d2c44734061cb0193074f5e216`，包含 `linux/amd64` 与 `linux/arm64`；artifact `rollback-manifest-30429765120-15bc1d7971132725a0605c36ca88bf6a172a58d2c44734061cb0193074f5e216` 已上传（560 bytes、未过期、90 天保留），下载后已验证 schema、source SHA、digest 与 Docker Hub immutable rollback reference |
 | 2026-07-29 | P4-DIGEST-ROLLBACK-REHEARSAL | [x] 已完成（本地 immutable-digest runtime） | 从 rollback manifest 指定的 `docker.io/keleyaa/subweb@sha256:15bc1d7971132725a0605c36ca88bf6a172a58d2c44734061cb0193074f5e216` 拉起一次性 Docker Desktop 容器，使用 `--rm`、`--restart=no`、无挂载/环境变量和 loopback-only 随机端口；容器运行、镜像 RepoDigest 和首页 HTTP 响应均通过 | 低；仅验证本地 Docker Desktop 的 arm64 运行时恢复，未重写 Docker Hub tag、未触碰部署或真实流量 | 不适用；演练容器自动移除，本次新拉取的镜像已删除 | 容器以目标 digest 运行并返回 `HTTP 200`、页面标题为 `Subconverter Web`；清理后容器和镜像均不存在；复查 Docker Hub `latest` 与 `2.0` 仍指向同一目标 digest，未发生远端标签变更 |
+| 2026-07-29 | P4-MUTABLE-TAG-REHEARSAL | [x] 已完成（隔离 tag 生命周期） | 写前确认 `latest`、`2.0` 和 source digest 均为 `sha256:15bc1d7971132725a0605c36ca88bf6a172a58d2c44734061cb0193074f5e216`，并确认唯一 tag `rollback-drill-20260729T081431Z-9c3537bd19464449-15bc1d797113` 不存在；使用 `docker buildx imagetools create --prefer-index=false` 从 immutable source 创建该 tag，CLI `docker buildx imagetools inspect` 与 Docker Hub API tag `.digest` 均验证其顶层 digest 精确匹配 source | 中；仅演练独立随机 tag 的创建/删除，未把 `latest` 或 `2.0` 恢复到不同历史 digest，未调度 GitHub workflow，未触碰部署或流量；Docker Hub 官方 OpenAPI 未将 tag delete 定义为稳定自动化契约，因此以本次实际 `DELETE`/后置读取结果记录行为，不扩展为长期 API 依赖 | 演练 tag 的 delete 请求返回 `204`，后置 `GET` 和 `HEAD` 均返回 `404`；无需回写任何受保护 tag | 删除后公开 tag 列表恢复为 `latest`、`2.0` 两项，均仍为 source digest 且保留 `linux/amd64`、`linux/arm64`；不遗留演练 tag |
 
 
 
@@ -707,6 +708,15 @@
 - 依赖：P4-03、P4-04、P4-05、P4-08
 - 验收标准：验证 action pin、context、Docker Hub digest、provenance/SBOM 禁用、无 Harbor promotion 和 rollback identity；失败不能静默发布
 - 回滚说明：恢复验证前 workflow gate
+
+#### [x] P4-MUTABLE-TAG-REHEARSAL 隔离 mutable-tag 生命周期演练
+- 目标：在不修改 `latest`、`2.0` 或部署的前提下，验证 immutable Docker Hub source digest 可被绑定到唯一的临时 mutable tag，并能恢复为该 tag 不存在的初始状态
+
+- 允许范围：仅从已记录 immutable source digest 创建、查询和删除 `keleyaa/subweb` 的唯一 `rollback-drill-*` tag
+- 禁止范围：`latest`、`2.0`、其他现有 tag、镜像 manifest 删除、GitHub workflow 调度、部署、流量切换、凭据创建或持久化
+- 依赖：P4-05、P4-08、P4-DIGEST-ROLLBACK-REHEARSAL
+- 验收标准：写前 source/`latest`/`2.0` digest 一致且 tag 不存在；创建后 CLI `imagetools inspect` 与 Hub API tag `.digest` 精确等于 source；删除后 tag `GET` 和 `HEAD` 均为 `404`，`latest`/`2.0` digest 和双架构平台不变
+- 回滚说明：删除唯一演练 tag；如果删除不可证实，停止并记录该 tag，不得触碰受保护 tag
 
 - 依赖：P0-01
 - 可能文件：
