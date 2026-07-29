@@ -5,7 +5,11 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
-    "lint": "vue-cli-service lint"
+    "lint": "vue-cli-service lint",
+    "dev:vite": "vite",
+    "build:vite": "vite build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "axios": "^1.5.0",
@@ -13,6 +17,7 @@
     "element-plus": "^2.3.14",
     "moment": "^2.29.4",
     "perfect-scrollbar": "^1.5.5",
+    "pinia": "2.2.4",
     "vue": "^3.2.13",
     "vue-router": "^4.0.3",
     "vuex": "^4.0.0"
@@ -20,6 +25,7 @@
   "devDependencies": {
     "@babel/core": "^7.12.16",
     "@babel/eslint-parser": "^7.12.16",
+    "@vitejs/plugin-vue": "5.2.4",
     "@vue/cli-plugin-babel": "~5.0.0",
     "@vue/cli-plugin-eslint": "~5.0.0",
     "@vue/cli-plugin-router": "~5.0.0",
@@ -32,6 +38,8 @@
     "eslint-plugin-vue": "^8.0.3",
     "prettier": "^2.4.1",
     "unplugin-auto-import": "^0.16.6",
-    "unplugin-vue-components": "^0.25.2"
+    "unplugin-vue-components": "^0.25.2",
+    "vite": "6.4.3",
+    "vitest": "2.1.9"
   }
 }

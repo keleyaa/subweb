@@ -7,53 +7,10 @@
     <link rel="icon" href="<%= BASE_URL %>favicon.ico">
     <!-- <title><%= htmlWebpackPlugin.options.title %></title> -->
     <title>Subconverter Web</title>
-    <script type="text/javascript">
-      (function () {
-        var defaultConfig = {
-          siteName: 'Subconverter Web',
-          apiUrl: 'http://127.0.0.1:25500',
-          shortUrl: 'https://s.ops.ci',
-          menuItem: [
-            { title: '首页', link: '/', target: '' },
-            { title: 'GitHub', link: 'https://github.com/stilleshan/subweb', target: '_blank' },
-          ],
-          remoteConfigOptions: [
-            {
-              value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online.ini',
-              text: 'ACL4SSR Online',
-            },
-            {
-              value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full.ini',
-              text: 'ACL4SSR Online Full',
-            },
-          ],
-        };
-
-        window.__normalizeSubwebConfig = function (config) {
-          config = config && typeof config === 'object' && !Array.isArray(config) ? config : {};
-
-          return {
-            siteName: typeof config.siteName === 'string' ? config.siteName : defaultConfig.siteName,
-            apiUrl: typeof config.apiUrl === 'string' ? config.apiUrl : defaultConfig.apiUrl,
-            shortUrl: typeof config.shortUrl === 'string' ? config.shortUrl : defaultConfig.shortUrl,
-            menuItem: Array.isArray(config.menuItem) ? config.menuItem : defaultConfig.menuItem,
-            remoteConfigOptions: Array.isArray(config.remoteConfigOptions)
-              ? config.remoteConfigOptions
-              : defaultConfig.remoteConfigOptions,
-          };
-        };
-
-        window.config = window.__normalizeSubwebConfig();
-      })();
-    </script>
     <script
       type="text/javascript"
       src="<%= BASE_URL %>conf/config.js"
     ></script>
-    <script type="text/javascript">
-      window.config = window.__normalizeSubwebConfig(window.config);
-      delete window.__normalizeSubwebConfig;
-    </script>
   </head>
   <body>
     <noscript>
