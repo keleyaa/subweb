@@ -55,8 +55,8 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          provenance: mode=min
-          sbom: true
+          provenance: false
+          sbom: false
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}:latest
             ${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}:${{ env.tag }}
@@ -121,8 +121,8 @@ jobs:
           upload_artifact_count=$(grep -Ec '^[[:space:]]*uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808$' "$WORKFLOW_FILE")
           [ "$upload_artifact_count" -eq 1 ] || { echo "Expected exactly one upload-artifact invocation" >&2; exit 1; }
 
-          grep -q 'provenance: mode=min' "$WORKFLOW_FILE" || { echo "Missing provenance request" >&2; exit 1; }
-          grep -q 'sbom: true' "$WORKFLOW_FILE" || { echo "Missing SBOM request" >&2; exit 1; }
+          grep -q 'provenance: false' "$WORKFLOW_FILE" || { echo "Blocking provenance attestation must be disabled" >&2; exit 1; }
+          grep -q 'sbom: false' "$WORKFLOW_FILE" || { echo "Blocking SBOM attestation must be disabled" >&2; exit 1; }
           github_expression_open='$''{{'
           expected_image_ref="IMAGE_REF=\"${github_expression_open} secrets.DOCKER_USERNAME }}/${github_expression_open} env.PROJECT }}@\${SOURCE_DIGEST}\""
           grep -Fq "$expected_image_ref" "$WORKFLOW_FILE" || { echo "Missing digest-based source image reference" >&2; exit 1; }
