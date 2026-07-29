@@ -36,6 +36,7 @@ describe('minimal borderless navigation', () => {
     expect(source).toContain('v-if="githubItem"');
     expect(source).toContain(':href="githubItem.link"');
     expect(source).toContain(':target="githubItem.target"');
+    expect(source).toContain(':title="githubItem.title"');
     expect(source).toContain('class="minimal-nav-link"');
     expect(source).toContain('rel="noopener noreferrer"');
     expect(source).toContain('{{ githubItem.title }}');

@@ -3,6 +3,7 @@
     v-if="githubItem"
     :href="githubItem.link"
     :target="githubItem.target"
+    :title="githubItem.title"
     class="minimal-nav-link"
     rel="noopener noreferrer"
   >
