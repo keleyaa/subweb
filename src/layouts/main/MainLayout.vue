@@ -1,19 +1,16 @@
 <template>
-  <html
-    lang="en"
-    class="light-style layout-navbar-fixed layout-wide"
+  <div
+    class="main-layout light-style layout-navbar-fixed layout-wide"
     dir="ltr"
     data-theme="theme-default"
     data-assets-path="assets/"
     data-template="front-pages"
     @wheel="setNavActive"
   >
-    <body>
-      <nav-bar />
-      <router-view />
-      <footer-bar />
-    </body>
-  </html>
+    <nav-bar />
+    <router-view />
+    <footer-bar />
+  </div>
 </template>
 
 <script>
