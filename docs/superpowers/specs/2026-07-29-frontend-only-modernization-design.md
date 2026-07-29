@@ -9,13 +9,13 @@
 - 以 Vite 作为唯一开发与生产构建工具，移除 Vue CLI 专属发布路径。
 - 保持 Vuex 为唯一状态源，并用 Pinia facade 渐进迁移布局样式状态的消费方。
 - 为首页提供由运行时配置控制的新旧 UX 呈现，并保持转换、复制和短链协议不变。
-- 提供仅保存非敏感转换偏好的本机模板，以及用户显式触发的系统原生分享。
+- 提供用户显式触发的系统原生分享。
 
 ## 范围与非目标
 
 本轮只修改浏览器端代码、静态资源、构建工具和测试。不会新增后端、登录、管理员后台、云同步、服务端分享链接、路由、查询参数合同或外部请求。
 
-模板存储不得包含订阅输入、转换结果、短链结果、`apiUrl`、`shortUrl`、手动 API、远程配置 URL 或任何 URL/token。现有 `/short` v1 请求形状保持为 `POST {shortUrl}/short` 和 `FormData.longUrl=btoa(result.subUrl)`。
+现有 `/short` v1 请求形状保持为 `POST {shortUrl}/short` 和 `FormData.longUrl=btoa(result.subUrl)`。
 
 Harbor、provenance/SBOM 和生产 tag/部署回滚不属于本规格。
 
@@ -49,45 +49,22 @@ Vuex 继续拥有 `style.main.navStyles` 和 `style.main.isCollapsed`。Pinia �
 
 现代呈现优化信息层级和响应式布局，但维持输入顺序、label/id 关联、可编辑结果字段、转换后复制、短链前重新生成转换链接、loading 清理和所有网络协议。清理失效的 `selectTarget` 监听；统一用户可见的“短链”文案。
 
-### 5. 本机偏好模板
+### 5. 显式原生分享
 
-新增 versioned `localStorage` envelope，最多保存 12 条命名模板。每条模板仅包含：
-
-```js
-{
-  id: string,
-  name: string,
-  target: string,
-  moreConfig: {
-    include: string,
-    exclude: string,
-    emoji: boolean,
-    udp: boolean,
-    sort: boolean,
-    scv: boolean,
-    list: boolean
-  }
-}
-```
-
-读取时验证 schema；损坏、旧版或未知字段数据回退为空集合。保存、应用、删除和清空模板均不调用网络，也不改变部署级 `window.config` 所有权。
-
-### 6. 显式原生分享
-
-仅当 `result.subUrl` 已存在且用户点击分享按钮时调用 `navigator.share({ url: result.subUrl })`。平台不支持时回退复制；用户取消分享不显示错误，也不改变转换或短链状态。分享操作不自动生成短链、不写入模板、不发送额外网络请求。
+仅当 `result.subUrl` 已存在且用户点击分享按钮时调用 `navigator.share({ url: result.subUrl })`。平台不支持时回退复制；用户取消分享不显示错误，也不改变转换或短链状态。分享操作不自动生成短链、不发送额外网络请求。
 
 ## 测试策略
 
-新增 Vitest 作为最小前端测试骨架，先覆盖纯函数和适配器：运行时配置归一化、模板 schema/存储、原生分享分支、Pinia facade 的 Vuex 转发。每项行为遵循红-绿循环。
+新增 Vitest 作为最小前端测试骨架，先覆盖纯函数和适配器：运行时配置归一化、原生分享分支、Pinia facade 的 Vuex 转发。每项行为遵循红-绿循环。
 
-集成验证必须执行 Vite build、非自动修复 ESLint、P1 白名单 lint、Vitest、Docker build/run 和 `git diff --check`。本地浏览器在 375、768、1440 宽度验证 `legacy`/`modern` 配置、单一表单 id、模板不存敏感字段、转换/复制/短链路径和控制台无 Vue 警告。
+集成验证必须执行 Vite build、非自动修复 ESLint、P1 白名单 lint、Vitest、Docker build/run 和 `git diff --check`。本地浏览器在 375、768、1440 宽度验证 `legacy`/`modern` 配置、单一表单 id、转换/复制/短链路径和控制台无 Vue 警告。
 
 ## 回滚策略
 
 - Vite：恢复 Vite 直接切换前的 Git 提交；Docker 输出目录始终保持 `dist`。
 - Pinia：移除 facade 并恢复 Vuex 消费方；Vuex 状态从未被移除。
 - UX：将 `uxMode` 改为 `legacy`，或恢复首页和表单的对应提交。
-- 模板/分享：移除 UI 和适配器；本机 `localStorage` 只使用命名空间键，不影响现有应用数据。
+- 分享：移除 UI 和适配器即可完整回退。
 
 ## 交付顺序
 
@@ -95,5 +72,5 @@ Vuex 继续拥有 `style.main.navStyles` 和 `style.main.isCollapsed`。Pinia �
 2. 将 Vite 提升为唯一开发/生产构建工具，验证 Docker runtime config 合同。
 3. 引入 Pinia facade 和白名单静态约束。
 4. 实现 UX 模式、现代首页呈现和回归修复。
-5. 实现本机偏好模板和显式原生分享。
+5. 实现显式原生分享。
 6. 完成构建、单元测试、浏览器回归和独立审查。

@@ -117,62 +117,6 @@
                         </div>
                       </fieldset>
                     </div>
-                    <div class="col-12 template-controls">
-                      <div class="row g-3">
-                        <div class="col-12 col-md-8">
-                          <label class="form-label" for="template-name">本机模板名称</label>
-                          <input
-                            class="form-control"
-                            id="template-name"
-                            v-model.trim="templateName"
-                            maxlength="80"
-                            placeholder="保存当前客户端与参数"
-                          />
-                        </div>
-                        <div class="col-12 col-md-4 d-flex align-items-end">
-                          <button type="button" class="btn btn-outline-primary" @click="saveTemplate">保存模板</button>
-                        </div>
-                        <div class="col-12 col-md-6">
-                          <label class="form-label" for="saved-template">已保存的本机模板</label>
-                          <select class="form-select" id="saved-template" v-model="selectedTemplateId">
-                            <option value="">选择模板</option>
-                            <option v-for="template in templates" :key="template.id" :value="template.id">
-                              {{ template.name }}
-                            </option>
-                          </select>
-                        </div>
-                        <div class="col-6 col-md-2 d-flex align-items-end">
-                          <button
-                            type="button"
-                            class="btn btn-outline-success"
-                            :disabled="!selectedTemplateId"
-                            @click="applyTemplate"
-                          >
-                            应用
-                          </button>
-                        </div>
-                        <div class="col-6 col-md-2 d-flex align-items-end">
-                          <button
-                            type="button"
-                            class="btn btn-outline-danger"
-                            :disabled="!selectedTemplateId"
-                            @click="deleteTemplate"
-                          >
-                            删除
-                          </button>
-                        </div>
-                        <div class="col-12 col-md-2 d-flex align-items-end">
-                          <button
-                            type="button"
-                            class="btn btn-outline-secondary"
-                            :disabled="templates.length === 0"
-                            @click="clearTemplates"
-                          >
-                            清空
-                          </button>
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 </fieldset>
                 <fieldset class="col-12 p-0 border-0 m-0">
@@ -224,13 +168,6 @@
 <script>
 import { showLoading, hideLoading } from '@/components/loading';
 import { TARGET_OPTIONS, createDefaultMoreConfig } from '@/features/conversion/options';
-import {
-  MAX_TEMPLATES,
-  createTemplate,
-  loadTemplates,
-  normalizeMoreConfig,
-  saveTemplates,
-} from '@/features/templates/preferences';
 import { prepareConversion, regexCheck } from './index.js';
 import { shareUrl } from '@/features/share/nativeShare';
 import { request } from '@/network';
@@ -262,106 +199,9 @@ export default {
       api: window.config.apiUrl,
       target: 'clash',
       remoteConfig: '',
-      templates: [],
-      templateName: '',
-      selectedTemplateId: '',
     };
   },
-  created() {
-    this.loadLocalTemplates();
-  },
   methods: {
-    showTemplateStorageError() {
-      this.$showDialog('error', '失败', '本机模板无法保存或读取，请检查浏览器存储设置');
-    },
-    loadLocalTemplates() {
-      try {
-        this.templates = loadTemplates(window.localStorage, () => this.showTemplateStorageError());
-      } catch {
-        this.templates = [];
-        this.showTemplateStorageError();
-      }
-    },
-    saveLocalTemplates(templates) {
-      try {
-        return saveTemplates(window.localStorage, templates, () => this.showTemplateStorageError());
-      } catch {
-        this.showTemplateStorageError();
-        return false;
-      }
-    },
-    createTemplateId() {
-      const prefix = `template-${Date.now().toString(36)}`;
-      let sequence = 0;
-      let id;
-
-      do {
-        id = `${prefix}-${sequence}`;
-        sequence += 1;
-      } while (this.templates.some((template) => template.id === id));
-
-      return id;
-    },
-    saveTemplate() {
-      if (this.templates.length >= MAX_TEMPLATES) {
-        this.$showDialog('warning', '注意', `本机模板最多保存 ${MAX_TEMPLATES} 条`);
-        return;
-      }
-
-      const template = createTemplate(
-        {
-          name: this.templateName,
-          target: this.target,
-          moreConfig: this.moreConfig,
-        },
-        this.createTemplateId()
-      );
-
-      if (!template) {
-        this.$showDialog('warning', '注意', '请输入不含地址的模板名称');
-        return;
-      }
-
-      const nextTemplates = [...this.templates, template];
-      if (!this.saveLocalTemplates(nextTemplates)) {
-        return;
-      }
-
-      this.templates = nextTemplates;
-      this.selectedTemplateId = template.id;
-      this.templateName = '';
-      showNotification('本机模板已保存', '成功');
-    },
-    applyTemplate() {
-      const template = this.templates.find((item) => item.id === this.selectedTemplateId);
-      if (!template) {
-        return;
-      }
-
-      this.target = template.target;
-      this.moreConfig = normalizeMoreConfig(template.moreConfig);
-      this.isShowMoreConfig = true;
-      showNotification('本机模板已应用', '成功');
-    },
-    deleteTemplate() {
-      const nextTemplates = this.templates.filter((item) => item.id !== this.selectedTemplateId);
-      if (nextTemplates.length === this.templates.length || !this.saveLocalTemplates(nextTemplates)) {
-        return;
-      }
-
-      this.templates = nextTemplates;
-      this.selectedTemplateId = '';
-      showNotification('本机模板已删除', '成功');
-    },
-    clearTemplates() {
-      if (!this.templates.length || !this.saveLocalTemplates([])) {
-        return;
-      }
-
-      this.templates = [];
-      this.selectedTemplateId = '';
-      showNotification('本机模板已清空', '成功');
-    },
     showMoreConfig() {
       this.isShowMoreConfig = !this.isShowMoreConfig;
     },

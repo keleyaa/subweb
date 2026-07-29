@@ -5,23 +5,49 @@ import { describe, expect, it } from 'vitest';
 const sourcePath = fileURLToPath(new URL('../../../src/views/home/SubTable.vue', import.meta.url));
 
 describe('SubTable configuration layout', () => {
-  it('keeps conversion fields together before the local template controls', () => {
+  it('keeps the conversion controls in their expected linear order', () => {
     const source = readFileSync(sourcePath, 'utf8');
+    const subscriptionUrlsIndex = source.indexOf('id="subscription-urls"');
     const clientIndex = source.indexOf('id="client"');
     const apiIndex = source.indexOf('id="api"');
     const remoteIndex = source.indexOf('id="remote"');
     const moreConfigIndex = source.indexOf('id="more-config-toggle"');
-    const advancedConfigIndex = source.indexOf('id="more-config-include"');
-    const templateControlsIndex = source.indexOf('class="col-12 template-controls"');
+    const convertedSubUrlIndex = source.indexOf('id="converted-sub-url"');
 
-    expect(clientIndex).toBeGreaterThan(-1);
+    expect(subscriptionUrlsIndex).toBeGreaterThan(-1);
+    expect(clientIndex).toBeGreaterThan(subscriptionUrlsIndex);
     expect(apiIndex).toBeGreaterThan(clientIndex);
     expect(remoteIndex).toBeGreaterThan(apiIndex);
     expect(moreConfigIndex).toBeGreaterThan(remoteIndex);
-    expect(advancedConfigIndex).toBeGreaterThan(moreConfigIndex);
-    expect(templateControlsIndex).toBeGreaterThan(advancedConfigIndex);
+    expect(convertedSubUrlIndex).toBeGreaterThan(moreConfigIndex);
+  });
 
-    expect(source.slice(clientIndex, apiIndex)).not.toContain('template-controls');
-    expect(source.slice(remoteIndex, moreConfigIndex)).not.toContain('template-controls');
+  it('contains no local template UI, state, imports, or browser storage access', () => {
+    const source = readFileSync(sourcePath, 'utf8');
+    const forbiddenMarkers = [
+      ['template', 'controls'].join('-'),
+      ['template', 'name'].join('-'),
+      ['saved', 'template'].join('-'),
+      `${'保存'}${'模板'}`,
+      `${'应用'}${'模板'}`,
+      `${'本机'}${'模板'}`,
+      `${'清空'}${'模板'}`,
+      ['loadLocal', 'Templates'].join(''),
+      ['saveLocal', 'Templates'].join(''),
+      ['selected', 'TemplateId'].join(''),
+      ['template', 'Name'].join(''),
+      ['features', 'templates'].join('/'),
+      ['local', 'Storage'].join(''),
+    ];
+
+    for (const marker of forbiddenMarkers) {
+      expect(source).not.toContain(marker);
+    }
+  });
+
+  it('keeps advanced conversion parameters collapsed initially', () => {
+    const source = readFileSync(sourcePath, 'utf8');
+
+    expect(source).toMatch(/isShowMoreConfig:\s*false/);
   });
 });

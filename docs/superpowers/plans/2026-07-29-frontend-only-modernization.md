@@ -2,9 +2,9 @@
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 subagent-driven-development 逐任务实现本计划。步骤使用复选框跟踪进度。
 
-**目标：** 以 Vite 取代 Vue CLI 作为唯一开发/生产构建工具，同时完成 Pinia facade、可回退首页 UX、本机偏好模板和显式原生分享；不引入服务端能力。
+**目标：** 以 Vite 取代 Vue CLI 作为唯一开发/生产构建工具，同时完成 Pinia facade、可回退首页 UX 和显式原生分享；不引入服务端能力。
 
-**架构：** Vite 通过根 index.html、公共静态目录和 runtime config 模块构建到 dist；Vuex 继续拥有状态，Pinia 只读/转发。首页通过静态 window.config.uxMode 选择呈现；模板和分享各自封装为可单测的纯前端模块。
+**架构：** Vite 通过根 index.html、公共静态目录和 runtime config 模块构建到 dist；Vuex 继续拥有状态，Pinia 只读/转发。首页通过静态 window.config.uxMode 选择呈现；分享封装为可单测的纯前端模块。
 
 **技术栈：** Vue 3、Vuex 4、Pinia 2.2.4、Vite 6.4.3、@vitejs/plugin-vue 5.2.4、Vitest 2.1.9。
 
@@ -16,10 +16,9 @@
 - vite.config.mjs、根 index.html：Vite 旁路入口与构建配置。
 - src/runtime/config.js：运行时配置归一化与 uxMode 合同。
 - src/stores/styleFacade.js：Pinia 对 Vuex style.main 的单向 facade。
-- src/features/templates/preferences.js：无敏感数据的本机模板序列化与存储。
 - src/features/share/nativeShare.js：显式系统原生分享适配器。
-- src/views/home/HomeView.vue、src/views/home/SubTable.vue：首页 UX、模板和分享 UI。
-- `tests/**/*.spec.js`：配置、状态、模板和分享的行为测试。
+- src/views/home/HomeView.vue、src/views/home/SubTable.vue：首页 UX 和分享 UI。
+- `tests/**/*.spec.js`：配置、状态和分享的行为测试。
 
 ## 任务 1：[x] 建立运行时配置测试骨架与 Vite 旁路
 
@@ -336,79 +335,7 @@ git add public/conf/config.js src/views/home/HomeView.vue src/views/home/SubTabl
 git commit -m "feat: add runtime UX mode"
 ```
 
-## 任务 5：[x] 实现本机偏好模板
-
-**文件：**
-
-- 创建：src/features/templates/preferences.js、tests/features/templates/preferences.spec.js
-- 修改：src/views/home/SubTable.vue
-
-- [x] **步骤 1：编写模板 schema 的失败测试**
-
-```js
-import { describe, expect, it } from 'vitest';
-import { loadTemplates, serializeTemplates } from '@/features/templates/preferences';
-
-it('drops sensitive and malformed fields from stored templates', () => {
-  const serialized = serializeTemplates([
-    {
-      id: 'a',
-      name: '默认',
-      target: 'clash',
-      moreConfig: { emoji: false },
-      urls: 'secret',
-      api: 'https://api.example',
-      remoteConfig: 'https://config.example',
-    },
-  ]);
-
-  expect(serialized).not.toContain('secret');
-  expect(serialized).not.toContain('api.example');
-  expect(loadTemplates({ getItem: () => serialized })).toEqual([expect.objectContaining({ id: 'a', target: 'clash' })]);
-});
-```
-
-- [x] **步骤 2：运行红灯测试**
-
-运行：npm test -- tests/features/templates/preferences.spec.js
-
-预期：失败，报错无法解析模板模块。
-
-- [x] **步骤 3：实现 versioned 本机存储适配器**
-
-模块必须导出 MAX_TEMPLATES = 12、loadTemplates(storage)、serializeTemplates(templates)、saveTemplates(storage, templates) 和 createTemplate(input, id)。序列化值必须为：
-
-```js
-{
-  version: 1,
-  templates: [{ id, name, target, moreConfig }],
-}
-```
-
-所有读取异常、JSON 解析失败、错误版本、无效字段和超过上限的数据均返回空集合或被裁剪的合法集合。moreConfig 补全默认 boolean 和空字符串；禁止读取或写入任何 URL、结果或部署配置字段。
-
-- [x] **步骤 4：接入模板 UI**
-
-在 SubTable.vue 的输入配置区域增加模板名称输入、保存、选择应用、删除和清空操作。应用模板只能更新 target、moreConfig 和必要的高级参数展开状态。所有存储操作必须捕获浏览器 storage 错误并显示本地提示，且每个操作不得调用 request、getSubUrl 或 getShortUrl。
-
-- [x] **步骤 5：验证绿灯**
-
-```bash
-npm test -- tests/features/templates/preferences.spec.js
-npm run lint
-npm run build
-```
-
-在浏览器中验证保存、应用、删除、清空、刷新恢复以及损坏 storage 回退；检查 localStorage 值不含订阅 URL、API、短链或结果。
-
-- [x] **步骤 6：提交**
-
-```bash
-git add src/features/templates/preferences.js tests/features/templates/preferences.spec.js src/views/home/SubTable.vue
-git commit -m "feat: add local conversion templates"
-```
-
-## 任务 6：[x] 实现显式原生分享与全量验证
+## 任务 5：[x] 实现显式原生分享与全量验证
 
 **文件：**
 
@@ -454,7 +381,7 @@ shareUrl(url, navigatorObject = globalThis.navigator) 必须返回 missing、uns
 await navigatorObject.share({ url });
 ```
 
-在 SubTable.vue 中只在结果存在时显示分享按钮。unsupported 回退调用既有 toCopy(result.subUrl, '订阅链接')；cancelled 不提示错误；failed 显示既有错误 dialog。分享不得生成转换、生成短链、写模板或改变网络请求。
+在 SubTable.vue 中只在结果存在时显示分享按钮。unsupported 回退调用既有 toCopy(result.subUrl, '订阅链接')；cancelled 不提示错误；failed 显示既有错误 dialog。分享不得生成转换、生成短链或改变网络请求。
 
 - [x] **步骤 4：执行全部验证**
 
@@ -466,7 +393,7 @@ npm run build
 git diff --check
 ```
 
-启动 Vite 服务执行本地浏览器 smoke：加载 conf/config.js，模板与分享功能可见，modern/legacy 回退正确，控制台无错误。对分享使用 mock 或取消的系统面板，不调用真实短链或远程配置服务。
+启动 Vite 服务执行本地浏览器 smoke：加载 conf/config.js，分享功能可见，modern/legacy 回退正确，控制台无错误。对分享使用 mock 或取消的系统面板，不调用真实短链或远程配置服务。
 
 - [x] **步骤 5：提交**
 
@@ -480,5 +407,4 @@ git commit -m "feat: add native subscription sharing"
 - [x] 每个新纯函数都先经过失败测试，再以最小实现转绿。
 - [x] npm test、Vite build、两条 lint、Docker runtime 验证和 git diff --check 均通过。
 - [x] Vite/Docker 默认构建合同、Vuex 唯一状态源、/short v1 协议和 runtime config 所有权未改变。
-- [x] 本机模板不保存任何 URL、结果、API、短链或 remote config。
 - [x] 浏览器在三种视口、Vite 构建和两种 UX mode 下无 console error、重复 id 或交互回退。
