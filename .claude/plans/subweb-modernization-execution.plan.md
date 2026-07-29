@@ -1,11 +1,11 @@
 # subweb 现代化执行计划（修订版）
 
-- Status: dockerhub-release-validation-blocked-on-artifact-name-fix
+- Status: immutable-digest-rollback-runtime-rehearsal-complete
 - Current task: none
-- Last completed: Docker Hub build/digest/static-gate/README/manifest validation
-- Next task: push artifact-name fix, then rerun workflow 322510819
+- Last completed: P4-Docker-Hub-immutable-digest-runtime-rehearsal
+- Next task: separately approved mutable-tag restoration rehearsal, production deployment rollback, or product contract
 
-> 说明：本文是本项目后续现代化改造的**唯一执行台账**。P0 至 P4 的已批准本地变更已完成；仍未执行的 Docker、GitHub Actions、镜像仓库与回滚演练均明确列为外部验证缺口，不得据此宣称生产发布已验证。
+> 说明：本文是本项目后续现代化改造的**唯一执行台账**。P0 至 P4 的已批准本地变更、fork 上的 Docker Hub 发布验证和 immutable-digest 本地运行演练已完成；mutable tag 改写、生产部署回滚及真实外部服务行为仍是外部验证缺口，不得据此宣称生产发布已验证。
 
 ## 1. Scope Lock
 
@@ -165,19 +165,20 @@
 | 2026-07-28 | P3-01 | [x] 已完成 | 完成配置与模板管理产品化评估；确认当前仅存在公开、部署时 `window.config`/`config.js`/`start.sh` 配置链，没有认证、持久化、管理 API 或多租户能力；将 `siteName`、`menuItem`、`remoteConfigOptions` 评为未来可考虑的 admin-only/local-only 内容，将 `apiUrl`、`shortUrl` 保持 deployment-only | 中；仅评估，无生产代码变更；公开配置、订阅 Token、远程配置 URL 和短链服务存在既有隐私/SSRF/多用户暴露边界 | 维持现有静态默认值、配置文件和容器环境覆盖路径；不启用任何新产品化能力 | 静态事实盘点、产品边界、回滚和安全审查完成；未访问外部服务或实现认证/持久化；未来 runtime-editable/admin-managed 能力必须单独批准并定义 API、auth、source-of-truth、迁移和 allowlist |
 | 2026-07-28 | P3-02a | [x] 已完成 | 定义已实现的 conversion、copy 和 short-link 边界：`result.subUrl` 为 canonical artifact；复制只处理 plain string；短链固定为 `POST {shortUrl}/short` + `FormData.longUrl=btoa(result.subUrl)`；未来 share 必须是独立、可选、版本化扩展 | 中；订阅 URL 是可重放 bearer-like 数据，base64 不是加密，短链/远程配置存在第三方暴露和 SSRF 边界；仅设计，无生产代码变更 | 始终回退到现有 conversion URL、plain-text clipboard 和当前 `/short` v1 合同；未来 share 失败不得阻断现有流程 | 已完成代码事实、兼容性、隐私和安全边界审查；未实现 share endpoint、envelope、存储或新字段；未调用外部短链服务；未来 schema、隐私确认、allowlist 和后端 ownership 需单独批准 |
 | 2026-07-28 | P3-02b | [x] 已完成 | 完成短链与分享 UI 接入评估；确认当前已存在“短链”生成后复制的 UI，但不存在独立 share UI、share endpoint 或 share schema；不增加代码、不改变 `/short` v1 合同 | 高；短链默认将完整订阅 URL 发送至配置的第三方服务，复制与远程配置也有既有隐私/供应链/SSRF 边界；进一步实现前需产品、隐私和后端批准 | 延迟任何新 UI/transport；维持现有 `result.subUrl`、短链可选旁路、plain-text copy 和失败时长链 fallback | 已完成短链成功/失败、末尾斜杠、loading、copy target 和 fallback 的静态验证设计；未调用真实短链服务、未做真实浏览器 clipboard E2E；未来需明确 consent、operator ownership、allowlist、share API/schema 和日志政策 |
-| 2026-07-29 | P4-01 | [x] 已完成 | 完成 CI/Docker/发布可重复性审计，并实施基础镜像更新、锁定依赖安装与构建输入边界加固；发布目标保持 Docker Hub + Harbor，tag 保持 `latest` 与 Dockerfile `ENV VERSION`/日期 fallback | 中；基础镜像仍为可变版本 tag，Docker/GitHub/registry 实际运行未在本地实证 | 恢复 Dockerfile、`.dockerignore` 与 workflow 到 P4 实施前的已知基线；任何实施失败只回滚对应文件 | 当前 Dockerfile 使用 `node:20.15.1-alpine`、`nginx:1.26.2-alpine` 和 `npm ci`；digest、registry、CI logs、Hub/Harbor 一致性和 provenance 仍未外部验证；`latest` 不作为可靠回滚锚点 |
+| 2026-07-29 | P4-01 | [x] 已完成 | 完成 CI/Docker/发布可重复性审计，并实施基础镜像更新、锁定依赖安装与构建输入边界加固；当前发布策略为 Docker Hub-only，tag 保持 `latest` 与 Dockerfile `ENV VERSION`/日期 fallback | 中；基础镜像仍为可变版本 tag，`latest` 仍是 mutable alias | 恢复 Dockerfile、`.dockerignore` 与 workflow 到 P4 实施前的已知基线；任何实施失败只回滚对应文件 | 当前 Dockerfile 使用 `node:20.15.1-alpine`、`nginx:1.26.2-alpine` 和 `npm ci`；fork workflow、Docker Hub digest 和 rollback artifact 已外部验证；Harbor、registry-side provenance/SBOM 已按 Docker Hub-only 策略移除/未提供 |
 | 2026-07-29 | P4-01a | [x] 已完成 | 将 Dockerfile 依赖安装收敛为 `RUN npm ci`，使用已提交 lockfile 执行冻结依赖安装，并保留依赖层缓存顺序 | 低；Docker runtime 不可用，无法执行真实镜像构建 | 恢复 Dockerfile 的依赖安装与复制顺序到 P4 实施前版本 | `npm run lint`、`npm run build` 和 `git diff --check` 通过；Docker build 未验证，因为环境没有 Docker |
 | 2026-07-29 | P4-01b | [x] 已完成 | 更新构建与运行时基础镜像到 `node:20.15.1-alpine` 和 `nginx:1.26.2-alpine`，保持多阶段构建、公开 runtime-config 模板和启动合同 | 中；镜像 tag 未按 digest 固定，容器运行时未实际启动 | 恢复 Dockerfile 基础镜像引用到 P4 实施前版本 | 静态 Dockerfile、shell、lint/build 与 diff 检查通过；实际镜像拉取、构建和运行仍需外部验证 |
 | 2026-07-29 | P4-02 | [x] 已完成 | 容器启动与 runtime-config 加固已由 P0-02a/P0-02b 完成并纳入 P4 发布控制：配置写入失败中止、值转义/换行拒绝、原子替换与 Nginx PID 1 语义保持 | 中；最终镜像中的容器启动未实际验证 | 恢复 `start.sh` 与 `public/index.html` 到 P0 基线 | 离线矩阵和静态检查通过；Docker runtime-config 注入仍需容器验证 |
 | 2026-07-29 | P4-03 | [x] 已完成 | 新增 `.dockerignore` 收敛 Docker build context，排除 Git/CI/Claude、本地依赖、构建产物、日志、编辑器状态和环境文件，同时保留 `.env.example` | 低；仍依赖 Docker build context 的真实构建验证 | 删除 `.dockerignore` 并恢复 Dockerfile context 相关改动 | 静态检查确认保留 package/lock/source、`start.sh` 与配置模板；真实 Docker build 未执行 |
 | 2026-07-29 | P4-04 | [x] 已完成 | 所有第三方 GitHub Actions 已固定为完整 commit SHA，保留原有触发、registry 与 tag 行为 | 中；上游 action SHA 与供应商发布版本的对应关系未在外部重新核验 | 恢复 workflow action 引用到 P4-03 前状态 | workflow 静态/YAML 与 diff 检查通过 |
-| 2026-07-29 | P4-05 | [x] 已完成 | 捕获 Docker Hub source digest 与 Git SHA、workflow run、ref、tag、平台、UTC 构建时间；digest 缺失或格式错误时 fail closed | 中；GitHub Actions、Docker Hub/Harbor 推送和 digest 一致性未在本地实证 | 移除发布身份步骤并恢复仅按 tag 发布的 workflow；不回滚 P4-04 action SHA pin | workflow 静态/YAML 检查和 diff 检查通过；仅输出非 Secret 单行身份字段 |
-| 2026-07-29 | P4-06 | [x] 已完成 | Docker Hub 构建请求 Buildx `provenance: mode=min` 与 `sbom: true`，并保留现有构建平台与发布目标 | 中；registry-side attestation/referrer 的生成、保留与 promotion 传播未实际验证 | 移除 provenance/SBOM 输入及其所需 workflow 配置 | 本地仅验证 workflow 合同；attestation 仍需发布后外部检查 |
-| 2026-07-29 | P4-07 | [x] 已完成 | 将 workflow 改为一次 Docker Hub 多架构构建，再以 source digest 通过 `docker buildx imagetools create` promotion 到 Harbor；保留两端 `latest`/resolved tag；promotion 后有限重试 inspect Harbor tag，严格校验并比较 destination manifest digest | 中；真实 registry promotion、manifest parity、blob/referrer 与 provenance/SBOM 保留未执行 | 恢复第二个 Harbor build/push，移除 digest promotion/inspect；不回滚 P4-05/P4-06 identity/evidence 配置 | 静态 YAML、shell、diff gate 和独立审查通过；source 使用 `repo@digest` 不依赖 mutable tag；Docker/GitHub Actions/registry runtime 未执行 |
-| 2026-07-29 | P4-07a | [x] 已完成 | promotion 结果由实际 Harbor inspect digest 记录；严格校验 source/destination digest，并在不相等或不可观测时 fail closed | 中；Harbor eventual consistency、权限、跨仓库复制与实际 parity 未在真实 registry 验证 | 移除 Harbor digest 验证/证据步骤并恢复 P4-07 前发布记录 | 代码含 5 次有限 retry/backoff 和严格 SHA-256 格式/相等性检查；外部 registry 行为未验证 |
-| 2026-07-29 | P4-08 | [x] 已完成 | 通过 `jq -n --arg` 生成并 `jq -e` 验证 rollback manifest；记录 source/destination references/digests、Git SHA、workflow identity、tag、平台和构建时间，并作为 90 天 artifact 上传 | 中；artifact 上传、下载、保留及受控 rollback 演练未实际执行 | 移除 manifest 和 artifact upload 步骤，恢复 P4-07a 前 workflow | 不把多行 JSON 写入 GitHub outputs；本地只验证源文本合同 |
-| 2026-07-29 | P4-LOCAL-VALIDATION | [x] 已完成 | 已使用 Docker Desktop 从本地 `Dockerfile` 构建临时镜像，并以 localhost-only 映射启动临时容器；验证默认配置、带引号/反斜杠/`&` 的运行时配置替换、Nginx HTTP 就绪和容器日志 | 低；仅本地、非发布验证；未访问应用外部 API，临时容器和镜像已清理 | 不适用；验证不改仓库代码，临时资源已删除 | `subweb:local-validate` 构建成功；`127.0.0.1:18080` 返回预期页面标题；容器内 `config.js` 保留特殊字符替换值；`subweb-validate` 容器与临时镜像均无残留；GitHub Actions、Docker Hub/Harbor、provenance/SBOM、artifact 和 rollback 仍未验证 |
-| 2026-07-29 | P4-REMOTE-VALIDATION | [~] Docker Hub 完成 / Harbor 已移除 | 在 fork `keleyaa/subweb` 的 `main` 调度 workflow，Docker Hub 多架构 build/push、source digest identity、修复后的 static gate 和 README sync 已成功；根据批准的 Docker Hub-only 策略，移除 Harbor promotion/parity，不再需要 Harbor secrets | 中；`latest` 与 `2.0` 是 mutable alias，可靠回滚仍必须使用 Docker Hub immutable digest；registry-side provenance/SBOM 不再由 blocking publish job 生成 | Docker Hub 侧回退使用已记录的 `docker.io/<username>/subweb@sha256:...` immutable source reference；rollback artifact 将记录同一 Docker Hub digest | run `30425721401` 已验证 Docker Hub 构建/推送和静态 gate；Docker Hub-only workflow 保留 source digest、README sync、90 天 rollback manifest artifact，删除全部 `HARBOR_*` secrets/步骤与 destination 字段；待新 workflow run 验证 Docker Hub-only manifest/artifact；Harbor parity、Harbor mirror 与 registry-side provenance/SBOM 不适用/未提供 |
+| 2026-07-29 | P4-05 | [x] 已完成 | 捕获 Docker Hub source digest 与 Git SHA、workflow run、ref、tag、平台、UTC 构建时间；digest 缺失或格式错误时 fail closed | 中；Docker Hub tag 仍是 mutable alias，实际部署不由 workflow 控制 | 移除发布身份步骤并恢复仅按 tag 发布的 workflow；不回滚 P4-04 action SHA pin | fork workflow run `30429765120` 已实证 Docker Hub push 和 digest identity；仅输出非 Secret 单行身份字段 |
+| 2026-07-29 | P4-06 | [x] 历史实现已移除 | 历史实现曾请求 Buildx `provenance: mode=min` 与 `sbom: true`；当前 Docker Hub-only 策略明确使用 `provenance: false` 与 `sbom: false`，不提供 registry-side attestation/SBOM | 中；当前发布不具备 provenance/SBOM 证据，任何恢复必须另行批准并验证不会阻塞发布 | 维持当前禁用状态；若未来需要证据，单独恢复并验证对应输入和 registry 行为 | 当前 workflow static gate 明确断言 provenance/SBOM 为 disabled；Docker Hub-only 远端验证不宣称提供这些能力 |
+| 2026-07-29 | P4-07 | [x] 历史 Harbor promotion 已移除 | 历史实现曾以 source digest 将 Docker Hub 镜像提升到 Harbor；当前 Docker Hub-only 策略已移除 Harbor promotion、mirror 和 parity | 中；当前没有 Harbor 副本或跨 registry parity；任何恢复必须另行批准并验证 registry 权限、复制与 manifest 一致性 | 维持 Docker Hub-only 发布路径；若未来恢复 Harbor，重新引入独立 promotion 合同 | 当前 workflow static gate 断言没有 `HARBOR_*` 引用；远端验证只覆盖 Docker Hub source digest |
+| 2026-07-29 | P4-07a | [x] 历史 Harbor parity 验证已移除 | 历史实现曾记录并比较 source/destination digest；当前因 Harbor promotion 已移除，destination digest/parity 不适用 | 低；Docker Hub source digest 仍受格式和 artifact schema 校验，但没有跨 registry 一致性保证 | 维持 Docker Hub-only identity/manifest 记录；若未来恢复 Harbor，随 promotion 一并恢复 destination 验证 | 当前 rollback manifest 仅记录 Docker Hub source reference/digest；远端验证未声称 Harbor parity |
+| 2026-07-29 | P4-08 | [x] 已完成 | 通过 `jq -n --arg` 生成并 `jq -e` 验证 Docker Hub-only rollback manifest；记录 source reference/digest、Git SHA、workflow identity、tag、平台和构建时间，并作为 90 天 artifact 上传 | 中；artifact 上传、下载、保留现已在 fork workflow 验证；mutable tag 改写和部署回滚仍未演练 | 移除 manifest 和 artifact upload 步骤，恢复人工回滚记录 | 不把多行 JSON 写入 GitHub outputs；run `30429765120` artifact 已下载并验证 schema、source SHA、digest 和 immutable rollback reference |
+| 2026-07-29 | P4-LOCAL-VALIDATION | [x] 已完成 | 已使用 Docker Desktop 从本地 `Dockerfile` 构建临时镜像，并以 localhost-only 映射启动临时容器；验证默认配置、带引号/反斜杠/`&` 的运行时配置替换、Nginx HTTP 就绪和容器日志 | 低；仅本地、非发布验证；未访问应用外部 API，临时容器和镜像已清理 | 不适用；验证不改仓库代码，临时资源已删除 | `subweb:local-validate` 构建成功；`127.0.0.1:18080` 返回预期页面标题；容器内 `config.js` 保留特殊字符替换值；`subweb-validate` 容器与临时镜像均无残留；后续 P4-REMOTE-VALIDATION 已验证 fork workflow、Docker Hub 和 artifact；Harbor/provenance/SBOM 按 Docker Hub-only 策略不适用/未提供，实际 tag/部署回滚仍未验证 |
+| 2026-07-29 | P4-REMOTE-VALIDATION | [x] Docker Hub-only 完成 | fork `keleyaa/subweb` 的 workflow run `30429765120` 成功完成 Docker Hub 多架构 build/push、source digest identity、static gate、README sync、Docker Hub-only rollback manifest 与 artifact 上传 | 中；`latest` 与 `2.0` 仍是 mutable alias，回滚必须使用 immutable Docker Hub digest；Harbor mirror/parity 与 registry-side provenance/SBOM 已按 Docker Hub-only 策略移除/未提供 | 回退目标为 artifact 记录的 `docker.io/keleyaa/subweb@sha256:15bc1d7971132725a0605c36ca88bf6a172a58d2c44734061cb0193074f5e216`；未实际执行 tag 改写或部署回滚演练 | run `30429765120` 成功；`latest` 与 `2.0` 均解析为同一 OCI index digest `sha256:15bc1d7971132725a0605c36ca88bf6a172a58d2c44734061cb0193074f5e216`，包含 `linux/amd64` 与 `linux/arm64`；artifact `rollback-manifest-30429765120-15bc1d7971132725a0605c36ca88bf6a172a58d2c44734061cb0193074f5e216` 已上传（560 bytes、未过期、90 天保留），下载后已验证 schema、source SHA、digest 与 Docker Hub immutable rollback reference |
+| 2026-07-29 | P4-DIGEST-ROLLBACK-REHEARSAL | [x] 已完成（本地 immutable-digest runtime） | 从 rollback manifest 指定的 `docker.io/keleyaa/subweb@sha256:15bc1d7971132725a0605c36ca88bf6a172a58d2c44734061cb0193074f5e216` 拉起一次性 Docker Desktop 容器，使用 `--rm`、`--restart=no`、无挂载/环境变量和 loopback-only 随机端口；容器运行、镜像 RepoDigest 和首页 HTTP 响应均通过 | 低；仅验证本地 Docker Desktop 的 arm64 运行时恢复，未重写 Docker Hub tag、未触碰部署或真实流量 | 不适用；演练容器自动移除，本次新拉取的镜像已删除 | 容器以目标 digest 运行并返回 `HTTP 200`、页面标题为 `Subconverter Web`；清理后容器和镜像均不存在；复查 Docker Hub `latest` 与 `2.0` 仍指向同一目标 digest，未发生远端标签变更 |
 
 
 
@@ -454,7 +455,7 @@
 
 ### P2 核心 UX 重设计
 
-#### [ ] P2-00 确认路由、layout 与 feature-flag 插入点
+#### [x] P2-00 确认路由、layout 与 feature-flag 插入点
 - 目标：在做并行 UI 之前，先确认实际可切换的入口
 - 依赖：P1-03
 - 可能文件：
@@ -472,7 +473,7 @@
   - 维持原入口，不启用切换
 - 复杂度 / 风险：中 / 低
 
-#### [ ] P2-01a 拆分 SubTable 的数据准备与校验逻辑
+#### [x] P2-01a 拆分 SubTable 的数据准备与校验逻辑
 - 目标：把表单数据处理从 UI 渲染中隔离出来
 - 依赖：P0-03、P1-02b
 - 可能文件：
@@ -515,25 +516,25 @@
 
 - 复杂度 / 风险：高 / 中
 
-#### [ ] P2-02 建立新旧 UX 并行切换机制
-- 目标：允许新界面逐步上线，而不是直接覆盖旧界面
+#### [x] P2-02 新旧 UX 并行切换机制评估（design-only，未实施）
+- 目标：评估新界面逐步上线所需的切换机制，并明确在缺少已批准合同的前提下不实施 switch plumbing
 - 依赖：P2-00、P2-01b
 - 可能文件：
   - `/Users/li/Desktop/GitHub/subweb/src/router/index.js`
   - `/Users/li/Desktop/GitHub/subweb/src/layouts/main/MainLayout.vue`
 - 实施步骤：
-  1. 定义切换入口
-  2. 保留旧界面作为 fallback
-  3. 设计可回退的路由或开关机制
+  1. 盘点现有路由、runtime config 和本地状态中的切换入口
+  2. 确认旧界面作为 fallback 的已验证边界
+  3. 记录不引入 speculative switch plumbing 的结论，以及未来实施所需的单独批准
 - 验收标准：
-  - 新旧路径都能打开
-  - 切换机制可复述且可回退
-  - 不引入新的权限或登录语义
+  - 已明确当前没有既有的全局切换合同
+  - 已记录旧 UI / `window.config` 默认路径作为 fallback-first 基线
+  - 未引入新的权限、登录语义、路由或 runtime-config 字段
 - 回滚说明：
-  - 切回旧路由或旧入口
+  - 不适用；本任务未改生产代码。未来实际切换机制失败时，维持现有旧 UI 入口
 - 复杂度 / 风险：中 / 中
 
-#### [ ] P2-03a 重做输入与结果区域的信息架构
+#### [x] P2-03a 重做输入与结果区域的信息架构
 - 目标：改善表单、校验、结果展示的可读性和操作效率
 - 依赖：P2-01a、P2-01b
 - 可能文件：
@@ -659,52 +660,52 @@
 - 允许文件：`.github/workflows/docker-build-release.yml`
 - 禁止范围：应用代码、registry 迁移、tag 删除、运行时行为
 - 依赖：P4-04
-- 验收标准：记录 Git SHA、workflow run、tag、digest、平台和构建时间；Docker Hub/Harbor 目标不变
+- 验收标准：记录 Git SHA、workflow run、tag、digest、平台和构建时间；Docker Hub-only 目标不变
 - 回滚说明：移除身份捕获步骤，恢复原发布步骤
 
-#### [x] P4-06 生成 provenance、SBOM 与 attestation
-- 目标：为发布镜像生成供应链证明
+#### [x] P4-06 历史 provenance/SBOM 方案（Docker Hub-only 策略下已移除）
+- 目标：记录 provenance/SBOM 曾被评估和实现，但当前 Docker Hub-only 发布明确不提供它们
 
 - 允许文件：`.github/workflows/docker-build-release.yml`
-- 禁止范围：Dockerfile runtime、应用代码、registry、tag 命名
+- 禁止范围：Dockerfile runtime、应用代码、Docker Hub tag 命名
 - 依赖：P4-05
-- 验收标准：发布构建生成并关联 provenance/SBOM/attestation；失败策略明确；运行时不变
-- 回滚说明：移除证据生成和对应权限/配置
+- 验收标准：当前 workflow 显式禁用 provenance/SBOM；台账不将历史能力表述为当前发布保证；运行时不变
+- 回滚说明：维持当前禁用状态；未来恢复须作为新任务，先验证 registry 行为和失败策略
 
-#### [x] P4-07 按 digest 进行 immutable artifact promotion
-- 目标：构建一次并按不可变 digest 推送/提升到现有 registry，同时保留兼容 tag
-
-- 允许文件：`.github/workflows/docker-build-release.yml`
-- 禁止范围：凭据、registry 目标、应用运行时、build context
-- 依赖：P4-05、P4-06
-- 验收标准：promotion 以 digest 为锚；latest 不再是唯一发布/回滚依据；现有 tag 兼容
-- 回滚说明：恢复原 tag-based 发布路径
-
-#### [x] P4-07a 生成滚动发布前置校验与回退证据
-- 目标：为 promotion 结果提供可核对、可回退的机器可读证据
+#### [x] P4-07 历史 Harbor digest promotion（Docker Hub-only 策略下已移除）
+- 目标：记录曾有的按 digest Harbor promotion 路径已被 Docker Hub-only 策略移除
 
 - 允许文件：`.github/workflows/docker-build-release.yml`
-- 禁止范围：应用代码、依赖、registry 布局、运行时行为
+- 禁止范围：凭据、Docker Hub tag、应用运行时、build context
+- 依赖：P4-05
+- 验收标准：当前 workflow 不含 Harbor promotion；Docker Hub immutable digest 仍被记录为回滚身份；现有 tag 兼容
+- 回滚说明：维持 Docker Hub-only 发布路径；未来恢复 Harbor 必须单独设计和验证
+
+#### [x] P4-07a 历史 Harbor parity 验证（Docker Hub-only 策略下不适用）
+- 目标：记录 destination digest/parity 验证仅属于已移除的 Harbor promotion 路径
+
+- 允许文件：`.github/workflows/docker-build-release.yml`
+- 禁止范围：应用代码、依赖、Docker Hub 发布路径、运行时行为
 - 依赖：P4-07
-- 验收标准：记录 source/destination digest、source commit、workflow run、tag、platforms、build time；失败时不静默继续
-- 回滚说明：移除新增证据步骤，恢复仅发布身份摘要
+- 验收标准：当前只记录 Docker Hub source digest、source commit、workflow run、tag、platforms 和 build time；不声明 destination parity
+- 回滚说明：维持 Docker Hub-only identity/manifest 记录；未来恢复 Harbor 时同步恢复 destination 验证
 
 #### [x] P4-08 生成正式 rollback manifest
-- 目标：记录 tag、digest、Git SHA、workflow run、平台和基础输入，形成可执行回滚证据
+- 目标：记录 Docker Hub source reference/digest、tag、Git SHA、workflow run、平台和基础输入，形成可定位的回滚证据
 
 - 允许文件：workflow；若需新增 manifest 文件，须在实施前确认其格式
 - 禁止范围：应用代码、依赖、registry 布局、运行时行为
-- 依赖：P4-07
-- 验收标准：每次发布生成可追踪 manifest，能够定位具体 digest 和 source commit
+- 依赖：P4-05
+- 验收标准：每次发布生成可追踪 manifest，能够定位具体 Docker Hub digest 和 source commit
 - 回滚说明：移除 manifest 生成，恢复人工回滚记录
 
-#### [x] P4-09 P4 发布控制验证
-- 目标：验证 P4-03 至 P4-08 的静态合同和失败阻断行为
+#### [x] P4-09 Docker Hub-only 发布控制验证
+- 目标：验证当前 Docker Hub-only workflow 的静态合同和失败阻断行为
 
 - 允许文件：workflow 及现有计划/文档记录
 - 禁止范围：应用功能、Docker runtime、发布目标扩展
-- 依赖：P4-03、P4-04、P4-05、P4-06、P4-07、P4-07a、P4-08
-- 验收标准：验证 action pin、context、digest、provenance/SBOM、promotion 和 rollback identity；失败不能静默发布
+- 依赖：P4-03、P4-04、P4-05、P4-08
+- 验收标准：验证 action pin、context、Docker Hub digest、provenance/SBOM 禁用、无 Harbor promotion 和 rollback identity；失败不能静默发布
 - 回滚说明：恢复验证前 workflow gate
 
 - 依赖：P0-01
