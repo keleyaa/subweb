@@ -3,8 +3,7 @@ export const TEMPLATE_VERSION = 1;
 export const MAX_TEMPLATES = 12;
 
 const TEMPLATE_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
-const URL_LIKE_PATTERN =
-  /:\/\/|www\.|^(?:https?|ftp|mailto|data|javascript|file|blob|tel|sms|ssh|ws|wss|urn|geo|magnet|ipfs):|^\/\//i;
+const URL_LIKE_PATTERN = /:\/\/|www\.|^[A-Za-z][A-Za-z0-9+.-]*:\S|^\/\//i;
 const ENVELOPE_KEYS = ['version', 'templates'];
 const TEMPLATE_KEYS = ['id', 'name', 'target', 'moreConfig'];
 const MORE_CONFIG_KEYS = ['include', 'exclude', 'emoji', 'udp', 'sort', 'scv', 'list'];

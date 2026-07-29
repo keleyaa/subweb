@@ -179,12 +179,15 @@ describe('local conversion templates', () => {
     expect(serialized).not.toContain('https://name.example.test');
   });
 
-  it('does not persist common URI schemes or protocol-relative values', () => {
+  it('does not persist URI schemes or protocol-relative values', () => {
     const uriLikeValues = [
       'mailto:person@example.test',
       'data:text/plain,template',
       'javascript:alert(1)',
       'ftp:files.example.test',
+      'about:blank',
+      'intent:scan',
+      'custom-scheme:opaque',
       '//host.example.test/path',
     ];
 
@@ -224,6 +227,44 @@ describe('local conversion templates', () => {
         include: '地区: HK',
       },
     });
+  });
+
+  it('rejects stored templates whose template fields contain URI values', () => {
+    const errors = [];
+    const onError = (error) => errors.push(error.message);
+    const safeTemplate = {
+      id: 'stored-uri',
+      name: 'Stored template',
+      target: 'clash',
+      moreConfig: completeMoreConfig(),
+    };
+    const unsafeTemplates = [
+      { ...safeTemplate, name: 'about:blank' },
+      { ...safeTemplate, moreConfig: { ...completeMoreConfig(), include: 'intent:scan' } },
+      { ...safeTemplate, moreConfig: { ...completeMoreConfig(), exclude: 'custom-scheme:opaque' } },
+      { ...safeTemplate, moreConfig: { ...completeMoreConfig(), include: '//host.example.test/path' } },
+    ];
+
+    for (const template of unsafeTemplates) {
+      expect(
+        loadTemplates(
+          createStorage(
+            JSON.stringify({
+              version: TEMPLATE_VERSION,
+              templates: [template],
+            })
+          ),
+          onError
+        )
+      ).toEqual([]);
+    }
+
+    expect(errors).toEqual([
+      'Invalid saved templates',
+      'Invalid saved templates',
+      'Invalid saved templates',
+      'Invalid saved templates',
+    ]);
   });
 
   it('rejects stored envelopes that contain unknown or invalid schema fields', () => {
@@ -345,13 +386,38 @@ describe('local conversion templates', () => {
     ]);
   });
 
+  it('stably truncates complete safe stored templates at the template limit', () => {
+    const templates = Array.from({ length: MAX_TEMPLATES + 3 }, (_, index) => ({
+      id: `stored-template-${index}`,
+      name: `Stored template ${index}`,
+      target: 'clash',
+      moreConfig: completeMoreConfig(),
+    }));
+    const errors = [];
+
+    expect(
+      loadTemplates(
+        createStorage(
+          JSON.stringify({
+            version: TEMPLATE_VERSION,
+            templates,
+          })
+        ),
+        (error) => errors.push(error.message)
+      )
+    ).toEqual(templates.slice(0, MAX_TEMPLATES));
+    expect(errors).toEqual([]);
+  });
+
   it('returns an empty list for malformed storage data and reports storage errors', () => {
     const errors = [];
     const onError = (error) => errors.push(error.message);
 
     expect(loadTemplates(createStorage('{invalid json'), onError)).toEqual([]);
     expect(loadTemplates(createStorage(JSON.stringify({ version: 2, templates: [] })), onError)).toEqual([]);
-    expect(loadTemplates(createStorage(JSON.stringify({ version: TEMPLATE_VERSION, templates: {} })), onError)).toEqual([]);
+    expect(loadTemplates(createStorage(JSON.stringify({ version: TEMPLATE_VERSION, templates: {} })), onError)).toEqual(
+      []
+    );
     expect(
       loadTemplates(
         {
