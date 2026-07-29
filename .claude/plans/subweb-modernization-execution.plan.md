@@ -1,9 +1,9 @@
 # subweb 现代化执行计划（修订版）
 
-- Status: remote-release-validation-blocked-on-harbor-secrets
+- Status: dockerhub-release-validation-blocked-on-artifact-name-fix
 - Current task: none
-- Last completed: Docker Hub release validation
-- Next task: configure fork Harbor secrets, then rerun workflow 322510819
+- Last completed: Docker Hub build/digest/static-gate/README/manifest validation
+- Next task: push artifact-name fix, then rerun workflow 322510819
 
 > 说明：本文是本项目后续现代化改造的**唯一执行台账**。P0 至 P4 的已批准本地变更已完成；仍未执行的 Docker、GitHub Actions、镜像仓库与回滚演练均明确列为外部验证缺口，不得据此宣称生产发布已验证。
 

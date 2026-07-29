@@ -134,7 +134,8 @@ jobs:
           grep -Fq -- "$expected_source_reference" "$WORKFLOW_FILE" || { echo "Missing rollback manifest source reference" >&2; exit 1; }
           grep -Fq 'rollback_manifest_path=$RUNNER_TEMP/rollback-manifest.json' "$WORKFLOW_FILE" || { echo "Missing rollback manifest artifact path wiring" >&2; exit 1; }
           grep -Fq 'rollback_manifest_source_digest=$SOURCE_DIGEST' "$WORKFLOW_FILE" || { echo "Missing rollback manifest source digest wiring" >&2; exit 1; }
-          expected_artifact_name="name: rollback-manifest-${github_expression_open} github.run_id }}-${github_expression_open} steps.dockerhub_rollback_manifest.outputs.rollback_manifest_source_digest }}"
+          grep -Fq 'rollback_manifest_digest_suffix=${SOURCE_DIGEST#sha256:}' "$WORKFLOW_FILE" || { echo "Missing rollback manifest digest suffix wiring" >&2; exit 1; }
+          expected_artifact_name="name: rollback-manifest-${github_expression_open} github.run_id }}-${github_expression_open} steps.dockerhub_rollback_manifest.outputs.rollback_manifest_digest_suffix }}"
           grep -Fq "$expected_artifact_name" "$WORKFLOW_FILE" || { echo "Missing artifact upload name" >&2; exit 1; }
           expected_artifact_path="path: ${github_expression_open} steps.dockerhub_rollback_manifest.outputs.rollback_manifest_path }}"
           grep -Fq "$expected_artifact_path" "$WORKFLOW_FILE" || { echo "Missing artifact upload path" >&2; exit 1; }
@@ -227,6 +228,7 @@ jobs:
           {
             echo "rollback_manifest_path=$RUNNER_TEMP/rollback-manifest.json"
             echo "rollback_manifest_source_digest=$SOURCE_DIGEST"
+            echo "rollback_manifest_digest_suffix=${SOURCE_DIGEST#sha256:}"
           } >> "$GITHUB_OUTPUT"
           {
             echo "### Docker Hub rollback manifest"
@@ -240,7 +242,7 @@ jobs:
       - name: Upload rollback manifest
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
         with:
-          name: rollback-manifest-${{ github.run_id }}-${{ steps.dockerhub_rollback_manifest.outputs.rollback_manifest_source_digest }}
+          name: rollback-manifest-${{ github.run_id }}-${{ steps.dockerhub_rollback_manifest.outputs.rollback_manifest_digest_suffix }}
           path: ${{ steps.dockerhub_rollback_manifest.outputs.rollback_manifest_path }}
           if-no-files-found: error
           retention-days: 90
