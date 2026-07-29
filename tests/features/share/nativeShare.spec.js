@@ -21,6 +21,16 @@ describe('native subscription sharing', () => {
     await expect(shareUrl('https://subscription.example.test', {})).resolves.toEqual({ status: 'unsupported' });
   });
 
+  it('reports failed when reading the native share capability throws', async () => {
+    const navigatorObject = {
+      get share() {
+        throw new Error('capability lookup failed');
+      },
+    };
+
+    await expect(shareUrl('https://subscription.example.test', navigatorObject)).resolves.toEqual({ status: 'failed' });
+  });
+
   it('shares the trimmed URL exactly once when the native API succeeds', async () => {
     const share = vi.fn().mockResolvedValue();
 
