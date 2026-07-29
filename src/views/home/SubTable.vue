@@ -1,5 +1,5 @@
 <template>
-  <div class="row g-4 custom-div">
+  <div class="row g-4 custom-div sub-table" :class="{ 'sub-table--modern': mode === 'modern' }">
     <div class="col-12 col-lg-12 pt-4 pt-lg-0">
       <div class="tab-content p-0">
         <div class="tab-pane fade show active">
@@ -19,15 +19,15 @@
                         rows="3"
                       ></textarea>
                     </div>
-                    <div class="col-5 col-md-6">
+                    <div :class="mode === 'modern' ? 'col-12 col-md-6' : 'col-5 col-md-6'">
                       <label class="form-label" for="client">客户端</label>
-                      <select class="form-select" id="client" v-model="target" @change="selectTarget">
+                      <select class="form-select" id="client" v-model="target">
                         <option v-for="option in targetOptions" :key="option.value" :value="option.value">
                           {{ option.text }}
                         </option>
                       </select>
                     </div>
-                    <div class="col-7 col-md-6">
+                    <div :class="mode === 'modern' ? 'col-12 col-md-6' : 'col-7 col-md-6'">
                       <label class="form-label" for="api">后端服务</label>
                       <select class="form-select" id="api" @change="selectApi">
                         <option :value="apiUrl">
@@ -45,7 +45,7 @@
                         v-model="api"
                       />
                     </div>
-                    <div class="col-8 col-md-10">
+                    <div :class="mode === 'modern' ? 'col-12 col-md-10' : 'col-8 col-md-10'">
                       <label class="form-label" for="remote">远程配置</label>
                       <select class="form-select" id="remote" @change="selectRemoteConfig">
                         <option value="">默认配置</option>
@@ -55,7 +55,7 @@
                         <option value="manual">自定义远程配置地址</option>
                       </select>
                     </div>
-                    <div class="col-4 col-md-2">
+                    <div :class="mode === 'modern' ? 'col-12 col-md-2' : 'col-4 col-md-2'">
                       <label class="form-label" for="more-config-toggle">&nbsp;</label>
                       <button id="more-config-toggle" type="button" class="btn btn-warning" @click="showMoreConfig">
                         参数
@@ -169,6 +169,12 @@ import { request } from '@/network';
 import showNotification from '@/components/notification';
 export default {
   name: 'SubTable',
+  props: {
+    mode: {
+      type: String,
+      default: 'legacy',
+    },
+  },
   setup() {
     const DEFAULT_MORECONFIG = {
       include: '',
@@ -321,7 +327,7 @@ export default {
         data = new FormData();
         data.append('longUrl', btoa(this.result.subUrl));
       } catch {
-        this.$showDialog('error', '失败', '短链接生成失败，请稍后重试');
+        this.$showDialog('error', '失败', '短链生成失败，请稍后重试');
         return;
       }
 
@@ -337,14 +343,14 @@ export default {
         });
 
         if (!res.data || res.data.Code !== 1 || !res.data.ShortUrl) {
-          this.$showDialog('error', '失败', '短链接生成失败，请稍后重试');
+          this.$showDialog('error', '失败', '短链生成失败，请稍后重试');
           return;
         }
 
         this.result.shortUrl = res.data.ShortUrl;
-        this.toCopy(this.result.shortUrl, '短链接');
+        this.toCopy(this.result.shortUrl, '短链');
       } catch {
-        this.$showDialog('error', '失败', '短链接生成失败，请稍后重试');
+        this.$showDialog('error', '失败', '短链生成失败，请稍后重试');
       } finally {
         hideLoading();
       }
@@ -390,5 +396,57 @@ export default {
 
 .divider {
   margin: 1%;
+}
+
+.sub-table--modern {
+  max-width: 68.75rem;
+}
+
+.sub-table--modern .card {
+  border: 1px solid #d9dee7;
+  box-shadow: none;
+}
+
+.sub-table--modern .card-body {
+  padding: 1.25rem;
+}
+
+.sub-table--modern .form-label {
+  color: #3b4350;
+  font-weight: 600;
+}
+
+.sub-table--modern .form-control,
+.sub-table--modern .form-select {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.sub-table--modern .btn {
+  min-height: 2.5rem;
+}
+
+.sub-table--modern .divider {
+  margin: 1.25rem 0;
+}
+
+@media (min-width: 767.98px) {
+  .sub-table--modern.custom-div {
+    width: calc(100% - 2rem);
+  }
+}
+
+@media (max-width: 575.98px) {
+  .sub-table--modern.custom-div {
+    max-width: 100%;
+  }
+
+  .sub-table--modern .card-body {
+    padding: 1rem;
+  }
+
+  .sub-table--modern .row {
+    --bs-gutter-x: 1rem;
+  }
 }
 </style>

@@ -5,6 +5,8 @@ window.config = {
   apiUrl: 'http://127.0.0.1:25500',
   // 短域名服务地址
   shortUrl: 'https://s.ops.ci',
+  // 首页 UX 模式
+  uxMode: 'modern',
   // 首页菜单
   menuItem: [
     {
