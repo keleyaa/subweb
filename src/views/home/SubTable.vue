@@ -183,7 +183,7 @@
                         <div class="divider-text"><i class="ti ti-refresh" style="color: gray"></i></div>
                       </div>
                     </div>
-                    <div class="col-12 col-md-10">
+                    <div :class="result.subUrl ? 'col-12 col-md-8' : 'col-12 col-md-10'">
                       <label class="form-label" for="converted-sub-url">转换结果</label>
                       <input
                         class="form-control"
@@ -194,6 +194,9 @@
                     </div>
                     <div class="col-12 col-md-2 d-flex align-items-end">
                       <button type="button" class="btn btn-success" @click="getSubUrl()">转换</button>
+                    </div>
+                    <div v-if="result.subUrl" class="col-12 col-md-2 d-flex align-items-end">
+                      <button type="button" class="btn btn-outline-success" @click="shareSubscription">分享</button>
                     </div>
                     <div class="col-12 col-md-10">
                       <label class="form-label" for="short-url-result">短链结果</label>
@@ -230,6 +233,7 @@ import {
   saveTemplates,
 } from '@/features/templates/preferences';
 import { prepareConversion, regexCheck } from './index.js';
+import { shareUrl } from '@/features/share/nativeShare';
 import { request } from '@/network';
 import showNotification from '@/components/notification';
 export default {
@@ -409,6 +413,18 @@ export default {
     },
     showConversionResult() {
       this.toCopy(this.result.subUrl, '订阅链接');
+    },
+    async shareSubscription() {
+      const { status } = await shareUrl(this.result.subUrl);
+
+      if (status === 'unsupported') {
+        this.toCopy(this.result.subUrl, '订阅链接');
+        return;
+      }
+
+      if (status === 'failed') {
+        this.$showDialog('error', '失败', '分享失败，请稍后重试');
+      }
     },
     getConverter() {
       const prepared = prepareConversion({
