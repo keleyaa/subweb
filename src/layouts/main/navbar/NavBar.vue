@@ -1,10 +1,8 @@
 <template>
-  <nav class="layout-navbar shadow-none py-0" :class="styleFacade.navStyles">
-    <div class="container">
-      <div class="navbar navbar-expand-lg landing-navbar px-3 px-md-4">
-        <AppBrand ref="appBrand" />
-        <NavMenu @close="focusMenuToggle" />
-      </div>
+  <nav class="minimal-navbar">
+    <div class="minimal-navbar__inner">
+      <AppBrand />
+      <NavMenu />
     </div>
   </nav>
 </template>
@@ -12,26 +10,38 @@
 <script>
 import AppBrand from './AppBrand.vue';
 import NavMenu from './NavMenu.vue';
-import { useStyleFacadeStore } from '@/stores/styleFacade';
+
 export default {
   name: 'NavBar',
   components: {
     AppBrand,
     NavMenu,
   },
-  setup() {
-    return { styleFacade: useStyleFacadeStore() };
-  },
-  methods: {
-    focusMenuToggle() {
-      this.$refs.appBrand.focusMenuToggle();
-    },
-  },
 };
 </script>
 
 <style scoped>
-.navbar.landing-navbar {
-  transform: none !important;
+.minimal-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid #d2d2d7;
+  background: rgba(245, 245, 247, 0.96);
+}
+
+.minimal-navbar__inner {
+  display: flex;
+  max-width: 860px;
+  min-height: 56px;
+  margin: 0 auto;
+  padding: 0 20px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .minimal-navbar {
+    background: #f5f5f7;
+  }
 }
 </style>

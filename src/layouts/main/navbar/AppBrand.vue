@@ -1,104 +1,44 @@
 <template>
-  <div class="navbar-brand app-brand demo d-flex py-0 py-lg-2 me-4">
-    <!-- Mobile menu toggle: Start-->
-    <button
-      ref="menuToggle"
-      class="navbar-toggler border-0 px-0 me-2 mobile-menu-toggle"
-      type="button"
-      data-bs-toggle="collapse"
-      data-bs-target="#navbarSupportedContent"
-      aria-controls="navbarSupportedContent"
-      :aria-expanded="String(styleFacade.isCollapsed)"
-      :aria-label="styleFacade.isCollapsed ? '关闭导航' : '打开导航'"
-      @click="styleFacade.toggleMenu"
-    >
-      <Menu class="mobile-menu-icon" aria-hidden="true" />
-    </button>
-    <!-- Mobile menu toggle: End-->
-    <router-link to="/" class="app-brand-link">
-      <span class="app-brand-logo demo">
-        <svg width="32" height="22" viewBox="0 0 32 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            fill-rule="evenodd"
-            clip-rule="evenodd"
-            d="M0.00172773 0V6.85398C0.00172773 6.85398 -0.133178 9.01207 1.98092 10.8388L13.6912 21.9964L19.7809 21.9181L18.8042 9.88248L16.4951 7.17289L9.23799 0H0.00172773Z"
-            fill="#7367F0"
-          />
-          <path
-            opacity="0.06"
-            fill-rule="evenodd"
-            clip-rule="evenodd"
-            d="M7.69824 16.4364L12.5199 3.23696L16.5541 7.25596L7.69824 16.4364Z"
-            fill="#161616"
-          />
-          <path
-            opacity="0.06"
-            fill-rule="evenodd"
-            clip-rule="evenodd"
-            d="M8.07751 15.9175L13.9419 4.63989L16.5849 7.28475L8.07751 15.9175Z"
-            fill="#161616"
-          />
-          <path
-            fill-rule="evenodd"
-            clip-rule="evenodd"
-            d="M7.77295 16.3566L23.6563 0H32V6.88383C32 6.88383 31.8262 9.17836 30.6591 10.4057L19.7824 22H13.6938L7.77295 16.3566Z"
-            fill="#7367F0"
-          />
-        </svg>
-      </span>
-      <span class="app-brand-text demo menu-text fw-bold ms-2 ps-1">{{ siteName }}</span>
-    </router-link>
-  </div>
+  <router-link to="/" class="app-brand-link" aria-label="返回首页">
+    <span class="app-brand-mark" aria-hidden="true">S</span>
+    <span class="app-brand-text">{{ siteName }}</span>
+  </router-link>
 </template>
 
 <script>
-import { Menu } from '@element-plus/icons-vue';
-import { useStyleFacadeStore } from '@/stores/styleFacade';
-
 export default {
   name: 'AppBrand',
-  components: { Menu },
-  setup() {
-    return { styleFacade: useStyleFacadeStore() };
-  },
   data() {
     return {
-      siteName: '',
+      siteName: window.config.siteName,
     };
-  },
-  created() {
-    this.siteName = window.config.siteName;
-  },
-  methods: {
-    focusMenuToggle() {
-      this.$refs.menuToggle?.focus();
-    },
   },
 };
 </script>
 
 <style scoped>
-.mobile-menu-toggle {
-  width: 32px;
-  height: 32px;
+.app-brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #1d1d1f;
+  text-decoration: none;
 }
 
-@media (max-width: 991.98px) {
-  .mobile-menu-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
+.app-brand-mark {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 7px;
+  background: #1d1d1f;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
 }
 
-@media (min-width: 992px) {
-  .mobile-menu-toggle {
-    display: none !important;
-  }
-}
-
-.mobile-menu-icon {
-  width: 20px;
-  height: 20px;
+.app-brand-text {
+  font-size: 15px;
+  font-weight: 600;
 }
 </style>
