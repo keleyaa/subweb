@@ -205,7 +205,8 @@ import { useStyleFacadeStore } from '@/stores/styleFacade';
 describe('style facade', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    vuexStore.commit('style/main/MAIN_LAYOUT_MENU_EXPAND_CLOSE');
+    vuexStore.commit('MAIN_LAYOUT_MENU_EXPAND_CLOSE');
+    vuexStore.commit('MAIN_LAYOUT_NAV_ACTIVE', false);
   });
 
   it('forwards menu expansion to Vuex without owning duplicate state', () => {
@@ -223,19 +224,19 @@ describe('style facade', () => {
 
 预期：失败，报错无法解析 @/stores/styleFacade。
 
-- [ ] **步骤 3：实现 facade 并安装 Pinia**
+- [ ] **步骤 3：实现 facade 并注册已安装的 Pinia**
 
 src/stores/styleFacade.js 使用 defineStore('style-facade', ...) 读取 vuexStore.state.style.main，并定义：
 
 ~~~js
 toggleMenu() {
-  vuexStore.commit('style/main/MAIN_LAYOUT_MENU_EXPAND');
+  vuexStore.commit('MAIN_LAYOUT_MENU_EXPAND');
 },
 closeMenu() {
-  vuexStore.commit('style/main/MAIN_LAYOUT_MENU_EXPAND_CLOSE');
+  vuexStore.commit('MAIN_LAYOUT_MENU_EXPAND_CLOSE');
 },
 setNavActive(active) {
-  vuexStore.commit('style/main/MAIN_LAYOUT_NAV_ACTIVE', active);
+  vuexStore.commit('MAIN_LAYOUT_NAV_ACTIVE', active);
 }
 ~~~
 
@@ -252,7 +253,7 @@ app.use(router).use(store).use(pinia);
 在 package.json 增加：
 
 ~~~json
-"lint:p1-04a": "eslint --no-fix src/views/home/index.js src/network/index.js"
+"lint:p1-04a": "eslint src/views/home/index.js src/network/index.js"
 ~~~
 
 不得改变默认 lint、.eslintrc.js、jsconfig.json 或全仓 warning 预算。
