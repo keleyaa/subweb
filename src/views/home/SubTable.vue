@@ -223,10 +223,9 @@
 
 <script>
 import { showLoading, hideLoading } from '@/components/loading';
+import { TARGET_OPTIONS, createDefaultMoreConfig } from '@/features/conversion/options';
 import {
   MAX_TEMPLATES,
-  TARGET_OPTIONS,
-  createDefaultMoreConfig,
   createTemplate,
   loadTemplates,
   normalizeMoreConfig,

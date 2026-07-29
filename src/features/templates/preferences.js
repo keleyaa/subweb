@@ -1,3 +1,5 @@
+import { TARGET_OPTIONS, createDefaultMoreConfig } from '@/features/conversion/options';
+
 export const STORAGE_KEY = 'subweb.local-conversion-templates';
 export const TEMPLATE_VERSION = 1;
 export const MAX_TEMPLATES = 12;
@@ -8,35 +10,8 @@ const ENVELOPE_KEYS = ['version', 'templates'];
 const TEMPLATE_KEYS = ['id', 'name', 'target', 'moreConfig'];
 const MORE_CONFIG_KEYS = ['include', 'exclude', 'emoji', 'udp', 'sort', 'scv', 'list'];
 
-export const TARGET_OPTIONS = [
-  { value: 'clash', text: 'Clash' },
-  { value: 'clashr', text: 'ClashR' },
-  { value: 'v2ray', text: 'V2Ray' },
-  { value: 'quan', text: 'Quantumult' },
-  { value: 'quanx', text: 'Quantumult X' },
-  { value: 'surge&ver=2', text: 'SurgeV2' },
-  { value: 'surge&ver=3', text: 'SurgeV3' },
-  { value: 'surge&ver=4', text: 'SurgeV4' },
-  { value: 'surfboard', text: 'Surfboard' },
-  { value: 'ss', text: 'SS (SIP002)' },
-  { value: 'sssub', text: 'SS Android' },
-  { value: 'ssd', text: 'SSD' },
-  { value: 'ssr', text: 'SSR' },
-  { value: 'loon', text: 'Loon' },
-  { value: 'singbox', text: 'Sing-box' },
-];
-
 const SUPPORTED_TARGETS = new Set(TARGET_OPTIONS.map((option) => option.value));
 const DEFAULT_TARGET = 'clash';
-const MORE_CONFIG_DEFAULTS = Object.freeze({
-  include: '',
-  exclude: '',
-  emoji: true,
-  udp: true,
-  sort: false,
-  scv: false,
-  list: false,
-});
 
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -78,8 +53,6 @@ const normalizeName = (value) => {
 };
 
 const normalizeTarget = (value) => (SUPPORTED_TARGETS.has(value) ? value : DEFAULT_TARGET);
-
-export const createDefaultMoreConfig = () => ({ ...MORE_CONFIG_DEFAULTS });
 
 export const normalizeMoreConfig = (input) => {
   const source = isPlainObject(input) ? input : {};
