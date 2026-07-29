@@ -27,62 +27,6 @@
                         </option>
                       </select>
                     </div>
-                    <div class="col-12 template-controls">
-                      <div class="row g-3">
-                        <div class="col-12 col-md-8">
-                          <label class="form-label" for="template-name">本机模板名称</label>
-                          <input
-                            class="form-control"
-                            id="template-name"
-                            v-model.trim="templateName"
-                            maxlength="80"
-                            placeholder="保存当前客户端与参数"
-                          />
-                        </div>
-                        <div class="col-12 col-md-4 d-flex align-items-end">
-                          <button type="button" class="btn btn-outline-primary" @click="saveTemplate">保存模板</button>
-                        </div>
-                        <div class="col-12 col-md-6">
-                          <label class="form-label" for="saved-template">已保存的本机模板</label>
-                          <select class="form-select" id="saved-template" v-model="selectedTemplateId">
-                            <option value="">选择模板</option>
-                            <option v-for="template in templates" :key="template.id" :value="template.id">
-                              {{ template.name }}
-                            </option>
-                          </select>
-                        </div>
-                        <div class="col-6 col-md-2 d-flex align-items-end">
-                          <button
-                            type="button"
-                            class="btn btn-outline-success"
-                            :disabled="!selectedTemplateId"
-                            @click="applyTemplate"
-                          >
-                            应用
-                          </button>
-                        </div>
-                        <div class="col-6 col-md-2 d-flex align-items-end">
-                          <button
-                            type="button"
-                            class="btn btn-outline-danger"
-                            :disabled="!selectedTemplateId"
-                            @click="deleteTemplate"
-                          >
-                            删除
-                          </button>
-                        </div>
-                        <div class="col-12 col-md-2 d-flex align-items-end">
-                          <button
-                            type="button"
-                            class="btn btn-outline-secondary"
-                            :disabled="templates.length === 0"
-                            @click="clearTemplates"
-                          >
-                            清空
-                          </button>
-                        </div>
-                      </div>
-                    </div>
                     <div :class="mode === 'modern' ? 'col-12 col-md-6' : 'col-7 col-md-6'">
                       <label class="form-label" for="api">后端服务</label>
                       <select class="form-select" id="api" @change="selectApi">
@@ -172,6 +116,62 @@
                           </div>
                         </div>
                       </fieldset>
+                    </div>
+                    <div class="col-12 template-controls">
+                      <div class="row g-3">
+                        <div class="col-12 col-md-8">
+                          <label class="form-label" for="template-name">本机模板名称</label>
+                          <input
+                            class="form-control"
+                            id="template-name"
+                            v-model.trim="templateName"
+                            maxlength="80"
+                            placeholder="保存当前客户端与参数"
+                          />
+                        </div>
+                        <div class="col-12 col-md-4 d-flex align-items-end">
+                          <button type="button" class="btn btn-outline-primary" @click="saveTemplate">保存模板</button>
+                        </div>
+                        <div class="col-12 col-md-6">
+                          <label class="form-label" for="saved-template">已保存的本机模板</label>
+                          <select class="form-select" id="saved-template" v-model="selectedTemplateId">
+                            <option value="">选择模板</option>
+                            <option v-for="template in templates" :key="template.id" :value="template.id">
+                              {{ template.name }}
+                            </option>
+                          </select>
+                        </div>
+                        <div class="col-6 col-md-2 d-flex align-items-end">
+                          <button
+                            type="button"
+                            class="btn btn-outline-success"
+                            :disabled="!selectedTemplateId"
+                            @click="applyTemplate"
+                          >
+                            应用
+                          </button>
+                        </div>
+                        <div class="col-6 col-md-2 d-flex align-items-end">
+                          <button
+                            type="button"
+                            class="btn btn-outline-danger"
+                            :disabled="!selectedTemplateId"
+                            @click="deleteTemplate"
+                          >
+                            删除
+                          </button>
+                        </div>
+                        <div class="col-12 col-md-2 d-flex align-items-end">
+                          <button
+                            type="button"
+                            class="btn btn-outline-secondary"
+                            :disabled="templates.length === 0"
+                            @click="clearTemplates"
+                          >
+                            清空
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </fieldset>
