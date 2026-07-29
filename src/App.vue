@@ -1,5 +1,5 @@
 <template>
-  <div id="app">
+  <div>
     <router-view />
     <dialog-view v-if="$store.state.app.dialog.active"></dialog-view>
   </div>
