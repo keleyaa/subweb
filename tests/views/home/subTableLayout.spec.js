@@ -12,6 +12,8 @@ describe('SubTable configuration layout', () => {
     const apiIndex = source.indexOf('id="api"');
     const remoteIndex = source.indexOf('id="remote"');
     const moreConfigIndex = source.indexOf('id="more-config-toggle"');
+    const moreConfigIncludeIndex = source.indexOf('id="more-config-include"');
+    const moreConfigExcludeIndex = source.indexOf('id="more-config-exclude"');
     const convertedSubUrlIndex = source.indexOf('id="converted-sub-url"');
 
     expect(subscriptionUrlsIndex).toBeGreaterThan(-1);
@@ -19,7 +21,9 @@ describe('SubTable configuration layout', () => {
     expect(apiIndex).toBeGreaterThan(clientIndex);
     expect(remoteIndex).toBeGreaterThan(apiIndex);
     expect(moreConfigIndex).toBeGreaterThan(remoteIndex);
-    expect(convertedSubUrlIndex).toBeGreaterThan(moreConfigIndex);
+    expect(moreConfigIncludeIndex).toBeGreaterThan(moreConfigIndex);
+    expect(moreConfigExcludeIndex).toBeGreaterThan(moreConfigIncludeIndex);
+    expect(convertedSubUrlIndex).toBeGreaterThan(moreConfigExcludeIndex);
   });
 
   it('contains no local template UI, state, imports, or browser storage access', () => {
@@ -36,6 +40,13 @@ describe('SubTable configuration layout', () => {
       ['saveLocal', 'Templates'].join(''),
       ['selected', 'TemplateId'].join(''),
       ['template', 'Name'].join(''),
+      ['templates', ': []'].join(''),
+      ['this', 'templates'].join('.'),
+      ['create', 'TemplateId'].join(''),
+      ['save', 'Template'].join(''),
+      ['apply', 'Template'].join(''),
+      ['delete', 'Template'].join(''),
+      ['clear', 'Templates'].join(''),
       ['features', 'templates'].join('/'),
       ['local', 'Storage'].join(''),
     ];
