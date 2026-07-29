@@ -26,6 +26,16 @@ const createStorage = (initialValue = null) => {
   };
 };
 
+const completeMoreConfig = () => ({
+  include: '',
+  exclude: '',
+  emoji: true,
+  udp: true,
+  sort: false,
+  scv: false,
+  list: false,
+});
+
 describe('local conversion templates', () => {
   it('whitelists a template without serializing conversion or runtime values', () => {
     const sensitiveUrl = 'https://subscription.example.test/input';
@@ -167,6 +177,172 @@ describe('local conversion templates', () => {
     expect(serialized).not.toContain(includeUrl);
     expect(serialized).not.toContain(excludeUrl);
     expect(serialized).not.toContain('https://name.example.test');
+  });
+
+  it('does not persist common URI schemes or protocol-relative values', () => {
+    const uriLikeValues = [
+      'mailto:person@example.test',
+      'data:text/plain,template',
+      'javascript:alert(1)',
+      'ftp:files.example.test',
+      '//host.example.test/path',
+    ];
+
+    for (const [index, value] of uriLikeValues.entries()) {
+      const serialized = serializeTemplates([
+        {
+          id: `uri-value-${index}`,
+          name: 'Safe template',
+          target: 'clash',
+          moreConfig: { include: value, exclude: value },
+        },
+        {
+          id: `uri-name-${index}`,
+          name: value,
+          target: 'clash',
+        },
+      ]);
+      const templates = JSON.parse(serialized).templates;
+
+      expect(templates).toEqual([
+        {
+          id: `uri-value-${index}`,
+          name: 'Safe template',
+          target: 'clash',
+          moreConfig: completeMoreConfig(),
+        },
+      ]);
+      expect(serialized).not.toContain(value);
+    }
+
+    expect(createTemplate({ name: '普通名称: 默认', moreConfig: { include: '地区: HK' } }, 'ordinary-name')).toEqual({
+      id: 'ordinary-name',
+      name: '普通名称: 默认',
+      target: 'clash',
+      moreConfig: {
+        ...completeMoreConfig(),
+        include: '地区: HK',
+      },
+    });
+  });
+
+  it('rejects stored envelopes that contain unknown or invalid schema fields', () => {
+    const errors = [];
+    const onError = (error) => errors.push(error.message);
+    const safeTemplate = {
+      id: 'stored-template',
+      name: 'Stored template',
+      target: 'clash',
+      moreConfig: completeMoreConfig(),
+    };
+
+    expect(
+      loadTemplates(
+        createStorage(
+          JSON.stringify({
+            version: TEMPLATE_VERSION,
+            templates: [safeTemplate],
+            urls: 'https://subscription.example.test/input',
+          })
+        ),
+        onError
+      )
+    ).toEqual([]);
+    expect(
+      loadTemplates(
+        createStorage(
+          JSON.stringify({
+            version: TEMPLATE_VERSION,
+            templates: [{ ...safeTemplate, api: 'https://api.example.test' }],
+          })
+        ),
+        onError
+      )
+    ).toEqual([]);
+    expect(
+      loadTemplates(
+        createStorage(
+          JSON.stringify({
+            version: TEMPLATE_VERSION,
+            templates: [
+              {
+                ...safeTemplate,
+                moreConfig: { ...completeMoreConfig(), remoteConfig: 'https://config.example.test' },
+              },
+            ],
+          })
+        ),
+        onError
+      )
+    ).toEqual([]);
+    expect(
+      loadTemplates(
+        createStorage(
+          JSON.stringify({
+            version: TEMPLATE_VERSION,
+            templates: [{ ...safeTemplate, target: 'not-a-client' }],
+          })
+        ),
+        onError
+      )
+    ).toEqual([]);
+    expect(
+      loadTemplates(
+        createStorage(
+          JSON.stringify({
+            version: TEMPLATE_VERSION,
+            templates: [{ ...safeTemplate, id: 123 }],
+          })
+        ),
+        onError
+      )
+    ).toEqual([]);
+
+    expect(errors).toEqual([
+      'Invalid saved templates',
+      'Invalid saved templates',
+      'Invalid saved templates',
+      'Invalid saved templates',
+      'Invalid saved templates',
+    ]);
+  });
+
+  it('round-trips complete safe templates through storage with isolated results', () => {
+    const storage = createStorage();
+    const source = [
+      {
+        id: 'round-trip',
+        name: 'Round trip',
+        target: 'singbox',
+        moreConfig: { ...completeMoreConfig(), include: 'HK', emoji: false },
+        urls: 'https://subscription.example.test/input',
+      },
+    ];
+
+    expect(saveTemplates(storage, source)).toBe(true);
+    expect(JSON.parse(storage.value)).toEqual({
+      version: TEMPLATE_VERSION,
+      templates: [
+        {
+          id: 'round-trip',
+          name: 'Round trip',
+          target: 'singbox',
+          moreConfig: { ...completeMoreConfig(), include: 'HK', emoji: false },
+        },
+      ],
+    });
+
+    const firstLoad = loadTemplates(storage);
+    firstLoad[0].moreConfig.include = 'Changed';
+
+    expect(loadTemplates(storage)).toEqual([
+      {
+        id: 'round-trip',
+        name: 'Round trip',
+        target: 'singbox',
+        moreConfig: { ...completeMoreConfig(), include: 'HK', emoji: false },
+      },
+    ]);
   });
 
   it('returns an empty list for malformed storage data and reports storage errors', () => {

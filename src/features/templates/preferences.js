@@ -3,7 +3,11 @@ export const TEMPLATE_VERSION = 1;
 export const MAX_TEMPLATES = 12;
 
 const TEMPLATE_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
-const URL_LIKE_PATTERN = /:\/\/|www\./i;
+const URL_LIKE_PATTERN =
+  /:\/\/|www\.|^(?:https?|ftp|mailto|data|javascript|file|blob|tel|sms|ssh|ws|wss|urn|geo|magnet|ipfs):|^\/\//i;
+const ENVELOPE_KEYS = ['version', 'templates'];
+const TEMPLATE_KEYS = ['id', 'name', 'target', 'moreConfig'];
+const MORE_CONFIG_KEYS = ['include', 'exclude', 'emoji', 'udp', 'sort', 'scv', 'list'];
 
 export const TARGET_OPTIONS = [
   { value: 'clash', text: 'Clash' },
@@ -36,6 +40,11 @@ const MORE_CONFIG_DEFAULTS = Object.freeze({
 });
 
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const hasExactKeys = (value, keys) =>
+  isPlainObject(value) &&
+  Object.keys(value).length === keys.length &&
+  keys.every((key) => Object.prototype.hasOwnProperty.call(value, key));
 
 const hasUrlLikeValue = (value) => typeof value === 'string' && URL_LIKE_PATTERN.test(value);
 
@@ -76,6 +85,15 @@ export const normalizeMoreConfig = (input) => {
   };
 };
 
+const isStoredMoreConfig = (value) => {
+  if (!hasExactKeys(value, MORE_CONFIG_KEYS)) {
+    return false;
+  }
+
+  const normalized = normalizeMoreConfig(value);
+  return MORE_CONFIG_KEYS.every((key) => normalized[key] === value[key]);
+};
+
 export const createTemplate = (input, id) => {
   const source = isPlainObject(input) ? input : {};
   const normalizedId = typeof id === 'string' ? id : '';
@@ -91,6 +109,17 @@ export const createTemplate = (input, id) => {
     target: normalizeTarget(source.target),
     moreConfig: normalizeMoreConfig(source.moreConfig),
   };
+};
+
+const isStoredTemplate = (value) => {
+  if (!hasExactKeys(value, TEMPLATE_KEYS) || typeof value.id !== 'string' || !TEMPLATE_ID_PATTERN.test(value.id)) {
+    return false;
+  }
+
+  const name = normalizeName(value.name);
+  return (
+    Boolean(name) && name === value.name && SUPPORTED_TARGETS.has(value.target) && isStoredMoreConfig(value.moreConfig)
+  );
 };
 
 const normalizeTemplates = (templates) => {
@@ -117,6 +146,24 @@ const normalizeTemplates = (templates) => {
   }
 
   return normalizedTemplates;
+};
+
+const readStoredTemplates = (templates) => {
+  if (!Array.isArray(templates)) {
+    return null;
+  }
+
+  const ids = new Set();
+
+  for (const template of templates) {
+    if (!isStoredTemplate(template) || ids.has(template.id)) {
+      return null;
+    }
+
+    ids.add(template.id);
+  }
+
+  return templates.slice(0, MAX_TEMPLATES).map((template) => createTemplate(template, template.id));
 };
 
 const reportStorageError = (onError, error) => {
@@ -149,14 +196,19 @@ export const loadTemplates = (storage, onError) => {
       throw new Error('Unable to parse saved templates');
     }
 
-    if (!isPlainObject(parsed) || !Array.isArray(parsed.templates)) {
+    if (!hasExactKeys(parsed, ENVELOPE_KEYS) || !Array.isArray(parsed.templates)) {
       throw new Error('Invalid saved templates');
     }
     if (parsed.version !== TEMPLATE_VERSION) {
       throw new Error('Unsupported template version');
     }
 
-    return normalizeTemplates(parsed.templates);
+    const templates = readStoredTemplates(parsed.templates);
+    if (templates === null) {
+      throw new Error('Invalid saved templates');
+    }
+
+    return templates;
   } catch (error) {
     reportStorageError(onError, error);
     return [];
