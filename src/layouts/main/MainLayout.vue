@@ -45,4 +45,12 @@ export default {
 <style scoped>
 @import '@/assets/vendor/css/pages/front-page.css';
 @import '@/assets/vendor/css/pages/front-page-landing.css';
+
+.main-layout.light-style {
+  background-color: #fff;
+}
+
+.main-layout.dark-style {
+  background-color: #2f3349;
+}
 </style>

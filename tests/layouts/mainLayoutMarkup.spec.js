@@ -14,4 +14,11 @@ describe('MainLayout document structure', () => {
     expect(source).toContain('<router-view />');
     expect(source).toContain('<footer-bar />');
   });
+
+  it('preserves the layout background contract on the semantic wrapper', async () => {
+    const source = await readFile(sourceUrl, 'utf8');
+
+    expect(source).toMatch(/\.main-layout\.light-style\s*\{[^}]*background-color:\s*#fff\s*;/);
+    expect(source).toMatch(/\.main-layout\.dark-style\s*\{[^}]*background-color:\s*#2f3349\s*;/);
+  });
 });
