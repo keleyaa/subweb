@@ -2,9 +2,9 @@
 
 > **面向 AI 代理的工作者：** 必需子技能：使用 subagent-driven-development 逐任务实现本计划。步骤使用复选框跟踪进度。
 
-**目标：** 在不改变 Vue CLI/Docker 发布路径或引入服务端能力的前提下，完成 Vite 旁路、Pinia facade、可回退首页 UX、本机偏好模板和显式原生分享。
+**目标：** 以 Vite 取代 Vue CLI 作为唯一开发/生产构建工具，同时完成 Pinia facade、可回退首页 UX、本机偏好模板和显式原生分享；不引入服务端能力。
 
-**架构：** Vue CLI 与 Vite 共享应用源码和运行时配置模块；Vuex 继续拥有状态，Pinia 只读/转发。首页通过静态 window.config.uxMode 选择呈现；模板和分享各自封装为可单测的纯前端模块。
+**架构：** Vite 通过根 index.html、公共静态目录和 runtime config 模块构建到 dist；Vuex 继续拥有状态，Pinia 只读/转发。首页通过静态 window.config.uxMode 选择呈现；模板和分享各自封装为可单测的纯前端模块。
 
 **技术栈：** Vue 3、Vuex 4、Pinia 2.2.4、Vite 6.4.3、@vitejs/plugin-vue 5.2.4、Vitest 2.1.9。
 
@@ -21,13 +21,15 @@
 - src/views/home/HomeView.vue、src/views/home/SubTable.vue：首页 UX、模板和分享 UI。
 - tests/**/*.spec.js：配置、状态、模板和分享的行为测试。
 
-## 任务 1：建立运行时配置测试骨架与 Vite 旁路
+## 任务 1：[x] 建立运行时配置测试骨架与 Vite 旁路
+
+已在 `c01dd53` 完成；以下验证记录对应切换前的兼容阶段。
 
 **文件：**
 - 创建：tests/runtime/config.spec.js、src/runtime/config.js、vite.config.mjs、根 index.html
 - 修改：package.json、package-lock.json、src/main.js、public/index.html
 
-- [ ] **步骤 1：添加测试工具并定义失败的配置合同**
+- [x] **步骤 1：添加测试工具并定义失败的配置合同**
 
 在 package.json 增加精确版本与脚本：
 
@@ -69,13 +71,13 @@ describe('normalizeRuntimeConfig', () => {
 });
 ~~~
 
-- [ ] **步骤 2：运行红灯测试**
+- [x] **步骤 2：运行红灯测试**
 
 运行：npm test -- tests/runtime/config.spec.js
 
 预期：失败，报错无法解析 @/runtime/config。
 
-- [ ] **步骤 3：实现运行时配置模块与应用安装**
+- [x] **步骤 3：实现运行时配置模块与应用安装**
 
 创建 src/runtime/config.js，导出 normalizeRuntimeConfig(config) 和 installRuntimeConfig(globalObject)。前者仅保留 siteName、apiUrl、shortUrl、menuItem、remoteConfigOptions 和 uxMode；数组字段必须是数组，uxMode 仅接受 legacy/modern。后者必须执行：
 
@@ -98,7 +100,7 @@ installRuntimeConfig(window);
 <script type="module" src="/src/main.js"></script>
 ~~~
 
-- [ ] **步骤 4：实现 Vite 配置**
+- [x] **步骤 4：实现 Vite 配置**
 
 vite.config.mjs 使用 Vite、Vue、Vite 版 auto-import/components 插件和 ElementPlusResolver；配置 @、layouts、assets、components、network、views、utils alias，base: '/'、build.outDir: 'dist-vite'、build.sourcemap: false，以及：
 
@@ -110,7 +112,7 @@ define: {
 
 同一配置的 test 块使用 node 环境与 tests/**/*.spec.js。不得修改 vue.config.js、serve、build、Dockerfile 或 workflow。
 
-- [ ] **步骤 5：验证绿灯与两套构建**
+- [x] **步骤 5：验证绿灯与两套构建**
 
 运行：
 
@@ -124,14 +126,69 @@ test -f dist-vite/conf/config.js
 
 预期：测试通过；两套构建均成功且各自产物包含运行时配置文件。
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ~~~bash
 git add package.json package-lock.json vite.config.mjs index.html public/index.html src/main.js src/runtime/config.js tests/runtime/config.spec.js
 git commit -m "feat: add Vite compatibility build"
 ~~~
 
-## 任务 2：引入 Pinia facade 与白名单静态约束
+## 任务 2：将 Vite 提升为默认构建
+
+**文件：**
+- 创建：tests/build/viteOutput.spec.js
+- 修改：package.json、package-lock.json、vite.config.mjs、.eslintrc.js、.gitignore
+- 删除：vue.config.js、babel.config.js、public/index.html
+
+- [ ] **步骤 1：编写 Vite 输出目录的失败测试**
+
+~~~js
+import { describe, expect, it } from 'vitest';
+import viteConfig from '../../vite.config.mjs';
+
+describe('production Vite output', () => {
+  it('uses the Docker-compatible dist directory', () => {
+    expect(viteConfig.build.outDir).toBe('dist');
+  });
+});
+~~~
+
+- [ ] **步骤 2：运行红灯测试**
+
+运行：npm test -- tests/build/viteOutput.spec.js
+
+预期：失败，因为当前 Vite 输出是 dist-vite。
+
+- [ ] **步骤 3：完成直接切换**
+
+将 serve 改为 vite、build 改为 vite build，并将 lint 改为非自动修复的 eslint --ext .js,.vue src；移除 dev:vite 和 build:vite。Vite 输出改为 dist 且 build.target 为 es2015。删除 Vue CLI 专属依赖、vue.config.js、babel.config.js、public/index.html 和失效的 /dist-vite ignore；保留 @babel/core 与 @babel/eslint-parser，直到 ESLint parser 有独立迁移任务。
+
+Dockerfile 保持不变，因为它已经调用通用 npm run build 并复制 /app/dist。不得新增 legacy bundle、Polyfill、第二套 build script 或 Docker 输出目录。
+
+- [ ] **步骤 4：验证 Vite、lint 和容器合同**
+
+~~~bash
+npm ci --ignore-scripts
+npm test
+npm run lint
+npm run build
+test -f dist/index.html
+test -f dist/conf/config.js
+test -f dist/favicon.ico
+docker build -t subweb:vite-cutover .
+~~~
+
+启动容器时使用 loopback 随机端口并注入 API_URL、SHORT_URL、SITE_NAME；验证首页和 /conf/config.js 返回 200，产物配置包含注入值。
+
+- [ ] **步骤 5：提交**
+
+~~~bash
+git add package.json package-lock.json vite.config.mjs .eslintrc.js .gitignore tests/build/viteOutput.spec.js
+git add -u vue.config.js babel.config.js public/index.html
+git commit -m "feat: make Vite the default builder"
+~~~
+
+## 任务 3：引入 Pinia facade 与白名单静态约束
 
 **文件：**
 - 创建：src/stores/styleFacade.js、tests/stores/styleFacade.spec.js
@@ -207,7 +264,6 @@ npm test -- tests/stores/styleFacade.spec.js
 npm run lint:p1-04a
 npm run lint
 npm run build
-npm run build:vite
 ~~~
 
 预期：所有命令退出码为 0；Vuex 仍是唯一写入状态源。
@@ -219,7 +275,7 @@ git add src/main.js src/stores/styleFacade.js src/layouts/main/MainLayout.vue sr
 git commit -m "feat: add Pinia style facade"
 ~~~
 
-## 任务 3：实现运行时可回退的首页 UX
+## 任务 4：实现运行时可回退的首页 UX
 
 **文件：**
 - 修改：public/conf/config.js、src/views/home/HomeView.vue、src/views/home/SubTable.vue
@@ -264,7 +320,6 @@ props: {
 npm test -- tests/runtime/config.spec.js
 npm run lint
 npm run build
-npm run build:vite
 ~~~
 
 启动本地服务后，在 375、768、1440 宽度检查：无效/缺失 uxMode 只显示 legacy；modern 只显示一个表单；label/id 和 Tab 顺序正确；控制台没有 selectTarget 或重复 id 警告；转换、复制和短链成功/失败路径保持。
@@ -276,7 +331,7 @@ git add public/conf/config.js src/views/home/HomeView.vue src/views/home/SubTabl
 git commit -m "feat: add runtime UX mode"
 ~~~
 
-## 任务 4：实现本机偏好模板
+## 任务 5：实现本机偏好模板
 
 **文件：**
 - 创建：src/features/templates/preferences.js、tests/features/templates/preferences.spec.js
@@ -334,7 +389,6 @@ it('drops sensitive and malformed fields from stored templates', () => {
 npm test -- tests/features/templates/preferences.spec.js
 npm run lint
 npm run build
-npm run build:vite
 ~~~
 
 在浏览器中验证保存、应用、删除、清空、刷新恢复以及损坏 storage 回退；检查 localStorage 值不含订阅 URL、API、短链或结果。
@@ -346,7 +400,7 @@ git add src/features/templates/preferences.js tests/features/templates/preferenc
 git commit -m "feat: add local conversion templates"
 ~~~
 
-## 任务 5：实现显式原生分享与全量验证
+## 任务 6：实现显式原生分享与全量验证
 
 **文件：**
 - 创建：src/features/share/nativeShare.js、tests/features/share/nativeShare.spec.js
@@ -392,11 +446,10 @@ npm test
 npm run lint:p1-04a
 npm run lint
 npm run build
-npm run build:vite
 git diff --check
 ~~~
 
-启动 Vue CLI 和 Vite 服务分别执行本地浏览器 smoke：两者均加载 conf/config.js，模板与分享功能可见，modern/legacy 回退正确，控制台无错误。对分享使用 mock 或取消的系统面板，不调用真实短链或远程配置服务。
+启动 Vite 服务执行本地浏览器 smoke：加载 conf/config.js，模板与分享功能可见，modern/legacy 回退正确，控制台无错误。对分享使用 mock 或取消的系统面板，不调用真实短链或远程配置服务。
 
 - [ ] **步骤 5：提交**
 
@@ -408,8 +461,7 @@ git commit -m "feat: add native subscription sharing"
 ## 最终验收
 
 - [ ] 每个新纯函数都先经过失败测试，再以最小实现转绿。
-- [ ] npm test、两套构建、两条 lint 和 git diff --check 均通过。
-- [ ] Vue CLI/Docker 默认构建合同、Vuex 唯一状态源、/short v1 协议和 runtime config 所有权未改变。
+- [ ] npm test、Vite build、两条 lint、Docker runtime 验证和 git diff --check 均通过。
+- [ ] Vite/Docker 默认构建合同、Vuex 唯一状态源、/short v1 协议和 runtime config 所有权未改变。
 - [ ] 本机模板不保存任何 URL、结果、API、短链或 remote config。
-- [ ] 浏览器在三种视口、两种构建和两种 UX mode 下无 console error、重复 id 或交互回退。
-
+- [ ] 浏览器在三种视口、Vite 构建和两种 UX mode 下无 console error、重复 id 或交互回退。

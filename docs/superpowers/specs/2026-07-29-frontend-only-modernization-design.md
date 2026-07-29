@@ -6,7 +6,7 @@
 
 将此前标记为 design-only 的 P1、P2、P3 前端部分实现为可并行验证、可回滚的能力：
 
-- 保留 Vue CLI 发布路径，同时提供 Vite 旁路构建。
+- 以 Vite 作为唯一开发与生产构建工具，移除 Vue CLI 专属发布路径。
 - 保持 Vuex 为唯一状态源，并用 Pinia facade 渐进迁移布局样式状态的消费方。
 - 为首页提供由运行时配置控制的新旧 UX 呈现，并保持转换、复制和短链协议不变。
 - 提供仅保存非敏感转换偏好的本机模板，以及用户显式触发的系统原生分享。
@@ -21,11 +21,11 @@ Harbor、provenance/SBOM 和生产 tag/部署回滚不属于本规格。
 
 ## 架构决策
 
-### 1. 双构建兼容层
+### 1. Vite 直接构建
 
-保留 `serve`、`build` 和 Docker 对 Vue CLI 的既有依赖。新增 `dev:vite` 和 `build:vite`，后者输出到 `dist-vite`，不覆盖 `dist`。
+Vite 完成等价构建验证后，`serve` 和 `build` 直接调用 Vite，生产输出统一为 `dist`，继续满足 Docker 对 `/app/dist` 的复制合同。Vue CLI 脚本、专属配置和依赖被移除，不长期维护双工具链；回滚通过还原 Vite 切换前的 Git 提交完成。
 
-Vite 配置复用当前 alias、Element Plus 自动导入和组件自动注册；它为 `process.env.BASE_URL` 提供 `/` 定义，避免在共享 router 源码中引入只适用于 Vite 的表达式。两个入口都加载 `/conf/config.js`，并从同一个运行时配置模块获得缺失或无效配置的回退。
+Vite 配置复用当前 alias、Element Plus 自动导入和组件自动注册；它为 `process.env.BASE_URL` 提供 `/` 定义，避免在共享 router 源码中引入只适用于 Vite 的表达式。根 `index.html` 在应用模块前加载 `/conf/config.js`，并从同一个运行时配置模块获得缺失或无效配置的回退。构建目标显式为 `es2015`；IE11 仍不受支持，且不会为已无服务端要求的旧浏览器添加 legacy bundle 或 polyfill。
 
 ### 2. 运行时配置合同
 
@@ -80,19 +80,20 @@ Vuex 继续拥有 `style.main.navStyles` 和 `style.main.isCollapsed`。Pinia �
 
 新增 Vitest 作为最小前端测试骨架，先覆盖纯函数和适配器：运行时配置归一化、模板 schema/存储、原生分享分支、Pinia facade 的 Vuex 转发。每项行为遵循红-绿循环。
 
-集成验证必须同时执行 Vue CLI build、Vite build、P1 白名单 lint、全量 lint、Vitest 和 `git diff --check`。本地浏览器在 375、768、1440 宽度验证 `legacy`/`modern` 配置、单一表单 id、模板不存敏感字段、转换/复制/短链路径和控制台无 Vue 警告。
+集成验证必须执行 Vite build、非自动修复 ESLint、P1 白名单 lint、Vitest、Docker build/run 和 `git diff --check`。本地浏览器在 375、768、1440 宽度验证 `legacy`/`modern` 配置、单一表单 id、模板不存敏感字段、转换/复制/短链路径和控制台无 Vue 警告。
 
 ## 回滚策略
 
-- Vite：移除 sidecar 依赖、脚本和配置；原 Vue CLI/Docker 路径不受影响。
+- Vite：恢复 Vite 直接切换前的 Git 提交；Docker 输出目录始终保持 `dist`。
 - Pinia：移除 facade 并恢复 Vuex 消费方；Vuex 状态从未被移除。
 - UX：将 `uxMode` 改为 `legacy`，或恢复首页和表单的对应提交。
 - 模板/分享：移除 UI 和适配器；本机 `localStorage` 只使用命名空间键，不影响现有应用数据。
 
 ## 交付顺序
 
-1. 建立测试骨架、运行时配置模块和 Vite 旁路。
-2. 引入 Pinia facade 和白名单静态约束。
-3. 实现 UX 模式、现代首页呈现和回归修复。
-4. 实现本机偏好模板和显式原生分享。
-5. 完成构建、单元测试、浏览器回归和独立审查。
+1. 建立测试骨架、运行时配置模块并验证 Vite 构建。
+2. 将 Vite 提升为唯一开发/生产构建工具，验证 Docker runtime config 合同。
+3. 引入 Pinia facade 和白名单静态约束。
+4. 实现 UX 模式、现代首页呈现和回归修复。
+5. 实现本机偏好模板和显式原生分享。
+6. 完成构建、单元测试、浏览器回归和独立审查。
