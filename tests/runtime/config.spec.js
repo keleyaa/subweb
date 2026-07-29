@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  installRuntimeConfig,
-  normalizeRuntimeConfig,
-} from '../../src/runtime/config';
+import { installRuntimeConfig, normalizeRuntimeConfig } from '../../src/runtime/config';
 
 describe('normalizeRuntimeConfig', () => {
   it('uses the existing default site name and legacy UX mode by default', () => {

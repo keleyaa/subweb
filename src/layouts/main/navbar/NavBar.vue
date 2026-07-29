@@ -2,8 +2,8 @@
   <nav class="layout-navbar shadow-none py-0" :class="styleFacade.navStyles">
     <div class="container">
       <div class="navbar navbar-expand-lg landing-navbar px-3 px-md-4">
-        <AppBrand />
-        <NavMenu />
+        <AppBrand ref="appBrand" />
+        <NavMenu @close="focusMenuToggle" />
       </div>
     </div>
   </nav>
@@ -22,5 +22,16 @@ export default {
   setup() {
     return { styleFacade: useStyleFacadeStore() };
   },
+  methods: {
+    focusMenuToggle() {
+      this.$refs.appBrand.focusMenuToggle();
+    },
+  },
 };
 </script>
+
+<style scoped>
+.navbar.landing-navbar {
+  transform: none !important;
+}
+</style>

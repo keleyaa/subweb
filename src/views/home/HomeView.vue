@@ -68,7 +68,7 @@ export default {
 
 .home-view--modern .landing-hero {
   background: #f7f8fa;
-  padding-top: 2rem;
+  padding-top: 4rem;
 }
 
 .home-view--modern .hero-text-box {
@@ -99,17 +99,13 @@ export default {
   padding-top: 2rem;
 }
 
-@media (min-width: 767.98px) {
+@media (min-width: 992px) {
   .home-view--modern .landing-hero {
-    padding-top: 2.5rem;
+    padding-top: 5rem;
   }
 }
 
 @media (max-width: 575.98px) {
-  .home-view--modern .landing-hero {
-    padding-top: 1.25rem;
-  }
-
   .home-view--modern .hero-text-box {
     margin-bottom: 1.25rem;
   }

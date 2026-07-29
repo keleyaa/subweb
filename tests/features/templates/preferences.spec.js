@@ -230,6 +230,54 @@ describe('local conversion templates', () => {
     });
   });
 
+  it('rejects control-character-obfuscated URI values on write and read', () => {
+    const obfuscatedUrl = 'https:\n//subscription.example.test/path?token=secret';
+    const serialized = serializeTemplates([
+      {
+        id: 'obfuscated-uri',
+        name: 'Safe template',
+        target: 'clash',
+        moreConfig: { include: obfuscatedUrl, exclude: obfuscatedUrl },
+      },
+      {
+        id: 'obfuscated-uri-name',
+        name: obfuscatedUrl,
+        target: 'clash',
+      },
+    ]);
+
+    expect(JSON.parse(serialized).templates).toEqual([
+      {
+        id: 'obfuscated-uri',
+        name: 'Safe template',
+        target: 'clash',
+        moreConfig: completeMoreConfig(),
+      },
+    ]);
+    expect(serialized).not.toContain('token=secret');
+
+    const errors = [];
+    expect(
+      loadTemplates(
+        createStorage(
+          JSON.stringify({
+            version: TEMPLATE_VERSION,
+            templates: [
+              {
+                id: 'stored-obfuscated-uri',
+                name: 'Stored template',
+                target: 'clash',
+                moreConfig: { ...completeMoreConfig(), include: obfuscatedUrl },
+              },
+            ],
+          })
+        ),
+        (error) => errors.push(error.message)
+      )
+    ).toEqual([]);
+    expect(errors).toEqual(['Invalid saved templates']);
+  });
+
   it('rejects stored templates whose template fields contain URI values', () => {
     const errors = [];
     const onError = (error) => errors.push(error.message);

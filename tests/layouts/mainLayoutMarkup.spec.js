@@ -21,4 +21,12 @@ describe('MainLayout document structure', () => {
     expect(source).toMatch(/\.main-layout\.light-style\s*\{[^}]*background-color:\s*#fff\s*;/);
     expect(source).toMatch(/\.main-layout\.dark-style\s*\{[^}]*background-color:\s*#2f3349\s*;/);
   });
+
+  it('keeps broad landing-page styles scoped to the layout wrapper', async () => {
+    const source = await readFile(sourceUrl, 'utf8');
+
+    expect(source).toMatch(/<style\s+scoped>/);
+    expect(source).toMatch(/@import '\@\/assets\/vendor\/css\/pages\/front-page\.css';/);
+    expect(source).toMatch(/@import '\@\/assets\/vendor\/css\/pages\/front-page-landing\.css';/);
+  });
 });

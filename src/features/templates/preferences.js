@@ -45,7 +45,19 @@ const hasExactKeys = (value, keys) =>
   Object.keys(value).length === keys.length &&
   keys.every((key) => Object.prototype.hasOwnProperty.call(value, key));
 
-const hasUrlLikeValue = (value) => typeof value === 'string' && URL_LIKE_PATTERN.test(value);
+const hasControlCharacter = (value) => {
+  for (const character of value) {
+    const characterCode = character.charCodeAt(0);
+    if (characterCode <= 31 || characterCode === 127) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const hasUrlLikeValue = (value) =>
+  typeof value === 'string' && (hasControlCharacter(value) || URL_LIKE_PATTERN.test(value));
 
 const normalizeOptionalText = (value) => {
   if (typeof value !== 'string') {

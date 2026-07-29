@@ -2,16 +2,17 @@
   <div class="navbar-brand app-brand demo d-flex py-0 py-lg-2 me-4">
     <!-- Mobile menu toggle: Start-->
     <button
-      class="navbar-toggler border-0 px-0 me-2"
+      ref="menuToggle"
+      class="navbar-toggler border-0 px-0 me-2 mobile-menu-toggle"
       type="button"
       data-bs-toggle="collapse"
       data-bs-target="#navbarSupportedContent"
       aria-controls="navbarSupportedContent"
-      aria-expanded="false"
-      aria-label="Toggle navigation"
+      :aria-expanded="String(styleFacade.isCollapsed)"
+      :aria-label="styleFacade.isCollapsed ? '关闭导航' : '打开导航'"
       @click="styleFacade.toggleMenu"
     >
-      <i class="ti ti-menu-2 ti-sm align-middle"></i>
+      <Menu class="mobile-menu-icon" aria-hidden="true" />
     </button>
     <!-- Mobile menu toggle: End-->
     <router-link to="/" class="app-brand-link">
@@ -51,10 +52,12 @@
 </template>
 
 <script>
+import { Menu } from '@element-plus/icons-vue';
 import { useStyleFacadeStore } from '@/stores/styleFacade';
 
 export default {
   name: 'AppBrand',
+  components: { Menu },
   setup() {
     return { styleFacade: useStyleFacadeStore() };
   },
@@ -66,5 +69,36 @@ export default {
   created() {
     this.siteName = window.config.siteName;
   },
+  methods: {
+    focusMenuToggle() {
+      this.$refs.menuToggle?.focus();
+    },
+  },
 };
 </script>
+
+<style scoped>
+.mobile-menu-toggle {
+  width: 32px;
+  height: 32px;
+}
+
+@media (max-width: 991.98px) {
+  .mobile-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+@media (min-width: 992px) {
+  .mobile-menu-toggle {
+    display: none !important;
+  }
+}
+
+.mobile-menu-icon {
+  width: 20px;
+  height: 20px;
+}
+</style>

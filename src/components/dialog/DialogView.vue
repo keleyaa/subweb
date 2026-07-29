@@ -1,5 +1,5 @@
 <template>
-  <html
+  <div
     lang="en"
     class="light-style layout-navbar-fixed layout-compact layout-menu-fixed swal2-shown swal2-height-auto"
     dir="ltr"
@@ -31,7 +31,7 @@
         <!-- button -->
       </div>
     </div>
-  </html>
+  </div>
 </template>
 
 <script>
@@ -67,8 +67,37 @@ export default {
 </script>
 
 <style scoped>
-/* 当前 div 样式加上 z-index: 999999 用于覆盖其他组件 */
 .dialog-custom {
-  z-index: 1150;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(32, 34, 51, 0.45);
+}
+
+.swal2-popup {
+  width: min(100%, 30rem);
+  gap: 16px;
+  padding: 24px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(32, 34, 51, 0.24);
+}
+
+.swal2-title {
+  margin: 0;
+  color: #2f3349;
+  font-size: 20px;
+}
+
+.swal2-html-container {
+  color: #5e5873;
+}
+
+.swal2-actions {
+  justify-content: center;
+  gap: 12px;
 }
 </style>
