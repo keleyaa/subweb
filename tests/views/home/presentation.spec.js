@@ -15,4 +15,15 @@ describe('home presentation', () => {
     });
     expect(getHomePresentation()).toEqual(getHomePresentation('legacy'));
   });
+
+  it('returns isolated presentation objects for repeated calls', () => {
+    const firstPresentation = getHomePresentation('modern');
+    const secondPresentation = getHomePresentation('modern');
+
+    expect(firstPresentation).not.toBe(secondPresentation);
+
+    firstPresentation.title = 'Changed title';
+
+    expect(secondPresentation.title).toBe('订阅转换');
+  });
 });

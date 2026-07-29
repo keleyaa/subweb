@@ -11,5 +11,5 @@ const MODERN_PRESENTATION = {
 };
 
 export function getHomePresentation(uxMode) {
-  return uxMode === 'modern' ? MODERN_PRESENTATION : LEGACY_PRESENTATION;
+  return { ...(uxMode === 'modern' ? MODERN_PRESENTATION : LEGACY_PRESENTATION) };
 }
