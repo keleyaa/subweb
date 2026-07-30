@@ -2,9 +2,11 @@
 
 ## 远端约定
 
-- `origin`：当前维护仓库 `keleyaa/subweb`，日常推送只使用该远端。
-- `upstream`：原始项目仓库，仅用于查阅或手动同步上游改动；不要向它推送。
+- `origin`：当前维护仓库 [`keleyaa/subweb`](https://github.com/keleyaa/subweb)，日常推送只使用该远端。
+- `upstream`：Fork 上游 [`stilleshan/subweb`](https://github.com/stilleshan/subweb)，仅用于查阅或手动同步上游改动；不要向它推送。
 - `main`：可发布分支，应跟踪 `origin/main`。
+
+README 的“Fork 与来源说明”是公开来源声明的唯一维护位置。更新上游关系或新增外部代码、素材、设计仓库参考时，必须先更新该说明及相应许可证/NOTICE，再提交。
 
 提交前先确认范围，只加入项目源代码、测试、必要配置和公开文档：
 

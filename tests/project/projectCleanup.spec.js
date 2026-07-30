@@ -36,13 +36,17 @@ describe('project cleanup and independent-maintenance boundary', () => {
       readFile(rootFile('.dockerignore'), 'utf8'),
     ]);
 
-    for (const source of [readme, publicConfig, runtimeConfig, dockerfile]) {
+    for (const source of [publicConfig, runtimeConfig, dockerfile]) {
       expect(source).not.toContain('stilleshan');
       expect(source).not.toContain('s.ops.ci');
       expect(source).not.toContain('sub.ops.ci');
     }
 
     expect(readme).toContain('独立维护');
+    expect(readme).toContain('Fork 与来源说明');
+    expect(readme).toContain('https://github.com/stilleshan/subweb');
+    expect(readme).toContain('未记录其他第三方代码仓库作为设计或代码来源');
+    expect(readme).toContain('Apple 风格的无框极简方向');
     expect(dockerfile).not.toContain('LABEL maintainer');
     expect(dockerfile).not.toContain('ENV VERSION');
     expect(workflow).not.toContain('paths-ignore:');
