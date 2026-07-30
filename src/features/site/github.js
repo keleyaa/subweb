@@ -10,9 +10,20 @@ function getGithubUrl(item) {
 
   try {
     const url = new URL(link);
-    const hostname = url.hostname.toLowerCase();
+    const [owner, repository, ...extraSegments] = url.pathname.split('/').filter(Boolean);
 
-    return url.protocol === 'https:' && (hostname === 'github.com' || hostname.endsWith('.github.com')) ? url : null;
+    return url.protocol === 'https:' &&
+      url.hostname.toLowerCase() === 'github.com' &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      owner &&
+      repository &&
+      extraSegments.length === 0 &&
+      !RESERVED_GITHUB_PATHS.has(owner.toLowerCase())
+      ? url
+      : null;
   } catch {
     return null;
   }
@@ -28,13 +39,13 @@ export function getGithubMenuItem(menuItems) {
 
 export function getGithubRepositoryLabel(item) {
   const url = getGithubUrl(item);
-  if (!url || url.hostname.toLowerCase() !== 'github.com') {
+  if (!url) {
     return null;
   }
 
   const [owner, repository] = url.pathname.split('/').filter(Boolean);
 
-  return owner && repository && !RESERVED_GITHUB_PATHS.has(owner.toLowerCase()) ? `${owner}/${repository}` : null;
+  return `${owner}/${repository}`;
 }
 const RESERVED_GITHUB_PATHS = new Set([
   'about',

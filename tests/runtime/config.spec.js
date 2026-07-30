@@ -25,7 +25,6 @@ const DEFAULT_REMOTE_CONFIG_OPTIONS = [
 describe('normalizeRuntimeConfig', () => {
   it('uses the maintained service defaults and opt-in public configuration presets when configuration is absent', () => {
     expect(normalizeRuntimeConfig()).toEqual({
-      siteName: 'ML1',
       apiUrl: 'https://api.ml1.one',
       shortUrl: 'https://ml1.one',
       menuItem: [{ title: 'GitHub', link: 'https://github.com/keleyaa/subweb', target: '_blank' }],
@@ -54,7 +53,6 @@ describe('normalizeRuntimeConfig', () => {
 
   it('keeps only supported fields and replaces invalid array values with defaults', () => {
     const config = normalizeRuntimeConfig({
-      siteName: 'Custom Subweb',
       apiUrl: 'https://api.example.test',
       shortUrl: 'https://short.example.test',
       menuItem: 'not-an-array',
@@ -63,17 +61,44 @@ describe('normalizeRuntimeConfig', () => {
     });
 
     expect(Object.keys(config)).toEqual([
-      'siteName',
       'apiUrl',
       'shortUrl',
       'menuItem',
       'remoteConfigOptions',
     ]);
-    expect(config.siteName).toBe('Custom Subweb');
     expect(config.apiUrl).toBe('https://api.example.test');
     expect(config.shortUrl).toBe('https://short.example.test');
     expect(Array.isArray(config.menuItem)).toBe(true);
     expect(Array.isArray(config.remoteConfigOptions)).toBe(true);
+  });
+
+  it('falls back from invalid service URLs and filters malformed option entries', () => {
+    const config = normalizeRuntimeConfig({
+      apiUrl: 'prefixhttps://api.example.test',
+      shortUrl: 'javascript:alert(1)',
+      menuItem: [
+        null,
+        { title: 'GitHub', link: 'javascript:alert(1)' },
+        { title: 'GitHub Pages', link: 'https://pages.github.com/example/project' },
+        { title: 'GitHub issue', link: 'https://github.com/owner/repository/issues/1' },
+      ],
+      remoteConfigOptions: [
+        {},
+        { value: 'javascript:alert(1)', text: 'Unsafe' },
+        { value: 'https://config.example.test/rules.ini', text: 'Valid' },
+      ],
+    });
+
+    expect(config.apiUrl).toBe(DEFAULT_RUNTIME_CONFIG.apiUrl);
+    expect(config.shortUrl).toBe(DEFAULT_RUNTIME_CONFIG.shortUrl);
+    expect(config.menuItem).toEqual([]);
+    expect(config.remoteConfigOptions).toEqual([
+      { value: 'https://config.example.test/rules.ini', text: 'Valid' },
+    ]);
+  });
+
+  it('keeps an empty short-link service value so deployments can disable the feature', () => {
+    expect(normalizeRuntimeConfig({ shortUrl: '' }).shortUrl).toBe('');
   });
 
   it('normalizes and stores the global configuration', () => {
@@ -96,7 +121,7 @@ describe('normalizeRuntimeConfig', () => {
 
     expect(window.config).toEqual(DEFAULT_RUNTIME_CONFIG);
     expect(startScript).toContain("replace_config_value 'https://api.ml1.one' \"$API_URL\"");
-    expect(startScript).toContain('"shortUrl: \'https://ml1.one\'"');
-    expect(startScript).toContain("replace_config_value 'ML1' \"$SITE_NAME\"");
+    expect(startScript).toContain("replace_config_value 'https://ml1.one' \"$SHORT_URL\"");
+    expect(startScript).not.toContain('SITE_NAME');
   });
 });

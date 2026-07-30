@@ -10,6 +10,6 @@ describe('Vite production output', () => {
   it('keeps the Docker runtime contract aligned with the Vite output directory', async () => {
     const dockerfile = await readFile(new URL('../../Dockerfile', import.meta.url), 'utf8');
 
-    expect(dockerfile).toContain('COPY --from=build /app/dist /usr/share/nginx/html');
+    expect(dockerfile).toMatch(/COPY --chown=101:101 --from=build \/app\/dist \/usr\/share\/nginx\/html/);
   });
 });

@@ -1,4 +1,4 @@
-name: "docker build release"
+name: docker build release
 
 on:
   push:
@@ -8,30 +8,76 @@ on:
 
 permissions:
   contents: read
-  id-token: write
+
+concurrency:
+  group: docker-release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  PROJECT: subweb
+  IMAGE_NAME: keleyaa/subweb
 
 jobs:
-  build:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      - name: Set tag
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=moderate
+
+      - name: Verify unit tests, lint, and build
+        run: npm run verify
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify browser workflows
+        run: npm run test:e2e
+
+      - name: Validate Compose
+        run: docker compose config --quiet
+
+      - name: Verify container runtime
+        run: ./scripts/verify-container.sh subweb:ci
+
+      - name: Scan final image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: subweb:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+  release:
+    needs: quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Set release tags
         id: tag
+        shell: bash
         run: |
-          if [[ -n $(cat Dockerfile | awk '{if($1~"ENV" && $2=="VERSION")print $3}') ]]; then
-            VERSION=$(cat Dockerfile | awk '{if($1~"ENV" && $2=="VERSION")print $3}')
-            echo "tag=$VERSION" >> "$GITHUB_ENV"
-            echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
-          else
-            TAG=$(date +%Y)-$(date +%m)-$(date +%d)
-            echo "tag=$TAG" >> "$GITHUB_ENV"
-            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          fi
+          short_sha="${GITHUB_SHA::12}"
+          date_tag="$(date -u +%Y-%m-%d)-${short_sha}"
+          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "date_tag=${date_tag}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf
@@ -39,207 +85,86 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@6524bf65af31da8d45b59e8c27de4bd072b392f5
 
-      - name: Login Docker Hub
+      - name: Login to Docker Hub
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push to docker hub
-        id: dockerhub_build
+      - name: Build and push
+        id: image
         uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          provenance: false
-          sbom: false
+          provenance: mode=max
+          sbom: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}:latest
-            ${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}:${{ env.tag }}
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.date_tag }}
+            ${{ env.IMAGE_NAME }}:sha-${{ steps.tag.outputs.short_sha }}
 
-      - name: Record Docker Hub release identity
-        id: dockerhub_identity
+      - name: Create rollback manifest
+        id: rollback
         env:
-          RESOLVED_TAG: ${{ steps.tag.outputs.tag }}
-          IMAGE_DIGEST: ${{ steps.dockerhub_build.outputs.digest }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          RELEASE_TAG: ${{ steps.tag.outputs.date_tag }}
+        shell: bash
         run: |
-          [ -n "$IMAGE_DIGEST" ] || { echo "Docker Hub image digest was not produced" >&2; exit 1; }
-          case "$IMAGE_DIGEST" in
-            sha256:????????????????????????????????????????????????????????????????)
-              printf '%s' "${IMAGE_DIGEST#sha256:}" | grep -Eq '^[0-9a-f]{64}$' || { echo "Docker Hub image digest is malformed" >&2; exit 1; }
-              ;;
-            *) echo "Docker Hub image digest is malformed" >&2; exit 1 ;;
-          esac
-          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          {
-            echo "source_sha=${GITHUB_SHA}"
-            echo "workflow_run_id=${GITHUB_RUN_ID}"
-            echo "workflow_run_number=${GITHUB_RUN_NUMBER}"
-            echo "workflow_run_attempt=${GITHUB_RUN_ATTEMPT}"
-            echo "workflow_ref=${GITHUB_REF}"
-            echo "workflow_ref_name=${GITHUB_REF_NAME}"
-            echo "resolved_tag=${RESOLVED_TAG}"
-            echo "platforms=linux/amd64,linux/arm64"
-            echo "image_digest=${IMAGE_DIGEST}"
-            echo "build_time=${BUILD_TIME}"
-            echo "registry=docker.io"
-          } >> "$GITHUB_OUTPUT"
-          {
-            echo "### Docker Hub release identity"
-            echo "- source SHA: \\`${GITHUB_SHA}\\`"
-            echo "- workflow run: \\`${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}\\`"
-            echo "- tag: \\`${RESOLVED_TAG}\\`"
-            echo "- platforms: \\`linux/amd64,linux/arm64\\`"
-            echo "- digest: \\`${IMAGE_DIGEST}\\`"
-            echo "- build time: \\`${BUILD_TIME}\\`"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Verify release-control contracts
-        env:
-          WORKFLOW_FILE: .github/workflows/docker-build-release.yml
-          DOCKERIGNORE_FILE: .dockerignore
-        run: |
-          printf '%s\n' 'Static verification only: this step inspects workflow and ignore-file source text with grep/awk; it does not perform live registry, runtime secret, or Docker execution checks.'
-
-          sha_pin_count=$(grep -oE '@[0-9a-f]{40}\b' "$WORKFLOW_FILE" | wc -l | awk '{print $1}')
-          [ "$sha_pin_count" -ge 5 ] || { echo "Expected full 40-hex SHA action pins in workflow" >&2; exit 1; }
-
-          grep -q 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' "$WORKFLOW_FILE" || { echo "Missing exact checkout action pin" >&2; exit 1; }
-          grep -q 'docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf' "$WORKFLOW_FILE" || { echo "Missing exact QEMU action pin" >&2; exit 1; }
-          grep -q 'docker/setup-buildx-action@6524bf65af31da8d45b59e8c27de4bd072b392f5' "$WORKFLOW_FILE" || { echo "Missing exact Buildx action pin" >&2; exit 1; }
-          grep -q 'docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567' "$WORKFLOW_FILE" || { echo "Missing exact login action pin" >&2; exit 1; }
-          grep -q 'docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4' "$WORKFLOW_FILE" || { echo "Missing exact build-push action pin" >&2; exit 1; }
-          grep -q 'ms-jpq/sync-dockerhub-readme@e2991ea1ba48832e73555cdbd5b82f5a2e91ee9b' "$WORKFLOW_FILE" || { echo "Missing exact README sync action pin" >&2; exit 1; }
-          grep -q 'actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808' "$WORKFLOW_FILE" || { echo "Missing exact upload-artifact action pin" >&2; exit 1; }
-
-          build_push_count=$(grep -Ec '^[[:space:]]*uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4$' "$WORKFLOW_FILE")
-          [ "$build_push_count" -eq 1 ] || { echo "Expected exactly one build-push action invocation" >&2; exit 1; }
-          upload_artifact_count=$(grep -Ec '^[[:space:]]*uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808$' "$WORKFLOW_FILE")
-          [ "$upload_artifact_count" -eq 1 ] || { echo "Expected exactly one upload-artifact invocation" >&2; exit 1; }
-
-          grep -q 'provenance: false' "$WORKFLOW_FILE" || { echo "Blocking provenance attestation must be disabled" >&2; exit 1; }
-          grep -q 'sbom: false' "$WORKFLOW_FILE" || { echo "Blocking SBOM attestation must be disabled" >&2; exit 1; }
-          github_expression_open='$''{{'
-          expected_image_ref="IMAGE_REF=\"${github_expression_open} secrets.DOCKER_USERNAME }}/${github_expression_open} env.PROJECT }}@\${SOURCE_DIGEST}\""
-          grep -Fq "$expected_image_ref" "$WORKFLOW_FILE" || { echo "Missing digest-based source image reference" >&2; exit 1; }
-          grep -Fq '${SOURCE_DIGEST#sha256:}' "$WORKFLOW_FILE" || { echo "Missing source digest suffix validation" >&2; exit 1; }
-          grep -Fq "grep -Eq '^[0-9a-f]{64}\$'" "$WORKFLOW_FILE" || { echo "Missing canonical digest validation regex" >&2; exit 1; }
-          grep -Fq "jq -e '.release_identity.source_sha and .release_identity.workflow_run.id and .release_identity.workflow_run.number and .release_identity.workflow_run.attempt and .release_identity.resolved_tag and .release_identity.source_digest and (.release_identity.platforms | length > 0) and .release_identity.build_time and .release_identity.source.digest and .release_identity.rollback_target.source_reference and .release_identity.rollback_target.source_digest'" "$WORKFLOW_FILE" || { echo "Missing Docker Hub rollback manifest field assertions" >&2; exit 1; }
-          grep -Fq '"schema_version": "1"' "$WORKFLOW_FILE" || { echo "Missing rollback manifest schema version" >&2; exit 1; }
-          expected_source_reference="--arg source_reference \"docker.io/${github_expression_open} secrets.DOCKER_USERNAME }}/${github_expression_open} env.PROJECT }}@\$SOURCE_DIGEST\""
-          grep -Fq -- "$expected_source_reference" "$WORKFLOW_FILE" || { echo "Missing rollback manifest source reference" >&2; exit 1; }
-          grep -Fq 'rollback_manifest_path=$RUNNER_TEMP/rollback-manifest.json' "$WORKFLOW_FILE" || { echo "Missing rollback manifest artifact path wiring" >&2; exit 1; }
-          grep -Fq 'rollback_manifest_source_digest=$SOURCE_DIGEST' "$WORKFLOW_FILE" || { echo "Missing rollback manifest source digest wiring" >&2; exit 1; }
-          grep -Fq 'rollback_manifest_digest_suffix=${SOURCE_DIGEST#sha256:}' "$WORKFLOW_FILE" || { echo "Missing rollback manifest digest suffix wiring" >&2; exit 1; }
-          expected_artifact_name="name: rollback-manifest-${github_expression_open} github.run_id }}-${github_expression_open} steps.dockerhub_rollback_manifest.outputs.rollback_manifest_digest_suffix }}"
-          grep -Fq "$expected_artifact_name" "$WORKFLOW_FILE" || { echo "Missing artifact upload name" >&2; exit 1; }
-          expected_artifact_path="path: ${github_expression_open} steps.dockerhub_rollback_manifest.outputs.rollback_manifest_path }}"
-          grep -Fq "$expected_artifact_path" "$WORKFLOW_FILE" || { echo "Missing artifact upload path" >&2; exit 1; }
-          grep -Fq 'retention-days: 90' "$WORKFLOW_FILE" || { echo "Missing artifact retention" >&2; exit 1; }
-          ! grep -Fq 'HARBOR_' <(grep -v "Harbor references must be absent" "$WORKFLOW_FILE") || { echo "Harbor references must be absent for Docker Hub-only release" >&2; exit 1; }
-
-          grep -Eq '^\.claude$' "$DOCKERIGNORE_FILE" || { echo "Missing .claude in .dockerignore" >&2; exit 1; }
-          grep -Eq '^\.git$' "$DOCKERIGNORE_FILE" || { echo "Missing .git in .dockerignore" >&2; exit 1; }
-          grep -Eq '^\.github$' "$DOCKERIGNORE_FILE" || { echo "Missing .github in .dockerignore" >&2; exit 1; }
-          grep -Eq '^node_modules$' "$DOCKERIGNORE_FILE" || { echo "Missing node_modules in .dockerignore" >&2; exit 1; }
-          grep -Eq '^/dist$' "$DOCKERIGNORE_FILE" || { echo "Missing /dist in .dockerignore" >&2; exit 1; }
-          grep -Eq '^build$' "$DOCKERIGNORE_FILE" || { echo "Missing build in .dockerignore" >&2; exit 1; }
-          grep -Eq '^coverage$' "$DOCKERIGNORE_FILE" || { echo "Missing coverage in .dockerignore" >&2; exit 1; }
-          grep -Eq '^\.env(\..*)?$' "$DOCKERIGNORE_FILE" || { echo "Missing .env exclusions in .dockerignore" >&2; exit 1; }
-          grep -Eq '^!\.env\.example$' "$DOCKERIGNORE_FILE" || { echo "Missing .env.example exception in .dockerignore" >&2; exit 1; }
-      - name: Sync README.md to Docker Hub
-        uses: ms-jpq/sync-dockerhub-readme@e2991ea1ba48832e73555cdbd5b82f5a2e91ee9b
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-          repository: ${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}
-          readme: "./README.md"
-
-      - name: Record Docker Hub rollback manifest
-        id: dockerhub_rollback_manifest
-        env:
-          RESOLVED_TAG: ${{ steps.tag.outputs.tag }}
-          SOURCE_DIGEST: ${{ steps.dockerhub_build.outputs.digest }}
-        run: |
-          [ -n "$GITHUB_SHA" ] || { echo "source SHA is required for rollback manifest" >&2; exit 1; }
-          [ -n "$GITHUB_RUN_ID" ] || { echo "workflow run id is required for rollback manifest" >&2; exit 1; }
-          [ -n "$GITHUB_RUN_NUMBER" ] || { echo "workflow run number is required for rollback manifest" >&2; exit 1; }
-          [ -n "$GITHUB_RUN_ATTEMPT" ] || { echo "workflow run attempt is required for rollback manifest" >&2; exit 1; }
-          [ -n "$RESOLVED_TAG" ] || { echo "resolved tag is required for rollback manifest" >&2; exit 1; }
-          [ -n "$SOURCE_DIGEST" ] || { echo "Docker Hub image digest was not produced; refusing rollback manifest" >&2; exit 1; }
-          case "$SOURCE_DIGEST" in
-            sha256:????????????????????????????????????????????????????????????????)
-              printf '%s' "${SOURCE_DIGEST#sha256:}" | grep -Eq '^[0-9a-f]{64}$' || { echo "Docker Hub image digest is malformed; refusing rollback manifest" >&2; exit 1; }
-              ;;
-            *) echo "Docker Hub image digest is malformed; refusing rollback manifest" >&2; exit 1 ;;
-          esac
-          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          SOURCE_REPO="docker.io/${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}"
-          IMAGE_REF="${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}@${SOURCE_DIGEST}"
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "Docker image digest is missing or malformed" >&2
+            exit 1
+          }
+          manifest_path="$RUNNER_TEMP/rollback-manifest.json"
           jq -n \
-            --arg schema_version "1" \
             --arg source_sha "$GITHUB_SHA" \
-            --arg workflow_run_id "$GITHUB_RUN_ID" \
-            --arg workflow_run_number "$GITHUB_RUN_NUMBER" \
-            --arg workflow_run_attempt "$GITHUB_RUN_ATTEMPT" \
-            --arg workflow_ref "$GITHUB_REF" \
-            --arg workflow_ref_name "$GITHUB_REF_NAME" \
-            --arg resolved_tag "$RESOLVED_TAG" \
-            --arg build_time "$BUILD_TIME" \
-            --arg source_registry "docker.io" \
-            --arg source_repository "$SOURCE_REPO" \
-            --arg source_reference "docker.io/${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}@$SOURCE_DIGEST" \
-            --arg source_digest "$SOURCE_DIGEST" \
-            --arg rollback_source_reference "docker.io/${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT }}@$SOURCE_DIGEST" \
-            --arg rollback_source_digest "$SOURCE_DIGEST" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg release_tag "$RELEASE_TAG" \
+            --arg image_digest "$IMAGE_DIGEST" \
+            --arg image_reference "docker.io/${IMAGE_NAME}@${IMAGE_DIGEST}" \
+            --arg build_time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '{
-              schema_version: $schema_version,
+              schema_version: "1",
               release_identity: {
                 source_sha: $source_sha,
                 workflow_run: {
-                  id: $workflow_run_id,
-                  number: $workflow_run_number,
-                  attempt: $workflow_run_attempt,
-                  ref: $workflow_ref,
-                  ref_name: $workflow_ref_name
+                  id: $run_id,
+                  attempt: $run_attempt
                 },
-                resolved_tag: $resolved_tag,
-                source_digest: $source_digest,
+                resolved_tag: $release_tag,
+                source_digest: $image_digest,
                 platforms: ["linux/amd64", "linux/arm64"],
                 build_time: $build_time,
-                source: {
-                  registry: $source_registry,
-                  repository: $source_repository,
-                  reference: $source_reference,
-                  digest: $source_digest
-                },
                 rollback_target: {
-                  source_reference: $rollback_source_reference,
-                  source_digest: $rollback_source_digest,
-                  resolved_tag: $resolved_tag
+                  source_reference: $image_reference,
+                  source_digest: $image_digest
                 }
               }
-            }' > "$RUNNER_TEMP/rollback-manifest.json"
-          jq -e '.release_identity.source_sha and .release_identity.workflow_run.id and .release_identity.workflow_run.number and .release_identity.workflow_run.attempt and .release_identity.resolved_tag and .release_identity.source_digest and (.release_identity.platforms | length > 0) and .release_identity.build_time and .release_identity.source.digest and .release_identity.rollback_target.source_reference and .release_identity.rollback_target.source_digest' "$RUNNER_TEMP/rollback-manifest.json" >/dev/null
+            }' > "$manifest_path"
+          jq -e '.release_identity.source_sha and .release_identity.source_digest and .release_identity.rollback_target.source_reference' "$manifest_path" >/dev/null
+          echo "manifest_path=${manifest_path}" >> "$GITHUB_OUTPUT"
+          echo "digest_suffix=${IMAGE_DIGEST#sha256:}" >> "$GITHUB_OUTPUT"
           {
-            echo "rollback_manifest_path=$RUNNER_TEMP/rollback-manifest.json"
-            echo "rollback_manifest_source_digest=$SOURCE_DIGEST"
-            echo "rollback_manifest_digest_suffix=${SOURCE_DIGEST#sha256:}"
-          } >> "$GITHUB_OUTPUT"
-          {
-            echo "### Docker Hub rollback manifest"
-            echo "- source SHA: \`${GITHUB_SHA}\`"
-            echo "- workflow run: \`${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}\`"
-            echo "- resolved tag: \`${RESOLVED_TAG}\`"
-            echo "- source digest: \`${SOURCE_DIGEST}\`"
-            echo "- manifest path: \`$RUNNER_TEMP/rollback-manifest.json\`"
+            echo "### Docker Hub release"
+            echo "- image: \`docker.io/${IMAGE_NAME}@${IMAGE_DIGEST}\`"
+            echo "- source: \`${GITHUB_SHA}\`"
+            echo "- tag: \`${RELEASE_TAG}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload rollback manifest
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
         with:
-          name: rollback-manifest-${{ github.run_id }}-${{ steps.dockerhub_rollback_manifest.outputs.rollback_manifest_digest_suffix }}
-          path: ${{ steps.dockerhub_rollback_manifest.outputs.rollback_manifest_path }}
+          name: rollback-manifest-${{ github.run_id }}-${{ steps.rollback.outputs.digest_suffix }}
+          path: ${{ steps.rollback.outputs.manifest_path }}
           if-no-files-found: error
           retention-days: 90
+
+      - name: Sync README to Docker Hub
+        uses: ms-jpq/sync-dockerhub-readme@e2991ea1ba48832e73555cdbd5b82f5a2e91ee9b
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: ${{ env.IMAGE_NAME }}
+          readme: ./README.md

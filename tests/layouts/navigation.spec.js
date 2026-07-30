@@ -37,11 +37,14 @@ describe('GitHub project selection', () => {
     'https://example.com/github',
     'https://evilgithub.com/example',
     'https://github.com.evil.example/example',
+    'https://status.github.com/keleyaa/subweb',
+    'https://github.com/keleyaa/subweb/issues/1',
+    'https://github.com/keleyaa/subweb?tab=readme',
   ])('rejects unsafe or non-GitHub links: %s', (link) => {
     expect(getGithubMenuItem([{ title: 'GitHub', link }])).toBeNull();
   });
 
-  it('returns the first valid HTTPS GitHub item, including github.com subdomains', () => {
+  it('returns the first canonical HTTPS GitHub repository item', () => {
     const repository = { title: 'Repository', link: 'https://github.com/example/repository' };
 
     expect(
@@ -52,17 +55,14 @@ describe('GitHub project selection', () => {
         { title: 'GitHub status', link: 'https://status.github.com/' },
       ]),
     ).toBe(repository);
-    expect(getGithubMenuItem([{ title: 'GitHub status', link: 'https://status.github.com/' }])).toEqual({
-      title: 'GitHub status',
-      link: 'https://status.github.com/',
-    });
+    expect(getGithubMenuItem([{ title: 'GitHub status', link: 'https://status.github.com/' }])).toBeNull();
   });
 
   it('derives owner/repository from valid ordinary GitHub repository links', () => {
     expect(getGithubRepositoryLabel({ title: 'Source', link: 'https://github.com/keleyaa/subweb' })).toBe(
       'keleyaa/subweb',
     );
-    expect(getGithubRepositoryLabel({ title: 'Source', link: 'https://github.com/keleyaa/subweb/issues' })).toBe(
+    expect(getGithubRepositoryLabel({ title: 'Source', link: 'https://github.com/keleyaa/subweb/' })).toBe(
       'keleyaa/subweb',
     );
   });
@@ -86,6 +86,8 @@ describe('GitHub project selection', () => {
     { title: 'Status', link: 'https://status.github.com/keleyaa/subweb' },
     { title: 'Source', link: 'http://github.com/keleyaa/subweb' },
     { title: 'Source', link: 'https://example.com/keleyaa/subweb' },
+    { title: 'Issue', link: 'https://github.com/keleyaa/subweb/issues' },
+    { title: 'Query', link: 'https://github.com/keleyaa/subweb?tab=readme' },
   ])('does not derive a project label from invalid or non-repository items: %j', (item) => {
     expect(getGithubRepositoryLabel(item)).toBeNull();
   });

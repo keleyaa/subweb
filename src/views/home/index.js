@@ -1,3 +1,5 @@
+import { isValidHttpUrl } from '@/features/url/httpUrl';
+
 /**
  * @typedef {Object} MoreConfig
  * @property {*} [include] Legacy loose-empty comparison value.
@@ -23,6 +25,18 @@ const normalizeLinks = function (urls) {
  */
 const normalizeApi = function (api) {
   return typeof api === 'string' && api.endsWith('/') ? api.slice(0, -1) : api;
+};
+
+/**
+ * @param {string} baseUrl
+ * @param {string} pathSegment
+ * @returns {string}
+ */
+const createServiceEndpoint = function (baseUrl, pathSegment) {
+  const endpoint = new URL(baseUrl);
+  endpoint.pathname = endpoint.pathname.replace(/\/+$/, '') + '/' + pathSegment;
+  endpoint.hash = '';
+  return endpoint.toString();
 };
 
 /**
@@ -141,7 +155,9 @@ const appendMoreConfig = function (url, moreConfig) {
  * @returns {string}
  */
 const getSubLink = function (urls, api, target, remoteConfig, isShowMoreConfig, moreConfig) {
-  let finalUrl = api + '/sub?target=' + target + '&url=' + encodeURIComponent(normalizeLinks(urls));
+  const endpoint = createServiceEndpoint(api, 'sub');
+  const separator = endpoint.includes('?') ? '&' : '?';
+  let finalUrl = endpoint + separator + 'target=' + target + '&url=' + encodeURIComponent(normalizeLinks(urls));
 
   if (remoteConfig) {
     finalUrl = finalUrl + '&config=' + encodeURIComponent(remoteConfig);
@@ -180,6 +196,9 @@ const prepareConversion = function (input) {
   if (input.remoteConfig == '' && input.isShowRemoteConfig) {
     return { ok: false, error: 'missingRemoteConfig' };
   }
+  if (input.remoteConfig && !regexCheck(input.remoteConfig)) {
+    return { ok: false, error: 'invalidRemoteConfig' };
+  }
 
   const api = normalizeApi(input.api);
   return {
@@ -189,22 +208,26 @@ const prepareConversion = function (input) {
   };
 };
 
+const createShortUrlRequestConfig = function (shortUrl, data) {
+  return {
+    method: 'post',
+    url: createServiceEndpoint(shortUrl, 'short'),
+    data,
+  };
+};
+
 /**
- * Permissive HTTP(S) URL-shaped input guard, not a full URL validator.
+ * Strict HTTP(S) URL guard retained under its historical public name.
  *
  * @param {*} url
  * @returns {boolean}
  */
 const regexCheck = function (url) {
-  const reg_url = /https?:\/\/[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]/;
-  if (reg_url.test(url)) {
-    return true;
-  } else {
-    return false;
-  }
+  return isValidHttpUrl(url);
 };
 
 export {
+  createShortUrlRequestConfig,
   createConversionInputKey,
   getSubLink,
   hasCurrentConversionResult,

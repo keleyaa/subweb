@@ -1,5 +1,7 @@
+import { isValidHttpUrl } from '@/features/url/httpUrl';
+import { getGithubRepositoryLabel } from '@/features/site/github';
+
 export const DEFAULT_RUNTIME_CONFIG = {
-  siteName: 'ML1',
   apiUrl: 'https://api.ml1.one',
   shortUrl: 'https://ml1.one',
   menuItem: [{ title: 'GitHub', link: 'https://github.com/keleyaa/subweb', target: '_blank' }],
@@ -23,10 +25,6 @@ export const DEFAULT_RUNTIME_CONFIG = {
   ],
 };
 
-function hasStringValue(config, key) {
-  return typeof config[key] === 'string';
-}
-
 function hasArrayValue(config, key) {
   return Array.isArray(config[key]);
 }
@@ -41,17 +39,40 @@ function copyConfigArray(items) {
   });
 }
 
+function normalizeApiUrl(source) {
+  return isValidHttpUrl(source.apiUrl) ? source.apiUrl : DEFAULT_RUNTIME_CONFIG.apiUrl;
+}
+
+function normalizeShortUrl(source) {
+  return source.shortUrl === '' || isValidHttpUrl(source.shortUrl) ? source.shortUrl : DEFAULT_RUNTIME_CONFIG.shortUrl;
+}
+
+function isSafeGithubMenuItem(item) {
+  return Boolean(getGithubRepositoryLabel(item));
+}
+
+function isRemoteConfigOption(item) {
+  return (
+    item &&
+    typeof item === 'object' &&
+    typeof item.text === 'string' &&
+    Boolean(item.text.trim()) &&
+    isValidHttpUrl(item.value)
+  );
+}
+
 export function normalizeRuntimeConfig(config) {
   const source = config && typeof config === 'object' && !Array.isArray(config) ? config : {};
 
   return {
-    siteName: hasStringValue(source, 'siteName') ? source.siteName : DEFAULT_RUNTIME_CONFIG.siteName,
-    apiUrl: hasStringValue(source, 'apiUrl') ? source.apiUrl : DEFAULT_RUNTIME_CONFIG.apiUrl,
-    shortUrl: hasStringValue(source, 'shortUrl') ? source.shortUrl : DEFAULT_RUNTIME_CONFIG.shortUrl,
-    menuItem: copyConfigArray(hasArrayValue(source, 'menuItem') ? source.menuItem : DEFAULT_RUNTIME_CONFIG.menuItem),
+    apiUrl: normalizeApiUrl(source),
+    shortUrl: normalizeShortUrl(source),
+    menuItem: copyConfigArray(
+      hasArrayValue(source, 'menuItem') ? source.menuItem.filter(isSafeGithubMenuItem) : DEFAULT_RUNTIME_CONFIG.menuItem
+    ),
     remoteConfigOptions: copyConfigArray(
       hasArrayValue(source, 'remoteConfigOptions')
-        ? source.remoteConfigOptions
+        ? source.remoteConfigOptions.filter(isRemoteConfigOption)
         : DEFAULT_RUNTIME_CONFIG.remoteConfigOptions
     ),
   };

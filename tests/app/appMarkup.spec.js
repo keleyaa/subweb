@@ -12,14 +12,13 @@ describe('application mount markup', () => {
 
     expect(indexHtml).toContain('<html lang="zh-CN">');
     expect(indexHtml).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />');
-    expect(indexHtml).toContain('<title>ML1</title>');
-    expect(indexHtml).toContain('<strong>ML1 需要启用 JavaScript 才能运行。</strong>');
-    expect(indexHtml).not.toContain('Subconverter Web');
+    expect(indexHtml).toContain('<title>Subconverter Web</title>');
+    expect(indexHtml).toContain('<strong>Subconverter Web 需要启用 JavaScript 才能运行。</strong>');
     expect(indexHtml).toContain('<noscript>');
     expect(indexHtml).toContain('<script type="module" src="/src/main.js"></script>');
   });
 
-  it('uses the standalone ML1 mark rather than the retired favicon', async () => {
+  it('uses the standalone project mark rather than the retired favicon', async () => {
     const favicon = await readFile(faviconUrl, 'utf8');
 
     expect(favicon).toContain('<svg');

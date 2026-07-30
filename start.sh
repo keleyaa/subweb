@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-config_template=/app/public/conf/config.js
-config_file=/usr/share/nginx/html/conf/config.js
+config_template=${CONFIG_TEMPLATE:-/app/public/conf/config.js}
+config_file=${CONFIG_FILE:-/usr/share/nginx/html/conf/config.js}
 
 fail() {
   printf '%s\n' "$1" >&2
@@ -54,15 +54,15 @@ else
   printf '%s\n' "如需修改请在容器启动时使用 -e API_URL='https://converter.example.com' 传递环境变量"
 fi
 
-if [ -n "${SHORT_URL:-}" ]; then
-  printf '当前短链接地址为: %s\n' "$SHORT_URL"
-  replace_config_value "shortUrl: 'https://ml1.one'" "shortUrl: '$SHORT_URL'"
+if [ "${SHORT_URL+x}" = x ]; then
+  if [ -n "$SHORT_URL" ]; then
+    printf '当前短链接地址为: %s\n' "$SHORT_URL"
+  else
+    printf '%s\n' '当前已关闭短链接功能'
+  fi
+  replace_config_value 'https://ml1.one' "$SHORT_URL"
 else
   printf '%s\n' '当前为默认短链接地址: https://ml1.one'
-fi
-
-if [ -n "${SITE_NAME:-}" ]; then
-  replace_config_value 'ML1' "$SITE_NAME"
 fi
 
 exec nginx -g 'daemon off;'

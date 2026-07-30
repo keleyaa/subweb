@@ -45,7 +45,7 @@ describe('MainLayout document structure', () => {
 
     legacyTokens.forEach((token) => expect(source).not.toContain(token));
     listenerMethods.forEach((method) =>
-      expect(source).not.toMatch(new RegExp(`${method}\\s*\\(\\s*['\"]${scrollEvent}['\"]`)),
+      expect(source).not.toMatch(new RegExp(`${method}\\s*\\(\\s*['"]${scrollEvent}['"]`)),
     );
   });
 });

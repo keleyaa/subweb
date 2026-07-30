@@ -145,8 +145,10 @@
 
 <script>
 import { showLoading, hideLoading } from '@/components/loading';
+import { copyText } from '@/features/clipboard/copy';
 import { TARGET_OPTIONS, createDefaultMoreConfig } from '@/features/conversion/options';
 import {
+  createShortUrlRequestConfig,
   createConversionInputKey,
   hasCurrentConversionResult,
   hasCurrentShortUrlResult,
@@ -231,31 +233,17 @@ export default {
         this.remoteConfig = event.target.value;
       }
     },
-    toCopy(url, title) {
+    async toCopy(url, title) {
       if (!url) {
         this.$showDialog('warning', '注意', '复制失败：内容为空');
         return;
       }
 
-      let copyInput;
       try {
-        copyInput = document.createElement('input');
-        copyInput.setAttribute('value', url);
-        document.body.appendChild(copyInput);
-        copyInput.select();
-
-        if (!document.execCommand('copy')) {
-          this.$showDialog('warning', '注意', '复制失败：浏览器不支持此操作');
-          return;
-        }
-
+        await copyText(url);
         showNotification(title + ' 复制成功', '成功');
       } catch {
         this.$showDialog('warning', '注意', '复制失败：请检查浏览器兼容性');
-      } finally {
-        if (copyInput && copyInput.parentNode) {
-          copyInput.parentNode.removeChild(copyInput);
-        }
       }
     },
     handleSubscriptionAction() {
@@ -297,6 +285,7 @@ export default {
           invalidRuntimeApi: ['error', '失败', '后端服务配置无效，请检查运行时配置'],
           invalidApi: ['warning', '注意', '请检查后端 API 地址，或选择默认后端服务'],
           missingRemoteConfig: ['warning', '注意', '请先输入远程配置地址，或选择后端默认配置'],
+          invalidRemoteConfig: ['warning', '注意', '请检查远程配置地址，或选择后端默认配置'],
         };
         const [type, title, message] = messages[prepared.error];
         this.$showDialog(type, title, message);
@@ -340,14 +329,7 @@ export default {
       this.isGeneratingShortUrl = true;
       showLoading();
       try {
-        const res = await request({
-          method: 'post',
-          url: this.shortUrl.replace(/\/$/, '') + '/short',
-          header: {
-            'Content-Type': 'application/form-data; charset=utf-8',
-          },
-          data: data,
-        });
+        const res = await request(createShortUrlRequestConfig(this.shortUrl, data));
 
         if (!matchesConversionInput(requestConversionKey, this.conversionInput)) {
           return;

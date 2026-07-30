@@ -1,0 +1,18 @@
+name: subweb
+
+services:
+  web:
+    build:
+      context: .
+    image: "${SUBWEB_IMAGE:-subweb:local}"
+    restart: unless-stopped
+    ports:
+      - "${SUBWEB_BIND_ADDRESS:-127.0.0.1}:${SUBWEB_PORT:-18080}:8080"
+    environment:
+      API_URL: "${API_URL:-https://api.ml1.one}"
+      SHORT_URL: "${SHORT_URL-https://ml1.one}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 10s
