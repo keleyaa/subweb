@@ -4,7 +4,7 @@ Subweb 在浏览器启动时读取 `/conf/config.js` 中的 `window.config`。Vi
 
 ```js
 window.config = {
-  siteName: 'Subweb',
+  siteName: 'ML1',
   apiUrl: 'https://api.ml1.one',
   shortUrl: 'https://ml1.one',
   menuItem: [{ title: 'GitHub', link: 'https://github.com/keleyaa/subweb', target: '_blank' }],

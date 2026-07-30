@@ -1,19 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 
 const indexUrl = new URL('../../index.html', import.meta.url);
 const appUrl = new URL('../../src/App.vue', import.meta.url);
+const faviconUrl = new URL('../../public/favicon.svg', import.meta.url);
+const legacyFaviconUrl = new URL('../../public/favicon.ico', import.meta.url);
 
 describe('application mount markup', () => {
   it('keeps the required document metadata and application entrypoints', async () => {
     const indexHtml = await readFile(indexUrl, 'utf8');
 
     expect(indexHtml).toContain('<html lang="zh-CN">');
-    expect(indexHtml).toContain('<link rel="icon" href="/favicon.ico" />');
-    expect(indexHtml).toContain('<title>Subweb</title>');
+    expect(indexHtml).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />');
+    expect(indexHtml).toContain('<title>ML1</title>');
+    expect(indexHtml).toContain('<strong>ML1 需要启用 JavaScript 才能运行。</strong>');
     expect(indexHtml).not.toContain('Subconverter Web');
     expect(indexHtml).toContain('<noscript>');
     expect(indexHtml).toContain('<script type="module" src="/src/main.js"></script>');
+  });
+
+  it('uses the standalone ML1 mark rather than the retired favicon', async () => {
+    const favicon = await readFile(faviconUrl, 'utf8');
+
+    expect(favicon).toContain('<svg');
+    expect(favicon).toContain('viewBox="0 0 64 64"');
+    await expect(stat(legacyFaviconUrl)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('keeps a scalable mobile viewport without remote font dependencies', async () => {

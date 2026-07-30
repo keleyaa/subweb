@@ -13,7 +13,7 @@ docker build -t subweb:local .
 以下示例为容器注入站点名称和转换后端地址：
 
 ```bash
-docker run -d --name subweb --restart unless-stopped -p 18080:80 -e SITE_NAME='Subweb' -e API_URL='https://converter.example.com' subweb:local
+docker run -d --name subweb --restart unless-stopped -p 18080:80 -e SITE_NAME='ML1' -e API_URL='https://converter.example.com' subweb:local
 ```
 
 `SHORT_URL` 会覆盖默认短链服务地址：

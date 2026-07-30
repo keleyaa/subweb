@@ -55,6 +55,10 @@
   font: inherit;
 }
 
+.sub-table--modern input[readonly] {
+  color: #424245;
+}
+
 .sub-table--modern textarea {
   min-height: 132px;
   resize: vertical;
@@ -152,11 +156,15 @@
 
 .sub-table--modern .primary-action-row {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding-top: 4px;
 }
 
 .sub-table--modern .primary-action-button {
-  min-width: 152px;
+  min-width: 168px;
   min-height: 44px;
   padding: 0 20px;
   border: 1px solid #0071e3;
@@ -216,13 +224,8 @@
   color: #1f7a35;
 }
 
-.sub-table--modern .result-control-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 10px;
-}
-
 .sub-table--modern .secondary-action-button {
+  min-width: 152px;
   min-height: 44px;
   padding: 0 14px;
   border: 1px solid #c7c7cc;
@@ -230,6 +233,7 @@
   background: #fff;
   box-shadow: none;
   color: #1d1d1f;
+  font-size: 15px;
   font-weight: 500;
   transform: none;
 }
@@ -289,12 +293,17 @@
   }
 
   .sub-table--modern .base-config-grid,
-  .sub-table--modern .advanced-fields-grid,
-  .sub-table--modern .result-control-row {
+  .sub-table--modern .advanced-fields-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .sub-table--modern .primary-action-button {
+  .sub-table--modern .primary-action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sub-table--modern .primary-action-button,
+  .sub-table--modern .secondary-action-button {
     width: 100%;
   }
 }

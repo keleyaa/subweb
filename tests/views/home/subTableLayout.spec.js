@@ -17,6 +17,7 @@ describe('SubTable configuration layout', () => {
     const moreConfigExcludeIndex = source.indexOf('id="more-config-exclude"');
     const convertedSubUrlIndex = source.indexOf('id="converted-sub-url"');
     const shortUrlResultIndex = source.indexOf('id="short-url-result"');
+    const primaryActionIndex = source.indexOf('class="primary-action-row"');
 
     expect(subscriptionUrlsIndex).toBeGreaterThan(-1);
     expect(clientIndex).toBeGreaterThan(subscriptionUrlsIndex);
@@ -27,6 +28,7 @@ describe('SubTable configuration layout', () => {
     expect(moreConfigExcludeIndex).toBeGreaterThan(moreConfigIncludeIndex);
     expect(convertedSubUrlIndex).toBeGreaterThan(moreConfigExcludeIndex);
     expect(shortUrlResultIndex).toBeGreaterThan(convertedSubUrlIndex);
+    expect(primaryActionIndex).toBeGreaterThan(shortUrlResultIndex);
   });
 
   it('contains no local template UI, state, imports, or browser storage access', () => {

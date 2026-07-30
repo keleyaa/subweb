@@ -9,9 +9,7 @@ describe('SubTable modern linear layout', () => {
   it('uses the shared semantic form structure for every UX mode', () => {
     const source = readFileSync(componentPath, 'utf8');
 
-    expect(source).toContain(
-      '<form class="sub-table sub-table--modern" @submit.prevent="getSubUrl">',
-    );
+    expect(source).toContain('<form class="sub-table sub-table--modern" @submit.prevent="handleSubscriptionAction">');
     expect(source).toContain('class="subscription-input"');
     expect(source).toContain('class="base-config-grid"');
     expect(source).toMatch(/class="[^"]*\badvanced-disclosure\b[^"]*"/);
@@ -25,7 +23,7 @@ describe('SubTable modern linear layout', () => {
     const source = readFileSync(componentPath, 'utf8');
 
     expect(source).toMatch(
-      /<fieldset class="configuration-section">[\s\S]*?<legend class="visually-hidden">订阅输入与配置<\/legend>[\s\S]*?<div class="subscription-input">[\s\S]*?<div class="base-config-grid">[\s\S]*?<\/fieldset>/,
+      /<fieldset class="configuration-section">[\s\S]*?<legend class="visually-hidden">订阅输入与配置<\/legend>[\s\S]*?<div class="subscription-input">[\s\S]*?<div class="base-config-grid">[\s\S]*?<\/fieldset>/
     );
     expect(source).not.toContain('<fieldset class="subscription-input">');
   });
@@ -39,8 +37,8 @@ describe('SubTable modern linear layout', () => {
       ['template', 'controls'].join('-'),
     ];
 
-    expect(source.match(/\bprimary-action-button\b/g) ?? []).toHaveLength(1);
-    expect(source).toContain('<button type="submit" class="primary-action-button">转换订阅</button>');
+    expect(source).toContain('<button type="submit" class="primary-action-button">');
+    expect(source).toContain("{{ hasCurrentSubscriptionResult ? '复制订阅' : '转换订阅' }}");
     expect(source).not.toMatch(/class="[^"]*\bbtn(?:-primary|-secondary)?\b[^"]*"/);
     for (const marker of forbiddenMarkers) {
       expect(source).not.toContain(marker);
@@ -51,7 +49,7 @@ describe('SubTable modern linear layout', () => {
     const source = readFileSync(componentPath, 'utf8');
 
     expect(source).toMatch(
-      /<button[\s\S]*?id="more-config-toggle"[\s\S]*?:aria-expanded="isShowMoreConfig"[\s\S]*?aria-controls="advanced-config"[\s\S]*?@click="showMoreConfig"/,
+      /<button[\s\S]*?id="more-config-toggle"[\s\S]*?:aria-expanded="isShowMoreConfig"[\s\S]*?aria-controls="advanced-config"[\s\S]*?@click="showMoreConfig"/
     );
     expect(source).toContain('<Transition name="field-reveal">');
     expect(source).toContain('<Transition name="advanced-reveal">');
@@ -110,26 +108,44 @@ describe('SubTable modern linear layout', () => {
     expect(stylesheet).toMatch(/\.checkbox-field\s*\{[\s\S]*?cursor:\s*pointer/);
   });
 
-  it('provides explicit copy, share, and short-link actions', () => {
+  it('uses one stateful action for the subscription and one for the short link', () => {
     const source = readFileSync(componentPath, 'utf8');
     const resultsSection = source.slice(
       source.indexOf('<fieldset class="results-section">'),
-      source.indexOf('</fieldset>', source.indexOf('<fieldset class="results-section">')),
+      source.indexOf('</fieldset>', source.indexOf('<fieldset class="results-section">'))
     );
 
-    expect(source).toContain(`@click="toCopy(result.subUrl, '订阅链接')"`);
     expect(resultsSection).toMatch(
-      /<div class="form-field result-field">\s*<label for="converted-sub-url">转换链接<\/label>/,
+      /<div class="form-field result-field">\s*<label for="converted-sub-url">转换链接<\/label>/
     );
     expect(resultsSection).toMatch(
-      /<div v-if="hasShortUrlService" class="form-field result-field">\s*<label for="short-url-result">短链<\/label>/,
+      /<div v-if="hasShortUrlService" class="form-field result-field">\s*<label for="short-url-result">短链<\/label>/
     );
-    expect(source).toContain(`@click="toCopy(result.shortUrl, '短链')"`);
-    expect(source).toMatch(/<button[^>]*v-if="result\.subUrl"[^>]*@click="shareSubscription"/);
-    expect(source).toContain('@click="getShortUrl"');
-    expect(source).toContain(':disabled="!result.subUrl"');
-    expect(source).toContain(':disabled="!result.shortUrl"');
+    expect(resultsSection).not.toContain('secondary-action-button');
+    expect(source).toContain('@submit.prevent="handleSubscriptionAction"');
+    expect(source).toContain('@click="handleShortUrlAction"');
+    expect(source).toContain("{{ isGeneratingShortUrl ? '生成中...' : hasCurrentShortUrl ? '复制短链' : '生成短链' }}");
+    expect(source).toContain(':disabled="isGeneratingShortUrl"');
+    expect(source).not.toContain('shareSubscription');
+    expect(source).not.toContain('import { shareUrl }');
     expect(source).toContain('hasShortUrlService()');
+  });
+
+  it('guards short-link responses with the input captured when the request began', () => {
+    const source = readFileSync(componentPath, 'utf8');
+    const shortUrlMethod = source.slice(source.indexOf('async getShortUrl()'), source.indexOf('\n    },\n  },\n};'));
+
+    expect(shortUrlMethod).toContain('const requestConversionKey = this.result.conversionKey;');
+    expect(shortUrlMethod).toMatch(
+      /if \(!matchesConversionInput\(requestConversionKey, this\.conversionInput\)\) \{\s*return;\s*\}[\s\S]*?this\.result\.shortUrl = res\.data\.ShortUrl;[\s\S]*?this\.result\.shortUrlConversionKey = requestConversionKey;/
+    );
+  });
+
+  it('does not report generated links as copied before a copy operation succeeds', () => {
+    const source = readFileSync(componentPath, 'utf8');
+
+    expect(source).toContain("'转换链接已生成'");
+    expect(source).not.toContain('转换链接已生成并复制');
   });
 });
 
@@ -151,10 +167,7 @@ describe('SubTable modern visual constraints', () => {
 
   it('does not use glass, gradients, or effective shadows', () => {
     const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
-    const forbiddenMarkers = [
-      ['linear', 'gradient'].join('-'),
-      ['backdrop', 'filter'].join('-'),
-    ];
+    const forbiddenMarkers = [['linear', 'gradient'].join('-'), ['backdrop', 'filter'].join('-')];
     const shadowDeclarations = source.match(/box-shadow\s*:\s*[^;]+/g) ?? [];
 
     for (const marker of forbiddenMarkers) {
@@ -175,13 +188,12 @@ describe('SubTable modern visual constraints', () => {
     expect(source).toMatch(/\.primary-action-button:disabled\s*\{/);
     expect(source).toMatch(/\.secondary-action-button:hover\s*\{[\s\S]*?background:\s*#f5f5f7/);
     expect(source).toMatch(/\.secondary-action-button:active\s*\{[\s\S]*?background:\s*#e8e8ed/);
-    expect(source).toMatch(/\.secondary-action-button:disabled\s*\{/);
     expect(source).toMatch(/\.primary-action-button:focus-visible[\s\S]*?\.secondary-action-button:focus-visible/);
     expect(source).toMatch(
-      /textarea:focus-visible,[\s\S]*?select:focus-visible,[\s\S]*?input:focus-visible\s*\{[^}]*outline:\s*3px solid #0066cc;/,
+      /textarea:focus-visible,[\s\S]*?select:focus-visible,[\s\S]*?input:focus-visible\s*\{[^}]*outline:\s*3px solid #0066cc;/
     );
     expect(source).toMatch(
-      /\.primary-action-button:focus-visible,[\s\S]*?\.secondary-action-button:focus-visible,[\s\S]*?\.advanced-disclosure:focus-visible\s*\{[^}]*outline:\s*3px solid #0066cc;/,
+      /\.primary-action-button:focus-visible,[\s\S]*?\.secondary-action-button:focus-visible,[\s\S]*?\.advanced-disclosure:focus-visible\s*\{[^}]*outline:\s*3px solid #0066cc;/
     );
     expect(source).not.toContain(legacyFocusColor);
     expect(source).toMatch(/transition:\s*(?:background-color|border-color|color)[^;]*1(?:6|7|8)0ms ease-out/);

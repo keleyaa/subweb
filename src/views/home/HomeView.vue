@@ -33,7 +33,8 @@ export default {
 }
 
 .home-workspace__heading {
-  margin-bottom: 28px;
+  margin-bottom: 32px;
+  text-align: center;
 }
 
 .home-workspace__heading h1 {
@@ -46,7 +47,8 @@ export default {
 }
 
 .home-workspace__heading p {
-  margin: 0;
+  max-width: 480px;
+  margin: 0 auto;
   color: #6e6e73;
   font-size: 15px;
   line-height: 1.5;

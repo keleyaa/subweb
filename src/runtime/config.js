@@ -1,5 +1,5 @@
 export const DEFAULT_RUNTIME_CONFIG = {
-  siteName: 'Subweb',
+  siteName: 'ML1',
   apiUrl: 'https://api.ml1.one',
   shortUrl: 'https://ml1.one',
   menuItem: [{ title: 'GitHub', link: 'https://github.com/keleyaa/subweb', target: '_blank' }],

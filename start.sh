@@ -62,7 +62,7 @@ else
 fi
 
 if [ -n "${SITE_NAME:-}" ]; then
-  replace_config_value 'Subweb' "$SITE_NAME"
+  replace_config_value 'ML1' "$SITE_NAME"
 fi
 
 exec nginx -g 'daemon off;'

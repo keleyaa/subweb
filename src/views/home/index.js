@@ -14,7 +14,83 @@
  * @returns {string}
  */
 const normalizeLinks = function (urls) {
-  return urls.split('\n').join('|');
+  return typeof urls === 'string' ? urls.split('\n').join('|') : '';
+};
+
+/**
+ * @param {*} api
+ * @returns {string}
+ */
+const normalizeApi = function (api) {
+  return typeof api === 'string' && api.endsWith('/') ? api.slice(0, -1) : api;
+};
+
+/**
+ * Creates a stable key for every input that changes a generated conversion URL.
+ *
+ * @param {Object} input
+ * @param {*} input.urls
+ * @param {*} input.api
+ * @param {*} input.target
+ * @param {*} input.remoteConfig
+ * @param {*} input.isShowMoreConfig
+ * @param {MoreConfig} input.moreConfig
+ * @returns {string}
+ */
+const createConversionInputKey = function (input) {
+  const moreConfig = input.isShowMoreConfig
+    ? {
+        include: input.moreConfig?.include ?? '',
+        exclude: input.moreConfig?.exclude ?? '',
+        emoji: Boolean(input.moreConfig?.emoji),
+        udp: Boolean(input.moreConfig?.udp),
+        sort: Boolean(input.moreConfig?.sort),
+        scv: Boolean(input.moreConfig?.scv),
+        list: Boolean(input.moreConfig?.list),
+      }
+    : null;
+
+  return JSON.stringify({
+    urls: normalizeLinks(input.urls),
+    api: normalizeApi(input.api),
+    target: input.target ?? '',
+    remoteConfig: input.remoteConfig ?? '',
+    moreConfig,
+  });
+};
+
+/**
+ * @param {*} conversionKey
+ * @param {Object} input
+ * @returns {boolean}
+ */
+const matchesConversionInput = function (conversionKey, input) {
+  return typeof conversionKey === 'string' && conversionKey === createConversionInputKey(input);
+};
+
+/**
+ * @param {*} result
+ * @param {Object} input
+ * @returns {boolean}
+ */
+const hasCurrentConversionResult = function (result, input) {
+  return Boolean(
+    result && typeof result.subUrl === 'string' && result.subUrl && matchesConversionInput(result.conversionKey, input)
+  );
+};
+
+/**
+ * @param {*} result
+ * @param {Object} input
+ * @returns {boolean}
+ */
+const hasCurrentShortUrlResult = function (result, input) {
+  return Boolean(
+    hasCurrentConversionResult(result, input) &&
+      typeof result.shortUrl === 'string' &&
+      result.shortUrl &&
+      result.shortUrlConversionKey === result.conversionKey
+  );
 };
 
 /**
@@ -105,7 +181,7 @@ const prepareConversion = function (input) {
     return { ok: false, error: 'missingRemoteConfig' };
   }
 
-  const api = input.api.endsWith('/') ? input.api.slice(0, -1) : input.api;
+  const api = normalizeApi(input.api);
   return {
     ok: true,
     api,
@@ -128,4 +204,12 @@ const regexCheck = function (url) {
   }
 };
 
-export { regexCheck, getSubLink, prepareConversion };
+export {
+  createConversionInputKey,
+  getSubLink,
+  hasCurrentConversionResult,
+  hasCurrentShortUrlResult,
+  matchesConversionInput,
+  prepareConversion,
+  regexCheck,
+};

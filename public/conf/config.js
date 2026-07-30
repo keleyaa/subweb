@@ -1,6 +1,6 @@
 window.config = {
   // 站点名称
-  siteName: 'Subweb',
+  siteName: 'ML1',
   // 转换后端 API 地址
   apiUrl: 'https://api.ml1.one',
   // 短链服务地址。留空时，前端不会显示短链功能。

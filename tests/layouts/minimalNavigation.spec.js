@@ -8,19 +8,20 @@ const navBarUrl = new URL('../../src/layouts/main/navbar/NavBar.vue', import.met
 const forbidden = (...parts) => parts.join('');
 
 describe('minimal borderless navigation', () => {
-  it('renders a compact text brand that links home without legacy menu controls', async () => {
+  it('renders the compact ML1 mark and runtime brand name without legacy menu controls', async () => {
     const source = await readFile(appBrandUrl, 'utf8');
     const legacyFocusColor = ['rgba(0, 102, 204, ', '0.24)'].join('');
 
     expect(source).toContain('<router-link to="/" class="app-brand-link" :aria-label="`${siteName}，返回首页`">');
-    expect(source).toContain('class="app-brand-mark"');
+    expect(source).toContain('<img class="app-brand-mark" src="/favicon.svg" width="28" height="28" alt="" />');
     expect(source).toContain('{{ siteName }}');
     expect(source).toContain('siteName: window.config.siteName');
     expect(source).toMatch(/\.app-brand-link\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*gap:\s*10px;/s);
     expect(source).toMatch(
       /\.app-brand-link:focus-visible\s*\{[^}]*outline:\s*3px solid #0066cc;[^}]*outline-offset:\s*2px;[^}]*border-radius:\s*4px;/s,
     );
-    expect(source).toMatch(/\.app-brand-mark\s*\{[^}]*width:\s*28px;[^}]*height:\s*28px;[^}]*border-radius:\s*7px;[^}]*background:\s*#1d1d1f;[^}]*color:\s*#fff;/s);
+    expect(source).toMatch(/\.app-brand-mark\s*\{[^}]*display:\s*block;[^}]*width:\s*28px;[^}]*height:\s*28px;[^}]*flex:\s*0 0 28px;/s);
+    expect(source).not.toContain('>S<');
     expect(source).not.toContain(legacyFocusColor);
 
     for (const token of [

@@ -39,12 +39,14 @@ describe('home workspace layout', () => {
     expect(source).toMatch(
       /\.home-workspace__inner\s*\{[^}]*max-width:\s*860px\s*;[^}]*margin:\s*0 auto\s*;[^}]*padding:\s*48px 20px 64px\s*;/
     );
-    expect(source).toMatch(/\.home-workspace__heading\s*\{[^}]*margin-bottom:\s*28px\s*;/);
+    expect(source).toMatch(
+      /\.home-workspace__heading\s*\{[^}]*margin-bottom:\s*32px\s*;[^}]*text-align:\s*center\s*;/,
+    );
     expect(source).toMatch(
       /\.home-workspace__heading h1\s*\{[^}]*margin:\s*0 0 8px\s*;[^}]*color:\s*#1d1d1f\s*;[^}]*font-size:\s*32px\s*;[^}]*font-weight:\s*600\s*;[^}]*letter-spacing:\s*0\s*;[^}]*line-height:\s*1\.2\s*;/
     );
     expect(source).toMatch(
-      /\.home-workspace__heading p\s*\{[^}]*margin:\s*0\s*;[^}]*color:\s*#6e6e73\s*;[^}]*font-size:\s*15px\s*;[^}]*line-height:\s*1\.5\s*;/
+      /\.home-workspace__heading p\s*\{[^}]*max-width:\s*480px\s*;[^}]*margin:\s*0 auto\s*;[^}]*color:\s*#6e6e73\s*;[^}]*font-size:\s*15px\s*;[^}]*line-height:\s*1\.5\s*;/,
     );
   });
 

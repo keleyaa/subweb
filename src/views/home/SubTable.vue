@@ -1,5 +1,5 @@
 <template>
-  <form class="sub-table sub-table--modern" @submit.prevent="getSubUrl">
+  <form class="sub-table sub-table--modern" @submit.prevent="handleSubscriptionAction">
     <fieldset class="configuration-section">
       <legend class="visually-hidden">订阅输入与配置</legend>
       <div class="subscription-input">
@@ -108,58 +108,52 @@
       </fieldset>
     </Transition>
 
-    <div class="primary-action-row">
-      <button type="submit" class="primary-action-button">转换订阅</button>
-    </div>
-
     <fieldset class="results-section">
       <legend>转换结果</legend>
-      <p class="results-status" :class="{ 'results-status--success': result.subUrl }" aria-live="polite">
-        {{ result.subUrl ? '转换链接已生成' : '转换后将在此显示结果' }}
+      <p class="results-status" :class="{ 'results-status--success': hasCurrentSubscriptionResult }" aria-live="polite">
+        {{ hasCurrentSubscriptionResult ? '转换链接已生成' : '转换后将在此显示结果' }}
       </p>
 
       <div class="form-field result-field">
         <label for="converted-sub-url">转换链接</label>
-        <div class="result-control-row">
-          <input id="converted-sub-url" v-model.trim="result.subUrl" placeholder="点击转换订阅" />
-          <button
-            type="button"
-            class="secondary-action-button"
-            :disabled="!result.subUrl"
-            @click="toCopy(result.subUrl, '订阅链接')"
-          >
-            复制
-          </button>
-          <button v-if="result.subUrl" type="button" class="secondary-action-button" @click="shareSubscription">
-            分享
-          </button>
-        </div>
+        <input id="converted-sub-url" :value="visibleSubUrl" readonly placeholder="点击转换订阅" />
       </div>
 
       <div v-if="hasShortUrlService" class="form-field result-field">
         <label for="short-url-result">短链</label>
-        <div class="result-control-row">
-          <input id="short-url-result" v-model.trim="result.shortUrl" placeholder="点击生成短链" />
-          <button
-            type="button"
-            class="secondary-action-button"
-            :disabled="!result.shortUrl"
-            @click="toCopy(result.shortUrl, '短链')"
-          >
-            复制短链
-          </button>
-          <button type="button" class="secondary-action-button" @click="getShortUrl">生成短链</button>
-        </div>
+        <input id="short-url-result" :value="visibleShortUrl" readonly placeholder="点击生成短链" />
       </div>
     </fieldset>
+
+    <div class="primary-action-row">
+      <button type="submit" class="primary-action-button">
+        {{ hasCurrentSubscriptionResult ? '复制订阅' : '转换订阅' }}
+      </button>
+      <button
+        v-if="hasShortUrlService"
+        type="button"
+        class="secondary-action-button result-action-button"
+        :disabled="isGeneratingShortUrl"
+        :aria-busy="isGeneratingShortUrl"
+        @click="handleShortUrlAction"
+      >
+        {{ isGeneratingShortUrl ? '生成中...' : hasCurrentShortUrl ? '复制短链' : '生成短链' }}
+      </button>
+    </div>
   </form>
 </template>
 
 <script>
 import { showLoading, hideLoading } from '@/components/loading';
 import { TARGET_OPTIONS, createDefaultMoreConfig } from '@/features/conversion/options';
-import { prepareConversion, regexCheck } from './index.js';
-import { shareUrl } from '@/features/share/nativeShare';
+import {
+  createConversionInputKey,
+  hasCurrentConversionResult,
+  hasCurrentShortUrlResult,
+  matchesConversionInput,
+  prepareConversion,
+  regexCheck,
+} from './index.js';
 import { request } from '@/network';
 import showNotification from '@/components/notification';
 export default {
@@ -175,11 +169,14 @@ export default {
       isShowMoreConfig: false,
       isShowManualApiUrl: false,
       isShowRemoteConfig: false,
+      isGeneratingShortUrl: false,
       result: {
         subUrl: '',
         shortUrl: '',
+        conversionKey: '',
+        shortUrlConversionKey: '',
       },
-      urls: [],
+      urls: '',
       api: window.config.apiUrl,
       target: 'clash',
       remoteConfig: '',
@@ -188,6 +185,28 @@ export default {
   computed: {
     hasShortUrlService() {
       return regexCheck(this.shortUrl);
+    },
+    conversionInput() {
+      return {
+        urls: this.urls,
+        api: this.api,
+        target: this.target,
+        remoteConfig: this.remoteConfig,
+        isShowMoreConfig: this.isShowMoreConfig,
+        moreConfig: this.moreConfig,
+      };
+    },
+    hasCurrentSubscriptionResult() {
+      return hasCurrentConversionResult(this.result, this.conversionInput);
+    },
+    hasCurrentShortUrl() {
+      return hasCurrentShortUrlResult(this.result, this.conversionInput);
+    },
+    visibleSubUrl() {
+      return this.hasCurrentSubscriptionResult ? this.result.subUrl : '';
+    },
+    visibleShortUrl() {
+      return this.hasCurrentShortUrl ? this.result.shortUrl : '';
     },
   },
   methods: {
@@ -239,20 +258,25 @@ export default {
         }
       }
     },
-    showConversionResult() {
-      this.toCopy(this.result.subUrl, '订阅链接');
-    },
-    async shareSubscription() {
-      const { status } = await shareUrl(this.result.subUrl);
-
-      if (status === 'unsupported') {
+    handleSubscriptionAction() {
+      if (this.hasCurrentSubscriptionResult) {
         this.toCopy(this.result.subUrl, '订阅链接');
         return;
       }
 
-      if (status === 'failed') {
-        this.$showDialog('error', '失败', '分享失败，请稍后重试');
+      this.getSubUrl();
+    },
+    handleShortUrlAction() {
+      if (this.isGeneratingShortUrl) {
+        return;
       }
+
+      if (this.hasCurrentShortUrl) {
+        this.toCopy(this.result.shortUrl, '短链');
+        return;
+      }
+
+      this.getShortUrl();
     },
     getConverter() {
       const prepared = prepareConversion({
@@ -281,13 +305,16 @@ export default {
 
       this.api = prepared.api;
       this.result.subUrl = prepared.subUrl;
+      this.result.shortUrl = '';
+      this.result.conversionKey = createConversionInputKey(this.conversionInput);
+      this.result.shortUrlConversionKey = '';
       return true;
     },
     getSubUrl() {
       if (!this.getConverter()) {
         return;
       }
-      this.showConversionResult();
+      this.toCopy(this.result.subUrl, '订阅链接');
     },
     async getShortUrl() {
       if (!this.getConverter()) {
@@ -298,15 +325,19 @@ export default {
         return;
       }
 
+      const requestConversionKey = this.result.conversionKey;
+      const requestSubUrl = this.result.subUrl;
+
       let data;
       try {
         data = new FormData();
-        data.append('longUrl', btoa(this.result.subUrl));
+        data.append('longUrl', btoa(requestSubUrl));
       } catch {
         this.$showDialog('error', '失败', '短链生成失败，请稍后重试');
         return;
       }
 
+      this.isGeneratingShortUrl = true;
       showLoading();
       try {
         const res = await request({
@@ -318,16 +349,24 @@ export default {
           data: data,
         });
 
+        if (!matchesConversionInput(requestConversionKey, this.conversionInput)) {
+          return;
+        }
+
         if (!res.data || res.data.Code !== 1 || !res.data.ShortUrl) {
           this.$showDialog('error', '失败', '短链生成失败，请稍后重试');
           return;
         }
 
         this.result.shortUrl = res.data.ShortUrl;
+        this.result.shortUrlConversionKey = requestConversionKey;
         this.toCopy(this.result.shortUrl, '短链');
       } catch {
-        this.$showDialog('error', '失败', '短链生成失败，请稍后重试');
+        if (matchesConversionInput(requestConversionKey, this.conversionInput)) {
+          this.$showDialog('error', '失败', '短链生成失败，请稍后重试');
+        }
       } finally {
+        this.isGeneratingShortUrl = false;
         hideLoading();
       }
     },

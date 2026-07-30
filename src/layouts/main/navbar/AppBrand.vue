@@ -1,6 +1,6 @@
 <template>
   <router-link to="/" class="app-brand-link" :aria-label="`${siteName}，返回首页`">
-    <span class="app-brand-mark" aria-hidden="true">S</span>
+    <img class="app-brand-mark" src="/favicon.svg" width="28" height="28" alt="" />
     <span class="app-brand-text">{{ siteName }}</span>
   </router-link>
 </template>
@@ -32,15 +32,10 @@ export default {
 }
 
 .app-brand-mark {
-  display: grid;
+  display: block;
   width: 28px;
   height: 28px;
-  place-items: center;
-  border-radius: 7px;
-  background: #1d1d1f;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
+  flex: 0 0 28px;
 }
 
 .app-brand-text {
