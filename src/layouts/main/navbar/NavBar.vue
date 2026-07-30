@@ -2,20 +2,20 @@
   <nav class="minimal-navbar">
     <div class="minimal-navbar__inner">
       <AppBrand />
-      <NavMenu />
+      <ThemeToggle />
     </div>
   </nav>
 </template>
 
 <script>
 import AppBrand from './AppBrand.vue';
-import NavMenu from './NavMenu.vue';
+import ThemeToggle from './ThemeToggle.vue';
 
 export default {
   name: 'NavBar',
   components: {
     AppBrand,
-    NavMenu,
+    ThemeToggle,
   },
 };
 </script>

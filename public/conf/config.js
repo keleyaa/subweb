@@ -1,11 +1,11 @@
 window.config = {
-  // 站点名称
+  // 运行时兼容字段；不再驱动页面内导航品牌文字。
   siteName: 'ML1',
   // 转换后端 API 地址
   apiUrl: 'https://api.ml1.one',
   // 短链服务地址。留空时，前端不会显示短链功能。
   shortUrl: 'https://ml1.one',
-  // 可选导航链接。
+  // 可选 GitHub 项目来源；首个安全 HTTPS GitHub URL 会显示在页脚，不作为顶部导航项。
   menuItem: [
     {
       title: 'GitHub',

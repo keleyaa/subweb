@@ -1,20 +1,9 @@
 <template>
-  <router-link to="/" class="app-brand-link" :aria-label="`${siteName}，返回首页`">
+  <router-link to="/" class="app-brand-link" aria-label="Subconverter Web，返回首页">
     <img class="app-brand-mark" src="/favicon.svg" width="28" height="28" alt="" />
-    <span class="app-brand-text">{{ siteName }}</span>
+    <span class="app-brand-text">Subconverter Web</span>
   </router-link>
 </template>
-
-<script>
-export default {
-  name: 'AppBrand',
-  data() {
-    return {
-      siteName: window.config.siteName,
-    };
-  },
-};
-</script>
 
 <style scoped>
 .app-brand-link {

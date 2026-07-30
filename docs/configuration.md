@@ -33,10 +33,10 @@ window.config = {
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `siteName` | string | 导航品牌名称。 |
+| `siteName` | string | 运行时兼容字段，不再驱动页面内导航文字。 |
 | `apiUrl` | string | 兼容订阅转换后端的基础地址，默认值为 `https://api.ml1.one`。生产环境应使用可从浏览器访问的 HTTPS 地址。 |
 | `shortUrl` | string | 短链服务基础地址，默认值为 `https://ml1.one`。为空时不显示短链区域；设置后会向 `${shortUrl}/short` 发送转换链接。 |
-| `menuItem` | array | 可选导航项。当前极简导航只渲染首个有效的 HTTPS GitHub 链接。 |
+| `menuItem` | array | 可选 GitHub 项目来源。首个安全的 HTTPS GitHub URL 仅显示为页脚 GitHub 项目，不再是顶部导航项。 |
 | `remoteConfigOptions` | array | 可选远程配置预设，每项使用 `{ value, text }`。默认列表见 [远程配置来源](remote-config-sources.md)，只有用户在页面中选择后才会使用。 |
 
 选择器中的“后端默认配置”会省略 `config` 参数，由转换后端使用自身默认规则。无效或缺失字段会回退到项目默认值。
