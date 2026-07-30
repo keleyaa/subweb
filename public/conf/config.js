@@ -2,9 +2,9 @@ window.config = {
   // 站点名称
   siteName: 'Subweb',
   // 转换后端 API 地址
-  apiUrl: 'http://127.0.0.1:25500',
-  // 可选短链服务地址。留空时，前端不会显示短链功能。
-  shortUrl: '',
+  apiUrl: 'https://api.ml1.one',
+  // 短链服务地址。留空时，前端不会显示短链功能。
+  shortUrl: 'https://ml1.one',
   // 可选导航链接。
   menuItem: [
     {
@@ -13,6 +13,23 @@ window.config = {
       target: '_blank',
     },
   ],
-  // 可选远程配置预设。默认不连接第三方服务。
-  remoteConfigOptions: [],
+  // 可选远程配置预设。只有在页面中主动选择后才会传给转换后端。
+  remoteConfigOptions: [
+    {
+      value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online.ini',
+      text: 'ACL4SSR Online',
+    },
+    {
+      value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full.ini',
+      text: 'ACL4SSR Online Full',
+    },
+    {
+      value: 'https://raw.githubusercontent.com/FDUZS/subconverter-config/main/config.ini',
+      text: 'FDUZS 流媒体与 AI',
+    },
+    {
+      value: 'https://raw.githubusercontent.com/BeingFun/config4subconverter/main/customize.ini',
+      text: 'BeingFun Clash / Sing-box',
+    },
+  ],
 };

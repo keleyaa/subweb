@@ -47,6 +47,8 @@ describe('project cleanup and independent-maintenance boundary', () => {
     expect(readme).toContain('https://github.com/stilleshan/subweb');
     expect(readme).toContain('未记录其他第三方代码仓库作为设计或代码来源');
     expect(readme).toContain('Apple 风格的无框极简方向');
+    expect(readme).toContain('https://api.ml1.one');
+    expect(readme).not.toContain('http://127.0.0.1:25500');
     expect(dockerfile).not.toContain('LABEL maintainer');
     expect(dockerfile).not.toContain('ENV VERSION');
     expect(workflow).not.toContain('paths-ignore:');
@@ -92,5 +94,6 @@ describe('project cleanup and independent-maintenance boundary', () => {
 
     await expect(access(rootFile('docs/configuration.md'))).resolves.toBeUndefined();
     await expect(access(rootFile('docs/deployment.md'))).resolves.toBeUndefined();
+    await expect(access(rootFile('docs/remote-config-sources.md'))).resolves.toBeUndefined();
   });
 });

@@ -42,7 +42,7 @@
         <div class="form-field">
           <label for="remote">远程配置</label>
           <select id="remote" @change="selectRemoteConfig">
-            <option value="">默认配置</option>
+            <option value="">后端默认配置</option>
             <option v-for="option in remoteConfigOptions" :key="option.value" :value="option.value">
               {{ option.text }}
             </option>
@@ -272,7 +272,7 @@ export default {
           missingUrls: ['warning', '注意', '请先输入订阅链接或节点'],
           invalidRuntimeApi: ['error', '失败', '后端服务配置无效，请检查运行时配置'],
           invalidApi: ['warning', '注意', '请检查后端 API 地址，或选择默认后端服务'],
-          missingRemoteConfig: ['warning', '注意', '请先输入远程配置地址，或选择默认配置'],
+          missingRemoteConfig: ['warning', '注意', '请先输入远程配置地址，或选择后端默认配置'],
         };
         const [type, title, message] = messages[prepared.error];
         this.$showDialog(type, title, message);

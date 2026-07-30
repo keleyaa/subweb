@@ -48,15 +48,17 @@ fi
 
 if [ -n "${API_URL:-}" ]; then
   printf '当前 API 地址为: %s\n' "$API_URL"
-  replace_config_value 'http://127.0.0.1:25500' "$API_URL"
+  replace_config_value 'https://api.ml1.one' "$API_URL"
 else
-  printf '%s\n' '当前为默认本地 API 地址: http://127.0.0.1:25500'
+  printf '%s\n' '当前为默认 API 地址: https://api.ml1.one'
   printf '%s\n' "如需修改请在容器启动时使用 -e API_URL='https://converter.example.com' 传递环境变量"
 fi
 
 if [ -n "${SHORT_URL:-}" ]; then
   printf '当前短链接地址为: %s\n' "$SHORT_URL"
-  replace_config_value "shortUrl: ''" "shortUrl: '$SHORT_URL'"
+  replace_config_value "shortUrl: 'https://ml1.one'" "shortUrl: '$SHORT_URL'"
+else
+  printf '%s\n' '当前为默认短链接地址: https://ml1.one'
 fi
 
 if [ -n "${SITE_NAME:-}" ]; then

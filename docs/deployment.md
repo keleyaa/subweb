@@ -16,17 +16,17 @@ docker build -t subweb:local .
 docker run -d --name subweb --restart unless-stopped -p 18080:80 -e SITE_NAME='Subweb' -e API_URL='https://converter.example.com' subweb:local
 ```
 
-可选的 `SHORT_URL` 会启用短链区域：
+`SHORT_URL` 会覆盖默认短链服务地址：
 
 ```bash
 docker run -d --name subweb --restart unless-stopped -p 18080:80 -e API_URL='https://converter.example.com' -e SHORT_URL='https://short.example.com' subweb:local
 ```
 
-容器启动脚本只处理 `SITE_NAME`、`API_URL` 和 `SHORT_URL`。这些值会写入容器内的 `/usr/share/nginx/html/conf/config.js`。
+容器启动脚本只处理 `SITE_NAME`、`API_URL` 和 `SHORT_URL`。未传入时，默认使用 `https://api.ml1.one` 和 `https://ml1.one`。这些值会写入容器内的 `/usr/share/nginx/html/conf/config.js`。
 
 ## 挂载完整配置
 
-需要设置导航或远程配置预设时，复制并编辑配置文件：
+需要关闭短链、设置导航或修改远程配置预设时，复制并编辑配置文件：
 
 ```bash
 mkdir -p runtime-config
