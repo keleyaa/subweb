@@ -150,59 +150,64 @@ describe('SubTable modern linear layout', () => {
 });
 
 describe('SubTable modern visual constraints', () => {
-  it('defines the linear grid, controls, separators, and responsive motion', () => {
+  it('defines the linear grid and one focused glass workspace with solid controls', () => {
     const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
 
     expect(source).toMatch(/repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
-    expect(source).toMatch(/\.advanced-disclosure[\s\S]*?border-top:\s*1px solid #d2d2d7/);
-    expect(source).toMatch(/\.advanced-disclosure[\s\S]*?border-bottom:\s*1px solid #d2d2d7/);
-    expect(source).toMatch(/\.results-section[\s\S]*?border-top:\s*1px solid #d2d2d7/);
-    expect(source).toContain('border-radius: 8px');
-    expect(source).toContain('#0071e3');
+    expect(source).toMatch(
+      /\.sub-table--modern\s*\{[^}]*padding:\s*28px\s*;[^}]*border:\s*1px solid var\(--surface-glass-edge\)\s*;[^}]*border-radius:\s*28px\s*;[^}]*background:\s*var\(--surface-glass\)\s*;[^}]*backdrop-filter:\s*blur\(22px\) saturate\(120%\)\s*;/s,
+    );
+    expect(source).toMatch(/textarea,[\s\S]*?background:\s*var\(--surface-control\)/);
+    expect(source).toContain('border-radius: 12px');
+    expect(source).toContain('var(--accent)');
+    expect(source).toContain('var(--separator)');
     expect(source).toContain('44px');
     expect(source).toContain('@media (max-width: 767.98px)');
     expect(source).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(source).toContain('@media (prefers-reduced-transparency: reduce)');
+    expect(source).toContain('@media (prefers-contrast: more)');
     expect(source).toContain('180ms ease-out');
   });
 
-  it('does not use glass, gradients, or effective shadows', () => {
+  it('uses the glass treatment only for the containing workspace, never a gradient or nested surface', () => {
     const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
-    const forbiddenMarkers = [['linear', 'gradient'].join('-'), ['backdrop', 'filter'].join('-')];
-    const shadowDeclarations = source.match(/box-shadow\s*:\s*[^;]+/g) ?? [];
+    const forbiddenMarkers = [['linear', 'gradient'].join('-'), ['radial', 'gradient'].join('-')];
 
     for (const marker of forbiddenMarkers) {
       expect(source).not.toContain(marker);
     }
-    for (const declaration of shadowDeclarations) {
-      expect(declaration).toMatch(/box-shadow\s*:\s*none$/);
-    }
+    expect(source).toContain('box-shadow: var(--shadow-glass)');
+    expect(source).not.toContain('.configuration-section {\n  padding:');
+    expect(source).not.toContain('.results-section {\n  padding: 24px;');
   });
 
   it('owns complete primary and secondary button interaction states', () => {
     const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
-    const legacyFocusColor = ['rgba(0, 113, 227, ', '0.28)'].join('');
 
-    expect(source).toMatch(/\.primary-action-button\s*\{[\s\S]*?background:\s*#0071e3/);
-    expect(source).toMatch(/\.primary-action-button:hover\s*\{[\s\S]*?background:\s*#0077ed/);
-    expect(source).toMatch(/\.primary-action-button:active\s*\{[\s\S]*?background:\s*#006edb/);
+    expect(source).toMatch(/\.primary-action-button\s*\{[\s\S]*?background:\s*var\(--accent\)/);
+    expect(source).toMatch(/\.primary-action-button:hover\s*\{[\s\S]*?background:\s*var\(--accent-hover\)/);
+    expect(source).toMatch(/\.primary-action-button:active\s*\{[\s\S]*?background:\s*var\(--accent-active\)/);
     expect(source).toMatch(/\.primary-action-button:disabled\s*\{/);
-    expect(source).toMatch(/\.secondary-action-button:hover\s*\{[\s\S]*?background:\s*#f5f5f7/);
-    expect(source).toMatch(/\.secondary-action-button:active\s*\{[\s\S]*?background:\s*#e8e8ed/);
+    expect(source).toMatch(/\.secondary-action-button:hover\s*\{[\s\S]*?background:\s*var\(--surface-control-hover\)/);
+    expect(source).toMatch(/\.secondary-action-button:active\s*\{[\s\S]*?background:\s*var\(--surface-control-active\)/);
     expect(source).toMatch(/\.primary-action-button:focus-visible[\s\S]*?\.secondary-action-button:focus-visible/);
     expect(source).toMatch(
-      /textarea:focus-visible,[\s\S]*?select:focus-visible,[\s\S]*?input:focus-visible\s*\{[^}]*outline:\s*3px solid #0066cc;/
+      /textarea:focus-visible,[\s\S]*?select:focus-visible,[\s\S]*?input:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--focus-ring\);/
     );
     expect(source).toMatch(
-      /\.primary-action-button:focus-visible,[\s\S]*?\.secondary-action-button:focus-visible,[\s\S]*?\.advanced-disclosure:focus-visible\s*\{[^}]*outline:\s*3px solid #0066cc;/
+      /\.primary-action-button:focus-visible,[\s\S]*?\.secondary-action-button:focus-visible,[\s\S]*?\.advanced-disclosure:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--focus-ring\);/
     );
-    expect(source).not.toContain(legacyFocusColor);
     expect(source).toMatch(/transition:\s*(?:background-color|border-color|color)[^;]*1(?:6|7|8)0ms ease-out/);
     expect(source).not.toMatch(/transition:\s*all\b/);
+    expect(source).toContain('scale(0.985)');
+    expect(source).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.field-reveal-enter-from,[\s\S]*?\.advanced-reveal-leave-to\s*\{[^}]*transform:\s*none\s*;/,
+    );
   });
 
   it('uses accessible contrast for successful result status text', () => {
     const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
 
-    expect(source).toMatch(/\.results-status--success\s*\{[^}]*color:\s*#1f7a35;/);
+    expect(source).toMatch(/\.results-status--success\s*\{[^}]*color:\s*var\(--success\);/);
   });
 });

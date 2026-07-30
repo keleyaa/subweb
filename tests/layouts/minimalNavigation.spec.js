@@ -19,7 +19,7 @@ describe('focused navigation', () => {
     expect(source).not.toContain('window.config');
     expect(source).toMatch(/\.app-brand-link\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*gap:\s*10px;/s);
     expect(source).toMatch(
-      /\.app-brand-link:focus-visible\s*\{[^}]*outline:\s*3px solid #0066cc;[^}]*outline-offset:\s*2px;[^}]*border-radius:\s*4px;/s,
+      /\.app-brand-link:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--focus-ring\);[^}]*outline-offset:\s*2px;[^}]*border-radius:\s*8px;/s,
     );
   });
 
@@ -35,6 +35,10 @@ describe('focused navigation', () => {
     expect(source).not.toContain('github');
     expect(source).not.toContain('<a');
     expect(source).toMatch(/\.minimal-navbar__inner\s*\{[^}]*max-width:\s*860px;[^}]*min-height:\s*56px;[^}]*margin:\s*0 auto;[^}]*padding:\s*0 20px;/s);
+    expect(source).toMatch(
+      /\.minimal-navbar\s*\{[^}]*border:\s*1px solid var\(--surface-glass-edge\)\s*;[^}]*border-radius:\s*20px\s*;[^}]*background:\s*var\(--surface-glass-strong\)\s*;[^}]*backdrop-filter:\s*blur\(18px\) saturate\(120%\)\s*;/s,
+    );
+    expect(source).toContain('@media (prefers-reduced-transparency: reduce)');
   });
 
   it('removes the superseded top-menu component and navigation helper', async () => {

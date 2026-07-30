@@ -23,13 +23,16 @@ export default {
 
 <style scoped>
 .home-workspace {
-  min-height: calc(100vh - 57px);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
 }
 
 .home-workspace__inner {
+  width: 100%;
   max-width: 860px;
   margin: 0 auto;
-  padding: 48px 20px 64px;
+  padding: 52px 20px 44px;
 }
 
 .home-workspace__heading {
@@ -39,9 +42,9 @@ export default {
 
 .home-workspace__heading h1 {
   margin: 0 0 8px;
-  color: #1d1d1f;
-  font-size: 32px;
-  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 34px;
+  font-weight: 650;
   letter-spacing: 0;
   line-height: 1.2;
 }
@@ -49,22 +52,22 @@ export default {
 .home-workspace__heading p {
   max-width: 480px;
   margin: 0 auto;
-  color: #6e6e73;
+  color: var(--text-secondary);
   font-size: 15px;
   line-height: 1.5;
 }
 
 @media (max-width: 575.98px) {
   .home-workspace__inner {
-    padding: 28px 16px 40px;
+    padding: 32px 16px 28px;
   }
 
   .home-workspace__heading {
-    margin-bottom: 20px;
+    margin-bottom: 24px;
   }
 
   .home-workspace__heading h1 {
-    font-size: 27px;
+    font-size: 28px;
   }
 }
 </style>

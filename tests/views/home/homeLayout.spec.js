@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 
 const sourceUrl = new URL('../../../src/views/home/HomeView.vue', import.meta.url);
+const baseCssUrl = new URL('../../../src/styles/base.css', import.meta.url);
 
 const forbiddenTokens = [
   ['landing-hero', '-blank'],
@@ -12,6 +13,22 @@ const forbiddenTokens = [
   ['display', '-6'],
   ['section', '-py'],
 ].map((parts) => parts.join(''));
+
+function relativeLuminance(hex) {
+  const channels = hex
+    .slice(1)
+    .match(/.{2}/g)
+    .map((channel) => Number.parseInt(channel, 16) / 255)
+    .map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
+
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+}
+
+function contrastRatio(foreground, background) {
+  const [lighter, darker] = [relativeLuminance(foreground), relativeLuminance(background)].sort((left, right) => right - left);
+
+  return (lighter + 0.05) / (darker + 0.05);
+}
 
 describe('home workspace layout', () => {
   it('renders one conversion table in the single-column workspace', async () => {
@@ -32,21 +49,22 @@ describe('home workspace layout', () => {
     });
   });
 
-  it('uses the compact desktop workspace dimensions and typography', async () => {
+  it('uses the focused single-workspace layout and token-based typography', async () => {
     const source = await readFile(sourceUrl, 'utf8');
 
-    expect(source).toMatch(/\.home-workspace\s*\{[^}]*min-height:\s*calc\(100vh - 57px\)\s*;/);
+    expect(source).toMatch(/\.home-workspace\s*\{[^}]*display:\s*flex\s*;/);
+    expect(source).not.toContain('min-height: calc(100vh - 57px)');
     expect(source).toMatch(
-      /\.home-workspace__inner\s*\{[^}]*max-width:\s*860px\s*;[^}]*margin:\s*0 auto\s*;[^}]*padding:\s*48px 20px 64px\s*;/
+      /\.home-workspace__inner\s*\{[^}]*max-width:\s*860px\s*;[^}]*margin:\s*0 auto\s*;[^}]*padding:\s*52px 20px 44px\s*;/
     );
     expect(source).toMatch(
       /\.home-workspace__heading\s*\{[^}]*margin-bottom:\s*32px\s*;[^}]*text-align:\s*center\s*;/,
     );
     expect(source).toMatch(
-      /\.home-workspace__heading h1\s*\{[^}]*margin:\s*0 0 8px\s*;[^}]*color:\s*#1d1d1f\s*;[^}]*font-size:\s*32px\s*;[^}]*font-weight:\s*600\s*;[^}]*letter-spacing:\s*0\s*;[^}]*line-height:\s*1\.2\s*;/
+      /\.home-workspace__heading h1\s*\{[^}]*margin:\s*0 0 8px\s*;[^}]*color:\s*var\(--text-primary\)\s*;[^}]*font-size:\s*34px\s*;[^}]*font-weight:\s*650\s*;[^}]*letter-spacing:\s*0\s*;[^}]*line-height:\s*1\.2\s*;/
     );
     expect(source).toMatch(
-      /\.home-workspace__heading p\s*\{[^}]*max-width:\s*480px\s*;[^}]*margin:\s*0 auto\s*;[^}]*color:\s*#6e6e73\s*;[^}]*font-size:\s*15px\s*;[^}]*line-height:\s*1\.5\s*;/,
+      /\.home-workspace__heading p\s*\{[^}]*max-width:\s*480px\s*;[^}]*margin:\s*0 auto\s*;[^}]*color:\s*var\(--text-secondary\)\s*;[^}]*font-size:\s*15px\s*;[^}]*line-height:\s*1\.5\s*;/,
     );
   });
 
@@ -54,7 +72,7 @@ describe('home workspace layout', () => {
     const source = await readFile(sourceUrl, 'utf8');
 
     expect(source).toMatch(
-      /@media \(max-width: 575\.98px\)\s*\{[\s\S]*?\.home-workspace__inner\s*\{[^}]*padding:\s*28px 16px 40px\s*;[^}]*\}[\s\S]*?\.home-workspace__heading\s*\{[^}]*margin-bottom:\s*20px\s*;[^}]*\}[\s\S]*?\.home-workspace__heading h1\s*\{[^}]*font-size:\s*27px\s*;/
+      /@media \(max-width: 575\.98px\)\s*\{[\s\S]*?\.home-workspace__inner\s*\{[^}]*padding:\s*32px 16px 28px\s*;[^}]*\}[\s\S]*?\.home-workspace__heading\s*\{[^}]*margin-bottom:\s*24px\s*;[^}]*\}[\s\S]*?\.home-workspace__heading h1\s*\{[^}]*font-size:\s*28px\s*;/
     );
   });
 
@@ -67,5 +85,32 @@ describe('home workspace layout', () => {
     expect(source).not.toContain('presentation');
     expect(source).not.toContain('uxMode');
     expect(source).not.toContain('data-ux-mode');
+  });
+
+  it('draws both explicit theme palettes from shared global tokens without decorative gradients', async () => {
+    const source = await readFile(baseCssUrl, 'utf8');
+
+    expect(source).toContain("html[data-theme='light']");
+    expect(source).toContain("html[data-theme='dark']");
+    expect(source).toContain('--surface-glass');
+    expect(source).toContain('--surface-control');
+    expect(source).toContain('--focus-ring');
+    expect(source).toContain('--el-bg-color');
+    expect(source).not.toContain('linear-gradient');
+    expect(source).not.toContain('radial-gradient');
+    expect(source).toMatch(
+      /@media \(prefers-contrast: more\)[\s\S]*?html\[data-theme='light'\]\s*\{[^}]*--surface-glass-edge:\s*[^;]+;[\s\S]*?html\[data-theme='dark'\]\s*\{[^}]*--surface-glass-edge:\s*[^;]+;/,
+    );
+  });
+
+  it('keeps light-theme secondary status text readable against a solid control surface', async () => {
+    const source = await readFile(baseCssUrl, 'utf8');
+    const lightPalette = source.match(/:root,\s*html\[data-theme='light'\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const mutedText = lightPalette.match(/--text-muted:\s*(#[0-9a-f]{6})\s*;/i)?.[1];
+    const controlSurface = lightPalette.match(/--surface-control:\s*(#[0-9a-f]{6})\s*;/i)?.[1];
+
+    expect(mutedText).toBeDefined();
+    expect(controlSurface).toBeDefined();
+    expect(contrastRatio(mutedText, controlSurface)).toBeGreaterThanOrEqual(4.5);
   });
 });

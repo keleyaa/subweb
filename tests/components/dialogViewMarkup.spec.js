@@ -22,6 +22,11 @@ describe('DialogView document structure', () => {
     expect(source).toMatch(/\.dialog-layer\s*\{[^}]*position:\s*fixed\s*;/);
     expect(source).toMatch(/\.dialog-layer\s*\{[^}]*inset:\s*0\s*;/);
     expect(source).toMatch(/\.dialog-layer\s*\{[^}]*z-index:\s*10000\s*;/);
-    expect(source).toMatch(/\.dialog-panel\s*\{[^}]*background:\s*#fff\s*;/);
+    expect(source).toMatch(/\.dialog-layer\s*\{[^}]*background:\s*var\(--overlay\)\s*;/);
+    expect(source).toMatch(
+      /\.dialog-panel\s*\{[^}]*border:\s*1px solid var\(--surface-glass-edge\)\s*;[^}]*background:\s*var\(--surface-overlay\)\s*;[^}]*backdrop-filter:\s*blur\(20px\) saturate\(120%\)\s*;/s,
+    );
+    expect(source).toContain('var(--focus-ring)');
+    expect(source).toContain('@media (prefers-reduced-transparency: reduce)');
   });
 });

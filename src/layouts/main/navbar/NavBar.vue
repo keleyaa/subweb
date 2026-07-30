@@ -23,10 +23,15 @@ export default {
 <style scoped>
 .minimal-navbar {
   position: sticky;
-  top: 0;
+  top: 12px;
   z-index: 100;
-  border-bottom: 1px solid #d2d2d7;
-  background: rgba(245, 245, 247, 0.96);
+  width: min(calc(100% - 32px), 900px);
+  margin: 12px auto 0;
+  border: 1px solid var(--surface-glass-edge);
+  border-radius: 20px;
+  background: var(--surface-glass-strong);
+  box-shadow: var(--shadow-glass-soft);
+  backdrop-filter: blur(18px) saturate(120%);
 }
 
 .minimal-navbar__inner {
@@ -41,7 +46,20 @@ export default {
 
 @media (prefers-reduced-transparency: reduce) {
   .minimal-navbar {
-    background: #f5f5f7;
+    background: var(--surface-glass-strong);
+    backdrop-filter: none;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .minimal-navbar {
+    top: 8px;
+    width: calc(100% - 24px);
+    margin-top: 8px;
+  }
+
+  .minimal-navbar__inner {
+    padding: 0 14px;
   }
 }
 </style>

@@ -10,14 +10,14 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  color: #1d1d1f;
+  color: var(--text-primary);
   text-decoration: none;
 }
 
 .app-brand-link:focus-visible {
-  outline: 3px solid #0066cc;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 8px;
 }
 
 .app-brand-mark {

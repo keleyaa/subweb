@@ -21,13 +21,15 @@ export default {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background-color: #f5f5f7;
-  color: #1d1d1f;
+  background-color: var(--canvas);
+  color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   letter-spacing: 0;
 }
 
 .main-layout__content {
+  display: flex;
   flex: 1;
+  flex-direction: column;
 }
 </style>

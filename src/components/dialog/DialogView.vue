@@ -71,7 +71,8 @@ export default {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(29, 29, 31, 0.36);
+  background: var(--overlay);
+  backdrop-filter: blur(6px);
 }
 
 .dialog-panel {
@@ -79,10 +80,11 @@ export default {
   width: min(100%, 28rem);
   gap: 14px;
   padding: 24px;
-  border: 1px solid #d2d2d7;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 18px 48px rgba(29, 29, 31, 0.2);
+  border: 1px solid var(--surface-glass-edge);
+  border-radius: 16px;
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-glass);
+  backdrop-filter: blur(20px) saturate(120%);
 }
 
 .dialog-tone {
@@ -91,25 +93,25 @@ export default {
   height: 32px;
   place-items: center;
   border-radius: 50%;
-  background: #e8e8ed;
-  color: #1d1d1f;
+  background: var(--tone-neutral);
+  color: var(--text-primary);
   font-size: 18px;
   font-weight: 700;
 }
 
 .dialog-tone--error {
-  background: #fce8e6;
-  color: #b3261e;
+  background: var(--tone-error);
+  color: var(--error);
 }
 
 .dialog-tone--success {
-  background: #e5f4ea;
-  color: #1f7a35;
+  background: var(--tone-success);
+  color: var(--success);
 }
 
 .dialog-tone--warning {
-  background: #fff3d6;
-  color: #8a5a00;
+  background: var(--tone-warning);
+  color: var(--warning);
 }
 
 .dialog-panel h2,
@@ -118,13 +120,13 @@ export default {
 }
 
 .dialog-panel h2 {
-  color: #1d1d1f;
+  color: var(--text-primary);
   font-size: 20px;
   line-height: 1.3;
 }
 
 .dialog-panel p {
-  color: #424245;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
@@ -138,22 +140,29 @@ export default {
 .dialog-button {
   min-height: 40px;
   padding: 0 16px;
-  border: 1px solid #0071e3;
-  border-radius: 8px;
-  background: #0071e3;
-  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-contrast);
   font: inherit;
   font-weight: 500;
 }
 
 .dialog-button--secondary {
-  border-color: #c7c7cc;
-  background: #fff;
-  color: #1d1d1f;
+  border-color: var(--control-border);
+  background: var(--surface-control);
+  color: var(--text-primary);
 }
 
 .dialog-button:focus-visible {
-  outline: 3px solid #0066cc;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .dialog-layer,
+  .dialog-panel {
+    backdrop-filter: none;
+  }
 }
 </style>
