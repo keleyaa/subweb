@@ -12,9 +12,18 @@ describe('Docker runtime contract', () => {
     expect(dockerfile).toMatch(/^FROM node:24-alpine@sha256:[0-9a-f]{64} AS build/m);
     expect(finalStage).toMatch(/^FROM nginxinc\/nginx-unprivileged:1\.30\.4-alpine@sha256:[0-9a-f]{64}/m);
     expect(finalStage).toContain('org.opencontainers.image.source="https://github.com/keleyaa/subweb"');
-    expect(finalStage).toContain('EXPOSE 8080');
+    expect(finalStage).toContain('RUN apk add --no-cache openssl=3.5.7-r0');
+    expect(finalStage).toContain('EXPOSE 8080 8443');
     expect(finalStage).toContain('HEALTHCHECK');
-    expect(finalStage).toContain('COPY nginx/default.conf /etc/nginx/conf.d/default.conf');
+    expect(finalStage).toMatch(/GATEWAY_MODE" = platform[^\n]+\$\{?PORT\}?/);
+    expect(finalStage).toContain('http://127.0.0.1:8080/healthz');
+    expect(finalStage).toContain('https://127.0.0.1:8443/healthz');
+    expect(finalStage).not.toContain('http://127.0.0.1:${GATEWAY_PORT}/healthz');
+    expect(finalStage).toContain('COPY --chown=101:101 nginx/templates /etc/nginx/gateway/templates');
+    expect(finalStage).toContain('COPY --chown=101:101 nginx/snippets /etc/nginx/gateway/snippets');
+    expect(finalStage).toContain('scripts/render-gateway-config.sh');
+    expect(finalStage).not.toContain('nginx/default.conf');
+    expect(finalStage).not.toMatch(/^(?:ARG|ENV)\s+(?:MYURLS_API_TOKEN|REDIS_PASSWORD)/m);
   });
 
   it('provides an official Compose deployment with constrained runtime defaults', async () => {
@@ -39,10 +48,11 @@ describe('Docker runtime contract', () => {
   });
 
   it('serves the SPA with security headers and an explicit health endpoint', async () => {
-    const nginx = await readFile(rootFile('nginx/default.conf'), 'utf8');
+    const nginx = await readFile(rootFile('nginx/snippets/security-headers.conf'), 'utf8');
+    const routes = await readFile(rootFile('nginx/snippets/app-routes.conf.template'), 'utf8');
 
-    expect(nginx).toContain('location = /healthz');
-    expect(nginx).toContain("try_files $uri $uri/ /index.html");
+    expect(routes).toContain('location = /healthz');
+    expect(routes).toContain("try_files $uri $uri/ /index.html");
     expect(nginx).toContain('Content-Security-Policy');
     expect(nginx).toContain('X-Content-Type-Options');
     expect(nginx).toContain('Referrer-Policy');

@@ -1,0 +1,5 @@
+location / {
+@@API_PROXY_HEADERS@@
+  set $subconverter_upstream "@@SUBCONVERTER_UPSTREAM@@";
+  proxy_pass $subconverter_upstream$request_uri;
+}

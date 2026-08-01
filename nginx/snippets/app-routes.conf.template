@@ -1,0 +1,52 @@
+location = /healthz {
+  access_log off;
+  default_type text/plain;
+  return 200 "ok\n";
+}
+
+location = /favicon.svg {
+  try_files $uri =404;
+}
+
+location ^~ /assets/ {
+  expires 1y;
+  try_files $uri =404;
+}
+
+location ^~ /conf/ {
+  expires -1;
+  try_files $uri =404;
+}
+
+location = /short-api/short {
+  limit_except POST {
+    deny all;
+  }
+  if ($short_content_type_allowed = 0) {
+    return 415;
+  }
+  client_max_body_size @@MYURLS_MAX_BODY_BYTES@@;
+  proxy_set_header Authorization "";
+  proxy_set_header Authorization "Bearer @@MYURLS_API_TOKEN@@";
+@@APP_PROXY_HEADERS@@
+  set $myurls_upstream "@@MYURLS_UPSTREAM@@";
+  proxy_pass $myurls_upstream/short$is_args$args;
+}
+
+location ^~ /short-api/ {
+  return 404;
+}
+
+location ~ "^/[A-Za-z0-9_-]{1,64}$" {
+  limit_except GET HEAD {
+    deny all;
+  }
+@@APP_PROXY_HEADERS@@
+  proxy_set_header Authorization "";
+  set $myurls_upstream "@@MYURLS_UPSTREAM@@";
+  proxy_pass $myurls_upstream$request_uri;
+}
+
+location / {
+  try_files $uri $uri/ /index.html;
+}

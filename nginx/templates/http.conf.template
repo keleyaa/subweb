@@ -1,0 +1,50 @@
+worker_processes auto;
+pid /tmp/nginx/nginx.pid;
+error_log /dev/stderr crit;
+
+events {
+  worker_connections 1024;
+}
+
+http {
+  include /etc/nginx/mime.types;
+  default_type application/octet-stream;
+  server_tokens off;
+
+ @@CONTENT_TYPE_MAP@@
+
+  client_body_temp_path /tmp/nginx/client_temp;
+  proxy_temp_path /tmp/nginx/proxy_temp;
+  fastcgi_temp_path /tmp/nginx/fastcgi_temp;
+  uwsgi_temp_path /tmp/nginx/uwsgi_temp;
+  scgi_temp_path /tmp/nginx/scgi_temp;
+
+  log_format gateway_privacy '$request_method $uri $status';
+  access_log /dev/stdout gateway_privacy;
+
+  resolver @@NGINX_RESOLVER@@ ipv6=off valid=30s;
+
+  server {
+    listen @@HTTP_LISTEN@@ default_server;
+    server_name _;
+    return 421;
+  }
+
+  server {
+    listen @@HTTP_LISTEN@@;
+    server_name @@APP_DOMAIN@@;
+    root /usr/share/nginx/html;
+    index index.html;
+
+@@SECURITY_HEADERS@@
+ @@APP_ROUTES@@
+  }
+
+  server {
+    listen @@HTTP_LISTEN@@;
+    server_name @@API_DOMAIN@@;
+
+ @@SECURITY_HEADERS@@
+ @@API_ROUTES@@
+  }
+}

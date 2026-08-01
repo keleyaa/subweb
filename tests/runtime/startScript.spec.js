@@ -31,10 +31,13 @@ describe('container runtime configuration', () => {
     const config = join(directory, 'config.js');
     const bin = join(directory, 'bin');
     const nginx = join(bin, 'nginx');
+    const renderer = join(bin, 'render-gateway');
+    const gatewayConfig = join(directory, 'nginx.conf');
     await mkdir(bin);
     await copyFile(new URL('../../public/conf/config.js', import.meta.url), template);
     await writeFile(nginx, '#!/bin/sh\nexit 0\n');
-    await chmod(nginx, 0o755);
+    await writeFile(renderer, '#!/bin/sh\nexit 0\n');
+    await Promise.all([nginx, renderer].map((file) => chmod(file, 0o755)));
 
     const apiUrl = "https://converter.example.com/a'b\\c?x=1&y=2";
     const shortUrl = "https://short.example.com/a'b\\c?x=1&y=2";
@@ -44,6 +47,10 @@ describe('container runtime configuration', () => {
         PATH: `${bin}:${process.env.PATH}`,
         CONFIG_TEMPLATE: template,
         CONFIG_FILE: config,
+        GATEWAY_RENDERER: renderer,
+        GATEWAY_CONFIG_FILE: gatewayConfig,
+        NGINX_BIN: nginx,
+        GATEWAY_MODE: 'behind-proxy',
         API_URL: apiUrl,
         SHORT_URL: shortUrl,
       },
@@ -63,10 +70,13 @@ describe('container runtime configuration', () => {
     const config = join(directory, 'config.js');
     const bin = join(directory, 'bin');
     const nginx = join(bin, 'nginx');
+    const renderer = join(bin, 'render-gateway');
+    const gatewayConfig = join(directory, 'nginx.conf');
     await mkdir(bin);
     await copyFile(new URL('../../public/conf/config.js', import.meta.url), template);
     await writeFile(nginx, '#!/bin/sh\nexit 0\n');
-    await chmod(nginx, 0o755);
+    await writeFile(renderer, '#!/bin/sh\nexit 0\n');
+    await Promise.all([nginx, renderer].map((file) => chmod(file, 0o755)));
 
     const result = await run('sh', [fileURLToPath(new URL('start.sh', root))], {
       env: {
@@ -74,6 +84,10 @@ describe('container runtime configuration', () => {
         PATH: `${bin}:${process.env.PATH}`,
         CONFIG_TEMPLATE: template,
         CONFIG_FILE: config,
+        GATEWAY_RENDERER: renderer,
+        GATEWAY_CONFIG_FILE: gatewayConfig,
+        NGINX_BIN: nginx,
+        GATEWAY_MODE: 'behind-proxy',
         SHORT_URL: '',
       },
     });

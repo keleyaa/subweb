@@ -13,13 +13,21 @@ LABEL org.opencontainers.image.title="Subweb" \
   org.opencontainers.image.source="https://github.com/keleyaa/subweb" \
   org.opencontainers.image.licenses="GPL-3.0-only"
 
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+USER root
+RUN apk add --no-cache openssl=3.5.7-r0 \
+  && rm -f /etc/nginx/conf.d/default.conf
+
+COPY --chown=101:101 nginx/templates /etc/nginx/gateway/templates
+COPY --chown=101:101 nginx/snippets /etc/nginx/gateway/snippets
 COPY --chown=101:101 --from=build /app/dist /usr/share/nginx/html
 COPY --chown=101:101 --from=build /app/public/conf/config.js /app/public/conf/config.js
+COPY --chown=101:101 --chmod=755 scripts/render-gateway-config.sh /app/render-gateway-config.sh
 COPY --chown=101:101 --chmod=755 start.sh /app/start.sh
 
-EXPOSE 8080
+USER 101
+
+EXPOSE 8080 8443
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz && wget -q -O /dev/null http://127.0.0.1:8080/conf/config.js || exit 1
+  CMD nginx -t -q -c /tmp/nginx/nginx.conf && if [ "$GATEWAY_MODE" = direct-tls ]; then wget --no-check-certificate -q -O /dev/null --header="Host: $APP_DOMAIN" https://127.0.0.1:8443/healthz; elif [ "$GATEWAY_MODE" = platform ]; then wget -q -O /dev/null --header="Host: $APP_DOMAIN" "http://127.0.0.1:${PORT}/healthz"; elif [ "$GATEWAY_MODE" = behind-proxy ]; then wget -q -O /dev/null --header="Host: $APP_DOMAIN" http://127.0.0.1:8080/healthz; else exit 1; fi
 
 CMD ["/app/start.sh"]
