@@ -1,0 +1,16 @@
+bind 127.0.0.1
+protected-mode yes
+port @@REDIS_PORT@@
+set-proc-title yes
+proc-title-template "@@RUN_ROOT@@ {title} {listen-addr} {server-mode}"
+requirepass @@REDIS_PASSWORD@@
+dir @@REDIS_DATA_DIR@@
+dbfilename dump.rdb
+appendonly yes
+appendfilename "appendonly.aof"
+appendfsync everysec
+save 900 1
+save 300 10
+save 60 10000
+logfile @@REDIS_LOG_PATH@@
+daemonize no

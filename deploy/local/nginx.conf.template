@@ -1,0 +1,37 @@
+worker_processes 1;
+pid @@NGINX_PID_PATH@@;
+error_log @@NGINX_ERROR_LOG@@ warn;
+
+events {
+  worker_connections 512;
+}
+
+http {
+  include @@NGINX_MIME_TYPES@@;
+  default_type application/octet-stream;
+  server_tokens off;
+
+@@CONTENT_TYPE_MAP@@
+
+  client_body_temp_path @@NGINX_CLIENT_TEMP@@;
+  proxy_temp_path @@NGINX_PROXY_TEMP@@;
+
+  log_format gateway_privacy '$request_method $uri $status';
+  access_log @@NGINX_ACCESS_LOG@@ gateway_privacy;
+
+  server {
+    listen 127.0.0.1:@@APP_PORT@@;
+    server_name 127.0.0.1;
+
+@@SECURITY_HEADERS@@
+@@APP_ROUTES@@
+  }
+
+  server {
+    listen 127.0.0.1:@@API_PORT@@;
+    server_name 127.0.0.1;
+
+@@SECURITY_HEADERS@@
+ @@API_ROUTES@@
+  }
+}
