@@ -26,6 +26,37 @@ configure_gateway_port() {
   fi
   GATEWAY_PORT=$PORT
   export GATEWAY_PORT
+  configure_platform_runtime
+}
+
+normalize_platform_upstream() {
+  variable_name=$1
+  value=$2
+  case "$value" in
+    http://*) normalized=$value ;;
+    *://*) fail "platform 模式的 $variable_name 只支持 HTTP 私网上游" ;;
+    *) normalized="http://$value" ;;
+  esac
+  printf '%s\n' "$normalized" | grep -Eq '^http://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?:[0-9]{1,5}$' \
+    || fail "platform 模式的 $variable_name 必须是无路径的私网主机和端口"
+  printf '%s\n' "$normalized"
+}
+
+configure_platform_runtime() {
+  [ -n "$APP_DOMAIN" ] && [ -n "$API_DOMAIN" ] \
+    || fail 'platform 模式必须提供 APP_DOMAIN 和 API_DOMAIN'
+  [ -n "$SUBCONVERTER_UPSTREAM" ] && [ -n "$MYURLS_UPSTREAM" ] \
+    || fail 'platform 模式必须提供两个私网上游'
+  PUBLIC_SCHEME=https
+  SUBCONVERTER_UPSTREAM=$(normalize_platform_upstream SUBCONVERTER_UPSTREAM "$SUBCONVERTER_UPSTREAM")
+  MYURLS_UPSTREAM=$(normalize_platform_upstream MYURLS_UPSTREAM "$MYURLS_UPSTREAM")
+  API_URL="https://$API_DOMAIN"
+  SHORT_URL="https://$APP_DOMAIN/short-api"
+  TLS_CERT_PATH=
+  TLS_KEY_PATH=
+  MYURLS_MAX_BODY_BYTES=1048576
+  export PUBLIC_SCHEME SUBCONVERTER_UPSTREAM MYURLS_UPSTREAM API_URL SHORT_URL
+  export TLS_CERT_PATH TLS_KEY_PATH MYURLS_MAX_BODY_BYTES
 }
 
 escape_config_value() {
