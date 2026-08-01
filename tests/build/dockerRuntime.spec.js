@@ -80,17 +80,47 @@ describe('Docker runtime contract', () => {
 
   it('blocks releases until application, browser, container, and image checks pass', async () => {
     const workflow = await readFile(rootFile('.github/workflows/docker-build-release.yml'), 'utf8');
+    const packageJson = JSON.parse(await readFile(rootFile('package.json'), 'utf8'));
 
     for (const command of [
       'npm ci',
+      'npm run verify:locks',
+      './scripts/configure.sh --mode behind-proxy --app-domain app.test --api-domain api.app.test',
+      'npm run verify:compose',
       'npm run verify',
+      'npm run verify:container',
+      'npm run verify:integration:behind-proxy',
+      'npm run verify:integration:direct-tls',
       'npm run test:e2e',
       'npm audit --audit-level=moderate',
-      'docker compose config --quiet',
-      './scripts/verify-container.sh subweb:ci',
     ]) {
       expect(workflow).toContain(command);
     }
+    const orderedCommands = [
+      'npm run verify:locks',
+      'npm run verify:compose',
+      'npm run verify:container',
+      'npm run verify:integration:behind-proxy',
+      'npm run verify:integration:direct-tls',
+      'npm run test:e2e',
+      'npm audit --audit-level=moderate',
+      'aquasecurity/trivy-action@',
+    ];
+    for (let index = 1; index < orderedCommands.length; index += 1) {
+      expect(workflow.indexOf(orderedCommands[index - 1])).toBeLessThan(
+        workflow.indexOf(orderedCommands[index]),
+      );
+    }
+    expect(packageJson.scripts['verify:container']).toBe('./scripts/verify-container.sh subweb:ci');
+    expect(packageJson.scripts['verify:integration:behind-proxy']).toBe(
+      './scripts/verify-integrated-stack.sh --mode behind-proxy',
+    );
+    expect(packageJson.scripts['verify:integration:direct-tls']).toBe(
+      './scripts/verify-integrated-stack.sh --mode direct-tls',
+    );
+    expect(workflow).toContain('if: always()');
+    expect(workflow).toContain('rm -f .env');
+    expect(workflow).not.toMatch(/upload-artifact[\s\S]{0,500}(?:\.env|fullchain\.pem|privkey\.pem|compose\.log|services\.log)/);
     expect(workflow).toContain('aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25');
     expect(workflow).toContain('needs: quality');
     expect(workflow).toContain('group: docker-release-${{ github.ref }}');

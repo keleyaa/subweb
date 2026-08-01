@@ -22,6 +22,9 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "verify:compose": "./scripts/validate-compose.sh",
+    "verify:container": "./scripts/verify-container.sh subweb:ci",
+    "verify:integration:behind-proxy": "./scripts/verify-integrated-stack.sh --mode behind-proxy",
+    "verify:integration:direct-tls": "./scripts/verify-integrated-stack.sh --mode direct-tls",
     "verify:locks": "node scripts/verify-version-locks.mjs",
     "verify": "npm test && npm run lint && npm run build"
   },

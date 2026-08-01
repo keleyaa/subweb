@@ -32,11 +32,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Audit dependencies
-        run: npm audit --audit-level=moderate
+      - name: Verify artifact locks
+        run: npm run verify:locks
+
+      - name: Create temporary Compose configuration
+        run: ./scripts/configure.sh --mode behind-proxy --app-domain app.test --api-domain api.app.test
+
+      - name: Validate Compose
+        run: npm run verify:compose
 
       - name: Verify unit tests, lint, and build
         run: npm run verify
+
+      - name: Verify container runtime
+        run: npm run verify:container
+
+      - name: Verify integrated behind-proxy stack
+        run: npm run verify:integration:behind-proxy
+
+      - name: Verify integrated direct-tls stack
+        run: npm run verify:integration:direct-tls
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -44,11 +59,8 @@ jobs:
       - name: Verify browser workflows
         run: npm run test:e2e
 
-      - name: Validate Compose
-        run: docker compose config --quiet
-
-      - name: Verify container runtime
-        run: ./scripts/verify-container.sh subweb:ci
+      - name: Audit dependencies
+        run: npm audit --audit-level=moderate
 
       - name: Scan final image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
@@ -59,6 +71,10 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
+
+      - name: Remove temporary deployment configuration
+        if: always()
+        run: rm -f .env
 
   release:
     needs: quality
