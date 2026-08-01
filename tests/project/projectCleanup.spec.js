@@ -96,4 +96,29 @@ describe('project cleanup and independent-maintenance boundary', () => {
     await expect(access(rootFile('docs/deployment.md'))).resolves.toBeUndefined();
     await expect(access(rootFile('docs/remote-config-sources.md'))).resolves.toBeUndefined();
   });
+
+  it('protects the focused interface from retired or decorative product surfaces', async () => {
+    const [home, table, navigation, baseCss] = await Promise.all([
+      readFile(rootFile('src/views/home/HomeView.vue'), 'utf8'),
+      readFile(rootFile('src/views/home/SubTable.vue'), 'utf8'),
+      readFile(rootFile('src/layouts/main/navbar/NavBar.vue'), 'utf8'),
+      readFile(rootFile('src/styles/base.css'), 'utf8'),
+    ]);
+    const combined = [home, table, navigation].join('\n');
+    for (const forbidden of [
+      'template-controls',
+      'savedTemplate',
+      'landing-hero',
+      'hero-animation',
+      'uxMode',
+      'presentation',
+      'MYURLS_API_TOKEN',
+      'REDIS_PASSWORD',
+    ]) {
+      expect(combined).not.toContain(forbidden);
+    }
+    expect(navigation).not.toContain('GitHub');
+    expect(baseCss).not.toMatch(/@keyframes[\s\S]*?(orb|bokeh|float)/i);
+    expect(baseCss).not.toContain('@import url(');
+  });
 });

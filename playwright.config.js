@@ -22,8 +22,20 @@ module.exports = defineConfig({
   },
   projects: [
     {
-      name: 'chromium',
-      use: { browserName: 'chromium' },
+      name: 'desktop-light',
+      use: { browserName: 'chromium', colorScheme: 'light', viewport: { width: 1440, height: 900 } },
+    },
+    {
+      name: 'desktop-dark',
+      use: { browserName: 'chromium', colorScheme: 'dark', viewport: { width: 1440, height: 900 } },
+    },
+    {
+      name: 'mobile-light',
+      use: { browserName: 'chromium', colorScheme: 'light', viewport: { width: 390, height: 844 } },
+    },
+    {
+      name: 'mobile-dark',
+      use: { browserName: 'chromium', colorScheme: 'dark', viewport: { width: 390, height: 844 } },
     },
   ],
 });

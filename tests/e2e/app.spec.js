@@ -1,4 +1,5 @@
 const { expect, test } = require('@playwright/test');
+const { applyBrowserPreferences } = require('./helpers/browserPreferences');
 
 function recordBrowserErrors(page) {
   const errors = [];
@@ -109,4 +110,52 @@ test('hides stale results as soon as a conversion input changes', async ({ conte
   await page.getByLabel('客户端').selectOption('singbox');
   await expect(page.getByLabel('转换链接')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '生成并复制短链' })).toHaveCount(0);
+});
+
+test('keeps optical alignment, target sizes, and keyboard disclosures accessible', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.sub-table--modern')).toBeVisible();
+  const geometry = await page.evaluate(() => {
+    const brand = document.querySelector('.app-brand-link').getBoundingClientRect();
+    const surface = document.querySelector('.sub-table--modern').getBoundingClientRect();
+    const targets = [...document.querySelectorAll('button, textarea, select')].map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    });
+    return {
+      centerDelta: Math.abs(brand.x + brand.width / 2 - (surface.x + surface.width / 2)),
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+      targets,
+    };
+  });
+  expect(geometry.centerDelta).toBeLessThanOrEqual(1);
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.innerWidth);
+  expect(geometry.targets.every(({ width, height }) => width >= 44 && height >= 44)).toBe(true);
+
+  const serviceToggle = page.getByRole('button', { name: '服务设置', exact: true });
+  await serviceToggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(serviceToggle).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Space');
+  await expect(serviceToggle).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('honors reduced motion, reduced transparency, and increased contrast', async ({ page }) => {
+  await page.goto('/');
+  const restore = await applyBrowserPreferences(page, {
+    reducedMotion: 'reduce',
+    reducedTransparency: true,
+    moreContrast: true,
+  });
+  const styles = await page.locator('.sub-table--modern').evaluate((element) => {
+    const computed = getComputedStyle(element);
+    return {
+      backdropFilter: computed.backdropFilter,
+      borderWidth: computed.borderTopWidth,
+    };
+  });
+  expect(styles.backdropFilter).toBe('none');
+  expect(styles.borderWidth).toBe('1px');
+  await restore();
 });
