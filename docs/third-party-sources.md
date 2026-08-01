@@ -10,7 +10,7 @@
 | Redis | [`redis/redis`](https://github.com/redis/redis) | `8.10.0`, image digest `sha256:5cca2f8a01ef2264c52dac86f14ec6a5abe973a93331e1b62522cfc5e63e4691` | 否 | 以 Redis 对应版本许可证为准 |
 | Nginx unprivileged | [`nginx/nginx`](https://github.com/nginx/nginx) 与官方 unprivileged image | `1.30.4`, image digest `sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49` | 只添加模板和启动配置 | 以 Nginx/镜像仓库许可证为准 |
 
-MyUrls 的 Redis URL/TLS 支持已在独立工作树实现和测试，但尚未发布 tag 与不可变镜像摘要，因此本仓库仍锁定 `v1.11`，并明确阻止 Railway/Render 被宣称为正式支持。
+MyUrls 的 Redis URL/TLS 支持已在独立工作树实现和测试，但尚未发布 tag 与不可变镜像摘要，因此本仓库仍锁定 `v1.11`。
 
 ## 设计参考
 

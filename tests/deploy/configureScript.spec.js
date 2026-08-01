@@ -73,8 +73,6 @@ describe('safe deployment configuration CLI', () => {
       '*.pem',
       '*.key',
       'redis-data/',
-      '.railway/',
-      '.render/',
     ]) {
       expect(gitignore.split('\n')).toContain(ignoredPath);
     }

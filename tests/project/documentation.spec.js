@@ -9,12 +9,12 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 describe('documentation contract', () => {
   it('keeps the documentation graph complete and linkable', () => {
     expect(verifyDocs({ root })).toEqual([]);
-    expect(requiredDocuments).toHaveLength(14);
+    expect(requiredDocuments).toHaveLength(12);
   });
 
   it('documents exactly the approved deployment families and source lineage', () => {
     const readme = read('README.md');
-    for (const name of ['本机源码', 'Docker', 'Railway', 'Render']) expect(readme).toContain(name);
+    for (const name of ['本机源码', 'Docker']) expect(readme).toContain(name);
     for (const source of [
       'stilleshan/subweb',
       'keleyaa/MyUrls',
@@ -25,9 +25,14 @@ describe('documentation contract', () => {
   });
 
   it('keeps runnable commands and ignored runtime data explicit', () => {
+    const readme = read('README.md');
     const local = read('docs/deployment-local.md');
     const docker = read('docs/deployment-docker.md');
     const maintenance = read('docs/maintenance.md');
+    for (const document of [readme, local, docker]) {
+      expect(document).toContain('git clone https://github.com/keleyaa/subweb.git');
+      expect(document).toContain('cd subweb');
+    }
     for (const command of ['bootstrap.sh', 'start.sh', 'status.sh', 'stop.sh']) expect(local).toContain(command);
     for (const command of [
       'docker-deploy.sh',
@@ -38,6 +43,13 @@ describe('documentation contract', () => {
     ]) {
       expect(docker).toContain(command);
     }
+    for (const command of ['docker compose ps', 'docker compose logs', 'docker compose stop', 'docker compose start', 'docker compose down']) {
+      expect(docker).toContain(command);
+    }
+    expect(docker).toContain('不要直接执行 `cat .env`');
+    expect(docker).toContain('无需手动填写');
+    expect(local).toContain('http://127.0.0.1:18080/');
+    expect(local).toContain('不要在其他项目目录执行');
     for (const ignored of ['.env', '.runtime/', 'dist/', 'test-results/']) expect(maintenance).toContain(ignored);
   });
 });

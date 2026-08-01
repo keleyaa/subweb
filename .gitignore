@@ -16,10 +16,6 @@ runtime-config/
 redis-data/
 *.pem
 *.key
-.railway/
-.render/
-
-
 # local env files
 .env
 .env.*

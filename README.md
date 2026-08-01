@@ -26,16 +26,24 @@ Subweb 是一套可自托管的订阅转换发行项目。它把 `Subconverter W
 
 ### Docker
 
-适合生产自托管，也是当前完整集成验证的主要方式。已有宝塔、1Panel、Nginx、OpenResty 或 Cloudflare Tunnel 时使用 `behind-proxy`：
+适合生产自托管，也是当前完整集成验证的主要方式。第一次部署必须先把项目拉取到服务器并进入项目目录。以下示例把项目放在当前用户的 `$HOME/apps/subweb`：
 
-直接拉取已发布镜像，不在服务器本地构建：
+```sh
+mkdir -p "$HOME/apps"
+cd "$HOME/apps"
+git clone https://github.com/keleyaa/subweb.git
+cd subweb
+```
+
+已有宝塔、1Panel、Nginx、OpenResty 或 Cloudflare Tunnel 时，直接拉取已发布镜像并启动：
 
 ```sh
 ./scripts/docker-deploy.sh --mode behind-proxy \
   --app-domain example.com --api-domain api.example.com
+docker compose ps
 ```
 
-生产环境建议增加 `--image docker.io/keleyaa/subweb:sha-<提交短 SHA>`，锁定与当前发行对应的不可变镜像标签。需要修改源码或验证本地 Dockerfile 时，使用源码构建方式：
+把 `example.com` 和 `api.example.com` 换成自己的两个域名。脚本自动生成未提交的 `.env`、Token 和 Redis 密码，无需手工填写秘密。生产环境建议增加 `--image docker.io/keleyaa/subweb:sha-<提交短 SHA>` 锁定镜像。需要修改源码或验证本地 Dockerfile 时，使用源码构建方式：
 
 ```sh
 ./scripts/configure.sh --mode behind-proxy \
@@ -48,25 +56,19 @@ docker compose up -d --build --wait
 
 ### 本机源码
 
-适合开发和验证，按锁文件拉取并构建 MyUrls 与 SubConverter：
+适合开发和验证。先拉取项目并进入项目目录，再按锁文件拉取和构建 MyUrls 与 SubConverter：
 
 ```sh
+git clone https://github.com/keleyaa/subweb.git
+cd subweb
 ./scripts/local/bootstrap.sh
 ./scripts/local/start.sh
 ./scripts/local/status.sh
-./scripts/local/stop.sh
 ```
 
-参见[本机源码运行](docs/deployment-local.md)。
+浏览器访问 `http://127.0.0.1:18080/`。结束测试时运行 `./scripts/local/stop.sh`。依赖安装和完整流程见[本机源码运行](docs/deployment-local.md)。
 
-### Railway 与 Render
-
-两种 PaaS 拓扑均已完成设计，但当前不属于正式可部署支持：MyUrls 的 `redis://` / `rediss://` 兼容改动仍只在独立仓库本地验证，尚未发布不可变镜像摘要，也尚未执行计费资源、平台私网、持久性、升级和回滚实测。不要把设计文档当成已验证部署结果。
-
-- [Railway 部署状态与计划](docs/deployment-railway.md)
-- [Render 部署状态与计划](docs/deployment-render.md)
-
-四种方式的选择矩阵见[部署索引](docs/deployment.md)。
+两种部署方式的选择矩阵见[部署索引](docs/deployment.md)。
 
 ## 开发与验证
 
@@ -95,8 +97,6 @@ npm run verify:integration:direct-tls
 - [部署索引](docs/deployment.md)
 - [本机源码运行](docs/deployment-local.md)
 - [Docker 部署](docs/deployment-docker.md)
-- [Railway 部署](docs/deployment-railway.md)
-- [Render 部署](docs/deployment-render.md)
 - [安全边界](docs/security.md)
 - [运维手册](docs/operations.md)
 - [第三方来源](docs/third-party-sources.md)

@@ -9,8 +9,6 @@ export const requiredDocuments = [
   'docs/deployment.md',
   'docs/deployment-local.md',
   'docs/deployment-docker.md',
-  'docs/deployment-railway.md',
-  'docs/deployment-render.md',
   'docs/security.md',
   'docs/operations.md',
   'docs/third-party-sources.md',

@@ -9,14 +9,6 @@
       "status": "designed",
       "evidence": "docs/validation/local-source.md",
       "reason": "Static lifecycle contracts are verified, but the current maintainer machine lacks required native tools for a fresh full run."
-    },
-    "railway": {
-      "status": "designed",
-      "reason": "Blocked until a MyUrls Redis URL and TLS release is published and real platform validation is authorized."
-    },
-    "render": {
-      "status": "designed",
-      "reason": "Blocked until a MyUrls Redis URL and TLS release is published and real platform validation is authorized."
     }
   }
 }

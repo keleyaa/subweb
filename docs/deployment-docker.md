@@ -5,8 +5,57 @@ Docker Compose 启动 gateway、SubConverter、MyUrls 和 Redis。所有外部�
 ## 前置条件
 
 - Docker Engine 24+ 与 Docker Compose v2。
+- Git 与可以访问 GitHub、Docker Hub、GHCR 的网络。
 - 两个不同域名，例如 `example.com` 和 `api.example.com`，都解析到同一入口。
 - 选择 `behind-proxy` 或 `direct-tls`，不要同时启用。
+
+先确认 Docker 已安装并且当前用户能够使用：
+
+```sh
+docker --version
+docker compose version
+docker info >/dev/null
+```
+
+如果最后一条命令提示权限不足，需要先按当前系统的 Docker 安装说明配置权限；不要通过给项目文件开放宽泛权限来绕过。
+
+## 第一次拉取项目
+
+以下命令把项目放在当前用户目录，不要求使用 `/root` 或 `/opt`：
+
+```sh
+mkdir -p "$HOME/apps"
+cd "$HOME/apps"
+git clone https://github.com/keleyaa/subweb.git
+cd subweb
+pwd
+test -f compose.yaml
+```
+
+后续所有 `./scripts/...` 和 `docker compose ...` 命令都必须在这个 `subweb` 目录执行。关闭终端后重新连接服务器时，先运行：
+
+```sh
+cd "$HOME/apps/subweb"
+```
+
+如果目录已经存在，用以下命令更新，不要再次克隆：
+
+```sh
+cd "$HOME/apps/subweb"
+git status --short
+git pull --ff-only origin main
+```
+
+工作树有本地改动时，`git pull --ff-only` 可能拒绝更新。先确认改动来源，不要使用 `git reset --hard` 直接丢弃。
+
+## 域名和模式选择
+
+部署前准备两个不同域名：
+
+- `APP_DOMAIN`：网页、短链创建和短码跳转，例如 `sub.example.com`。
+- `API_DOMAIN`：订阅转换接口，例如 `api.example.com`。
+
+两个域名都指向同一台服务器。已有宝塔、1Panel、Nginx、OpenResty 或 Cloudflare Tunnel 时选择 `behind-proxy`；80/443 完全空闲且已经有一张覆盖两个域名的证书时才选择 `direct-tls`。
 
 ## 预构建镜像快速部署
 
@@ -16,14 +65,23 @@ Docker Compose 启动 gateway、SubConverter、MyUrls 和 Redis。所有外部�
 
 ```sh
 ./scripts/docker-deploy.sh --mode behind-proxy \
-  --app-domain example.com --api-domain api.example.com
+  --app-domain sub.example.com \
+  --api-domain api.example.com
+```
+
+脚本执行成功后已经完成启动，不需要再手工执行 `docker compose up`。检查状态和本机入口：
+
+```sh
+docker compose ps
+docker compose logs --tail=100 gateway-http myurls subconverter redis
+curl -fsS -H 'Host: sub.example.com' http://127.0.0.1:18080/healthz
 ```
 
 没有外层代理且已有覆盖两个域名的证书时：
 
 ```sh
 ./scripts/docker-deploy.sh --mode direct-tls \
-  --app-domain example.com --api-domain api.example.com \
+  --app-domain sub.example.com --api-domain api.example.com \
   --tls-cert /absolute/path/to/fullchain.pem \
   --tls-key /absolute/path/to/privkey.pem
 ```
@@ -55,11 +113,11 @@ docker compose up -d --no-build --pull always --wait
 
 ```sh
 ./scripts/configure.sh --mode behind-proxy \
-  --app-domain example.com --api-domain api.example.com
+  --app-domain sub.example.com --api-domain api.example.com
 ./scripts/validate-compose.sh
 docker compose up -d --build --wait
 docker compose ps
-curl -fsS -H 'Host: example.com' http://127.0.0.1:18080/healthz
+curl -fsS -H 'Host: sub.example.com' http://127.0.0.1:18080/healthz
 ```
 
 Compose 固定绑定 `127.0.0.1:${SUBWEB_PORT:-18080}`。通用 Nginx 配置为两个站点指向同一 upstream：
@@ -112,6 +170,27 @@ docker compose ps
 
 ## 配置变更与秘密轮换
 
+首次执行 `configure.sh` 或 `docker-deploy.sh` 时会自动创建权限为 `600` 的 `.env`。以下值由脚本生成，无需手动填写：
+
+- `API_URL` 与 `SHORT_URL`：从两个域名派生。
+- `MYURLS_API_TOKEN`：Gateway 与 MyUrls 共用的随机秘密。
+- `REDIS_PASSWORD`：Redis 随机密码。
+- `SUBWEB_IMAGE`：使用镜像快速部署时写入。
+
+不要直接执行 `cat .env`，因为其中包含真实 Token 和 Redis 密码。只检查公开配置时使用：
+
+```sh
+grep -E '^(COMPOSE_PROFILES|APP_DOMAIN|API_DOMAIN|API_URL|SHORT_URL|SUBWEB_IMAGE)=' .env
+```
+
+一般不需要手动编辑 `.env`。`behind-proxy` 需要永久修改本机监听端口时，可以用文本编辑器增加或修改：
+
+```dotenv
+SUBWEB_PORT=18090
+```
+
+修改后外层反向代理地址也要改成 `http://127.0.0.1:18090`，然后重新执行 `./scripts/validate-compose.sh` 和对应启动命令。不要手工修改 `MYURLS_API_TOKEN` 或 `REDIS_PASSWORD`；使用脚本的轮换流程保证所有消费者一致。
+
 更换域名时重新运行 `configure.sh`，更新 DNS/证书/外层代理后执行：
 
 ```sh
@@ -130,6 +209,12 @@ docker compose up -d --build --wait
 
 ## 日常操作
 
+每次执行以下命令前都先进入安装目录：
+
+```sh
+cd "$HOME/apps/subweb"
+```
+
 ```sh
 docker compose ps
 docker compose logs --tail=200 gateway-http myurls subconverter redis
@@ -137,6 +222,11 @@ docker compose stop
 docker compose start
 docker compose down
 ```
+
+- `stop`：停止容器但保留容器、网络和数据。
+- `start`：重新启动已存在的容器。
+- `down`：删除容器和网络，但保留命名数据卷。
+- 再次部署：重新运行 `docker-deploy.sh`，或按源码构建流程执行 `docker compose up`。
 
 `docker compose down` 默认保留命名卷；禁止使用 `down -v` 作为日常停止命令，因为它会删除短链数据。备份、恢复、升级和回滚流程见[运维手册](operations.md)。
 

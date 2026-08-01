@@ -36,7 +36,6 @@ chmod 700 .runtime/redis-backups
 
 脚本确认 Redis healthy，执行同步 `SAVE`，把 RDB 原子移动到权限 `0600` 的目标，并输出路径与 SHA-256。仍应在隔离的临时全栈中验证随机测试短码，且不输出 key/value。
 
-平台部署必须使用平台提供的快照/导出功能并验证可恢复性；Railway/Render 尚未实测，不能假设免费层或 Key Value 自动提供可用备份。
 
 ## 恢复
 
@@ -80,7 +79,7 @@ npm run verify:locks
   --confirm-redis-major
 ```
 
-MyUrls 与 SubConverter 属于独立上游：先在各自边界验证，再更新本仓库锁文件。MyUrls 当前未发布的 Redis URL/TLS commit 不能用于生产锁定或 PaaS 声明。
+MyUrls 与 SubConverter 属于独立上游：先在各自边界验证，再更新本仓库锁文件。未发布的本地 commit 不能用于生产锁定。
 
 ## 常见故障
 

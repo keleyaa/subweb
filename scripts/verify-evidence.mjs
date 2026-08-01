@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const allowedStatuses = new Set(['verified', 'designed', 'failed']);
-const deploymentNames = ['docker', 'local', 'railway', 'render'];
+const deploymentNames = ['docker', 'local'];
 
 export function verifyEvidence({ root }) {
   const errors = [];
@@ -29,13 +29,6 @@ export function verifyEvidence({ root }) {
     }
     if (entry.status === 'designed' && (typeof entry.reason !== 'string' || entry.reason.length < 20)) {
       errors.push(`${name} designed status requires a concrete reason`);
-    }
-  }
-  const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
-  for (const name of ['Railway', 'Render']) {
-    const key = name.toLowerCase();
-    if (deployments[key]?.status === 'designed' && !readme.includes(`${name}`)) {
-      errors.push(`README does not disclose ${name} designed status`);
     }
   }
   return errors;

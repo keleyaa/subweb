@@ -29,7 +29,6 @@
 | `REDIS_PASSWORD` | `configure.sh` | 否 | Docker 和本机 Redis；不进入浏览器 |
 | `SUBCONVERTER_UPSTREAM` | 部署编排 | 否 | Docker 默认 `http://subconverter:25500` |
 | `MYURLS_UPSTREAM` | 部署编排 | 否 | Docker 默认 `http://myurls:8080` |
-| Redis URL / connection string | PaaS Redis | 否 | 仅供未来 MyUrls PaaS 版本；当前已发布 v1.11 不支持该契约 |
 
 `.env` 是私有文件，不提交。`.env.example` 中的 secret 只是无效占位符，正式部署必须运行 `configure.sh`。
 
@@ -58,7 +57,3 @@
 | `LOCAL_API_PORT` | 18081 |
 
 可写入未提交的 `.env` 或在命令前导出。启动脚本要求六个端口互不重复且未被占用；活跃值写入权限受限的 `.runtime/local/config/local.env`。
-
-## PaaS 变量
-
-平台模式读取 `PORT`、`APP_DOMAIN`、`API_DOMAIN`、`SUBCONVERTER_UPSTREAM`、`MYURLS_UPSTREAM` 和 `MYURLS_API_TOKEN`。私网上游只接受 `host:port` 或无用户信息、路径、查询和 fragment 的 `http://host:port`。Railway/Render 仍处于设计状态，变量引用不能在正式镜像发布和真实验证前视为可用部署契约。

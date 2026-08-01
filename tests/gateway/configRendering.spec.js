@@ -67,15 +67,12 @@ async function render(environment = {}, fakeOptions = {}) {
 }
 
 describe('gateway configuration rendering', () => {
-  it.each([
-    ['behind-proxy', '8080', /listen 8080 default_server;/, /listen 8080;/],
-    ['platform', '4173', /listen 0\.0\.0\.0:4173 default_server;/, /listen 0\.0\.0\.0:4173;/],
-  ])('renders %s with separate public hosts and without transport security', async (mode, port, defaultListen, hostListen) => {
-    const result = await render({ GATEWAY_MODE: mode, GATEWAY_PORT: port });
+  it('renders behind-proxy with separate public hosts and without transport security', async () => {
+    const result = await render({ GATEWAY_MODE: 'behind-proxy', GATEWAY_PORT: '8080' });
 
     expect(result).toMatchObject({ code: 0 });
-    expect(result.config).toMatch(defaultListen);
-    expect(result.config).toMatch(hostListen);
+    expect(result.config).toMatch(/listen 8080 default_server;/);
+    expect(result.config).toMatch(/listen 8080;/);
     expect(result.config).toContain('server_name app.example.test;');
     expect(result.config).toContain('server_name api.example.test;');
     expect(result.config).toContain('resolver 10.20.30.40 ipv6=off valid=30s;');
@@ -107,6 +104,7 @@ describe('gateway configuration rendering', () => {
 
   it.each([
     ['GATEWAY_MODE', 'http'],
+    ['GATEWAY_MODE', 'platform'],
     ['APP_DOMAIN', 'app.test; return 200'],
     ['APP_DOMAIN', 'https://app.test'],
     ['API_DOMAIN', 'app.example.test'],
@@ -475,45 +473,7 @@ describe('gateway startup boundary', () => {
     await expect(readFile(fixture.events, 'utf8')).rejects.toThrow(/ENOENT/);
   });
 
-  it('derives the renderer port from the standard platform PORT variable', async () => {
-    const fixture = await setupStartFixture();
-    const env = {
-      ...fixture.env,
-      GATEWAY_MODE: 'platform',
-      PORT: '4173',
-    };
-    delete env.GATEWAY_PORT;
-
-    const result = await run('sh', [startScript], { env });
-
-    expect(result).toMatchObject({ code: 0 });
-    expect(await readFile(fixture.events, 'utf8')).toBe('render:4173\nnginx\n');
-  });
-
-  it.each([
-    ['missing PORT', undefined, undefined],
-    ['non-numeric PORT', 'abc', undefined],
-    ['privileged PORT', '80', undefined],
-    ['out-of-range PORT', '65536', undefined],
-    ['conflicting GATEWAY_PORT', '4173', '8080'],
-  ])('rejects platform startup with %s before rendering', async (_scenario, port, gatewayPort) => {
-    const fixture = await setupStartFixture();
-    const env = {
-      ...fixture.env,
-      GATEWAY_MODE: 'platform',
-    };
-    if (port === undefined) delete env.PORT;
-    else env.PORT = port;
-    if (gatewayPort === undefined) delete env.GATEWAY_PORT;
-    else env.GATEWAY_PORT = gatewayPort;
-
-    const result = await run('sh', [startScript], { env });
-
-    expect(result.code).not.toBe(0);
-    await expect(readFile(fixture.events, 'utf8')).rejects.toThrow(/ENOENT/);
-  });
-
-  it('does not consume an unrelated PORT outside platform mode', async () => {
+  it('does not consume an unrelated PORT', async () => {
     const fixture = await setupStartFixture();
     const result = await run('sh', [startScript], {
       env: { ...fixture.env, PORT: '65536' },

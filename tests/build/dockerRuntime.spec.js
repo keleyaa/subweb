@@ -15,7 +15,7 @@ describe('Docker runtime contract', () => {
     expect(finalStage).toContain('RUN apk add --no-cache openssl=3.5.7-r0');
     expect(finalStage).toContain('EXPOSE 8080 8443');
     expect(finalStage).toContain('HEALTHCHECK');
-    expect(finalStage).toMatch(/GATEWAY_MODE" = platform[^\n]+\$\{?PORT\}?/);
+    expect(finalStage).not.toContain('GATEWAY_MODE" = platform');
     expect(finalStage).toContain('http://127.0.0.1:8080/healthz');
     expect(finalStage).toContain('https://127.0.0.1:8443/healthz');
     expect(finalStage).not.toContain('http://127.0.0.1:${GATEWAY_PORT}/healthz');
@@ -24,6 +24,9 @@ describe('Docker runtime contract', () => {
     expect(finalStage).toContain('scripts/render-gateway-config.sh');
     expect(finalStage).not.toContain('nginx/default.conf');
     expect(finalStage).not.toMatch(/^(?:ARG|ENV)\s+(?:MYURLS_API_TOKEN|REDIS_PASSWORD)/m);
+    const startScript = await readFile(rootFile('start.sh'), 'utf8');
+    expect(startScript).not.toContain('configure_platform_runtime');
+    expect(startScript).not.toContain('normalize_platform_upstream');
   });
 
   it('provides an integrated Compose deployment with two profile-scoped gateways', async () => {

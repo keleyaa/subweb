@@ -2,7 +2,7 @@
 
 ## 暴露面
 
-生产环境只公开 gateway。Docker `behind-proxy` 固定绑定 loopback，`direct-tls` 只公开 80/443；Redis、MyUrls 和 SubConverter 不映射宿主机端口。Railway/Render 的目标拓扑同样要求只有 gateway 公开，但两者尚未实测。
+生产环境只公开 gateway。Docker `behind-proxy` 固定绑定 loopback，`direct-tls` 只公开 80/443；Redis、MyUrls 和 SubConverter 不映射宿主机端口。
 
 gateway 根据 Host 分离应用与 API，并在 `/short-api/` 代理中注入 MyUrls Token。浏览器、`/conf/config.js` 和响应正文都不应包含该 Token、Redis 密码或私网连接串。外层代理必须保留 Host，不应删除项目返回的 CSP、`X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy` 和 `Permissions-Policy`。HSTS 只有在整个域名确定长期使用 HTTPS 后才应由最外层 TLS 入口启用。
 

@@ -38,6 +38,5 @@
 | Docker `behind-proxy` | 外层代理 | 宝塔、1Panel、Nginx、OpenResty、Cloudflare 等 | Compose 只把网关绑定到 `127.0.0.1` |
 | Docker `direct-tls` | 网关 80/443 | 部署者提供并续期证书 | MyUrls、Redis、SubConverter 仅在 Compose 网络 |
 | 本机源码 | 默认 loopback 端口 | 仅开发；公开时由外层代理负责 | 六个本机进程按 PID 所有权管理 |
-| Railway / Render | 平台网关 | 平台托管 | 设计要求只有 gateway 公开，其余服务私网；尚未正式实测 |
 
 项目不要求 Caddy，也不会自动申请证书。Redis 卷或平台 Key Value/Redis 是备份、恢复和迁移的核心；其他组件应按 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 重建。

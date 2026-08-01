@@ -2,6 +2,8 @@
 
 本方式会在本机按锁定 commit 获取并构建 MyUrls 与 SubConverter，启动 Redis、两个后端、Vite 和两个 Nginx gateway 入口。适合开发与验收，不是默认公网生产方案。
 
+所有命令都必须在 Subweb 项目根目录执行，不要在其他项目目录执行，尤其不要在独立 MyUrls 仓库中运行这些脚本。
+
 ## 系统与依赖
 
 支持 macOS、Linux 和 WSL2；不支持原生 Windows。需要 Node.js 24+、npm 11+、Go、CMake、pkg-config、Redis、Nginx、Git、curl、lsof、OpenSSL，以及 SubConverter 所需的 curl、PCRE2、RapidJSON 和 yaml-cpp 开发包。QuickJS 与 libcron 会按 SubConverter 自带的依赖锁在用户缓存中构建，不写入本仓库。
@@ -22,12 +24,54 @@ sudo apt install nodejs npm golang cmake pkg-config redis-server nginx git curl 
 
 发行版仓库里的 Node/npm 版本若低于要求，应改用 Node 官方支持的安装方式。脚本只检查并报告缺失项，不自动修改系统。
 
+安装完成后逐项确认：
+
+```sh
+node --version
+npm --version
+go version
+cmake --version
+redis-server --version
+nginx -v
+git --version
+```
+
+## 拉取项目并进入目录
+
+```sh
+mkdir -p "$HOME/apps"
+cd "$HOME/apps"
+git clone https://github.com/keleyaa/subweb.git
+cd subweb
+pwd
+test -f package.json
+```
+
+关闭终端后重新开始时，先执行 `cd "$HOME/apps/subweb"`。项目已经存在时使用：
+
+```sh
+cd "$HOME/apps/subweb"
+git status --short
+git pull --ff-only origin main
+```
+
 ## 最短流程
 
 ```sh
 ./scripts/local/bootstrap.sh
 ./scripts/local/start.sh
 ./scripts/local/status.sh
+```
+
+`bootstrap.sh` 首次执行可能需要较长时间，因为它会获取并编译锁定版本。`start.sh` 返回成功后，用浏览器打开：
+
+```text
+http://127.0.0.1:18080/
+```
+
+结束本机运行时执行：
+
+```sh
 ./scripts/local/stop.sh
 ```
 
@@ -55,6 +99,8 @@ LOCAL_MYURLS_PORT=18092 LOCAL_REDIS_PORT=16389 \
 LOCAL_APP_PORT=19080 LOCAL_API_PORT=19081 \
 ./scripts/local/start.sh
 ```
+
+第一次运行不需要手工创建 `.env`。只有默认端口发生冲突时才在项目根目录新建或编辑 `.env`，并且只填写需要覆盖的 `LOCAL_*_PORT`。不要复制 Docker 示例中的 Token 或 Redis 密码占位符作为真实秘密；本机 bootstrap 会管理本机运行所需配置。
 
 应用入口是 `http://127.0.0.1:18080/`，API 健康入口是 `http://127.0.0.1:18081/healthz`。本机模式使用 loopback，不直接对公网开放。
 

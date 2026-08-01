@@ -43,7 +43,7 @@ npm run verify:integration:direct-tls
 git diff --check
 ```
 
-本机源码验证还需 `./scripts/verify-local-source.sh`，前提是当前主机已手动安装全部原生依赖。Railway/Render 目前只能标记 `designed`；在真实新建、功能、持久性、日志、升级与回滚证据完成前不得改成 `verified`。
+本机源码验证还需 `./scripts/verify-local-source.sh`，前提是当前主机已手动安装全部原生依赖。
 
 `npm run verify:release` 聚合安装、审计、质量、浏览器、锁、Compose、文档、容器、两个 Docker profile 和证据门禁。它会重装依赖并运行较长时间，仅在准备发布的干净工作树执行。
 

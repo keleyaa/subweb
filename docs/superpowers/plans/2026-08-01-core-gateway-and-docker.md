@@ -187,7 +187,6 @@
 - [ ] **步骤 4：实现 HTTP、平台端口和自备证书 TLS**
 
   - `behind-proxy`：容器监听 `8080`，不设 HSTS；
-  - `platform`：监听 `0.0.0.0:$PORT`，不在容器内终止 TLS；
   - `direct-tls`：容器监听 `8080` 做 HTTPS 跳转、`8443 ssl`提供 HTTPS 并设 HSTS，宿主机映射 `80:8080` / `443:8443`。
 
   `start.sh` 在 `direct-tls` 下用 `openssl x509 -checkhost` 同时校验 APP/API 域名，用公钥指纹校验证书和私钥配对，检查容器用户可读且其他用户不可写。所有错误只说文件类型和域名，不输出私钥内容。

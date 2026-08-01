@@ -144,16 +144,11 @@ case "$GATEWAY_MODE" in
     [ "$GATEWAY_PORT" = 8080 ] || fail 'behind-proxy 模式的容器端口必须为 8080'
     http_listen=8080
     ;;
-  platform)
-    [ "$GATEWAY_PORT" -ge 1024 ] 2>/dev/null && [ "$GATEWAY_PORT" -le 65535 ] \
-      || fail 'platform 模式端口必须在 1024 到 65535 之间'
-    http_listen="0.0.0.0:$GATEWAY_PORT"
-    ;;
   direct-tls)
     [ "$GATEWAY_PORT" = 8443 ] || fail 'direct-tls 模式的 HTTPS 容器端口必须为 8443'
     http_listen=''
     ;;
-  *) fail 'GATEWAY_MODE 只能是 behind-proxy、platform 或 direct-tls' ;;
+  *) fail 'GATEWAY_MODE 只能是 behind-proxy 或 direct-tls' ;;
 esac
 
 validate_domain "$APP_DOMAIN" || fail 'APP_DOMAIN 不是有效的纯域名'
