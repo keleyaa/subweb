@@ -2,6 +2,10 @@
 
 Subweb 是一套可自托管的订阅转换发行项目。它把 `Subconverter Web` 单页前端、SubConverter-Extended 转换服务、MyUrls 短链服务、Redis 和统一 Nginx 网关放进同一套部署与维护流程；浏览器只访问应用域名和 API 域名，内部服务默认不直接暴露。
 
+## 界面预览
+
+![Subconverter Web 单页订阅转换界面](docs/assets/subconverter-web.png)
+
 ## Fork 与来源说明
 
 本仓库 [`keleyaa/subweb`](https://github.com/keleyaa/subweb) fork 自 [`stilleshan/subweb`](https://github.com/stilleshan/subweb)，之后已作为独立维护项目改造前端、网关、测试、容器和文档。短链服务来自维护者 fork 的 [`keleyaa/MyUrls`](https://github.com/keleyaa/MyUrls)，其原始上游是 [`CareyWang/MyUrls`](https://github.com/CareyWang/MyUrls)；转换服务直接使用持续维护的 [`Aethersailor/SubConverter-Extended`](https://github.com/Aethersailor/SubConverter-Extended)，不在本仓库修改其源码。
