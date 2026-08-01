@@ -35,6 +35,9 @@ jobs:
       - name: Verify artifact locks
         run: npm run verify:locks
 
+      - name: Verify documentation and deployment evidence
+        run: npm run verify:docs && npm run verify:evidence
+
       - name: Create temporary Compose configuration
         run: ./scripts/configure.sh --mode behind-proxy --app-domain app.test --api-domain api.app.test
 
