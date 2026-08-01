@@ -29,7 +29,13 @@ describe('documentation contract', () => {
     const docker = read('docs/deployment-docker.md');
     const maintenance = read('docs/maintenance.md');
     for (const command of ['bootstrap.sh', 'start.sh', 'status.sh', 'stop.sh']) expect(local).toContain(command);
-    for (const command of ['configure.sh', 'validate-compose.sh', 'docker compose up -d --build --wait']) {
+    for (const command of [
+      'docker-deploy.sh',
+      'configure.sh',
+      'validate-compose.sh',
+      'docker compose up -d --build --wait',
+      'docker compose up -d --no-build --pull always --wait',
+    ]) {
       expect(docker).toContain(command);
     }
     for (const ignored of ['.env', '.runtime/', 'dist/', 'test-results/']) expect(maintenance).toContain(ignored);

@@ -28,6 +28,15 @@ Subweb 是一套可自托管的订阅转换发行项目。它把 `Subconverter W
 
 适合生产自托管，也是当前完整集成验证的主要方式。已有宝塔、1Panel、Nginx、OpenResty 或 Cloudflare Tunnel 时使用 `behind-proxy`：
 
+直接拉取已发布镜像，不在服务器本地构建：
+
+```sh
+./scripts/docker-deploy.sh --mode behind-proxy \
+  --app-domain example.com --api-domain api.example.com
+```
+
+生产环境建议增加 `--image docker.io/keleyaa/subweb:sha-<提交短 SHA>`，锁定与当前发行对应的不可变镜像标签。需要修改源码或验证本地 Dockerfile 时，使用源码构建方式：
+
 ```sh
 ./scripts/configure.sh --mode behind-proxy \
   --app-domain example.com --api-domain api.example.com

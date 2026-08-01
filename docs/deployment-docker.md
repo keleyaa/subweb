@@ -8,6 +8,47 @@ Docker Compose 启动 gateway、SubConverter、MyUrls 和 Redis。所有外部�
 - 两个不同域名，例如 `example.com` 和 `api.example.com`，都解析到同一入口。
 - 选择 `behind-proxy` 或 `direct-tls`，不要同时启用。
 
+## 预构建镜像快速部署
+
+仓库提供的快速部署脚本会生成 `.env`、拉取 Gateway、SubConverter、MyUrls 和 Redis 镜像，并以 `--no-build` 启动。它不会安装 Docker、修改 DNS、申请证书或删除已有数据卷。
+
+已有宝塔、1Panel、Nginx、OpenResty、Cloudflare Tunnel 等反向代理时：
+
+```sh
+./scripts/docker-deploy.sh --mode behind-proxy \
+  --app-domain example.com --api-domain api.example.com
+```
+
+没有外层代理且已有覆盖两个域名的证书时：
+
+```sh
+./scripts/docker-deploy.sh --mode direct-tls \
+  --app-domain example.com --api-domain api.example.com \
+  --tls-cert /absolute/path/to/fullchain.pem \
+  --tls-key /absolute/path/to/privkey.pem
+```
+
+脚本默认使用 `docker.io/keleyaa/subweb:latest` 方便首次体验。正式生产部署应从 Docker Hub 或对应 Actions 发行记录取得版本标签，并显式锁定：
+
+```sh
+./scripts/docker-deploy.sh --mode behind-proxy \
+  --app-domain example.com --api-domain api.example.com \
+  --image docker.io/keleyaa/subweb:sha-2bf1a9f
+```
+
+脚本内部的启动契约为：
+
+```sh
+docker compose pull
+docker compose up -d --no-build --pull always --wait
+```
+
+`latest` 会随新发行变化，适合体验和主动跟随更新；`sha-*` 标签或镜像 digest 适合可审计生产部署。快速部署仍是四容器 Compose 架构，不是把 Redis、MyUrls 和 SubConverter 塞入 Gateway 单体镜像。
+
+## 从源码构建
+
+需要修改前端、Gateway 或验证本地 Dockerfile 时再使用以下流程。
+
 ## 已有反向代理：behind-proxy
 
 适用于宝塔、1Panel、Nginx、OpenResty、Cloudflare Tunnel 等已经占用 80/443 的环境：
@@ -100,6 +141,10 @@ docker compose down
 `docker compose down` 默认保留命名卷；禁止使用 `down -v` 作为日常停止命令，因为它会删除短链数据。备份、恢复、升级和回滚流程见[运维手册](operations.md)。
 
 ## 升级与回滚
+
+镜像快速部署升级时，先备份 Redis，再重新运行 `docker-deploy.sh` 并通过 `--image` 指定新的不可变标签。回滚时指定之前记录的标签；脚本不会删除 `redis-data` 卷。
+
+源码构建部署按以下流程升级。
 
 升级前备份 Redis、记录当前 Git commit 和锁文件摘要，然后：
 

@@ -43,6 +43,30 @@ validate_absolute_path() {
   esac
 }
 
+validate_container_image() {
+  image=${1-}
+  [ -n "$image" ] || return 1
+  [ "${#image}" -le 512 ] || return 1
+  case "$image" in
+    *[!A-Za-z0-9._/@:+-]* | -* | */ | *:) return 1 ;;
+  esac
+  case "$image" in
+    */*:* | */*@sha256:*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+load_existing_image() {
+  image_file=${1-}
+  [ -f "$image_file" ] || return 1
+
+  image_value=$(awk 'index($0, "SUBWEB_IMAGE=") == 1 { count += 1; value = substr($0, 14) } END { if (count == 1) print value; else if (count > 1) exit 2; else exit 1 }' "$image_file")
+  image_status=$?
+  [ "$image_status" -eq 0 ] || return "$image_status"
+  validate_container_image "$image_value" || return 2
+  printf '%s\n' "$image_value"
+}
+
 load_existing_secret() {
   secret_file=${1-}
   secret_key=${2-}

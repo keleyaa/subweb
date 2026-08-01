@@ -8,6 +8,7 @@
 | `API_DOMAIN` | `api.ml1.one` | 是 | 同上；必须与应用域名不同 |
 | `API_URL` | 从 `API_DOMAIN` 派生为 HTTPS URL | 是 | 写入浏览器 `apiUrl` |
 | `SHORT_URL` | 从 `APP_DOMAIN` 派生为 `https://APP_DOMAIN/short-api` | 是 | 写入浏览器 `shortUrl` |
+| `SUBWEB_IMAGE` | Compose 默认 `subweb:local` | 是 | `docker-deploy.sh` 写入已发布 Gateway 镜像；源码构建可不设置 |
 
 这两个默认域名属于维护者展示部署。其他用户必须用自己的域名执行：
 
@@ -17,6 +18,8 @@
 ```
 
 更换域名时重新运行同一命令。默认保留现有秘密；增加 `--rotate-secrets` 才会同时轮换 MyUrls Token 和 Redis 密码，轮换前必须按[运维手册](operations.md)安排停写和备份。
+
+使用预构建镜像时，`docker-deploy.sh --image` 会把引用写入 `.env`。后续只重新配置域名也会保留该引用。生产环境使用 `sha-*` 标签或 digest；不带 `--image` 的快速部署默认跟随 `latest`。
 
 ## 秘密与内部地址
 

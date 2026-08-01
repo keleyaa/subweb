@@ -88,6 +88,9 @@ describe('safe deployment configuration CLI', () => {
     ['duplicate TLS certificate after an empty value', ['--mode', 'direct-tls', '--app-domain', 'example.com', '--api-domain', 'api.example.com', '--tls-cert', '', '--tls-cert', '/tmp/cert.pem', '--tls-key', '/tmp/key.pem']],
     ['duplicate TLS key after an empty value', ['--mode', 'direct-tls', '--app-domain', 'example.com', '--api-domain', 'api.example.com', '--tls-cert', '/tmp/cert.pem', '--tls-key', '', '--tls-key', '/tmp/key.pem']],
     ['duplicate secret rotation flag', [...behindProxyArgs, '--rotate-secrets', '--rotate-secrets']],
+    ['duplicate Subweb image', [...behindProxyArgs, '--subweb-image', 'docker.io/keleyaa/subweb:latest', '--subweb-image', 'docker.io/keleyaa/subweb:sha-1234567']],
+    ['newline in Subweb image', [...behindProxyArgs, '--subweb-image', 'docker.io/keleyaa/subweb:latest\nINJECTED=value']],
+    ['whitespace in Subweb image', [...behindProxyArgs, '--subweb-image', 'docker.io/keleyaa/subweb:bad tag']],
     ['unknown mode', ['--mode', 'other', '--app-domain', 'example.com', '--api-domain', 'api.example.com']],
     ['scheme in domain', ['--mode', 'behind-proxy', '--app-domain', 'https://example.com', '--api-domain', 'api.example.com']],
     ['path in domain', ['--mode', 'behind-proxy', '--app-domain', 'example.com/path', '--api-domain', 'api.example.com']],
@@ -134,6 +137,23 @@ describe('safe deployment configuration CLI', () => {
     expect((await stat(envPath)).mode & 0o777).toBe(0o600);
     expect(`${result.stdout}${result.stderr}`).not.toContain(env.MYURLS_API_TOKEN);
     expect(`${result.stdout}${result.stderr}`).not.toContain(env.REDIS_PASSWORD);
+  });
+
+  it('writes and preserves an explicitly selected prebuilt Subweb image', async () => {
+    const cwd = await makeDirectory();
+    const image = 'docker.io/keleyaa/subweb:sha-2bf1a9f';
+
+    const first = runConfigure(cwd, [...behindProxyArgs, '--subweb-image', image]);
+    expect(first.status).toBe(0);
+    expect(parseEnv(await readFile(join(cwd, '.env'), 'utf8')).SUBWEB_IMAGE).toBe(image);
+
+    const second = runConfigure(cwd, [
+      '--mode', 'behind-proxy',
+      '--app-domain', 'new.example.com',
+      '--api-domain', 'api.new.example.com',
+    ]);
+    expect(second.status).toBe(0);
+    expect(parseEnv(await readFile(join(cwd, '.env'), 'utf8')).SUBWEB_IMAGE).toBe(image);
   });
 
   it('writes only the direct-tls profile and absolute TLS paths', async () => {

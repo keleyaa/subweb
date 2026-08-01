@@ -36,6 +36,8 @@ tls_cert_seen=0
 tls_key=
 tls_key_seen=0
 rotate_secrets=0
+subweb_image=
+subweb_image_seen=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -79,6 +81,13 @@ while [ "$#" -gt 0 ]; do
       rotate_secrets=1
       shift
       ;;
+    --subweb-image)
+      [ "$subweb_image_seen" -eq 0 ] || fail '--subweb-image may be provided only once.'
+      [ "$#" -ge 2 ] || fail '--subweb-image requires a value.'
+      subweb_image=$2
+      subweb_image_seen=1
+      shift 2
+      ;;
     *) fail "Unknown argument: $1" ;;
   esac
 done
@@ -86,6 +95,7 @@ done
 validate_mode "$mode" || fail 'mode must be behind-proxy or direct-tls.'
 validate_domain "$app_domain" || fail 'APP domain must be a plain hostname without scheme, path, or port.'
 validate_domain "$api_domain" || fail 'API domain must be a plain hostname without scheme, path, or port.'
+[ "$subweb_image_seen" -eq 0 ] || validate_container_image "$subweb_image" || fail 'Subweb image must be a safe registry/repository reference with a tag or sha256 digest.'
 
 normalized_app=$(printf '%s' "$app_domain" | tr '[:upper:]' '[:lower:]')
 normalized_api=$(printf '%s' "$api_domain" | tr '[:upper:]' '[:lower:]')
@@ -106,6 +116,21 @@ esac
 env_file=$PWD/.env
 [ ! -d "$env_file" ] || fail '.env target must not be a directory or a symlink to a directory.'
 
+if [ "$subweb_image_seen" -eq 0 ] && [ -f "$env_file" ]; then
+  if existing_image=$(load_existing_image "$env_file"); then
+    subweb_image=$existing_image
+  else
+    existing_image_status=$?
+    [ "$existing_image_status" -eq 1 ] || fail 'Existing SUBWEB_IMAGE is duplicated or invalid.'
+  fi
+fi
+
+subweb_image_setting=
+if [ -n "$subweb_image" ]; then
+  subweb_image_setting="SUBWEB_IMAGE=$subweb_image
+"
+fi
+
 if [ "$rotate_secrets" -eq 0 ] && [ -f "$env_file" ]; then
   myurls_api_token=$(load_existing_secret "$env_file" MYURLS_API_TOKEN) || fail 'Existing MYURLS_API_TOKEN is missing, duplicated, or invalid.'
   redis_password=$(load_existing_secret "$env_file" REDIS_PASSWORD) || fail 'Existing REDIS_PASSWORD is missing, duplicated, or invalid.'
@@ -121,7 +146,7 @@ APP_DOMAIN=$app_domain
 API_DOMAIN=$api_domain
 API_URL=https://$api_domain
 SHORT_URL=https://$app_domain/short-api
-TLS_CERT_PATH=$tls_cert
+${subweb_image_setting}TLS_CERT_PATH=$tls_cert
 TLS_KEY_PATH=$tls_key
 MYURLS_API_TOKEN=$myurls_api_token
 REDIS_PASSWORD=$redis_password
@@ -133,7 +158,7 @@ APP_DOMAIN=$app_domain
 API_DOMAIN=$api_domain
 API_URL=https://$api_domain
 SHORT_URL=https://$app_domain/short-api
-MYURLS_API_TOKEN=$myurls_api_token
+${subweb_image_setting}MYURLS_API_TOKEN=$myurls_api_token
 REDIS_PASSWORD=$redis_password
 EOF
 fi

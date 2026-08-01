@@ -36,6 +36,7 @@ const renderProfile = async (profile) => {
       'API_DOMAIN=api.example.com',
       'API_URL=https://api.example.com',
       'SHORT_URL=https://app.example.com/short-api',
+      'SUBWEB_IMAGE=docker.io/keleyaa/subweb:sha-2bf1a9f',
       'SUBWEB_PORT=19080',
       `TLS_CERT_PATH=${join(fixtureDirectory, 'fullchain.pem')}`,
       `TLS_KEY_PATH=${join(fixtureDirectory, 'privkey.pem')}`,
@@ -126,6 +127,7 @@ describe('integrated Compose stack', () => {
 
   it('uses exact locked production images and a named Redis data volume', async () => {
     const config = await renderProfile('behind-proxy');
+    expect(config.services['gateway-http'].image).toBe('docker.io/keleyaa/subweb:sha-2bf1a9f');
     expect(config.services.redis.image).toBe(imageFor('redis'));
     expect(config.services.myurls.image).toBe(imageFor('myurls'));
     expect(config.services.subconverter.image).toBe(imageFor('subconverter'));
