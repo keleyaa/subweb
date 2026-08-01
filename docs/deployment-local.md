@@ -4,19 +4,20 @@
 
 ## 系统与依赖
 
-支持 macOS、Linux 和 WSL2；不支持原生 Windows。需要 Node.js 24+、npm 11+、Go、CMake、Redis、Nginx、Git、curl、lsof 和 OpenSSL。
+支持 macOS、Linux 和 WSL2；不支持原生 Windows。需要 Node.js 24+、npm 11+、Go、CMake、pkg-config、Redis、Nginx、Git、curl、lsof、OpenSSL，以及 SubConverter 所需的 curl、PCRE2、RapidJSON 和 yaml-cpp 开发包。QuickJS 与 libcron 会按 SubConverter 自带的依赖锁在用户缓存中构建，不写入本仓库。
 
 macOS Homebrew 用户可手动执行：
 
 ```sh
-brew install node go cmake redis nginx git curl lsof openssl
+brew install node go cmake pkg-config redis nginx git curl lsof openssl rapidjson yaml-cpp pcre2
 ```
 
 Debian/Ubuntu 用户可手动执行：
 
 ```sh
 sudo apt update
-sudo apt install nodejs npm golang cmake redis-server nginx git curl lsof openssl
+sudo apt install nodejs npm golang cmake pkg-config redis-server nginx git curl lsof openssl \
+  build-essential libcurl4-openssl-dev libpcre2-dev rapidjson-dev libyaml-cpp-dev
 ```
 
 发行版仓库里的 Node/npm 版本若低于要求，应改用 Node 官方支持的安装方式。脚本只检查并报告缺失项，不自动修改系统。
@@ -30,7 +31,7 @@ sudo apt install nodejs npm golang cmake redis-server nginx git curl lsof openss
 ./scripts/local/stop.sh
 ```
 
-`bootstrap.sh` 校验工具、创建私有秘密、按 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 获取源码并编译。默认源码缓存位于 `$XDG_CACHE_HOME/subweb/sources` 或 `$HOME/.cache/subweb/sources`；构建、日志、Redis 数据和 PID 位于未提交的 `.runtime/local/`。
+`bootstrap.sh` 校验工具、创建私有秘密、按 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 获取业务源码，并继续读取锁定 SubConverter commit 自带的 `scripts/ci/dependencies.lock.json` 构建 QuickJS/libcron。SubConverter 的 Mihomo bridge 和 C++ 程序在 `.runtime/local/build/subconverter-source/` 隔离副本中构建，不修改用户指定或缓存的 checkout。默认源码缓存位于 `$XDG_CACHE_HOME/subweb/sources` 或 `$HOME/.cache/subweb/sources`；构建、日志、Redis 数据和 PID 位于未提交的 `.runtime/local/`。
 
 已有正确 checkout 时可避免重复下载：
 

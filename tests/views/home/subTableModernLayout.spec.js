@@ -159,10 +159,10 @@ describe('SubTable modern visual constraints', () => {
 
     expect(source).toMatch(/repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
     expect(source).toMatch(
-      /\.sub-table--modern\s*\{[^}]*padding:\s*28px\s*;[^}]*border:\s*1px solid var\(--surface-glass-edge\)\s*;[^}]*border-radius:\s*32px\s*;[^}]*background:\s*var\(--surface-glass\)\s*;[^}]*backdrop-filter:\s*blur\(24px\) saturate\(125%\)\s*;/s,
+      /\.sub-table--modern\s*\{[^}]*padding:\s*32px\s*;[^}]*border:\s*1px solid var\(--surface-glass-edge\)\s*;[^}]*border-radius:\s*32px\s*;[^}]*background:\s*var\(--surface-glass\)\s*;[^}]*backdrop-filter:\s*blur\(28px\) saturate\(150%\)\s*;/s,
     );
     expect(source).toMatch(/textarea,[\s\S]*?background:\s*var\(--surface-control\)/);
-    expect(source).toContain('border-radius: 12px');
+    expect(source).toContain('border-radius: 14px');
     expect(source).toContain('var(--accent)');
     expect(source).toContain('var(--separator)');
     expect(source).toContain('44px');
@@ -189,6 +189,7 @@ describe('SubTable modern visual constraints', () => {
     const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
 
     expect(source).toMatch(/\.primary-action-button\s*\{[\s\S]*?background:\s*var\(--accent\)/);
+    expect(source).toMatch(/\.primary-action-button\s*\{[\s\S]*?width:\s*100%/);
     expect(source).toMatch(/\.primary-action-button:hover\s*\{[\s\S]*?background:\s*var\(--accent-hover\)/);
     expect(source).toMatch(/\.primary-action-button:active\s*\{[\s\S]*?background:\s*var\(--accent-active\)/);
     expect(source).toMatch(/\.primary-action-button:disabled\s*\{/);

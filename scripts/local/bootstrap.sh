@@ -20,7 +20,7 @@ case "$platform" in
   *) local_error "不支持的本机系统: $platform"; exit 1 ;;
 esac
 
-required_tools='node npm go cmake redis-server redis-cli nginx git curl lsof openssl'
+required_tools='node npm go cmake pkg-config redis-server redis-cli nginx git curl lsof openssl tar bash file'
 missing_tools=
 for tool in $required_tools; do
   command -v "$tool" >/dev/null 2>&1 || missing_tools="$missing_tools $tool"
@@ -28,8 +28,8 @@ done
 if [ -n "$missing_tools" ]; then
   printf '缺少本机源码运行依赖:%s\n' "$missing_tools" >&2
   case "$platform" in
-    Darwin) printf '%s\n' '请手动安装缺失依赖；Homebrew 用户可参考 brew install node go cmake redis nginx git curl lsof openssl。' >&2 ;;
-    Linux) printf '%s\n' '请手动安装缺失依赖；Debian/Ubuntu 用户可参考 apt install nodejs npm golang cmake redis-server nginx git curl lsof openssl。' >&2 ;;
+    Darwin) printf '%s\n' '请手动安装缺失依赖；Homebrew 用户可参考 brew install node go cmake pkg-config redis nginx git curl lsof openssl rapidjson yaml-cpp pcre2。' >&2 ;;
+    Linux) printf '%s\n' '请手动安装缺失依赖；Debian/Ubuntu 用户可参考 apt install nodejs npm golang cmake pkg-config redis-server nginx git curl lsof openssl build-essential libcurl4-openssl-dev libpcre2-dev rapidjson-dev libyaml-cpp-dev。' >&2 ;;
     *) printf '%s\n' '请根据当前系统文档手动安装上述依赖。' >&2 ;;
   esac
   exit 1
@@ -94,6 +94,46 @@ source_cache=$cache_home/subweb/sources
 myurls_source=$(ensure_pinned_source myurls "$myurls_url" "$myurls_commit" "${MYURLS_SOURCE_DIR:-}" "$source_cache") || exit 1
 subconverter_source=$(ensure_pinned_source subconverter "$subconverter_url" "$subconverter_commit" "${SUBCONVERTER_SOURCE_DIR:-}" "$source_cache") || exit 1
 
+subconverter_dependency_lock=$subconverter_source/scripts/ci/dependencies.lock.json
+[ -f "$subconverter_dependency_lock" ] \
+  || { local_error 'SubConverter dependency lock is missing'; exit 1; }
+read_subconverter_dependency() {
+  dependency=$1
+  field=$2
+  node -e '
+const fs = require("node:fs");
+const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+const value = data.git?.[process.argv[2]]?.[process.argv[3]];
+if (typeof value !== "string" || value.length === 0) process.exit(1);
+process.stdout.write(value);
+' "$subconverter_dependency_lock" "$dependency" "$field"
+}
+
+quickjspp_url=$(read_subconverter_dependency quickjspp repository) \
+  || { local_error 'SubConverter quickjspp dependency URL is invalid'; exit 1; }
+quickjspp_commit=$(read_subconverter_dependency quickjspp revision) \
+  || { local_error 'SubConverter quickjspp dependency revision is invalid'; exit 1; }
+libcron_url=$(read_subconverter_dependency libcron repository) \
+  || { local_error 'SubConverter libcron dependency URL is invalid'; exit 1; }
+libcron_commit=$(read_subconverter_dependency libcron revision) \
+  || { local_error 'SubConverter libcron dependency revision is invalid'; exit 1; }
+quickjspp_source=$(ensure_pinned_source quickjspp "$quickjspp_url" "$quickjspp_commit" '' "$source_cache") || exit 1
+libcron_source=$(ensure_pinned_source libcron "$libcron_url" "$libcron_commit" '' "$source_cache") || exit 1
+git -C "$quickjspp_source" submodule update --init --recursive
+git -C "$libcron_source" submodule update --init --recursive
+
+subconverter_work_source=$runtime_root/build/subconverter-source
+subconverter_source_marker=$subconverter_work_source/.subweb-source-revision
+prepared_subconverter_revision=
+[ -f "$subconverter_source_marker" ] && prepared_subconverter_revision=$(sed -n '1p' "$subconverter_source_marker")
+if [ "$prepared_subconverter_revision" != "$subconverter_commit" ]; then
+  rm -rf "$subconverter_work_source"
+  mkdir -p "$subconverter_work_source"
+  git -C "$subconverter_source" archive "$subconverter_commit" \
+    | tar -x -C "$subconverter_work_source"
+  printf '%s\n' "$subconverter_commit" > "$subconverter_source_marker"
+fi
+
 lock_digest=$(node -e '
 const fs = require("node:fs");
 const crypto = require("node:crypto");
@@ -121,8 +161,59 @@ build_jobs=${BUILD_JOBS:-}
 if [ -z "$build_jobs" ]; then build_jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf 2); fi
 case "$build_jobs" in ''|*[!0-9]*) local_error 'BUILD_JOBS 必须是正整数'; exit 1 ;; esac
 [ "$build_jobs" -ge 1 ] || { local_error 'BUILD_JOBS 必须是正整数'; exit 1; }
+subconverter_dependency_prefix=$runtime_root/build/subconverter-dependencies
+mkdir -p "$subconverter_dependency_prefix/include" "$subconverter_dependency_prefix/lib/quickjs"
+
+quickjs_marker=$subconverter_dependency_prefix/.quickjspp-revision
+installed_quickjs_revision=
+[ -f "$quickjs_marker" ] && installed_quickjs_revision=$(sed -n '1p' "$quickjs_marker")
+if [ "$installed_quickjs_revision" != "$quickjspp_commit" ] \
+  || [ ! -f "$subconverter_dependency_prefix/lib/quickjs/libquickjs.a" ]; then
+  quickjs_build=$runtime_root/build/quickjspp
+  rm -rf "$quickjs_build"
+  cmake -S "$quickjspp_source" -B "$quickjs_build" -DCMAKE_BUILD_TYPE=Release
+  cmake --build "$quickjs_build" --config Release --target quickjs --parallel "$build_jobs"
+  quickjs_library=$(find "$quickjs_build" -type f -name libquickjs.a -print | sed -n '1p')
+  [ -n "$quickjs_library" ] || { local_error 'quickjspp build did not produce libquickjs.a'; exit 1; }
+  install -m 0644 "$quickjs_library" "$subconverter_dependency_prefix/lib/quickjs/libquickjs.a"
+  mkdir -p "$subconverter_dependency_prefix/include/quickjs"
+  install -m 0644 "$quickjspp_source/quickjs/quickjs.h" "$quickjspp_source/quickjs/quickjs-libc.h" \
+    "$subconverter_dependency_prefix/include/quickjs/"
+  install -m 0644 "$quickjspp_source/quickjspp.hpp" "$subconverter_dependency_prefix/include/quickjspp.hpp"
+  printf '%s\n' "$quickjspp_commit" > "$quickjs_marker.tmp"
+  mv -f "$quickjs_marker.tmp" "$quickjs_marker"
+fi
+
+libcron_marker=$subconverter_dependency_prefix/.libcron-revision
+installed_libcron_revision=
+[ -f "$libcron_marker" ] && installed_libcron_revision=$(sed -n '1p' "$libcron_marker")
+if [ "$installed_libcron_revision" != "$libcron_commit" ] \
+  || [ ! -f "$subconverter_dependency_prefix/lib/liblibcron.a" ]; then
+  libcron_build=$runtime_root/build/libcron
+  rm -rf "$libcron_build"
+  cmake -S "$libcron_source" -B "$libcron_build" -DCMAKE_BUILD_TYPE=Release
+  cmake --build "$libcron_build" --config Release --target libcron --parallel "$build_jobs"
+  libcron_library=$(find "$libcron_build" "$libcron_source/libcron/out" -type f -name liblibcron.a -print | sed -n '1p')
+  [ -n "$libcron_library" ] || { local_error 'libcron build did not produce liblibcron.a'; exit 1; }
+  install -m 0644 "$libcron_library" "$subconverter_dependency_prefix/lib/liblibcron.a"
+  mkdir -p "$subconverter_dependency_prefix/include/libcron" "$subconverter_dependency_prefix/include/date"
+  install -m 0644 "$libcron_source/libcron/include/libcron/"* "$subconverter_dependency_prefix/include/libcron/"
+  install -m 0644 "$libcron_source/libcron/externals/date/include/date/"* "$subconverter_dependency_prefix/include/date/"
+  printf '%s\n' "$libcron_commit" > "$libcron_marker.tmp"
+  mv -f "$libcron_marker.tmp" "$libcron_marker"
+fi
+
+if [ ! -f "$subconverter_work_source/bridge/libmihomo.a" ] \
+  || [ ! -f "$subconverter_work_source/bridge/libmihomo.h" ]; then
+  (cd "$subconverter_work_source" && bash bridge/build.sh)
+fi
+
 subconverter_build=$runtime_root/build/subconverter
-cmake -S "$subconverter_source" -B "$subconverter_build" -DCMAKE_BUILD_TYPE=Release
+cmake -S "$subconverter_work_source" -B "$subconverter_build" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="$subconverter_dependency_prefix" \
+  -DCMAKE_LIBRARY_PATH="$subconverter_dependency_prefix/lib" \
+  -DCMAKE_INCLUDE_PATH="$subconverter_dependency_prefix/include"
 cmake --build "$subconverter_build" --config Release --parallel "$build_jobs"
 subconverter_candidates=$(find "$subconverter_build" -type f -name subconverter -perm -111 -print)
 subconverter_binary=$(printf '%s\n' "$subconverter_candidates" | sed -n '1p')
@@ -138,7 +229,8 @@ umask 077
 {
   printf 'MYURLS_SOURCE_DIR=%s\n' "$myurls_source"
   printf 'MYURLS_SOURCE_COMMIT=%s\n' "$myurls_commit"
-  printf 'SUBCONVERTER_SOURCE_DIR=%s\n' "$subconverter_source"
+  printf 'SUBCONVERTER_SOURCE_DIR=%s\n' "$subconverter_work_source"
+  printf 'SUBCONVERTER_CHECKOUT_DIR=%s\n' "$subconverter_source"
   printf 'SUBCONVERTER_SOURCE_COMMIT=%s\n' "$subconverter_commit"
   printf 'SUBCONVERTER_BUILD_DIR=%s\n' "$subconverter_build"
   printf 'SUBCONVERTER_BINARY=%s\n' "$subconverter_binary"

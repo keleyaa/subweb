@@ -1,9 +1,7 @@
 <template>
-  <main class="home-workspace">
+  <main class="home-workspace" aria-labelledby="conversion-title">
     <div class="home-workspace__inner">
-      <header class="home-workspace__heading">
-        <h1>订阅转换</h1>
-      </header>
+      <h2 id="conversion-title" class="visually-hidden">订阅转换</h2>
       <SubTable />
     </div>
   </main>
@@ -29,36 +27,14 @@ export default {
 
 .home-workspace__inner {
   width: 100%;
-  max-width: 46rem;
+  max-width: 52rem;
   margin: 0 auto;
-  padding: 36px 20px 40px;
-}
-
-.home-workspace__heading {
-  margin-bottom: 24px;
-  text-align: center;
-}
-
-.home-workspace__heading h1 {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 30px;
-  font-weight: 650;
-  letter-spacing: 0;
-  line-height: 1.2;
+  padding: 20px 20px 48px;
 }
 
 @media (max-width: 575.98px) {
   .home-workspace__inner {
-    padding: 24px 16px 28px;
-  }
-
-  .home-workspace__heading {
-    margin-bottom: 20px;
-  }
-
-  .home-workspace__heading h1 {
-    font-size: 28px;
+    padding: 16px 16px 32px;
   }
 }
 </style>

@@ -21,6 +21,9 @@ describe('focused navigation', () => {
     expect(source).toMatch(
       /\.app-brand-link:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--focus-ring\);[^}]*outline-offset:\s*2px;[^}]*border-radius:\s*8px;/s,
     );
+    expect(source).toMatch(/\.app-brand-text\s*\{[^}]*font-size:\s*54px;[^}]*font-weight:\s*800;[^}]*letter-spacing:\s*0;/s);
+    expect(source).toContain('@media (max-width: 575.98px)');
+    expect(source).toMatch(/@media \(max-width: 575\.98px\)[\s\S]*?\.app-brand-text,[\s\S]*?\.app-brand-dot\s*\{[^}]*font-size:\s*40px;/s);
   });
 
   it('contains only the brand and theme toggle in the top navigation', async () => {
@@ -34,7 +37,7 @@ describe('focused navigation', () => {
     expect(source).not.toContain('NavMenu');
     expect(source).not.toContain('github');
     expect(source).not.toContain('<a');
-    expect(source).toMatch(/\.minimal-navbar__inner\s*\{[^}]*max-width:\s*46rem;[^}]*min-height:\s*56px;[^}]*margin:\s*0 auto;[^}]*justify-content:\s*center;/s);
+    expect(source).toMatch(/\.minimal-navbar__inner\s*\{[^}]*max-width:\s*52rem;[^}]*min-height:\s*84px;[^}]*margin:\s*0 auto;[^}]*justify-content:\s*center;/s);
     expect(source).not.toMatch(/position:\s*sticky|backdrop-filter|box-shadow|border-radius:\s*20px/);
     expect(source).toMatch(/:deep\(\.theme-toggle\)\s*\{[^}]*position:\s*absolute;[^}]*right:\s*0;/s);
   });

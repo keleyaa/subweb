@@ -36,7 +36,8 @@ describe('home workspace layout', () => {
 
     expect(source).toContain('class="home-workspace"');
     expect(source).toContain('class="home-workspace__inner"');
-    expect(source).toContain('class="home-workspace__heading"');
+    expect(source).toContain('aria-labelledby="conversion-title"');
+    expect(source).toContain('<h2 id="conversion-title" class="visually-hidden">订阅转换</h2>');
     expect(source).toContain('<SubTable />');
     expect(source.match(/<SubTable/g)).toHaveLength(1);
   });
@@ -55,31 +56,24 @@ describe('home workspace layout', () => {
     expect(source).toMatch(/\.home-workspace\s*\{[^}]*display:\s*flex\s*;/);
     expect(source).not.toContain('min-height: calc(100vh - 57px)');
     expect(source).toMatch(
-      /\.home-workspace__inner\s*\{[^}]*max-width:\s*46rem\s*;[^}]*margin:\s*0 auto\s*;[^}]*padding:\s*36px 20px 40px\s*;/
+      /\.home-workspace__inner\s*\{[^}]*max-width:\s*52rem\s*;[^}]*margin:\s*0 auto\s*;[^}]*padding:\s*20px 20px 48px\s*;/
     );
-    expect(source).toMatch(
-      /\.home-workspace__heading\s*\{[^}]*margin-bottom:\s*24px\s*;[^}]*text-align:\s*center\s*;/,
-    );
-    expect(source).toMatch(
-      /\.home-workspace__heading h1\s*\{[^}]*margin:\s*0\s*;[^}]*color:\s*var\(--text-primary\)\s*;[^}]*font-size:\s*30px\s*;[^}]*font-weight:\s*650\s*;[^}]*letter-spacing:\s*0\s*;[^}]*line-height:\s*1\.2\s*;/
-    );
-    expect(source).not.toContain('.home-workspace__heading p');
+    expect(source).not.toContain('home-workspace__heading');
   });
 
   it('tightens workspace spacing and heading size on mobile', async () => {
     const source = await readFile(sourceUrl, 'utf8');
 
     expect(source).toMatch(
-      /@media \(max-width: 575\.98px\)\s*\{[\s\S]*?\.home-workspace__inner\s*\{[^}]*padding:\s*24px 16px 28px\s*;[^}]*\}[\s\S]*?\.home-workspace__heading\s*\{[^}]*margin-bottom:\s*20px\s*;[^}]*\}[\s\S]*?\.home-workspace__heading h1\s*\{[^}]*font-size:\s*28px\s*;/
+      /@media \(max-width: 575\.98px\)\s*\{[\s\S]*?\.home-workspace__inner\s*\{[^}]*padding:\s*16px 16px 32px\s*;/
     );
   });
 
   it('uses one fixed presentation without a retired runtime-UX compatibility layer', async () => {
     const source = await readFile(sourceUrl, 'utf8');
 
-    expect(source).toContain('<main class="home-workspace">');
-    expect(source).toContain('<h1>订阅转换</h1>');
-    expect(source).not.toContain('<p>');
+    expect(source).toContain('<main class="home-workspace" aria-labelledby="conversion-title">');
+    expect(source).toContain('<h2 id="conversion-title" class="visually-hidden">订阅转换</h2>');
     expect(source).not.toContain('presentation');
     expect(source).not.toContain('uxMode');
     expect(source).not.toContain('data-ux-mode');
@@ -94,9 +88,9 @@ describe('home workspace layout', () => {
     expect(source).toContain('--surface-control');
     expect(source).toContain('--focus-ring');
     expect(source).toContain('--el-bg-color');
-    expect(source).not.toContain('linear-gradient');
-    expect(source).toMatch(/body::before\s*\{[\s\S]*?radial-gradient/);
-    expect((source.match(/radial-gradient/g) ?? [])).toHaveLength(3);
+    expect(source).not.toContain('radial-gradient');
+    expect(source).toMatch(/body::before\s*\{[\s\S]*?linear-gradient/);
+    expect((source.match(/linear-gradient/g) ?? []).length).toBeGreaterThanOrEqual(3);
     expect(source).toMatch(
       /@media \(prefers-contrast: more\)[\s\S]*?html\[data-theme='light'\]\s*\{[^}]*--surface-glass-edge:\s*[^;]+;[\s\S]*?html\[data-theme='dark'\]\s*\{[^}]*--surface-glass-edge:\s*[^;]+;/,
     );

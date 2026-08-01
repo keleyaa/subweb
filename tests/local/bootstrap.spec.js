@@ -117,7 +117,7 @@ describe('local source bootstrap contract', () => {
     });
 
     expect(result.status).not.toBe(0);
-    for (const tool of ['node', 'npm', 'go', 'cmake', 'redis-server', 'redis-cli', 'nginx', 'git', 'curl', 'lsof']) {
+    for (const tool of ['node', 'npm', 'go', 'cmake', 'pkg-config', 'redis-server', 'redis-cli', 'nginx', 'git', 'curl', 'lsof', 'tar', 'bash', 'file']) {
       expect(result.stderr).toContain(tool);
     }
     expect(result.stderr).toContain('手动安装');
@@ -130,6 +130,13 @@ describe('local source bootstrap contract', () => {
     expect(source).toContain('go build -trimpath -o');
     expect(source).toContain('cmake -S');
     expect(source).toContain('cmake --build');
+    expect(source).toContain('scripts/ci/dependencies.lock.json');
+    expect(source).toContain('quickjspp');
+    expect(source).toContain('libcron');
+    expect(source).toContain('git -C "$subconverter_source" archive');
+    expect(source).toContain('bridge/build.sh');
+    expect(source).toContain('subconverter_work_source');
+    expect(source).toContain('-DCMAKE_PREFIX_PATH="$subconverter_dependency_prefix"');
     expect(source).toContain('runtime_root/bin/subconverter');
     expect(source).toContain('SUBCONVERTER_BINARY=');
     expect(source).toContain('secrets_file=$runtime_root/secrets.env');

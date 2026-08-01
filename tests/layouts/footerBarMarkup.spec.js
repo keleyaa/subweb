@@ -13,15 +13,17 @@ describe('FooterBar source contract', () => {
     expect(source).toContain('target="_blank"');
     expect(source).toContain('rel="noopener noreferrer"');
     expect(source).toContain('aria-label="在新窗口打开 GitHub 项目"');
-    expect(source).toContain('GitHub 项目 · {{ repositoryLabel }}');
+    expect(source).toContain('<strong>{{ repositoryLabel }}</strong>');
+    expect(source).toContain('<small>Vue 3 · MIT</small>');
+    expect(source).toContain('class="footer-bar__external"');
     expect(source).toContain("import { getGithubMenuItem, getGithubRepositoryLabel } from '@/features/site/github';");
     expect(source).toContain('menuItems: Array.isArray(window.config?.menuItem) ? window.config.menuItem : []');
     expect(source).toMatch(/githubItem\(\)\s*\{\s*return getGithubMenuItem\(this\.menuItems\);\s*\}/);
     expect(source).toMatch(
       /repositoryLabel\(\)\s*\{\s*return getGithubRepositoryLabel\(this\.githubItem\);\s*\}/,
     );
-    expect(source).toMatch(/\.footer-bar\s*\{[^}]*max-width:\s*46rem\s*;[^}]*text-align:\s*center\s*;/s);
-    expect(source).not.toMatch(/backdrop-filter|box-shadow|background:\s*var\(--surface-glass/);
+    expect(source).toMatch(/\.footer-bar\s*\{[^}]*max-width:\s*52rem\s*;/s);
+    expect(source).not.toMatch(/backdrop-filter|background:\s*var\(--surface-glass/);
     expect(source).toContain('var(--text-secondary)');
   });
 });

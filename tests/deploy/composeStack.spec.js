@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { lstat, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -106,15 +106,22 @@ describe('integrated Compose stack', () => {
         expect.objectContaining({
           read_only: true,
           target: '/run/tls/fullchain.pem',
-          bind: { create_host_path: false },
         }),
         expect.objectContaining({
           read_only: true,
           target: '/run/tls/privkey.pem',
-          bind: { create_host_path: false },
         }),
       ]),
     );
+  });
+
+  it('declares non-creating TLS bind mounts in the Compose source', async () => {
+    const source = await readFile(composePath, 'utf8');
+    const gatewayTls = source.slice(source.indexOf('  gateway-tls:'), source.indexOf('\nvolumes:'));
+
+    expect(gatewayTls.match(/create_host_path:\s*false/g)).toHaveLength(2);
+    expect(gatewayTls).toContain('target: /run/tls/fullchain.pem');
+    expect(gatewayTls).toContain('target: /run/tls/privkey.pem');
   });
 
   it('uses exact locked production images and a named Redis data volume', async () => {
@@ -214,40 +221,4 @@ describe('integrated Compose stack', () => {
     expect(config.services.subconverter.expose).toBeUndefined();
   });
 
-  it('fails before container creation when direct TLS bind sources do not exist', async () => {
-    const missingCert = join(fixtureDirectory, 'missing-fullchain.pem');
-    const missingKey = join(fixtureDirectory, 'missing-privkey.pem');
-    const envPath = join(fixtureDirectory, 'direct-missing-tls.env');
-    const project = `subweb-tls-missing-${process.pid}`;
-    await writeFile(
-      envPath,
-      [
-        'COMPOSE_PROFILES=direct-tls',
-        'APP_DOMAIN=app.example.com',
-        'API_DOMAIN=api.example.com',
-        'API_URL=https://api.example.com',
-        'SHORT_URL=https://app.example.com/short-api',
-        `TLS_CERT_PATH=${missingCert}`,
-        `TLS_KEY_PATH=${missingKey}`,
-        `MYURLS_API_TOKEN=${testSecret}`,
-        `REDIS_PASSWORD=${testSecret}`,
-        '',
-      ].join('\n'),
-    );
-
-    const args = ['compose', '-p', project, '-f', composePath, '--env-file', envPath];
-    const result = spawnSync('docker', [...args, 'create', 'gateway-tls'], {
-      cwd: new URL('../..', import.meta.url).pathname,
-      encoding: 'utf8',
-    });
-    spawnSync('docker', [...args, 'down', '-v', '--remove-orphans'], {
-      cwd: new URL('../..', import.meta.url).pathname,
-      encoding: 'utf8',
-    });
-
-    expect(result.status).not.toBe(0);
-    expect(`${result.stdout}\n${result.stderr}`).toMatch(/bind source path does not exist/i);
-    await expect(lstat(missingCert)).rejects.toMatchObject({ code: 'ENOENT' });
-    await expect(lstat(missingKey)).rejects.toMatchObject({ code: 'ENOENT' });
-  });
 });

@@ -9,6 +9,8 @@ describe('local source workflow contract', () => {
     const workflow = await readFile(workflowPath, 'utf8');
     expect(workflow).toContain('macos-15');
     expect(workflow).toContain('ubuntu-24.04');
+    expect(workflow).toContain('uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16');
+    expect(workflow).toContain('go-version: 1.26.5');
     expect(workflow).toContain('./scripts/local/bootstrap.sh && ./scripts/local/bootstrap.sh');
     expect(workflow).toContain('./scripts/local/start.sh');
     expect(workflow).toContain('./scripts/local/status.sh');
@@ -16,6 +18,7 @@ describe('local source workflow contract', () => {
     expect(workflow).toContain('if: always()');
     expect(workflow).toContain('./scripts/local/stop.sh');
     expect(workflow).not.toMatch(/sudo\s+.*(start|bootstrap|stop)\.sh/);
+    expect(workflow).not.toContain('golang-go');
   });
 
   it('keeps the full local lifecycle contract in the real verifier', async () => {

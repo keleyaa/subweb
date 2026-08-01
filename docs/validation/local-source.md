@@ -19,8 +19,8 @@ npm ci
 
 ## 运行环境
 
-GitHub Actions 在 `macos-15` 和 `ubuntu-24.04` 上执行同一生命周期；CI 只在安装编译工具阶段使用系统包管理器，业务脚本不调用 `sudo`。本机缺少 Go、CMake、Redis 或 Nginx 时，bootstrap 会一次性列出缺失项并退出，需用户按提示手动安装后重试。
+GitHub Actions 在 `macos-15` 和 `ubuntu-24.04` 上执行同一生命周期；CI 只在安装编译工具与系统开发头文件阶段使用系统包管理器，业务脚本不调用 `sudo`。QuickJS 和 libcron 由 bootstrap 按锁定 SubConverter 源码中的依赖 revision 构建；Mihomo Go bridge 与 C++ 主程序在运行时源码副本中完成，不污染外部 checkout。本机缺少 Go、CMake、pkg-config、Redis、Nginx 或系统开发包时，bootstrap 会一次性列出命令依赖；CMake 对缺失开发包会给出精确包名，安装后重试即可。
 
 ## 当前工作站证据
 
-截至 2026-08-02，本机源码生命周期的脚本、配置派生、状态聚合、优雅停止和单元测试已通过；实际 macOS 端到端启动尚未执行，因为当前工作站缺少 `go`、`cmake`、`redis-server`、`redis-cli` 和 `nginx`。这不是脚本自动安装依赖的失败，而是预期的安全前置条件阻断。GitHub Actions workflow 提供 macOS/Linux 的真实验证入口，安装依赖后可直接复现上述命令。
+截至 2026-08-02，本机源码生命周期的脚本、配置派生、状态聚合、优雅停止和单元测试已通过；实际维护工作站仍缺少 `go`、`cmake`、`redis-server`、`redis-cli` 和 `nginx`，因此不把该机器描述为端到端通过。GitHub Actions 的 macOS/Linux 任务负责真实构建与生命周期复现；此前失败日志已确认分别缺少 `libcurl` 和 `yaml-cpp` 开发依赖，本次修复把完整系统开发包和锁定 QuickJS/libcron 构建纳入同一工作流。
