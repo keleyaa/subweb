@@ -1,63 +1,61 @@
 # 运行时配置
 
-Subweb 在浏览器启动时读取 `/conf/config.js` 中的 `window.config`。Vite 会把 `public/conf/config.js` 原样复制到构建产物；修改部署目录中的该文件并刷新页面即可生效，不需要重新编译。
+## 公开域名
 
-```js
-window.config = {
-  apiUrl: 'https://api.ml1.one',
-  shortUrl: 'https://ml1.one',
-  menuItem: [{ title: 'GitHub', link: 'https://github.com/keleyaa/subweb', target: '_blank' }],
-  remoteConfigOptions: [
-    {
-      value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online.ini',
-      text: 'ACL4SSR Online',
-    },
-    {
-      value: 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full.ini',
-      text: 'ACL4SSR Online Full',
-    },
-    {
-      value: 'https://raw.githubusercontent.com/FDUZS/subconverter-config/main/config.ini',
-      text: 'FDUZS 流媒体与 AI',
-    },
-    {
-      value: 'https://raw.githubusercontent.com/BeingFun/config4subconverter/main/customize.ini',
-      text: 'BeingFun Clash / Sing-box',
-    },
-  ],
-};
+| 变量 | 默认展示值 | 可公开 | 生效方式 |
+| --- | --- | --- | --- |
+| `APP_DOMAIN` | `ml1.one` | 是 | `configure.sh` 写入 `.env`，重建网关容器 |
+| `API_DOMAIN` | `api.ml1.one` | 是 | 同上；必须与应用域名不同 |
+| `API_URL` | 从 `API_DOMAIN` 派生为 HTTPS URL | 是 | 写入浏览器 `apiUrl` |
+| `SHORT_URL` | 从 `APP_DOMAIN` 派生为 `https://APP_DOMAIN/short-api` | 是 | 写入浏览器 `shortUrl` |
+
+这两个默认域名属于维护者展示部署。其他用户必须用自己的域名执行：
+
+```sh
+./scripts/configure.sh --mode behind-proxy \
+  --app-domain example.com --api-domain api.example.com
 ```
 
-## 字段
+更换域名时重新运行同一命令。默认保留现有秘密；增加 `--rotate-secrets` 才会同时轮换 MyUrls Token 和 Redis 密码，轮换前必须按[运维手册](operations.md)安排停写和备份。
 
-| 字段 | 类型 | 规则 |
-| --- | --- | --- |
-| `apiUrl` | string | 转换后端基础地址。必须是完整 HTTP(S) URL，不允许前后空格或用户名密码；无效时回退到 `https://api.ml1.one`。 |
-| `shortUrl` | string | 短链服务基础地址。使用与 `apiUrl` 相同的 URL 规则；空字符串会关闭短链区域，无效非空值回退到 `https://ml1.one`。 |
-| `menuItem` | array | 页脚 GitHub 项目来源。只保留标题非空、地址为 `https://github.com/<owner>/<repo>` 仓库根路径且不含查询或 fragment 的条目；空数组会隐藏页脚链接。 |
-| `remoteConfigOptions` | array | 远程配置预设，每项为 `{ value, text }`。只保留名称非空且地址为完整 HTTP(S) URL 的条目。 |
+## 秘密与内部地址
 
-字段类型错误或配置对象缺失时使用项目默认值；数组中的无效成员会被过滤。选择“后端默认配置”会省略 `config` 参数，由转换后端使用自身默认规则。
+| 值 | 所有者 | 公开 | 说明 |
+| --- | --- | --- | --- |
+| `MYURLS_API_TOKEN` | `configure.sh` 或平台秘密系统 | 否 | 网关注入、MyUrls 校验；轮换需同时更新两端 |
+| `REDIS_PASSWORD` | `configure.sh` | 否 | Docker 和本机 Redis；不进入浏览器 |
+| `SUBCONVERTER_UPSTREAM` | 部署编排 | 否 | Docker 默认 `http://subconverter:25500` |
+| `MYURLS_UPSTREAM` | 部署编排 | 否 | Docker 默认 `http://myurls:8080` |
+| Redis URL / connection string | PaaS Redis | 否 | 仅供未来 MyUrls PaaS 版本；当前已发布 v1.11 不支持该契约 |
 
-页面会把 `/sub` 或 `/short` 追加到服务地址的路径末尾，并保留已有查询参数；URL fragment 不会发送到服务端。例如 `https://example.com/base?token=value` 会形成 `https://example.com/base/sub?token=value&...`。手动输入的远程配置同样必须通过完整 HTTP(S) URL 校验。
+`.env` 是私有文件，不提交。`.env.example` 中的 secret 只是无效占位符，正式部署必须运行 `configure.sh`。
 
-## 容器环境变量
+## 浏览器配置
 
-容器启动脚本支持：
+前端启动时读取 `/conf/config.js` 的 `window.config`。容器启动脚本从公开的 `API_URL`、`SHORT_URL` 渲染该文件；也可以在静态构建中编辑 [`public/conf/config.js`](../public/conf/config.js)。文件可被任何访客读取，严禁秘密。
 
-| 环境变量 | 作用 |
+字段规则：
+
+- `apiUrl`：完整 HTTP(S) URL；无效时回退到 `https://api.ml1.one`。
+- `shortUrl`：完整 HTTP(S) URL；空字符串关闭短链；无效非空值回退到 `https://ml1.one`。
+- `menuItem`：只接受 GitHub 仓库根链接，显示在页脚。
+- `remoteConfigOptions`：名称非空且 URL 完整的公开远程配置列表。
+
+“后端默认配置”不附加 `config` 参数。选定公开预设后，后端会读取第三方文件；来源见[远程配置来源](remote-config-sources.md)。
+
+## 本机源码端口
+
+| 变量 | 默认端口 |
 | --- | --- |
-| `API_URL` | 覆盖 `apiUrl`。 |
-| `SHORT_URL` | 覆盖 `shortUrl`；传入空字符串可关闭短链。 |
+| `LOCAL_VITE_PORT` | 5173 |
+| `LOCAL_SUBCONVERTER_PORT` | 25500 |
+| `LOCAL_MYURLS_PORT` | 18082 |
+| `LOCAL_REDIS_PORT` | 16379 |
+| `LOCAL_APP_PORT` | 18080 |
+| `LOCAL_API_PORT` | 18081 |
 
-环境变量会在容器启动时安全写入 `/usr/share/nginx/html/conf/config.js`。值不能包含换行符。页面名称固定为 `Subconverter Web`，不存在 `SITE_NAME` 配置。
+可写入未提交的 `.env` 或在命令前导出。启动脚本要求六个端口互不重复且未被占用；活跃值写入权限受限的 `.runtime/local/config/local.env`。
 
-如果把完整配置目录只读挂载到容器，不要同时传入 `API_URL` 或 `SHORT_URL`，否则启动脚本无法写入挂载文件并会主动失败。
+## PaaS 变量
 
-## 安全与隐私
-
-- `/conf/config.js` 是浏览器可直接访问的公开文件，不能存放订阅地址、访问令牌、密码或其他秘密。
-- `apiUrl`、`shortUrl` 和远程配置来源由部署者负责审核。生产环境应使用浏览器可访问的 HTTPS 地址。
-- 转换后端和短链服务需要允许页面来源发起跨域请求；HTTPS 页面调用 HTTP 服务通常会被浏览器作为混合内容拦截。
-- 选择远程配置会让转换后端读取第三方规则及其下游规则集。来源和许可证见[远程配置来源](remote-config-sources.md)。
-- 使用短链会把完整转换链接提交给短链服务；Base64 编码不提供保密性。
+平台模式读取 `PORT`、`APP_DOMAIN`、`API_DOMAIN`、`SUBCONVERTER_UPSTREAM`、`MYURLS_UPSTREAM` 和 `MYURLS_API_TOKEN`。私网上游只接受 `host:port` 或无用户信息、路径、查询和 fragment 的 `http://host:port`。Railway/Render 仍处于设计状态，变量引用不能在正式镜像发布和真实验证前视为可用部署契约。

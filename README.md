@@ -1,87 +1,96 @@
 # Subweb
 
-Subweb 是一个独立维护的单页订阅转换前端，页面品牌显示为 `Subconverter Web`。用户可以在一个页面内输入订阅、选择目标客户端、生成并自动复制转换链接；实际转换由部署者配置的兼容后端完成。
+Subweb 是一套可自托管的订阅转换发行项目。它把 `Subconverter Web` 单页前端、SubConverter-Extended 转换服务、MyUrls 短链服务、Redis 和统一 Nginx 网关放进同一套部署与维护流程；浏览器只访问应用域名和 API 域名，内部服务默认不直接暴露。
 
-## Fork 与来源说明
+## Fork 与来源
 
-| 类型 | 来源 | 说明 |
-| --- | --- | --- |
-| 当前维护仓库 | [keleyaa/subweb](https://github.com/keleyaa/subweb) | 当前代码、镜像、文档和后续维护均以此仓库为准。 |
-| Fork 上游 | [stilleshan/subweb](https://github.com/stilleshan/subweb) | 本项目由该开源仓库 fork 而来，并以其历史代码为起点。 |
-| 设计与代码仓库参考 | 无其他记录 | 留存的前端现代化和无框极简设计计划未记录其他第三方代码仓库作为设计或代码来源。 |
+本仓库 [`keleyaa/subweb`](https://github.com/keleyaa/subweb) fork 自 [`stilleshan/subweb`](https://github.com/stilleshan/subweb)，之后已独立改造前端、网关、测试、容器和文档。短链服务来自维护者 fork 的 [`keleyaa/MyUrls`](https://github.com/keleyaa/MyUrls)，其原始上游是 [`CareyWang/MyUrls`](https://github.com/CareyWang/MyUrls)；转换服务直接使用持续维护的 [`Aethersailor/SubConverter-Extended`](https://github.com/Aethersailor/SubConverter-Extended)，不在本仓库修改其源码。
 
-Fork 之后，本项目已经独立调整前端构建、运行时配置、页面结构、交互、样式、测试、容器和发布流程。上游仓库的旧 README、默认服务和部署方式不代表当前项目状态。
+界面参考 Apple 平台的材质、层级和可访问性原则，并与 MyUrls 的简洁产品气质保持一致；没有复制第三方页面代码、DOM、图形资产或商标。完整版本、镜像摘要、许可证和修改边界见[第三方来源](docs/third-party-sources.md)。
 
-当前界面采用维护者指定的 Apple 风格的无框极简方向；这是视觉原则参考，不是第三方代码来源。改版没有直接复制 Apple 或其他第三方项目的源码、UI 资源或图片。
+## 架构摘要
 
-## 项目边界
+- `APP_DOMAIN` 提供网页、短链创建代理 `/short-api/short` 和短码跳转。
+- `API_DOMAIN` 提供 `/sub` 等转换接口。
+- 网关在服务端注入 MyUrls API Token，Token 不进入浏览器配置。
+- Redis 是唯一业务持久数据；前端、网关、MyUrls 和 SubConverter 均可按锁定版本重建。
+- `ml1.one` 与 `api.ml1.one` 只是维护者展示部署的默认值。其他部署者必须替换成自己的两个域名。
 
-- 本仓库只包含静态前端，不包含订阅转换后端、节点服务、账号或数据存储。
-- 默认转换后端为 `https://api.ml1.one`，默认短链服务为 `https://ml1.one`。
-- 生成转换链接不会请求转换后端；使用生成的链接时，订阅内容会由对应后端处理。
-- 生成短链会把转换链接发送给短链服务。Base64 只是请求格式，不是加密。
-- “后端默认配置”不会追加 `config` 参数；公开远程配置只有在用户主动选择后才会传给后端。
+详细请求路径和信任边界见[架构说明](docs/architecture.md)。
 
-## 功能
+## 快速部署
 
-- 单页完成订阅输入、客户端选择、远程配置和高级参数设置。
-- 点击“转换订阅”后生成并自动复制结果，按钮随后切换为“复制订阅”。
-- 点击“生成短链”后请求短链服务并自动复制，按钮随后切换为“复制短链”。
-- 支持明暗主题切换、系统主题初始值、键盘焦点和移动端布局。
-- 页脚显示当前维护的 GitHub 仓库。
+### Docker
 
-## 本地开发
+适合生产自托管，也是当前完整集成验证的主要方式。已有宝塔、1Panel、Nginx、OpenResty 或 Cloudflare Tunnel 时使用 `behind-proxy`：
 
-要求 Node.js 24 或更高版本、npm 11 或更高版本：
-
-```bash
-npm ci
-npm run serve
+```sh
+./scripts/configure.sh --mode behind-proxy \
+  --app-domain example.com --api-domain api.example.com
+./scripts/validate-compose.sh
+docker compose up -d --build --wait
 ```
 
-完整本地质量检查：
+项目不依赖 Caddy。没有现成反向代理但已有合法双域名证书时，可使用 `direct-tls`。参见 [Docker 部署](docs/deployment-docker.md)。
 
-```bash
+### 本机源码
+
+适合开发和验证，按锁文件拉取并构建 MyUrls 与 SubConverter：
+
+```sh
+./scripts/local/bootstrap.sh
+./scripts/local/start.sh
+./scripts/local/status.sh
+./scripts/local/stop.sh
+```
+
+参见[本机源码运行](docs/deployment-local.md)。
+
+### Railway 与 Render
+
+两种 PaaS 拓扑均已完成设计，但当前不属于正式可部署支持：MyUrls 的 `redis://` / `rediss://` 兼容改动仍只在独立仓库本地验证，尚未发布不可变镜像摘要，也尚未执行计费资源、平台私网、持久性、升级和回滚实测。不要把设计文档当成已验证部署结果。
+
+- [Railway 部署状态与计划](docs/deployment-railway.md)
+- [Render 部署状态与计划](docs/deployment-render.md)
+
+四种方式的选择矩阵见[部署索引](docs/deployment.md)。
+
+## 开发与验证
+
+要求 Node.js 24+、npm 11+：
+
+```sh
+npm ci
 npm run verify
 npm run test:e2e
-npm audit --audit-level=moderate
+npm run verify:locks
+npm run verify:compose
+npm run verify:docs
 ```
 
-第一次运行 E2E 前执行 `npx playwright install chromium`。生产构建输出到 `dist/`，该目录不会提交到 Git。
+容器全链路验证会创建并清理专用测试项目：
 
-## Docker 快速部署
-
-使用仓库源码和 Docker Compose：
-
-```bash
-cp .env.example .env
-docker compose config
-docker compose up -d --build
-curl -fsS http://127.0.0.1:18080/healthz
+```sh
+npm run verify:integration:behind-proxy
+npm run verify:integration:direct-tls
 ```
-
-也可以直接使用公开镜像：
-
-```bash
-docker run -d --name subweb --restart unless-stopped \
-  --security-opt no-new-privileges \
-  --cap-drop ALL \
-  -p 127.0.0.1:18080:8080 \
-  -e API_URL='https://api.ml1.one' \
-  -e SHORT_URL='https://ml1.one' \
-  keleyaa/subweb:latest
-```
-
-生产环境应使用 HTTPS 反向代理，并优先按发布 digest 固定镜像。完整步骤、验证、升级和回滚方式见[部署说明](docs/deployment.md)。
 
 ## 文档
 
-- [运行时配置](docs/configuration.md)：后端、短链、GitHub 来源和远程配置预设。
-- [远程配置来源](docs/remote-config-sources.md)：默认预设的仓库、许可证和使用边界。
-- [部署说明](docs/deployment.md)：Compose、Docker Run、反向代理、验证、升级和回滚。
-- [维护指南](docs/maintenance.md)：质量门禁、远端、清理和推送边界。
-- [界面设计规范](docs/interface-design.md)：当前单页与玻璃材质设计约束。
+- [架构说明](docs/architecture.md)
+- [运行时配置](docs/configuration.md)
+- [部署索引](docs/deployment.md)
+- [本机源码运行](docs/deployment-local.md)
+- [Docker 部署](docs/deployment-docker.md)
+- [Railway 部署](docs/deployment-railway.md)
+- [Render 部署](docs/deployment-render.md)
+- [安全边界](docs/security.md)
+- [运维手册](docs/operations.md)
+- [第三方来源](docs/third-party-sources.md)
+- [界面设计规范](docs/interface-design.md)
+- [远程配置来源](docs/remote-config-sources.md)
+- [维护与发布](docs/maintenance.md)
 
 ## 许可证
 
-本项目遵循仓库中的 [GPL-3.0 许可证](LICENSE)。
+本仓库代码遵循 [GPL-3.0](LICENSE)。集成组件和远程配置继续遵循各自许可证。
