@@ -39,6 +39,7 @@ const makeFakePs = async (directory) => {
   await writeFile(fakePs, `#!/bin/sh
 case "$*" in
   *command=*) printf '%s\\n' "$PROCESS_TEST_COMMAND" ;;
+  *lstart=*) printf '%s\\n' "$PROCESS_TEST_START" ;;
   *stat=*) printf '%s\\n' S ;;
   *) exit 1 ;;
 esac
@@ -58,6 +59,7 @@ describe('local source process ownership', () => {
       'RUN_PATH=/tmp/project/.runtime/local/run-forged',
       'STARTED_AT=2026-08-02T00:00:00Z',
       'HEALTH_URL=redis://127.0.0.1:16379',
+      'PROCESS_START=Fri Aug 1 21:00:00 2026',
       '',
     ].join('\n'));
     const fakePs = await makeFakePs(record.slice(0, record.lastIndexOf('/')));
@@ -72,6 +74,7 @@ describe('local source process ownership', () => {
           ...process.env,
           PROCESS_PS_BIN: fakePs,
           PROCESS_TEST_COMMAND: 'sleep 30',
+          PROCESS_TEST_START: 'Fri Aug 1 21:00:01 2026',
         },
       },
     );
@@ -82,7 +85,7 @@ describe('local source process ownership', () => {
     await expect(readFile(record)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('terminates only a process whose command contains the recorded runtime feature', async () => {
+  it('terminates only a process whose start identity matches the record', async () => {
     const feature = join(root, '.runtime/local/run-owned-test');
     const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', feature], { stdio: 'ignore' });
     children.push(child);
@@ -94,6 +97,7 @@ describe('local source process ownership', () => {
       `RUN_PATH=${feature}`,
       'STARTED_AT=2026-08-02T00:00:00Z',
       'HEALTH_URL=http://127.0.0.1:18082/healthz',
+      'PROCESS_START=Fri Aug 1 21:00:00 2026',
       '',
     ].join('\n'));
     const fakePs = await makeFakePs(record.slice(0, record.lastIndexOf('/')));
@@ -108,6 +112,7 @@ describe('local source process ownership', () => {
           ...process.env,
           PROCESS_PS_BIN: fakePs,
           PROCESS_TEST_COMMAND: `${process.execPath} -e setInterval ${feature}`,
+          PROCESS_TEST_START: 'Fri Aug 1 21:00:00 2026',
         },
       },
     );

@@ -183,8 +183,10 @@ start_local_service() {
   esac
   service_pid=$!
   started_services="$service $started_services"
+  process_start=$(process_start_identity "$service_pid" || true)
+  [ -n "$process_start" ] || return 1
   if ! write_process_record "$run_root/pids/$service.pid" "$service_pid" "$service" "$run_root" \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$health_url"; then
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$health_url" "$process_start"; then
     kill -TERM "$service_pid" 2>/dev/null || true
     sleep 1
     kill -KILL "$service_pid" 2>/dev/null || true

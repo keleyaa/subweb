@@ -179,6 +179,10 @@ describe('integrated Docker gateway stack', () => {
     expect(source).toContain("'TLS 证书不覆盖 API_DOMAIN: api.app.test'");
     expect(source).toContain('"$wrong_san" app.test other.test');
     expect(source).toContain('tcp_connects 127.0.0.1 "$internal_port"');
+    expect(source).toContain('docker_port_is_available 80');
+    expect(source).toContain('docker_port_is_available 443');
+    expect(source).toContain('tcp_connects 127.0.0.1 "$listener_port"');
+    expect(source).not.toContain('server.listen(port');
   });
 
   it.skipIf(!dockerIntegrationEnabled)(

@@ -52,7 +52,9 @@
 | 证书 SAN 不覆盖 API 域名 | 拒绝，HTTPS 不可用 |
 | 宿主机 80 或 443 端口被单独占用 | 两种情况均拒绝 |
 
-拒绝测试先用已构建镜像启动并确认 Redis、MyUrls 和 SubConverter 健康，再单独启动 Gateway。缺失文件场景匹配 Docker bind 错误；密钥和 SAN 场景匹配 Gateway 的精确启动错误；端口场景同时确认唯一命名的占用容器仍在运行、目标端口确实被占用且 Compose 返回绑定失败。其他构建、拉取或内部依赖故障不会被计作 TLS 拒绝通过。
+拒绝测试先用已构建镜像启动并确认 Redis、MyUrls 和 SubConverter 健康，再单独启动 Gateway。缺失文件场景匹配 Docker bind 错误；密钥和 SAN 场景匹配 Gateway 的精确启动错误；端口可用性由 Docker 实际试占 `80/443` 验证，避免把普通用户无权绑定低端口误判为占用；端口拒绝场景同时确认唯一命名的占用容器仍在运行、目标端口可建立 TCP 连接且 Compose 返回绑定失败。其他构建、拉取或内部依赖故障不会被计作 TLS 拒绝通过。
+
+Redis 离线备份校验将服务日志写入独立文件，`DBSIZE` 输出不会被启动日志污染。恢复流程只在权限为 `0700` 的运维目录内创建短生命周期的只读暂存快照，使容器内 Redis 用户可读取宿主机 `0600` 备份；暂存文件在成功、失败或退出时删除，不以 root 身份运行 Redis。
 
 测试证书仅由 `scripts/test-support/create-test-certificate.sh` 写入独立系统临时目录，权限受限，并由退出陷阱删除。端口冲突测试使用唯一命名且带 `--rm` 的临时容器；Compose 验证使用随机 project name，退出时只执行该 project 的 `down --volumes --remove-orphans`，不会清理其他项目的容器、网络或卷。
 

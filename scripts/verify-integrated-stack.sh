@@ -45,6 +45,7 @@ env_file=$temporary_directory/stack.env
 command_log=$temporary_directory/compose.log
 service_log=$temporary_directory/services.log
 listener_container=
+port_probe_container=
 cleanup_complete=0
 
 cleanup() {
@@ -53,6 +54,10 @@ cleanup() {
   if [ -n "$listener_container" ]; then
     docker stop "$listener_container" >/dev/null 2>&1 || true
     listener_container=
+  fi
+  if [ -n "$port_probe_container" ]; then
+    docker stop "$port_probe_container" >/dev/null 2>&1 || true
+    port_probe_container=
   fi
   if [ -f "$env_file" ]; then
     docker compose -p "$project_name" -f "$compose_file" --env-file "$env_file" down --volumes --remove-orphans >/dev/null 2>&1 || true
@@ -101,17 +106,6 @@ server.listen(0, '127.0.0.1', () => {
 NODE
 }
 
-port_is_free() {
-  node - "$1" <<'NODE'
-const net = require('node:net');
-const port = Number(process.argv[2]);
-const server = net.createServer();
-server.unref();
-server.once('error', () => process.exit(1));
-server.listen(port, '0.0.0.0', () => server.close(() => process.exit(0)));
-NODE
-}
-
 tcp_connects() {
   node - "$1" "$2" <<'NODE'
 const net = require('node:net');
@@ -130,6 +124,20 @@ socket.once('error', () => {
   process.exit(1);
 });
 NODE
+}
+
+docker_port_is_available() {
+  probe_port=$1
+  port_probe_container="subweb-port-probe-$project_suffix-$probe_port"
+  if ! docker run --detach --rm --name "$port_probe_container" \
+    --publish "$probe_port:6379" \
+    docker.io/library/redis:8.10.0-alpine@sha256:5cca2f8a01ef2264c52dac86f14ec6a5abe973a93331e1b62522cfc5e63e4691 \
+    redis-server --save '' --appendonly no \
+    > "$temporary_directory/port-probe-$probe_port.log" 2>&1; then
+    return 1
+  fi
+  docker stop "$port_probe_container" >/dev/null 2>&1 || return 1
+  port_probe_container=
 }
 
 url_encode() {
@@ -341,7 +349,7 @@ expect_tls_rejection() {
       ;;
     occupied-port)
       blocker_running=$(docker inspect --format '{{.State.Running}}' "$listener_container" 2>/dev/null || true)
-      [ "$blocker_running" = true ] && ! port_is_free "$evidence_value" \
+      [ "$blocker_running" = true ] && tcp_connects 127.0.0.1 "$evidence_value" \
         || fail '端口拒绝场景的受控占用容器未运行'
       grep -Eiq 'address already in use|port is already allocated|failed to bind' "$command_log" \
         || fail '端口拒绝场景没有匹配到绑定失败证据'
@@ -365,7 +373,7 @@ start_port_listener() {
     > "$temporary_directory/listener.log" 2>&1 || return 1
   deadline=$(( $(date +%s) + 10 ))
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    if ! port_is_free "$listener_port"; then return 0; fi
+    if tcp_connects 127.0.0.1 "$listener_port"; then return 0; fi
     node -e 'setTimeout(() => {}, 100)'
   done
   return 1
@@ -387,7 +395,7 @@ if [ "$mode" = behind-proxy ]; then
   scan_logs
 else
   gateway_service=gateway-tls
-  if ! port_is_free 80 || ! port_is_free 443; then
+  if ! docker_port_is_available 80 || ! docker_port_is_available 443; then
     printf '%s\n' 'direct-tls 未执行：宿主机 80 或 443 已被外部服务占用' >&2
     exit 1
   fi

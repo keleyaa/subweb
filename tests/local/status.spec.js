@@ -41,6 +41,7 @@ SERVICE=${service}
 RUN_PATH=${runRoot}
 STARTED_AT=2026-08-02T00:00:00Z
 HEALTH_URL=http://127.0.0.1/healthz
+PROCESS_START=Fri Aug 1 21:00:00 2026
 `, { mode: 0o600 });
   }
   const bin = join(parent, 'bin');
@@ -49,6 +50,7 @@ HEALTH_URL=http://127.0.0.1/healthz
   await writeFile(fakePs, `#!/bin/sh
 case "$*" in
   *command=*) printf '%s\\n' "$PROCESS_TEST_COMMAND" ;;
+  *lstart=*) printf '%s\\n' 'Fri Aug 1 21:00:00 2026' ;;
   *stat=*) printf '%s\\n' S ;;
 esac
 `);

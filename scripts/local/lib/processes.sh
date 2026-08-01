@@ -20,7 +20,9 @@ write_process_record() {
   run_path=$4
   started_at=$5
   health_url=$6
+  process_start=$7
   case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  [ -n "$process_start" ] || return 1
   case "$run_path" in /*/.runtime/local/*) ;; *) return 1 ;; esac
   record_directory=${record_file%/*}
   [ "$record_directory" != "$record_file" ] || return 1
@@ -33,6 +35,7 @@ write_process_record() {
     printf 'RUN_PATH=%s\n' "$run_path"
     printf 'STARTED_AT=%s\n' "$started_at"
     printf 'HEALTH_URL=%s\n' "$health_url"
+    printf 'PROCESS_START=%s\n' "$process_start"
   } > "$temporary_record" || { rm -f "$temporary_record"; return 1; }
   chmod 0600 "$temporary_record" || { rm -f "$temporary_record"; return 1; }
   mv -f "$temporary_record" "$record_file" || { rm -f "$temporary_record"; return 1; }
@@ -41,6 +44,11 @@ write_process_record() {
 process_command() {
   process_ps_bin=${PROCESS_PS_BIN:-ps}
   "$process_ps_bin" -p "$1" -o command= 2>/dev/null
+}
+
+process_start_identity() {
+  process_ps_bin=${PROCESS_PS_BIN:-ps}
+  "$process_ps_bin" -p "$1" -o lstart= 2>/dev/null | awk '{$1=$1; print}'
 }
 
 process_is_running() {
@@ -68,11 +76,10 @@ stop_owned_process() {
   case "$pid" in ''|*[!0-9]*) remove_stale_process_record "$record_file" "${service:-unknown}"; return 0 ;; esac
   case "$run_path" in /*/.runtime/local/*) ;; *) remove_stale_process_record "$record_file" "${service:-unknown}"; return 0 ;; esac
 
-  command=$(process_command "$pid" || true)
-  case "$command" in
-    *"$run_path"*) ;;
-    *) remove_stale_process_record "$record_file" "${service:-unknown}"; return 0 ;;
-  esac
+  recorded_start=$(read_process_record_field "$record_file" PROCESS_START 2>/dev/null || true)
+  current_start=$(process_start_identity "$pid" || true)
+  [ -n "$recorded_start" ] && [ "$current_start" = "$recorded_start" ] \
+    || { remove_stale_process_record "$record_file" "${service:-unknown}"; return 0; }
 
   if process_is_running "$pid"; then
     kill -TERM "$pid" 2>/dev/null || {

@@ -46,8 +46,9 @@ process_owned_and_running() {
   case "$pid" in ''|*[!0-9]*) return 2 ;; esac
   [ "$recorded_service" = "$service" ] || return 2
   [ -n "$run_root" ] && [ "$recorded_run_path" = "$run_root" ] || return 2
-  command=$(process_command "$pid" || true)
-  case "$command" in *"$recorded_run_path"*) ;; *) return 2 ;; esac
+  recorded_start=$(read_process_record_field "$record_file" PROCESS_START 2>/dev/null || true)
+  current_start=$(process_start_identity "$pid" || true)
+  [ -n "$recorded_start" ] && [ "$current_start" = "$recorded_start" ] || return 2
   process_is_running "$pid" || return 2
 }
 
