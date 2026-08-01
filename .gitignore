@@ -11,6 +11,7 @@ node_modules
 /test-results
 .eslintcache
 .runtime/
+/.runtime/local/
 runtime-config/
 redis-data/
 *.pem
