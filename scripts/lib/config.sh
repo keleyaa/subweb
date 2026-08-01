@@ -1,0 +1,98 @@
+#!/bin/sh
+
+validate_domain() {
+  domain=${1-}
+
+  [ -n "$domain" ] || return 1
+  [ "${#domain}" -le 253 ] || return 1
+  case "$domain" in
+    *[!A-Za-z0-9.-]* | .* | *. | *..*) return 1 ;;
+  esac
+
+  old_ifs=$IFS
+  IFS=.
+  set -- $domain
+  IFS=$old_ifs
+  [ "$#" -ge 2 ] || return 1
+
+  for label do
+    [ -n "$label" ] || return 1
+    [ "${#label}" -le 63 ] || return 1
+    case "$label" in
+      -* | *-) return 1 ;;
+    esac
+  done
+}
+
+validate_mode() {
+  case ${1-} in
+    behind-proxy | direct-tls) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_absolute_path() {
+  path=${1-}
+  case "$path" in
+    /*) ;;
+    *) return 1 ;;
+  esac
+  case "$path" in
+    *[!A-Za-z0-9._/+@%=,-]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+load_existing_secret() {
+  secret_file=${1-}
+  secret_key=${2-}
+  [ -f "$secret_file" ] || return 1
+
+  secret_lines=$(awk -v key="$secret_key" 'index($0, key "=") == 1 { count += 1; value = substr($0, length(key) + 2) } END { if (count == 1) print value; else if (count > 1) exit 2; else exit 1 }' "$secret_file")
+  secret_status=$?
+  [ "$secret_status" -eq 0 ] || return 2
+  printf '%s\n' "$secret_lines" | LC_ALL=C grep -Eq '^[0-9a-f]{64}$' || return 2
+  printf '%s\n' "$secret_lines"
+}
+
+generate_hex_secret() {
+  generated_secret=$(openssl rand -hex 32 2>/dev/null) || return 1
+  printf '%s\n' "$generated_secret" | LC_ALL=C grep -Eq '^[0-9a-f]{64}$' || return 1
+  printf '%s\n' "$generated_secret"
+}
+
+write_env_atomically() {
+  target_file=${1-}
+  [ ! -d "$target_file" ] || return 1
+  target_directory=$(dirname "$target_file")
+  target_name=$(basename "$target_file")
+  CONFIG_TEMP_FILE=$(mktemp "$target_directory/$target_name.tmp.XXXXXX") || return 1
+  temp_basename=$(basename "$CONFIG_TEMP_FILE")
+
+  if ! cat > "$CONFIG_TEMP_FILE"; then
+    rm -f "$CONFIG_TEMP_FILE"
+    CONFIG_TEMP_FILE=
+    return 1
+  fi
+  chmod 600 "$CONFIG_TEMP_FILE" || {
+    rm -f "$CONFIG_TEMP_FILE"
+    CONFIG_TEMP_FILE=
+    return 1
+  }
+  mv -f "$CONFIG_TEMP_FILE" "$target_file" || {
+    rm -f "$CONFIG_TEMP_FILE"
+    CONFIG_TEMP_FILE=
+    return 1
+  }
+  CONFIG_TEMP_FILE=
+
+  target_permissions=$(LC_ALL=C ls -ld "$target_file" 2>/dev/null | awk '{ print substr($1, 1, 10) }')
+  if [ ! -f "$target_file" ] || [ -L "$target_file" ] || [ "$target_permissions" != '-rw-------' ]; then
+    if [ -d "$target_file" ]; then
+      CONFIG_MOVED_FILE=$target_file/$temp_basename
+      rm -f "$CONFIG_MOVED_FILE"
+      CONFIG_MOVED_FILE=
+    fi
+    return 1
+  fi
+}

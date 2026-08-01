@@ -10,6 +10,13 @@ node_modules
 /playwright-report
 /test-results
 .eslintcache
+.runtime/
+runtime-config/
+redis-data/
+*.pem
+*.key
+.railway/
+.render/
 
 
 # local env files

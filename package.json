@@ -21,6 +21,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "verify:compose": "./scripts/validate-compose.sh",
     "verify:locks": "node scripts/verify-version-locks.mjs",
     "verify": "npm test && npm run lint && npm run build"
   },
