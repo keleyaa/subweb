@@ -25,6 +25,9 @@ describe('Redis operations safety contracts', () => {
     expect(backup).not.toMatch(/docker compose exec[^\n]*REDIS_PASSWORD/u);
     expect(restore).toContain('--confirm-stop-writes');
     expect(restore).toContain('Pre-restore backup retained');
+    expect(restore).toContain('install -m 0644 "$snapshot" "$restore_staging"');
+    expect(restore).toContain('rm -f "$restore_staging"');
+    expect(restore).not.toContain('--user root');
     expect(restore).toContain('rm -rf /data/appendonlydir');
     expect(restore).toContain('CONFIG SET appendonly yes');
     expect(restore).toContain('aof_rewrite_in_progress:0');

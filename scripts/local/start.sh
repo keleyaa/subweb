@@ -36,6 +36,10 @@ read_generated_value() {
 }
 subconverter_source=$(read_generated_value SUBCONVERTER_SOURCE_DIR) \
   || { local_error '本机 SubConverter 源码记录无效'; exit 1; }
+myurls_source=$(read_generated_value MYURLS_SOURCE_DIR) \
+  || { local_error '本机 MyUrls 源码记录无效'; exit 1; }
+[ -d "$myurls_source/public" ] && [ ! -L "$myurls_source/public" ] \
+  || { local_error '本机 MyUrls public 运行资产无效'; exit 1; }
 
 load_optional_port() {
   key=$1
@@ -86,6 +90,7 @@ trap 'rm -rf "$run_root"; exit 1' HUP INT TERM
 ln -s "$runtime_root/bin/myurls" "$run_root/myurls"
 ln -s "$runtime_root/bin/subconverter" "$run_root/subconverter"
 ln -s "$(command -v npm)" "$run_root/npm"
+cp -R "$myurls_source/public" "$run_root/public"
 
 find_nginx_mime_types() {
   for candidate in /etc/nginx/mime.types /opt/homebrew/etc/nginx/mime.types /usr/local/etc/nginx/mime.types; do

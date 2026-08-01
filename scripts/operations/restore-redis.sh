@@ -27,6 +27,8 @@ mkdir -p "$runtime_backup_directory"
 chmod 0700 "$runtime_backup_directory"
 rollback_backup=$runtime_backup_directory/pre-restore-$(date -u +%Y%m%dT%H%M%SZ).rdb
 "$operations_script_directory/backup-redis.sh" --output "$rollback_backup"
+restore_staging=$runtime_backup_directory/.restore-staging.$$
+trap 'rm -f "$restore_staging"' EXIT HUP INT TERM
 
 cd "$operations_project_root"
 docker compose stop gateway-http gateway-tls myurls >/dev/null 2>&1 || true
@@ -34,8 +36,9 @@ docker compose stop redis >/dev/null
 
 install_snapshot() {
   snapshot=$1
-  docker compose run --rm --no-deps \
-    -v "$snapshot:/restore.rdb:ro" \
+  install -m 0644 "$snapshot" "$restore_staging"
+  if docker compose run --rm --no-deps \
+    -v "$restore_staging:/restore.rdb:ro" \
     --entrypoint sh redis -eu -c \
     'rm -rf /data/appendonlydir
      cp /restore.rdb /data/dump.rdb
@@ -59,7 +62,13 @@ install_snapshot() {
        attempts=$((attempts + 1))
        [ "$attempts" -lt 100 ] || exit 1
      done
-     redis-cli -s /run/redis/restore.sock SHUTDOWN NOSAVE >/dev/null 2>&1 || true'
+     redis-cli -s /run/redis/restore.sock SHUTDOWN NOSAVE >/dev/null 2>&1 || true'; then
+    result=0
+  else
+    result=$?
+  fi
+  rm -f "$restore_staging"
+  return "$result"
 }
 
 if ! install_snapshot "$backup" || ! docker compose up -d --wait; then
