@@ -24,13 +24,13 @@ curl -fsS http://127.0.0.1:18080/healthz
 `.env` 支持以下值：
 
 ```dotenv
-SUBWEB_BIND_ADDRESS=127.0.0.1
 SUBWEB_PORT=18080
 API_URL=https://api.ml1.one
 SHORT_URL=https://ml1.one
 ```
 
-设置 `SUBWEB_BIND_ADDRESS=0.0.0.0` 会让端口暴露到所有主机接口，只有在防火墙和访问控制已经明确配置时才这样做。把 `SHORT_URL` 留空可以关闭短链功能。
+behind-proxy 模式固定只监听 `127.0.0.1`，只允许用 `SUBWEB_PORT` 调整宿主机端口；
+不提供修改监听地址的环境变量。
 
 停止服务：
 

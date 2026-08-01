@@ -29,6 +29,19 @@ SUBCONVERTER_ALLOW_PUBLIC_UPLOAD=false
 该文件启动服务。部署自定义配置时只挂载 `/base/pref.toml`；不要覆盖整个 `/base`，以免
 遮盖镜像自带资源。`/base/stats` 仅在启用统计功能时需要持久化。
 
+集成 Compose 不挂载本目录中的自定义偏好设置，`config/` 只用 README 保留空目录策略：
+没有经过固定镜像验证的覆盖文件就不提交，也不编造最小 TOML。实际容器检查确认，固定镜像
+仍需以 root 启动，但根文件系统可以保持只读。版本绑定命名卷
+`subconverter-runtime-v1-2-0` 挂到 `/base`
+时，Docker 首次挂载会把镜像中完整的 `/base` 复制进空卷，启动脚本可在其中生成
+`pref.toml`，同时不会开放宿主机端口或放宽 `cap_drop: ALL`、
+`no-new-privileges:true`。
+
+`subconverter-runtime-v1-2-0` 只是可重建的镜像运行时副本，不是 Redis 那类业务持久数据，
+部署不得依赖其中保存业务状态。卷名由锁文件版本按“转小写、连续非字母数字替换为单个连字符”
+规则生成；升级或回滚会自然创建对应版本的新卷，避免旧 `/base` 遮盖新镜像。Docker 不会
+自动删除旧版本卷，确认新版本验证通过后才能手动删除旧卷。
+
 ## 已验证的 HTTP 行为
 
 以下行为均在固定 digest 的 `linux/arm64` 容器上实际确认：

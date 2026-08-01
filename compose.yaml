@@ -1,18 +1,177 @@
 name: subweb
 
+x-runtime-security: &runtime-security
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+  stop_grace_period: 10s
+
+x-gateway-common: &gateway-common
+  <<: *runtime-security
+  build:
+    context: .
+  image: "${SUBWEB_IMAGE:-subweb:local}"
+  user: "101:101"
+  environment: &gateway-environment
+    API_URL: "${API_URL:?Set API_URL with scripts/configure.sh}"
+    SHORT_URL: "${SHORT_URL:?Set SHORT_URL with scripts/configure.sh}"
+    APP_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
+    API_DOMAIN: "${API_DOMAIN:?Set API_DOMAIN with scripts/configure.sh}"
+    PUBLIC_SCHEME: https
+    SUBCONVERTER_UPSTREAM: http://subconverter:25500
+    MYURLS_UPSTREAM: http://myurls:8080
+    MYURLS_API_TOKEN: "${MYURLS_API_TOKEN:?Set MYURLS_API_TOKEN with scripts/configure.sh}"
+    MYURLS_MAX_BODY_BYTES: "1048576"
+  depends_on:
+    myurls:
+      condition: service_healthy
+      restart: true
+    subconverter:
+      condition: service_healthy
+      restart: true
+  tmpfs:
+    - /tmp:uid=101,gid=101,mode=0700
+    - /usr/share/nginx/html/conf:uid=101,gid=101,mode=0700
+  healthcheck:
+    test:
+      - CMD-SHELL
+      - >-
+        if [ "$${GATEWAY_MODE}" = direct-tls ]; then
+          wget --no-check-certificate -q -O /dev/null --header="Host: $${APP_DOMAIN}" https://127.0.0.1:8443/healthz;
+        else
+          wget -q -O /dev/null --header="Host: $${APP_DOMAIN}" http://127.0.0.1:8080/healthz;
+        fi
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 10s
+
 services:
-  web:
-    build:
-      context: .
-    image: "${SUBWEB_IMAGE:-subweb:local}"
-    restart: unless-stopped
-    ports:
-      - "${SUBWEB_BIND_ADDRESS:-127.0.0.1}:${SUBWEB_PORT:-18080}:8080"
+  redis:
+    <<: *runtime-security
+    image: "docker.io/library/redis:8.10.0-alpine@sha256:5cca2f8a01ef2264c52dac86f14ec6a5abe973a93331e1b62522cfc5e63e4691"
+    user: "999:1000"
     environment:
-      API_URL: "${API_URL:-https://api.ml1.one}"
-      SHORT_URL: "${SHORT_URL-https://ml1.one}"
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    stop_grace_period: 10s
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
+    command:
+      - /bin/sh
+      - -eu
+      - -c
+      - >-
+        awk '{ gsub(/@@REDIS_PASSWORD@@/, ENVIRON["REDIS_PASSWORD"]); print }'
+        /etc/redis/redis.conf.template > /run/redis/redis.conf &&
+        exec redis-server /run/redis/redis.conf
+    volumes:
+      - redis-data:/data
+      - type: bind
+        source: ./deploy/redis/redis.conf.template
+        target: /etc/redis/redis.conf.template
+        read_only: true
+    tmpfs:
+      - /run/redis:uid=999,gid=1000,mode=0700
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli ping | grep -qx PONG
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  myurls:
+    <<: *runtime-security
+    image: "ghcr.io/keleyaa/myurls:v1.11@sha256:f00046cd6c68986781ac9bf13d43fc4db3dbedb8815146a3510ef325cd5b98b0"
+    user: "65532:65532"
+    environment:
+      MYURLS_PORT: "8080"
+      MYURLS_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
+      MYURLS_PROTO: https
+      MYURLS_REDIS_CONN: redis:6379
+      MYURLS_REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
+      MYURLS_API_TOKEN: "${MYURLS_API_TOKEN:?Set MYURLS_API_TOKEN with scripts/configure.sh}"
+    depends_on:
+      redis:
+        condition: service_healthy
+        restart: true
+    tmpfs:
+      - /app/logs:uid=65532,gid=65532,mode=0700
+    healthcheck:
+      test:
+        - CMD
+        - /app/myurls
+        - -healthcheck
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  subconverter:
+    # The pinned upstream process still requires root, while a runtime volume
+    # makes /base writable without making the root filesystem writable.
+    <<: *runtime-security
+    image: "ghcr.io/aethersailor/subconverter-extended:v1.2.0@sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f"
+    environment:
+      MANAGED_CONFIG_PREFIX: "${API_URL:?Set API_URL with scripts/configure.sh}"
+      SUBCONVERTER_SECURITY_PROFILE: public
+      SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: "false"
+    volumes:
+      - subconverter-runtime-v1-2-0:/base
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -q
+        - -O
+        - /dev/null
+        - http://127.0.0.1:25500/healthz
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  gateway-http:
+    <<: *gateway-common
+    profiles:
+      - behind-proxy
+    environment:
+      <<: *gateway-environment
+      GATEWAY_MODE: behind-proxy
+      GATEWAY_PORT: "8080"
+      TLS_CERT_PATH: ""
+      TLS_KEY_PATH: ""
+    ports:
+      - "127.0.0.1:${SUBWEB_PORT:-18080}:8080"
+
+  gateway-tls:
+    <<: *gateway-common
+    profiles:
+      - direct-tls
+    environment:
+      <<: *gateway-environment
+      GATEWAY_MODE: direct-tls
+      GATEWAY_PORT: "8443"
+      TLS_CERT_PATH: /run/tls/fullchain.pem
+      TLS_KEY_PATH: /run/tls/privkey.pem
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - type: bind
+        source: "${TLS_CERT_PATH:-/dev/null}"
+        target: /run/tls/fullchain.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${TLS_KEY_PATH:-/dev/null}"
+        target: /run/tls/privkey.pem
+        read_only: true
+        bind:
+          create_host_path: false
+
+volumes:
+  redis-data:
+  subconverter-runtime-v1-2-0:

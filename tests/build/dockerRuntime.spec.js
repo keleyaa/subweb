@@ -26,22 +26,42 @@ describe('Docker runtime contract', () => {
     expect(finalStage).not.toMatch(/^(?:ARG|ENV)\s+(?:MYURLS_API_TOKEN|REDIS_PASSWORD)/m);
   });
 
-  it('provides an official Compose deployment with constrained runtime defaults', async () => {
+  it('provides an integrated Compose deployment with two profile-scoped gateways', async () => {
     const compose = await readFile(rootFile('compose.yaml'), 'utf8');
 
-    expect(compose).toContain('build:');
+    expect(compose).toContain('x-gateway-common:');
+    expect(compose).toContain('gateway-http:');
+    expect(compose).toContain('gateway-tls:');
+    expect(compose).toContain('behind-proxy');
+    expect(compose).toContain('direct-tls');
     expect(compose).toContain('${SUBWEB_PORT:-18080}:8080');
-    expect(compose).toContain('API_URL:');
-    expect(compose).toContain('SHORT_URL:');
+    expect(compose).toContain('redis-data:');
     expect(compose).toContain('no-new-privileges:true');
     expect(compose).toContain('cap_drop:');
     expect(compose).toContain('- ALL');
+    expect(compose).not.toContain(':latest');
   });
 
   it('ships reusable runtime smoke verification and environment examples', async () => {
     await expect(access(rootFile('scripts/verify-container.sh'))).resolves.toBeUndefined();
+    const verifier = await readFile(rootFile('scripts/verify-container.sh'), 'utf8');
     const example = await readFile(rootFile('.env.example'), 'utf8');
 
+    expect(verifier).toContain('--read-only');
+    expect(verifier).toContain('--cap-drop ALL');
+    expect(verifier).toContain('--security-opt no-new-privileges:true');
+    expect(verifier).toContain('--tmpfs /tmp:uid=101,gid=101,mode=0700');
+    expect(verifier).toContain('--tmpfs /usr/share/nginx/html/conf:uid=101,gid=101,mode=0700');
+    expect(verifier).toContain("-e GATEWAY_MODE='behind-proxy'");
+    expect(verifier).toContain("-e SUBCONVERTER_UPSTREAM='http://subconverter:25500'");
+    expect(verifier).toContain("-e MYURLS_UPSTREAM='http://myurls:8080'");
+    expect(verifier).toContain("randomBytes(32)");
+    expect(verifier).toContain('-e MYURLS_API_TOKEN="$verification_token"');
+    expect(verifier).toContain("ReadonlyRootfs");
+    expect(verifier).toContain("CapDrop");
+    expect(verifier).toContain("SecurityOpt");
+    expect(verifier).toContain('grep -Fq "$verification_token"');
+    expect(verifier.match(/--header='Host: app\.example\.com'/g)).toHaveLength(2);
     expect(example).toContain('API_URL=https://api.ml1.one');
     expect(example).toContain('SHORT_URL=https://ml1.one');
     expect(example).toContain('SUBWEB_PORT=18080');
