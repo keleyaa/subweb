@@ -29,7 +29,8 @@ key_count=$(docker run --rm --read-only --network none \
   --entrypoint sh "$image" -eu -c '
     cp /backup.rdb /data/dump.rdb
     redis-server --daemonize yes --port 0 --unixsocket /tmp/redis.sock \
-      --dir /data --dbfilename dump.rdb --appendonly no --protected-mode no
+      --dir /data --dbfilename dump.rdb --appendonly no --protected-mode no \
+      --logfile /tmp/redis.log
     attempts=0
     until redis-cli -s /tmp/redis.sock ping >/dev/null 2>&1; do
       attempts=$((attempts + 1))

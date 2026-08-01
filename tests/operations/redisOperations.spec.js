@@ -38,6 +38,7 @@ describe('Redis operations safety contracts', () => {
     expect(verify).toContain('--network none');
     expect(verify).toContain('redis-check-rdb');
     expect(verify).toContain('--appendonly no');
+    expect(verify).toContain('--logfile /tmp/redis.log');
     expect(verify).toContain('DBSIZE');
     expect(verify).toContain('readonly');
   });

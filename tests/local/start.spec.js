@@ -18,6 +18,9 @@ describe('atomic local source startup', () => {
     expect(portCheck).toBeLessThan(redis);
     expect(redis).toBeLessThan(myurls);
     expect(myurls).toBeLessThan(subconverter);
+    expect(source).toContain('(cd "$run_root" &&');
+    expect(source).toContain('MyUrls log tail (secrets redacted):');
+    expect(source).toContain('gsub(token, "[REDACTED]")');
     expect(subconverter).toBeLessThan(vite);
     expect(vite).toBeLessThan(nginx);
     expect(source).toContain('rollback_new_services');

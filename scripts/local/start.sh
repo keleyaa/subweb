@@ -143,13 +143,14 @@ start_local_service() {
       health_url="redis://127.0.0.1:$LOCAL_REDIS_PORT"
       ;;
     myurls)
-      MYURLS_PORT=$LOCAL_MYURLS_PORT \
-      MYURLS_DOMAIN="127.0.0.1:$LOCAL_APP_PORT" \
-      MYURLS_PROTO=http \
-      MYURLS_REDIS_CONN="127.0.0.1:$LOCAL_REDIS_PORT" \
-      MYURLS_REDIS_PASSWORD=$redis_password \
-      MYURLS_API_TOKEN=$myurls_api_token \
-        "$run_root/myurls" >> "$log_file" 2>&1 &
+      (cd "$run_root" && \
+        MYURLS_PORT=$LOCAL_MYURLS_PORT \
+        MYURLS_DOMAIN="127.0.0.1:$LOCAL_APP_PORT" \
+        MYURLS_PROTO=http \
+        MYURLS_REDIS_CONN="127.0.0.1:$LOCAL_REDIS_PORT" \
+        MYURLS_REDIS_PASSWORD=$redis_password \
+        MYURLS_API_TOKEN=$myurls_api_token \
+        exec ./myurls) >> "$log_file" 2>&1 &
       health_url="http://127.0.0.1:$LOCAL_MYURLS_PORT/healthz"
       ;;
     subconverter)
@@ -189,7 +190,15 @@ start_local_service() {
 start_local_service redis
 wait_for_redis_health "$LOCAL_REDIS_PORT" "$redis_password"
 start_local_service myurls
-wait_for_http_health myurls "http://127.0.0.1:$LOCAL_MYURLS_PORT/healthz"
+if ! wait_for_http_health myurls "http://127.0.0.1:$LOCAL_MYURLS_PORT/healthz"; then
+  if [ -f "$runtime_root/logs/myurls.log" ]; then
+    printf '%s\n' 'MyUrls log tail (secrets redacted):' >&2
+    tail -n 40 "$runtime_root/logs/myurls.log" \
+      | awk -v token="$myurls_api_token" -v password="$redis_password" \
+        '{ gsub(token, "[REDACTED]"); gsub(password, "[REDACTED]"); print }' >&2
+  fi
+  exit 1
+fi
 start_local_service subconverter
 wait_for_http_health subconverter "http://127.0.0.1:$LOCAL_SUBCONVERTER_PORT/healthz"
 start_local_service vite
