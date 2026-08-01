@@ -1,0 +1,51 @@
+name: local source lifecycle
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: local-source-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lifecycle:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install native tools on macOS
+        if: runner.os == 'macOS'
+        run: brew install go cmake redis nginx
+      - name: Install native tools on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake golang-go redis-server nginx
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Bootstrap twice
+        run: ./scripts/local/bootstrap.sh && ./scripts/local/bootstrap.sh
+      - name: Start integrated local source stack
+        run: ./scripts/local/start.sh
+      - name: Check integrated local source stack
+        run: ./scripts/local/status.sh
+      - name: Stop preflight stack
+        run: ./scripts/local/stop.sh
+      - name: Verify lifecycle and business sentinels
+        run: ./scripts/verify-local-source.sh
+      - name: Stop integrated local source stack
+        if: always()
+        run: ./scripts/local/stop.sh
