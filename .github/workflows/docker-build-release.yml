@@ -53,6 +53,9 @@ jobs:
       - name: Verify integrated behind-proxy stack
         run: npm run verify:integration:behind-proxy
 
+      - name: Verify Redis backup and restore lifecycle
+        run: npm run verify:operations
+
       - name: Verify integrated direct-tls stack
         run: npm run verify:integration:direct-tls
 

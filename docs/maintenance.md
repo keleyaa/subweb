@@ -37,6 +37,7 @@ npm run verify:locks
 npm run verify:compose
 npm run verify:docs
 npm run verify:evidence
+npm run verify:operations
 npm run verify:integration:behind-proxy
 npm run verify:integration:direct-tls
 git diff --check

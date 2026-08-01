@@ -2,7 +2,7 @@
   "name": "subweb",
   "version": "0.1.0",
   "private": true,
-  "description": "Independent minimal frontend for subscription conversion backends",
+  "description": "Integrated self-hosted subscription conversion and short-link stack",
   "homepage": "https://github.com/keleyaa/subweb",
   "repository": {
     "type": "git",
@@ -25,6 +25,7 @@
     "verify:container": "./scripts/verify-container.sh subweb:ci",
     "verify:integration:behind-proxy": "./scripts/verify-integrated-stack.sh --mode behind-proxy",
     "verify:integration:direct-tls": "./scripts/verify-integrated-stack.sh --mode direct-tls",
+    "verify:operations": "./scripts/verify-redis-operations.sh",
     "verify:locks": "node scripts/verify-version-locks.mjs",
     "verify:docs": "node scripts/verify-docs.mjs",
     "verify:evidence": "node scripts/verify-evidence.mjs",

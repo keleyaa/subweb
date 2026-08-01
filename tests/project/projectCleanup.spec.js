@@ -45,9 +45,10 @@ describe('project cleanup and independent-maintenance boundary', () => {
     expect(readme).toContain('独立维护');
     expect(readme).toContain('Fork 与来源说明');
     expect(readme).toContain('https://github.com/stilleshan/subweb');
-    expect(readme).toContain('未记录其他第三方代码仓库作为设计或代码来源');
-    expect(readme).toContain('Apple 风格的无框极简方向');
-    expect(readme).toContain('https://api.ml1.one');
+    expect(readme).toContain('keleyaa/MyUrls');
+    expect(readme).toContain('Aethersailor/SubConverter-Extended');
+    expect(readme).toContain('Apple 平台的材质、层级和可访问性原则');
+    expect(readme).toContain('api.ml1.one');
     expect(readme).not.toContain('http://127.0.0.1:25500');
     expect(dockerfile).not.toContain('LABEL maintainer');
     expect(dockerfile).not.toContain('ENV VERSION');
@@ -68,7 +69,7 @@ describe('project cleanup and independent-maintenance boundary', () => {
     const packageJson = JSON.parse(packageSource);
 
     expect(packageJson).toMatchObject({
-      description: 'Independent minimal frontend for subscription conversion backends',
+      description: 'Integrated self-hosted subscription conversion and short-link stack',
       homepage: 'https://github.com/keleyaa/subweb',
       repository: {
         type: 'git',
