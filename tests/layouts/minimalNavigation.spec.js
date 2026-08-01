@@ -13,11 +13,11 @@ describe('focused navigation', () => {
     const source = await readFile(appBrandUrl, 'utf8');
 
     expect(source).toContain('<router-link to="/" class="app-brand-link" aria-label="Subconverter Web，返回首页">');
-    expect(source).toContain('<img class="app-brand-mark" src="/favicon.svg" width="28" height="28" alt="" />');
     expect(source).toContain('<span class="app-brand-text">Subconverter Web</span>');
+    expect(source).toContain('<span class="app-brand-dot" aria-hidden="true">.</span>');
     expect(source).not.toContain('siteName');
     expect(source).not.toContain('window.config');
-    expect(source).toMatch(/\.app-brand-link\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*gap:\s*10px;/s);
+    expect(source).toMatch(/\.app-brand-link\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;/s);
     expect(source).toMatch(
       /\.app-brand-link:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--focus-ring\);[^}]*outline-offset:\s*2px;[^}]*border-radius:\s*8px;/s,
     );
@@ -26,19 +26,17 @@ describe('focused navigation', () => {
   it('contains only the brand and theme toggle in the top navigation', async () => {
     const source = await readFile(navBarUrl, 'utf8');
 
-    expect(source).toContain('<nav class="minimal-navbar">');
-    expect(source).toContain('<div class="minimal-navbar__inner">');
+    expect(source).toContain('<header class="minimal-navbar">');
+    expect(source).toContain('<nav class="minimal-navbar__inner" aria-label="主导航">');
     expect(source).toContain('<AppBrand />');
     expect(source).toContain('<ThemeToggle />');
     expect(source).toContain("import ThemeToggle from './ThemeToggle.vue';");
     expect(source).not.toContain('NavMenu');
     expect(source).not.toContain('github');
     expect(source).not.toContain('<a');
-    expect(source).toMatch(/\.minimal-navbar__inner\s*\{[^}]*max-width:\s*860px;[^}]*min-height:\s*56px;[^}]*margin:\s*0 auto;[^}]*padding:\s*0 20px;/s);
-    expect(source).toMatch(
-      /\.minimal-navbar\s*\{[^}]*border:\s*1px solid var\(--surface-glass-edge\)\s*;[^}]*border-radius:\s*20px\s*;[^}]*background:\s*var\(--surface-glass-strong\)\s*;[^}]*backdrop-filter:\s*blur\(18px\) saturate\(120%\)\s*;/s,
-    );
-    expect(source).toContain('@media (prefers-reduced-transparency: reduce)');
+    expect(source).toMatch(/\.minimal-navbar__inner\s*\{[^}]*max-width:\s*46rem;[^}]*min-height:\s*56px;[^}]*margin:\s*0 auto;[^}]*justify-content:\s*center;/s);
+    expect(source).not.toMatch(/position:\s*sticky|backdrop-filter|box-shadow|border-radius:\s*20px/);
+    expect(source).toMatch(/:deep\(\.theme-toggle\)\s*\{[^}]*position:\s*absolute;[^}]*right:\s*0;/s);
   });
 
   it('removes the superseded top-menu component and navigation helper', async () => {

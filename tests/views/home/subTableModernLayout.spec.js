@@ -16,7 +16,7 @@ describe('SubTable modern linear layout', () => {
     expect(source).toContain('class="primary-action-row"');
     expect(source).toContain('class="results-section"');
     expect(source).toContain('aria-live="polite"');
-    expect(source).toContain('转换订阅');
+    expect(source).toContain('subscriptionActionLabel');
   });
 
   it('groups subscription input and base configuration in one fieldset', () => {
@@ -37,8 +37,8 @@ describe('SubTable modern linear layout', () => {
       ['template', 'controls'].join('-'),
     ];
 
-    expect(source).toContain('<button type="submit" class="primary-action-button">');
-    expect(source).toContain("{{ hasCurrentSubscriptionResult ? '复制订阅' : '转换订阅' }}");
+    expect(source).toContain('type="submit" class="primary-action-button"');
+    expect(source).toContain('{{ subscriptionActionLabel }}');
     expect(source).not.toMatch(/class="[^"]*\bbtn(?:-primary|-secondary)?\b[^"]*"/);
     for (const marker of forbiddenMarkers) {
       expect(source).not.toContain(marker);
@@ -54,6 +54,10 @@ describe('SubTable modern linear layout', () => {
     expect(source).toContain('<Transition name="field-reveal">');
     expect(source).toContain('<Transition name="advanced-reveal">');
     expect(source).toContain('id="advanced-config"');
+    expect(source).toMatch(
+      /id="service-settings-toggle"[\s\S]*?:aria-expanded="isShowServiceSettings"[\s\S]*?aria-controls="service-settings"/
+    );
+    expect(source).toContain('id="service-settings"');
   });
 
   it('preserves every field label and identifier contract', () => {
@@ -111,21 +115,21 @@ describe('SubTable modern linear layout', () => {
   it('uses one stateful action for the subscription and one for the short link', () => {
     const source = readFileSync(componentPath, 'utf8');
     const resultsSection = source.slice(
-      source.indexOf('<fieldset class="results-section">'),
-      source.indexOf('</fieldset>', source.indexOf('<fieldset class="results-section">'))
+      source.indexOf('<fieldset v-if="hasCurrentSubscriptionResult" class="results-section">'),
+      source.indexOf('</fieldset>', source.indexOf('<fieldset v-if="hasCurrentSubscriptionResult" class="results-section">'))
     );
 
     expect(resultsSection).toMatch(
       /<div class="form-field result-field">\s*<label for="converted-sub-url">转换链接<\/label>/
     );
     expect(resultsSection).toMatch(
-      /<div v-if="hasShortUrlService" class="form-field result-field">\s*<label for="short-url-result">短链<\/label>/
+      /<div v-if="hasCurrentShortUrl" class="form-field result-field">\s*<label for="short-url-result">短链<\/label>/
     );
-    expect(resultsSection).not.toContain('secondary-action-button');
+    expect(resultsSection).toContain('secondary-action-button');
     expect(source).toContain('@submit.prevent="handleSubscriptionAction"');
     expect(source).toContain('@click="handleShortUrlAction"');
-    expect(source).toContain("{{ isGeneratingShortUrl ? '生成中...' : hasCurrentShortUrl ? '复制短链' : '生成短链' }}");
-    expect(source).toContain(':disabled="isGeneratingShortUrl"');
+    expect(source).toContain('{{ shortActionLabel }}');
+    expect(source).toContain(':disabled="isGeneratingShortUrl || isShortCopying"');
     expect(source).not.toContain('shareSubscription');
     expect(source).not.toContain('import { shareUrl }');
     expect(source).toContain('hasShortUrlService()');
@@ -153,9 +157,9 @@ describe('SubTable modern visual constraints', () => {
   it('defines the linear grid and one focused glass workspace with solid controls', () => {
     const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
 
-    expect(source).toMatch(/repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
+    expect(source).toMatch(/repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
     expect(source).toMatch(
-      /\.sub-table--modern\s*\{[^}]*padding:\s*28px\s*;[^}]*border:\s*1px solid var\(--surface-glass-edge\)\s*;[^}]*border-radius:\s*28px\s*;[^}]*background:\s*var\(--surface-glass\)\s*;[^}]*backdrop-filter:\s*blur\(22px\) saturate\(120%\)\s*;/s,
+      /\.sub-table--modern\s*\{[^}]*padding:\s*28px\s*;[^}]*border:\s*1px solid var\(--surface-glass-edge\)\s*;[^}]*border-radius:\s*32px\s*;[^}]*background:\s*var\(--surface-glass\)\s*;[^}]*backdrop-filter:\s*blur\(24px\) saturate\(125%\)\s*;/s,
     );
     expect(source).toMatch(/textarea,[\s\S]*?background:\s*var\(--surface-control\)/);
     expect(source).toContain('border-radius: 12px');

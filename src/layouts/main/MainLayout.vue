@@ -21,7 +21,7 @@ export default {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background-color: var(--canvas);
+  background-color: transparent;
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   letter-spacing: 0;

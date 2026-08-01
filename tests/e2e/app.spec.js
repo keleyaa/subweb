@@ -30,9 +30,10 @@ test('converts, copies, and creates a short link with browser-owned multipart he
   await page.goto('/');
   await expect(page).toHaveTitle('Subconverter Web');
   await expect(page.getByRole('link', { name: 'Subconverter Web，返回首页' })).toBeVisible();
+  await expect(page.getByRole('group', { name: '转换结果' })).toHaveCount(0);
 
   await page.getByLabel('订阅链接').fill('https://subscription.example.test/token');
-  await page.getByRole('button', { name: '转换订阅' }).click();
+  await page.getByRole('button', { name: '转换并复制' }).click();
 
   const expectedUrl =
     'https://api.ml1.one/sub?target=clash&url=https%3A%2F%2Fsubscription.example.test%2Ftoken';
@@ -40,7 +41,7 @@ test('converts, copies, and creates a short link with browser-owned multipart he
   await expect(page.getByRole('button', { name: '复制订阅' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expectedUrl);
 
-  await page.getByRole('button', { name: '生成短链' }).click();
+  await page.getByRole('button', { name: '生成并复制短链' }).click();
   await expect(page.getByLabel('短链')).toHaveValue('https://ml1.one/e2e-result');
   await expect(page.getByRole('button', { name: '复制短链' })).toBeVisible();
   expect(shortRequestContentType).toMatch(/^multipart\/form-data; boundary=/i);
@@ -69,7 +70,7 @@ test('keeps the complete workflow within a 390px mobile viewport', async ({ page
   await page.goto('/');
 
   await expect(page.getByRole('link', { name: 'Subconverter Web，返回首页' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '转换订阅' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '转换并复制' })).toBeVisible();
   const widths = await page.evaluate(() => ({
     document: document.documentElement.scrollWidth,
     viewport: window.innerWidth,
@@ -77,4 +78,35 @@ test('keeps the complete workflow within a 390px mobile viewport', async ({ page
 
   expect(widths.document).toBeLessThanOrEqual(widths.viewport);
   expect(browserErrors).toEqual([]);
+});
+
+test('keeps generated links selectable when clipboard access is rejected', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: () => Promise.reject(new Error('denied')) },
+    });
+    Document.prototype.execCommand = () => false;
+  });
+  await page.goto('/');
+  await page.getByLabel('订阅链接').fill('https://subscription.example.test/manual-copy');
+  await page.getByRole('button', { name: '转换并复制' }).click();
+
+  await expect(page.getByLabel('转换链接')).toHaveValue(/manual-copy/);
+  await expect(page.getByText('链接已生成，请手动复制')).toBeVisible();
+  await expect(page.getByText(/复制成功/)).toHaveCount(0);
+});
+
+test('hides stale results as soon as a conversion input changes', async ({ context, page }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
+    origin: 'http://127.0.0.1:4173',
+  });
+  await page.goto('/');
+  await page.getByLabel('订阅链接').fill('https://subscription.example.test/original');
+  await page.getByRole('button', { name: '转换并复制' }).click();
+  await expect(page.getByLabel('转换链接')).toBeVisible();
+
+  await page.getByLabel('客户端').selectOption('singbox');
+  await expect(page.getByLabel('转换链接')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '生成并复制短链' })).toHaveCount(0);
 });

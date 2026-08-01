@@ -20,11 +20,43 @@
         </div>
 
         <div class="form-field">
+          <label for="remote">远程配置</label>
+          <select id="remote" @change="selectRemoteConfig">
+            <option value="">后端默认配置</option>
+            <option v-for="option in remoteConfigOptions" :key="option.value" :value="option.value">
+              {{ option.text }}
+            </option>
+            <option value="manual">自定义远程配置地址</option>
+          </select>
+          <Transition name="field-reveal">
+            <div v-if="isShowRemoteConfig" class="conditional-field">
+              <label for="manual-remote-config">自定义远程配置地址</label>
+              <input id="manual-remote-config" v-model="remoteConfig" placeholder="自定义远程配置地址" />
+            </div>
+          </Transition>
+        </div>
+      </div>
+    </fieldset>
+
+    <button
+      id="service-settings-toggle"
+      type="button"
+      class="advanced-disclosure"
+      :aria-expanded="isShowServiceSettings"
+      aria-controls="service-settings"
+      @click="showServiceSettings"
+    >
+      <span>服务设置</span>
+      <span aria-hidden="true">{{ isShowServiceSettings ? '−' : '+' }}</span>
+    </button>
+
+    <Transition name="advanced-reveal">
+      <fieldset v-if="isShowServiceSettings" id="service-settings" class="advanced-config">
+        <legend class="visually-hidden">服务设置</legend>
+        <div class="form-field">
           <label for="api">后端服务</label>
           <select id="api" @change="selectApi">
-            <option :value="apiUrl">
-              {{ apiUrl }}
-            </option>
+            <option :value="apiUrl">{{ apiUrl }}</option>
             <option value="manual">自定义后端 API 地址</option>
           </select>
           <Transition name="field-reveal">
@@ -38,25 +70,8 @@
             </div>
           </Transition>
         </div>
-
-        <div class="form-field">
-          <label for="remote">远程配置</label>
-          <select id="remote" @change="selectRemoteConfig">
-            <option value="">后端默认配置</option>
-            <option v-for="option in remoteConfigOptions" :key="option.value" :value="option.value">
-              {{ option.text }}
-            </option>
-            <option value="manual">自定义远程配置地址</option>
-          </select>
-          <Transition name="field-reveal">
-            <div v-if="isShowRemoteConfig" class="conditional-field">
-              <label for="manual-remote-config">自定义远程配置地址</label>
-              <input id="manual-remote-config" v-model="remoteConfig" placeholder="自定义远程配置地址：" />
-            </div>
-          </Transition>
-        </div>
-      </div>
-    </fieldset>
+      </fieldset>
+    </Transition>
 
     <button
       id="more-config-toggle"
@@ -67,7 +82,7 @@
       @click="showMoreConfig"
     >
       <span>高级参数</span>
-      <span aria-hidden="true">{{ isShowMoreConfig ? '-' : '+' }}</span>
+      <span aria-hidden="true">{{ isShowMoreConfig ? '−' : '+' }}</span>
     </button>
 
     <Transition name="advanced-reveal">
@@ -84,69 +99,63 @@
           </div>
         </div>
         <div class="checkbox-group">
-          <label class="checkbox-field">
-            <input id="emoji" v-model="moreConfig.emoji" type="checkbox" />
-            <span>Emoji</span>
-          </label>
-          <label class="checkbox-field">
-            <input id="udp" v-model="moreConfig.udp" type="checkbox" />
-            <span>开启 UDP</span>
-          </label>
-          <label class="checkbox-field">
-            <input id="sort" v-model="moreConfig.sort" type="checkbox" />
-            <span>排序节点</span>
-          </label>
-          <label class="checkbox-field">
-            <input id="scv" v-model="moreConfig.scv" type="checkbox" />
-            <span>关闭证书检查</span>
-          </label>
-          <label class="checkbox-field">
-            <input id="nodelist" v-model="moreConfig.list" type="checkbox" />
-            <span>Node List</span>
-          </label>
+          <label class="checkbox-field"><input id="emoji" v-model="moreConfig.emoji" type="checkbox" /><span>Emoji</span></label>
+          <label class="checkbox-field"><input id="udp" v-model="moreConfig.udp" type="checkbox" /><span>开启 UDP</span></label>
+          <label class="checkbox-field"><input id="sort" v-model="moreConfig.sort" type="checkbox" /><span>排序节点</span></label>
+          <label class="checkbox-field"><input id="scv" v-model="moreConfig.scv" type="checkbox" /><span>关闭证书检查</span></label>
+          <label class="checkbox-field"><input id="nodelist" v-model="moreConfig.list" type="checkbox" /><span>Node List</span></label>
         </div>
       </fieldset>
     </Transition>
 
-    <fieldset class="results-section">
-      <legend>转换结果</legend>
-      <p class="results-status" :class="{ 'results-status--success': hasCurrentSubscriptionResult }" aria-live="polite">
-        {{ hasCurrentSubscriptionResult ? '转换链接已生成' : '转换后将在此显示结果' }}
-      </p>
-
-      <div class="form-field result-field">
-        <label for="converted-sub-url">转换链接</label>
-        <input id="converted-sub-url" :value="visibleSubUrl" readonly placeholder="点击转换订阅" />
-      </div>
-
-      <div v-if="hasShortUrlService" class="form-field result-field">
-        <label for="short-url-result">短链</label>
-        <input id="short-url-result" :value="visibleShortUrl" readonly placeholder="点击生成短链" />
-      </div>
-    </fieldset>
-
     <div class="primary-action-row">
-      <button type="submit" class="primary-action-button">
-        {{ hasCurrentSubscriptionResult ? '复制订阅' : '转换订阅' }}
-      </button>
-      <button
-        v-if="hasShortUrlService"
-        type="button"
-        class="secondary-action-button result-action-button"
-        :disabled="isGeneratingShortUrl"
-        :aria-busy="isGeneratingShortUrl"
-        @click="handleShortUrlAction"
-      >
-        {{ isGeneratingShortUrl ? '生成中...' : hasCurrentShortUrl ? '复制短链' : '生成短链' }}
+      <button type="submit" class="primary-action-button" :disabled="isSubscriptionCopying">
+        {{ subscriptionActionLabel }}
       </button>
     </div>
+
+    <Transition name="result-materialize">
+      <fieldset v-if="hasCurrentSubscriptionResult" class="results-section">
+        <legend>转换结果</legend>
+        <p class="results-status" :class="{ 'results-status--success': copyFeedback }" aria-live="polite">
+          {{ copyFeedback || '转换链接已生成' }}
+        </p>
+        <div class="form-field result-field">
+          <label for="converted-sub-url">转换链接</label>
+          <input id="converted-sub-url" :value="result.subUrl" readonly />
+        </div>
+        <div v-if="hasCurrentShortUrl" class="form-field result-field">
+          <label for="short-url-result">短链</label>
+          <input id="short-url-result" :value="result.shortUrl" readonly />
+        </div>
+        <button
+          v-if="hasShortUrlService"
+          type="button"
+          class="secondary-action-button result-action-button"
+          :disabled="isGeneratingShortUrl || isShortCopying"
+          :aria-busy="isGeneratingShortUrl"
+          @click="handleShortUrlAction"
+        >
+          {{ shortActionLabel }}
+        </button>
+      </fieldset>
+    </Transition>
   </form>
 </template>
 
 <script>
 import { showLoading, hideLoading } from '@/components/loading';
+import showNotification from '@/components/notification';
 import { copyText } from '@/features/clipboard/copy';
 import { TARGET_OPTIONS, createDefaultMoreConfig } from '@/features/conversion/options';
+import { request } from '@/network';
+import {
+  COPY_STATUS,
+  createEmptyResultState,
+  getCopyFeedback,
+  getShortActionLabel,
+  getSubscriptionActionLabel,
+} from './actionState.js';
 import {
   createShortUrlRequestConfig,
   createConversionInputKey,
@@ -156,8 +165,7 @@ import {
   prepareConversion,
   regexCheck,
 } from './index.js';
-import { request } from '@/network';
-import showNotification from '@/components/notification';
+
 export default {
   name: 'SubTable',
   data() {
@@ -168,16 +176,12 @@ export default {
       shortUrl: window.config.shortUrl,
       remoteConfigOptions: window.config.remoteConfigOptions,
       moreConfig: createDefaultMoreConfig(),
+      isShowServiceSettings: false,
       isShowMoreConfig: false,
       isShowManualApiUrl: false,
       isShowRemoteConfig: false,
       isGeneratingShortUrl: false,
-      result: {
-        subUrl: '',
-        shortUrl: '',
-        conversionKey: '',
-        shortUrlConversionKey: '',
-      },
+      result: createEmptyResultState(),
       urls: '',
       api: window.config.apiUrl,
       target: 'clash',
@@ -204,19 +208,41 @@ export default {
     hasCurrentShortUrl() {
       return hasCurrentShortUrlResult(this.result, this.conversionInput);
     },
-    visibleSubUrl() {
-      return this.hasCurrentSubscriptionResult ? this.result.subUrl : '';
+    isSubscriptionCopying() {
+      return this.result.subscriptionCopyStatus === COPY_STATUS.COPYING;
     },
-    visibleShortUrl() {
-      return this.hasCurrentShortUrl ? this.result.shortUrl : '';
+    isShortCopying() {
+      return this.result.shortCopyStatus === COPY_STATUS.COPYING;
+    },
+    subscriptionActionLabel() {
+      return getSubscriptionActionLabel({
+        hasResult: this.hasCurrentSubscriptionResult,
+        copyStatus: this.result.subscriptionCopyStatus,
+      });
+    },
+    shortActionLabel() {
+      return getShortActionLabel({
+        hasShortUrl: this.hasCurrentShortUrl,
+        copyStatus: this.result.shortCopyStatus,
+        isGenerating: this.isGeneratingShortUrl,
+      });
+    },
+    copyFeedback() {
+      return (
+        getCopyFeedback({ resource: '短链', copyStatus: this.result.shortCopyStatus }) ||
+        getCopyFeedback({ resource: '订阅链接', copyStatus: this.result.subscriptionCopyStatus })
+      );
     },
   },
   methods: {
+    showServiceSettings() {
+      this.isShowServiceSettings = !this.isShowServiceSettings;
+    },
     showMoreConfig() {
       this.isShowMoreConfig = !this.isShowMoreConfig;
     },
     selectApi(event) {
-      if (event.target.value == 'manual') {
+      if (event.target.value === 'manual') {
         this.api = '';
         this.isShowManualApiUrl = true;
       } else {
@@ -225,7 +251,7 @@ export default {
       }
     },
     selectRemoteConfig(event) {
-      if (event.target.value == 'manual') {
+      if (event.target.value === 'manual') {
         this.remoteConfig = '';
         this.isShowRemoteConfig = true;
       } else {
@@ -233,38 +259,34 @@ export default {
         this.remoteConfig = event.target.value;
       }
     },
-    async toCopy(url, title) {
-      if (!url) {
-        this.$showDialog('warning', '注意', '复制失败：内容为空');
-        return;
-      }
-
+    async copyResult(url, resource) {
+      if (!url) return false;
+      const statusField = resource === 'short' ? 'shortCopyStatus' : 'subscriptionCopyStatus';
+      this.result[statusField] = COPY_STATUS.COPYING;
       try {
         await copyText(url);
-        showNotification(title + ' 复制成功', '成功');
+        this.result[statusField] = COPY_STATUS.COPIED;
+        showNotification(resource === 'short' ? '短链复制成功' : '订阅链接复制成功', '成功');
+        return true;
       } catch {
-        this.$showDialog('warning', '注意', '复制失败：请检查浏览器兼容性');
+        this.result[statusField] = COPY_STATUS.MANUAL;
+        return false;
       }
     },
-    handleSubscriptionAction() {
+    async handleSubscriptionAction() {
       if (this.hasCurrentSubscriptionResult) {
-        this.toCopy(this.result.subUrl, '订阅链接');
+        await this.copyResult(this.result.subUrl, 'subscription');
         return;
       }
-
-      this.getSubUrl();
+      await this.getSubUrl();
     },
-    handleShortUrlAction() {
-      if (this.isGeneratingShortUrl) {
-        return;
-      }
-
+    async handleShortUrlAction() {
+      if (this.isGeneratingShortUrl || this.isShortCopying) return;
       if (this.hasCurrentShortUrl) {
-        this.toCopy(this.result.shortUrl, '短链');
+        await this.copyResult(this.result.shortUrl, 'short');
         return;
       }
-
-      this.getShortUrl();
+      await this.getShortUrl();
     },
     getConverter() {
       const prepared = prepareConversion({
@@ -278,7 +300,6 @@ export default {
         isShowMoreConfig: this.isShowMoreConfig,
         moreConfig: this.moreConfig,
       });
-
       if (!prepared.ok) {
         const messages = {
           missingUrls: ['warning', '注意', '请先输入订阅链接或节点'],
@@ -291,32 +312,24 @@ export default {
         this.$showDialog(type, title, message);
         return false;
       }
-
       this.api = prepared.api;
+      this.result = createEmptyResultState();
       this.result.subUrl = prepared.subUrl;
-      this.result.shortUrl = '';
       this.result.conversionKey = createConversionInputKey(this.conversionInput);
-      this.result.shortUrlConversionKey = '';
       return true;
     },
-    getSubUrl() {
-      if (!this.getConverter()) {
-        return;
-      }
-      this.toCopy(this.result.subUrl, '订阅链接');
+    async getSubUrl() {
+      if (!this.getConverter()) return;
+      await this.copyResult(this.result.subUrl, 'subscription');
     },
     async getShortUrl() {
-      if (!this.getConverter()) {
-        return;
-      }
+      if (!this.hasCurrentSubscriptionResult && !this.getConverter()) return;
       if (!regexCheck(this.shortUrl)) {
         this.$showDialog('error', '失败', '短链服务配置无效，请检查运行时配置');
         return;
       }
-
       const requestConversionKey = this.result.conversionKey;
       const requestSubUrl = this.result.subUrl;
-
       let data;
       try {
         data = new FormData();
@@ -325,24 +338,21 @@ export default {
         this.$showDialog('error', '失败', '短链生成失败，请稍后重试');
         return;
       }
-
       this.isGeneratingShortUrl = true;
+      this.result.shortCopyStatus = COPY_STATUS.IDLE;
       showLoading();
       try {
         const res = await request(createShortUrlRequestConfig(this.shortUrl, data));
-
         if (!matchesConversionInput(requestConversionKey, this.conversionInput)) {
           return;
         }
-
         if (!res.data || res.data.Code !== 1 || !res.data.ShortUrl) {
           this.$showDialog('error', '失败', '短链生成失败，请稍后重试');
           return;
         }
-
         this.result.shortUrl = res.data.ShortUrl;
         this.result.shortUrlConversionKey = requestConversionKey;
-        this.toCopy(this.result.shortUrl, '短链');
+        await this.copyResult(this.result.shortUrl, 'short');
       } catch {
         if (matchesConversionInput(requestConversionKey, this.conversionInput)) {
           this.$showDialog('error', '失败', '短链生成失败，请稍后重试');

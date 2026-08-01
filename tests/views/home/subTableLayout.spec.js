@@ -10,25 +10,27 @@ describe('SubTable configuration layout', () => {
     const source = readFileSync(sourcePath, 'utf8');
     const subscriptionUrlsIndex = source.indexOf('id="subscription-urls"');
     const clientIndex = source.indexOf('id="client"');
-    const apiIndex = source.indexOf('id="api"');
     const remoteIndex = source.indexOf('id="remote"');
+    const serviceSettingsIndex = source.indexOf('id="service-settings-toggle"');
+    const apiIndex = source.indexOf('id="api"');
     const moreConfigIndex = source.indexOf('id="more-config-toggle"');
     const moreConfigIncludeIndex = source.indexOf('id="more-config-include"');
     const moreConfigExcludeIndex = source.indexOf('id="more-config-exclude"');
+    const primaryActionIndex = source.indexOf('class="primary-action-row"');
     const convertedSubUrlIndex = source.indexOf('id="converted-sub-url"');
     const shortUrlResultIndex = source.indexOf('id="short-url-result"');
-    const primaryActionIndex = source.indexOf('class="primary-action-row"');
 
     expect(subscriptionUrlsIndex).toBeGreaterThan(-1);
     expect(clientIndex).toBeGreaterThan(subscriptionUrlsIndex);
-    expect(apiIndex).toBeGreaterThan(clientIndex);
-    expect(remoteIndex).toBeGreaterThan(apiIndex);
-    expect(moreConfigIndex).toBeGreaterThan(remoteIndex);
+    expect(remoteIndex).toBeGreaterThan(clientIndex);
+    expect(serviceSettingsIndex).toBeGreaterThan(remoteIndex);
+    expect(apiIndex).toBeGreaterThan(serviceSettingsIndex);
+    expect(moreConfigIndex).toBeGreaterThan(apiIndex);
     expect(moreConfigIncludeIndex).toBeGreaterThan(moreConfigIndex);
     expect(moreConfigExcludeIndex).toBeGreaterThan(moreConfigIncludeIndex);
-    expect(convertedSubUrlIndex).toBeGreaterThan(moreConfigExcludeIndex);
+    expect(primaryActionIndex).toBeGreaterThan(moreConfigExcludeIndex);
+    expect(convertedSubUrlIndex).toBeGreaterThan(primaryActionIndex);
     expect(shortUrlResultIndex).toBeGreaterThan(convertedSubUrlIndex);
-    expect(primaryActionIndex).toBeGreaterThan(shortUrlResultIndex);
   });
 
   it('contains no local template UI, state, imports, or browser storage access', () => {
@@ -65,6 +67,7 @@ describe('SubTable configuration layout', () => {
     const source = readFileSync(sourcePath, 'utf8');
 
     expect(source).toMatch(/isShowMoreConfig:\s*false/);
+    expect(source).toMatch(/isShowServiceSettings:\s*false/);
   });
 
   it('names the blank remote-config choice as the backend built-in configuration', () => {

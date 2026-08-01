@@ -1,15 +1,15 @@
 .sub-table--modern {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
   width: 100%;
   padding: 28px;
   border: 1px solid var(--surface-glass-edge);
-  border-radius: 28px;
+  border-radius: 32px;
   background: var(--surface-glass);
   box-shadow: var(--shadow-glass);
   color: var(--text-primary);
-  backdrop-filter: blur(22px) saturate(120%);
+  backdrop-filter: blur(24px) saturate(125%);
 }
 
 .sub-table--modern fieldset {
@@ -43,7 +43,7 @@
 
 .sub-table--modern .base-config-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -190,7 +190,7 @@
 .sub-table--modern .primary-action-button:active {
   border-color: var(--accent-active);
   background: var(--accent-active);
-  transform: scale(0.985);
+  transform: scale(0.97);
 }
 
 .sub-table--modern .primary-action-button:disabled {
@@ -207,6 +207,22 @@
   gap: 14px;
   padding-top: 24px;
   border-top: 1px solid var(--separator);
+}
+
+.sub-table--modern .result-action-button {
+  align-self: flex-start;
+}
+
+.sub-table--modern .result-materialize-enter-active,
+.sub-table--modern .result-materialize-leave-active {
+  transition: opacity 300ms ease-out, filter 300ms ease-out, transform 300ms ease-out;
+}
+
+.sub-table--modern .result-materialize-enter-from,
+.sub-table--modern .result-materialize-leave-to {
+  opacity: 0;
+  filter: blur(4px);
+  transform: scale(0.99);
 }
 
 .sub-table--modern .results-section legend {
@@ -301,6 +317,10 @@
   .sub-table--modern .secondary-action-button {
     width: 100%;
   }
+
+  .sub-table--modern .result-action-button {
+    align-self: stretch;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -317,6 +337,11 @@
     transition-duration: 0.01ms;
   }
 
+  .sub-table--modern .result-materialize-enter-active,
+  .sub-table--modern .result-materialize-leave-active {
+    transition-duration: 0.01ms;
+  }
+
   .sub-table--modern .primary-action-button:active,
   .sub-table--modern .secondary-action-button:active,
   .sub-table--modern .advanced-disclosure:active {
@@ -327,6 +352,12 @@
   .sub-table--modern .field-reveal-leave-to,
   .sub-table--modern .advanced-reveal-enter-from,
   .sub-table--modern .advanced-reveal-leave-to {
+    transform: none;
+  }
+
+  .sub-table--modern .result-materialize-enter-from,
+  .sub-table--modern .result-materialize-leave-to {
+    filter: none;
     transform: none;
   }
 }

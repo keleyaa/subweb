@@ -55,24 +55,22 @@ describe('home workspace layout', () => {
     expect(source).toMatch(/\.home-workspace\s*\{[^}]*display:\s*flex\s*;/);
     expect(source).not.toContain('min-height: calc(100vh - 57px)');
     expect(source).toMatch(
-      /\.home-workspace__inner\s*\{[^}]*max-width:\s*860px\s*;[^}]*margin:\s*0 auto\s*;[^}]*padding:\s*52px 20px 44px\s*;/
+      /\.home-workspace__inner\s*\{[^}]*max-width:\s*46rem\s*;[^}]*margin:\s*0 auto\s*;[^}]*padding:\s*36px 20px 40px\s*;/
     );
     expect(source).toMatch(
-      /\.home-workspace__heading\s*\{[^}]*margin-bottom:\s*32px\s*;[^}]*text-align:\s*center\s*;/,
+      /\.home-workspace__heading\s*\{[^}]*margin-bottom:\s*24px\s*;[^}]*text-align:\s*center\s*;/,
     );
     expect(source).toMatch(
-      /\.home-workspace__heading h1\s*\{[^}]*margin:\s*0 0 8px\s*;[^}]*color:\s*var\(--text-primary\)\s*;[^}]*font-size:\s*34px\s*;[^}]*font-weight:\s*650\s*;[^}]*letter-spacing:\s*0\s*;[^}]*line-height:\s*1\.2\s*;/
+      /\.home-workspace__heading h1\s*\{[^}]*margin:\s*0\s*;[^}]*color:\s*var\(--text-primary\)\s*;[^}]*font-size:\s*30px\s*;[^}]*font-weight:\s*650\s*;[^}]*letter-spacing:\s*0\s*;[^}]*line-height:\s*1\.2\s*;/
     );
-    expect(source).toMatch(
-      /\.home-workspace__heading p\s*\{[^}]*max-width:\s*480px\s*;[^}]*margin:\s*0 auto\s*;[^}]*color:\s*var\(--text-secondary\)\s*;[^}]*font-size:\s*15px\s*;[^}]*line-height:\s*1\.5\s*;/,
-    );
+    expect(source).not.toContain('.home-workspace__heading p');
   });
 
   it('tightens workspace spacing and heading size on mobile', async () => {
     const source = await readFile(sourceUrl, 'utf8');
 
     expect(source).toMatch(
-      /@media \(max-width: 575\.98px\)\s*\{[\s\S]*?\.home-workspace__inner\s*\{[^}]*padding:\s*32px 16px 28px\s*;[^}]*\}[\s\S]*?\.home-workspace__heading\s*\{[^}]*margin-bottom:\s*24px\s*;[^}]*\}[\s\S]*?\.home-workspace__heading h1\s*\{[^}]*font-size:\s*28px\s*;/
+      /@media \(max-width: 575\.98px\)\s*\{[\s\S]*?\.home-workspace__inner\s*\{[^}]*padding:\s*24px 16px 28px\s*;[^}]*\}[\s\S]*?\.home-workspace__heading\s*\{[^}]*margin-bottom:\s*20px\s*;[^}]*\}[\s\S]*?\.home-workspace__heading h1\s*\{[^}]*font-size:\s*28px\s*;/
     );
   });
 
@@ -81,13 +79,13 @@ describe('home workspace layout', () => {
 
     expect(source).toContain('<main class="home-workspace">');
     expect(source).toContain('<h1>订阅转换</h1>');
-    expect(source).toContain('<p>将订阅链接和节点转换为目标客户端配置。</p>');
+    expect(source).not.toContain('<p>');
     expect(source).not.toContain('presentation');
     expect(source).not.toContain('uxMode');
     expect(source).not.toContain('data-ux-mode');
   });
 
-  it('draws both explicit theme palettes from shared global tokens without decorative gradients', async () => {
+  it('draws both explicit theme palettes with static ambient light only on the page background', async () => {
     const source = await readFile(baseCssUrl, 'utf8');
 
     expect(source).toContain("html[data-theme='light']");
@@ -97,7 +95,8 @@ describe('home workspace layout', () => {
     expect(source).toContain('--focus-ring');
     expect(source).toContain('--el-bg-color');
     expect(source).not.toContain('linear-gradient');
-    expect(source).not.toContain('radial-gradient');
+    expect(source).toMatch(/body::before\s*\{[\s\S]*?radial-gradient/);
+    expect((source.match(/radial-gradient/g) ?? [])).toHaveLength(3);
     expect(source).toMatch(
       /@media \(prefers-contrast: more\)[\s\S]*?html\[data-theme='light'\]\s*\{[^}]*--surface-glass-edge:\s*[^;]+;[\s\S]*?html\[data-theme='dark'\]\s*\{[^}]*--surface-glass-edge:\s*[^;]+;/,
     );

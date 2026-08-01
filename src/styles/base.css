@@ -98,9 +98,22 @@ html {
 }
 
 body {
+  position: relative;
   min-width: 320px;
   background: var(--canvas);
   color: var(--text-primary);
+}
+
+body::before {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(74, 154, 255, 0.16), transparent 34%),
+    radial-gradient(circle at 82% 18%, rgba(80, 211, 205, 0.11), transparent 30%),
+    radial-gradient(circle at 52% 88%, rgba(158, 122, 255, 0.1), transparent 36%);
+  content: '';
+  pointer-events: none;
 }
 
 button,
@@ -174,7 +187,8 @@ button:not(:disabled) {
   }
 
   .el-notification,
-  .el-loading-mask {
+  .el-loading-mask,
+  .sub-table--modern {
     backdrop-filter: none;
   }
 }
@@ -186,6 +200,7 @@ button:not(:disabled) {
     --separator: rgba(42, 55, 69, 0.52);
     --control-border: rgba(42, 55, 69, 0.6);
     --focus-ring: #003f7f;
+    --surface-glass: #ffffff;
   }
 
   html[data-theme='dark'] {
@@ -194,5 +209,6 @@ button:not(:disabled) {
     --separator: rgba(234, 242, 249, 0.54);
     --control-border: rgba(234, 242, 249, 0.66);
     --focus-ring: #b7dcff;
+    --surface-glass: #151c25;
   }
 }

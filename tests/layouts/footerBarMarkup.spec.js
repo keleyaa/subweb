@@ -20,9 +20,8 @@ describe('FooterBar source contract', () => {
     expect(source).toMatch(
       /repositoryLabel\(\)\s*\{\s*return getGithubRepositoryLabel\(this\.githubItem\);\s*\}/,
     );
-    expect(source).toMatch(
-      /\.footer-bar\s*\{[^}]*max-width:\s*860px\s*;[^}]*border:\s*1px solid var\(--surface-glass-edge\)\s*;[^}]*border-radius:\s*20px\s*;[^}]*background:\s*var\(--surface-glass-strong\)\s*;[^}]*backdrop-filter:\s*blur\(18px\) saturate\(120%\)\s*;/s,
-    );
+    expect(source).toMatch(/\.footer-bar\s*\{[^}]*max-width:\s*46rem\s*;[^}]*text-align:\s*center\s*;/s);
+    expect(source).not.toMatch(/backdrop-filter|box-shadow|background:\s*var\(--surface-glass/);
     expect(source).toContain('var(--text-secondary)');
   });
 });

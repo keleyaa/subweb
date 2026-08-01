@@ -3,7 +3,6 @@
     <div class="home-workspace__inner">
       <header class="home-workspace__heading">
         <h1>订阅转换</h1>
-        <p>将订阅链接和节点转换为目标客户端配置。</p>
       </header>
       <SubTable />
     </div>
@@ -30,40 +29,32 @@ export default {
 
 .home-workspace__inner {
   width: 100%;
-  max-width: 860px;
+  max-width: 46rem;
   margin: 0 auto;
-  padding: 52px 20px 44px;
+  padding: 36px 20px 40px;
 }
 
 .home-workspace__heading {
-  margin-bottom: 32px;
+  margin-bottom: 24px;
   text-align: center;
 }
 
 .home-workspace__heading h1 {
-  margin: 0 0 8px;
+  margin: 0;
   color: var(--text-primary);
-  font-size: 34px;
+  font-size: 30px;
   font-weight: 650;
   letter-spacing: 0;
   line-height: 1.2;
 }
 
-.home-workspace__heading p {
-  max-width: 480px;
-  margin: 0 auto;
-  color: var(--text-secondary);
-  font-size: 15px;
-  line-height: 1.5;
-}
-
 @media (max-width: 575.98px) {
   .home-workspace__inner {
-    padding: 32px 16px 28px;
+    padding: 24px 16px 28px;
   }
 
   .home-workspace__heading {
-    margin-bottom: 24px;
+    margin-bottom: 20px;
   }
 
   .home-workspace__heading h1 {
