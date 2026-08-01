@@ -24,7 +24,7 @@ module.exports = [
     },
   },
   {
-    files: ['tests/**/*.js', '*.config.{js,mjs}'],
+    files: ['tests/**/*.js', 'scripts/**/*.{js,mjs}', '*.config.{js,mjs}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

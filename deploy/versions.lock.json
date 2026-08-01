@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-08-01T10:55:34Z",
+  "services": {
+    "gatewayBase": {
+      "source": {
+        "url": "https://github.com/nginx/nginx",
+        "repository": "nginx/nginx",
+        "tag": "release-1.30.4",
+        "commit": "017cf98dcce217946572a896f0992370475e189f",
+        "prerelease": false
+      },
+      "image": {
+        "reference": "docker.io/nginxinc/nginx-unprivileged:1.30.4-alpine",
+        "digest": "sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49",
+        "platforms": {
+          "linux/amd64": "sha256:bc69cfff69f75aef06daeda8dea70de95fa9ad97a03fe134cd4e5e6789d51124",
+          "linux/arm64": "sha256:044acf9fd345f73fe66d818e043fd601982f0ab5ae14213c5bdaccd5ffaa065d"
+        }
+      },
+      "container": {
+        "internalPorts": [8080]
+      }
+    },
+    "myurls": {
+      "source": {
+        "url": "https://github.com/keleyaa/MyUrls",
+        "repository": "keleyaa/MyUrls",
+        "tag": "v1.11",
+        "commit": "68527398a2b4019f7ee5a176eb8645f68055d0ae",
+        "prerelease": false
+      },
+      "image": {
+        "reference": "ghcr.io/keleyaa/myurls:v1.11",
+        "digest": "sha256:f00046cd6c68986781ac9bf13d43fc4db3dbedb8815146a3510ef325cd5b98b0",
+        "platforms": {
+          "linux/amd64": "sha256:46fe1a8c476ef0cd5d6cd1299a578991d66fa2e63d780714482ccf8b895bc5fd",
+          "linux/arm64": "sha256:2b2b93248f6d48a10d8a609801aa05b282b63a4f09f150adac9541ff3931d7c7"
+        }
+      },
+      "container": {
+        "internalPorts": [8080]
+      }
+    },
+    "redis": {
+      "source": {
+        "url": "https://github.com/redis/redis",
+        "repository": "redis/redis",
+        "tag": "8.10.0",
+        "commit": "5279a8d44818a5ca51e9abb91a9b8ce481d3c88b",
+        "prerelease": false
+      },
+      "image": {
+        "reference": "docker.io/library/redis:8.10.0-alpine",
+        "digest": "sha256:5cca2f8a01ef2264c52dac86f14ec6a5abe973a93331e1b62522cfc5e63e4691",
+        "platforms": {
+          "linux/amd64": "sha256:a6a88248ad5b0c724b7f2b380b7d21f46097db158b2b077ef85bcb97f90aee3a",
+          "linux/arm64": "sha256:0f8941c253cc39d98439a608dcb4f0a840b54421cc5109a68c72b2d2d223cea5"
+        }
+      },
+      "container": {
+        "internalPorts": [6379]
+      }
+    },
+    "subconverter": {
+      "source": {
+        "url": "https://github.com/Aethersailor/SubConverter-Extended",
+        "repository": "Aethersailor/SubConverter-Extended",
+        "tag": "v1.2.0",
+        "commit": "4db6a63f078f27da2cfb6cc90d47eb2dbd80c1cd",
+        "prerelease": false
+      },
+      "image": {
+        "reference": "ghcr.io/aethersailor/subconverter-extended:v1.2.0",
+        "digest": "sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f",
+        "platforms": {
+          "linux/amd64": "sha256:a4cf5108985d56272093f535e5d935df71cf3e7d97ead02e07bb2c298ddb958f",
+          "linux/arm64": "sha256:92e844093f85a2aa4db73c291f9668f0f3ad76af5598b7f824bc87e49ce41d98"
+        }
+      },
+      "container": {
+        "internalPorts": [25500]
+      }
+    }
+  }
+}

@@ -16,11 +16,12 @@
     "serve": "vite",
     "preview": "vite preview",
     "build": "vite build",
-    "lint": "eslint src tests vite.config.mjs eslint.config.js playwright.config.js",
+    "lint": "eslint src tests scripts vite.config.mjs eslint.config.js playwright.config.js",
     "lint:p1-04a": "eslint src/views/home/index.js src/network/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "verify:locks": "node scripts/verify-version-locks.mjs",
     "verify": "npm test && npm run lint && npm run build"
   },
   "dependencies": {
