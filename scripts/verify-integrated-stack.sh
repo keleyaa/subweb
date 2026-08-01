@@ -93,6 +93,14 @@ random_hex() {
   openssl rand -hex "$1"
 }
 
+make_test_certificate() {
+  output_directory=$1
+  app_domain=$2
+  api_domain=$3
+  "$certificate_creator" "$output_directory" "$app_domain" "$api_domain" >/dev/null
+  chmod 0644 "$output_directory/fullchain.pem" "$output_directory/privkey.pem"
+}
+
 random_loopback_port() {
   node <<'NODE'
 const net = require('node:net');
@@ -401,7 +409,7 @@ else
   fi
   certificate_directory=$temporary_directory/certificate
   mkdir "$certificate_directory"
-  "$certificate_creator" "$certificate_directory" app.test api.app.test >/dev/null
+  make_test_certificate "$certificate_directory" app.test api.app.test
   write_environment direct-tls "$certificate_directory/fullchain.pem" "$certificate_directory/privkey.pem"
   compose up -d --build --wait --wait-timeout 240 > "$command_log" 2>&1 \
     || fail 'direct-tls 栈启动失败'
@@ -419,14 +427,14 @@ else
   mismatch_a=$temporary_directory/mismatch-a
   mismatch_b=$temporary_directory/mismatch-b
   mkdir "$mismatch_a" "$mismatch_b"
-  "$certificate_creator" "$mismatch_a" app.test api.app.test >/dev/null
-  "$certificate_creator" "$mismatch_b" app.test api.app.test >/dev/null
+  make_test_certificate "$mismatch_a" app.test api.app.test
+  make_test_certificate "$mismatch_b" app.test api.app.test
   write_environment direct-tls "$mismatch_a/fullchain.pem" "$mismatch_b/privkey.pem"
   expect_tls_rejection '证书与私钥不匹配' gateway-log 'TLS 证书和私钥不匹配'
 
   wrong_san=$temporary_directory/wrong-san
   mkdir "$wrong_san"
-  "$certificate_creator" "$wrong_san" app.test other.test >/dev/null
+  make_test_certificate "$wrong_san" app.test other.test
   write_environment direct-tls "$wrong_san/fullchain.pem" "$wrong_san/privkey.pem"
   expect_tls_rejection '证书不覆盖 API 域名' gateway-log 'TLS 证书不覆盖 API_DOMAIN: api.app.test'
 

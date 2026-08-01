@@ -89,7 +89,6 @@ trap 'rm -rf "$run_root"' EXIT
 trap 'rm -rf "$run_root"; exit 1' HUP INT TERM
 ln -s "$runtime_root/bin/myurls" "$run_root/myurls"
 ln -s "$runtime_root/bin/subconverter" "$run_root/subconverter"
-ln -s "$(command -v npm)" "$run_root/npm"
 cp -R "$myurls_source/public" "$run_root/public"
 
 find_nginx_mime_types() {
@@ -169,7 +168,7 @@ start_local_service() {
       health_url="http://127.0.0.1:$LOCAL_SUBCONVERTER_PORT/healthz"
       ;;
     vite)
-      (cd "$project_root" && exec "$run_root/npm" run serve -- \
+      (cd "$project_root" && exec node "$project_root/node_modules/vite/bin/vite.js" \
         --host 127.0.0.1 --port "$LOCAL_VITE_PORT" --strictPort) \
         >> "$log_file" 2>&1 &
       health_url="http://127.0.0.1:$LOCAL_VITE_PORT/"

@@ -56,7 +56,7 @@
 
 Redis 离线备份校验将服务日志写入独立文件，`DBSIZE` 输出不会被启动日志污染。恢复流程只在权限为 `0700` 的运维目录内创建短生命周期的只读暂存快照，使容器内 Redis 用户可读取宿主机 `0600` 备份；暂存文件在成功、失败或退出时删除，不以 root 身份运行 Redis。
 
-测试证书仅由 `scripts/test-support/create-test-certificate.sh` 写入独立系统临时目录，权限受限，并由退出陷阱删除。端口冲突测试使用唯一命名且带 `--rm` 的临时容器；Compose 验证使用随机 project name，退出时只执行该 project 的 `down --volumes --remove-orphans`，不会清理其他项目的容器、网络或卷。
+测试证书仅由 `scripts/test-support/create-test-certificate.sh` 写入权限为 `0700` 的独立系统临时目录；Linux 容器验证期间只放宽文件读取位、不开放目录遍历，并由退出陷阱删除。端口冲突测试使用唯一命名且带 `--rm` 的临时容器；Compose 验证使用随机 project name，退出时只执行该 project 的 `down --volumes --remove-orphans`，不会清理其他项目的容器、网络或卷。
 
 ## 证据边界
 

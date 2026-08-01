@@ -183,6 +183,8 @@ describe('integrated Docker gateway stack', () => {
     expect(source).toContain('docker_port_is_available 443');
     expect(source).toContain('tcp_connects 127.0.0.1 "$listener_port"');
     expect(source).not.toContain('server.listen(port');
+    expect(source).toContain('make_test_certificate');
+    expect(source).toContain('chmod 0644 "$output_directory/fullchain.pem" "$output_directory/privkey.pem"');
   });
 
   it.skipIf(!dockerIntegrationEnabled)(

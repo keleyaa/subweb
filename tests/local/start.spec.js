@@ -20,6 +20,8 @@ describe('atomic local source startup', () => {
     expect(myurls).toBeLessThan(subconverter);
     expect(source).toContain('(cd "$run_root" &&');
     expect(source).toContain('cp -R "$myurls_source/public" "$run_root/public"');
+    expect(source).toContain('node "$project_root/node_modules/vite/bin/vite.js"');
+    expect(source).not.toContain('npm run serve');
     expect(source).toContain('MyUrls log tail (secrets redacted):');
     expect(source).toContain('gsub(token, "[REDACTED]")');
     expect(subconverter).toBeLessThan(vite);
