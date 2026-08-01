@@ -34,4 +34,25 @@ describe('release evidence and command gate', () => {
     }
     expect(source).toMatch(/^set -eu$/mu);
   });
+
+  it('publishes one multi-platform release to Docker Hub and GHCR', () => {
+    const source = fs.readFileSync(path.join(root, '.github/workflows/docker-build-release.yml'), 'utf8');
+
+    expect(source).toContain('packages: write');
+    expect(source).toContain('registry: ghcr.io');
+    expect(source).toContain('username: ${{ github.actor }}');
+    expect(source).toContain('password: ${{ secrets.GITHUB_TOKEN }}');
+
+    for (const suffix of [
+      'latest',
+      '${{ steps.tag.outputs.date_tag }}',
+      'sha-${{ steps.tag.outputs.short_sha }}',
+    ]) {
+      expect(source).toContain('docker.io/${{ env.DOCKERHUB_IMAGE }}:' + suffix);
+      expect(source).toContain('ghcr.io/${{ env.GHCR_IMAGE }}:' + suffix);
+    }
+
+    expect(source).toContain('dockerhub_reference');
+    expect(source).toContain('ghcr_reference');
+  });
 });

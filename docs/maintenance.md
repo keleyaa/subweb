@@ -47,6 +47,21 @@ git diff --check
 
 `npm run verify:release` 聚合安装、审计、质量、浏览器、锁、Compose、文档、容器、两个 Docker profile 和证据门禁。它会重装依赖并运行较长时间，仅在准备发布的干净工作树执行。
 
+## 容器镜像发行
+
+主分支的 `docker build release` 工作流以单次 Buildx 构建同时发布 `docker.io/keleyaa/subweb` 与 `ghcr.io/keleyaa/subweb`。`release` 作业只增加 GHCR 所需的 `packages: write`；Docker Hub 使用仓库 Secrets，GHCR 使用 Actions 自动提供的 `GITHUB_TOKEN`，不要为此创建长期 PAT。
+
+两个注册表必须得到相同的 `latest`、日期加提交短 SHA、`sha-*` 标签和 manifest digest。回滚清单同时记录两个 digest 引用。首次创建 GHCR Package 后，维护者需要在 GitHub Package 设置中把可见性设为 Public，并确认未登录环境能够拉取；这是一次性的远端仓库设置，不能仅靠本地测试证明。
+
+每次推送后检查 Actions 中 Docker Hub 和 GHCR 的 manifest 推送日志，再分别执行：
+
+```sh
+docker buildx imagetools inspect docker.io/keleyaa/subweb:sha-<提交短 SHA>
+docker buildx imagetools inspect ghcr.io/keleyaa/subweb:sha-<提交短 SHA>
+```
+
+两个命令显示的顶层 manifest digest 必须一致。若 GHCR 推送返回权限错误，先检查工作流 `packages: write`、仓库 Actions 权限和 Package 与仓库的关联，不要把个人访问令牌写进工作流。
+
 ## 锁定更新
 
 外部服务升级先核验正式 tag、commit、manifest digest、amd64/arm64 digest 和许可证，再更新 [`deploy/versions.lock.json`](../deploy/versions.lock.json)。运行锁校验、对应服务测试和两个 Docker profile 的全链路验证。禁止在生产示例使用 `latest`，也不能把本地未发布 commit 写成远端可拉取镜像。

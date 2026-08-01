@@ -14,7 +14,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE_NAME: keleyaa/subweb
+  DOCKERHUB_IMAGE: keleyaa/subweb
+  GHCR_IMAGE: keleyaa/subweb
 
 jobs:
   quality:
@@ -88,6 +89,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -113,6 +115,13 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Login to GHCR
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and push
         id: image
         uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4
@@ -123,9 +132,12 @@ jobs:
           provenance: mode=max
           sbom: true
           tags: |
-            ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.date_tag }}
-            ${{ env.IMAGE_NAME }}:sha-${{ steps.tag.outputs.short_sha }}
+            docker.io/${{ env.DOCKERHUB_IMAGE }}:latest
+            docker.io/${{ env.DOCKERHUB_IMAGE }}:${{ steps.tag.outputs.date_tag }}
+            docker.io/${{ env.DOCKERHUB_IMAGE }}:sha-${{ steps.tag.outputs.short_sha }}
+            ghcr.io/${{ env.GHCR_IMAGE }}:latest
+            ghcr.io/${{ env.GHCR_IMAGE }}:${{ steps.tag.outputs.date_tag }}
+            ghcr.io/${{ env.GHCR_IMAGE }}:sha-${{ steps.tag.outputs.short_sha }}
 
       - name: Create rollback manifest
         id: rollback
@@ -145,7 +157,8 @@ jobs:
             --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
             --arg release_tag "$RELEASE_TAG" \
             --arg image_digest "$IMAGE_DIGEST" \
-            --arg image_reference "docker.io/${IMAGE_NAME}@${IMAGE_DIGEST}" \
+            --arg dockerhub_reference "docker.io/${DOCKERHUB_IMAGE}@${IMAGE_DIGEST}" \
+            --arg ghcr_reference "ghcr.io/${GHCR_IMAGE}@${IMAGE_DIGEST}" \
             --arg build_time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '{
               schema_version: "1",
@@ -160,17 +173,22 @@ jobs:
                 platforms: ["linux/amd64", "linux/arm64"],
                 build_time: $build_time,
                 rollback_target: {
-                  source_reference: $image_reference,
-                  source_digest: $image_digest
+                  source_reference: $dockerhub_reference,
+                  source_digest: $image_digest,
+                  registry_references: {
+                    docker_hub: $dockerhub_reference,
+                    ghcr: $ghcr_reference
+                  }
                 }
               }
             }' > "$manifest_path"
-          jq -e '.release_identity.source_sha and .release_identity.source_digest and .release_identity.rollback_target.source_reference' "$manifest_path" >/dev/null
+          jq -e '.release_identity.source_sha and .release_identity.source_digest and .release_identity.rollback_target.registry_references.docker_hub and .release_identity.rollback_target.registry_references.ghcr' "$manifest_path" >/dev/null
           echo "manifest_path=${manifest_path}" >> "$GITHUB_OUTPUT"
           echo "digest_suffix=${IMAGE_DIGEST#sha256:}" >> "$GITHUB_OUTPUT"
           {
-            echo "### Docker Hub release"
-            echo "- image: \`docker.io/${IMAGE_NAME}@${IMAGE_DIGEST}\`"
+            echo "### Container release"
+            echo "- Docker Hub: \`docker.io/${DOCKERHUB_IMAGE}@${IMAGE_DIGEST}\`"
+            echo "- GHCR: \`ghcr.io/${GHCR_IMAGE}@${IMAGE_DIGEST}\`"
             echo "- source: \`${GITHUB_SHA}\`"
             echo "- tag: \`${RELEASE_TAG}\`"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -188,5 +206,5 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-          repository: ${{ env.IMAGE_NAME }}
+          repository: ${{ env.DOCKERHUB_IMAGE }}
           readme: ./README.md

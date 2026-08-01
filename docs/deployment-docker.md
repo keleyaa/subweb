@@ -61,6 +61,13 @@ git pull --ff-only origin main
 
 仓库提供的快速部署脚本会生成 `.env`、拉取 Gateway、SubConverter、MyUrls 和 Redis 镜像，并以 `--no-build` 启动。它不会安装 Docker、修改 DNS、申请证书或删除已有数据卷。
 
+Gateway 的每次正式发行由同一次多架构构建同时推送到两个公开镜像源：
+
+- 默认源：`docker.io/keleyaa/subweb`
+- 备用源：`ghcr.io/keleyaa/subweb`
+
+两个镜像源具有相同的 `latest`、日期提交标签、`sha-*` 标签和 manifest digest。部署者拉取公开镜像不需要登录；当某个注册表不可达或限流时，可以只替换 `--image` 的注册表前缀，不需要修改 Compose。
+
 已有宝塔、1Panel、Nginx、OpenResty、Cloudflare Tunnel 等反向代理时：
 
 ```sh
@@ -94,6 +101,16 @@ curl -fsS -H 'Host: sub.example.com' http://127.0.0.1:18080/healthz
   --image docker.io/keleyaa/subweb:sha-2bf1a9f
 ```
 
+使用同一发行的 GHCR 备用镜像：
+
+```sh
+./scripts/docker-deploy.sh --mode behind-proxy \
+  --app-domain example.com --api-domain api.example.com \
+  --image ghcr.io/keleyaa/subweb:sha-2bf1a9f
+```
+
+将示例短 SHA 替换为 [GitHub Actions 发行记录](https://github.com/keleyaa/subweb/actions/workflows/docker-build-release.yml)中实际发布的完整 `sha-*` 标签。不要根据本地未推送提交猜测远端标签。
+
 脚本内部的启动契约为：
 
 ```sh
@@ -101,7 +118,7 @@ docker compose pull
 docker compose up -d --no-build --pull always --wait
 ```
 
-`latest` 会随新发行变化，适合体验和主动跟随更新；`sha-*` 标签或镜像 digest 适合可审计生产部署。快速部署仍是四容器 Compose 架构，不是把 Redis、MyUrls 和 SubConverter 塞入 Gateway 单体镜像。
+`latest` 会随新发行变化，适合体验和主动跟随更新；`sha-*` 标签或镜像 digest 适合可审计生产部署。Docker Hub 与 GHCR 都不可用时，不要退回不明来源镜像，可按“从源码构建”流程在本机生成 Gateway。快速部署仍是四容器 Compose 架构，不是把 Redis、MyUrls 和 SubConverter 塞入 Gateway 单体镜像。
 
 ## 从源码构建
 

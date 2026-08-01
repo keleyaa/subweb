@@ -52,4 +52,17 @@ describe('documentation contract', () => {
     expect(local).toContain('不要在其他项目目录执行');
     for (const ignored of ['.env', '.runtime/', 'dist/', 'test-results/']) expect(maintenance).toContain(ignored);
   });
+
+  it('documents Docker Hub and GHCR as equivalent release sources', () => {
+    const readme = read('README.md');
+    const docker = read('docs/deployment-docker.md');
+    const maintenance = read('docs/maintenance.md');
+
+    for (const document of [readme, docker, maintenance]) {
+      expect(document).toContain('docker.io/keleyaa/subweb');
+      expect(document).toContain('ghcr.io/keleyaa/subweb');
+    }
+    expect(docker).toContain('--image ghcr.io/keleyaa/subweb:sha-');
+    expect(maintenance).toContain('packages: write');
+  });
 });

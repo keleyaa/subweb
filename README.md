@@ -43,7 +43,7 @@ cd subweb
 docker compose ps
 ```
 
-把 `example.com` 和 `api.example.com` 换成自己的两个域名。脚本自动生成未提交的 `.env`、Token 和 Redis 密码，无需手工填写秘密。生产环境建议增加 `--image docker.io/keleyaa/subweb:sha-<提交短 SHA>` 锁定镜像。需要修改源码或验证本地 Dockerfile 时，使用源码构建方式：
+把 `example.com` 和 `api.example.com` 换成自己的两个域名。脚本自动生成未提交的 `.env`、Token 和 Redis 密码，无需手工填写秘密。发行镜像同时发布到默认源 `docker.io/keleyaa/subweb` 和备用源 `ghcr.io/keleyaa/subweb`；两边使用相同标签和 manifest digest。生产环境建议增加 `--image docker.io/keleyaa/subweb:sha-<提交短 SHA>`，也可以改用 `--image ghcr.io/keleyaa/subweb:sha-<提交短 SHA>` 锁定同一发行。需要修改源码或验证本地 Dockerfile 时，使用源码构建方式：
 
 ```sh
 ./scripts/configure.sh --mode behind-proxy \

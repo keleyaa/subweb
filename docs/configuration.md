@@ -19,7 +19,7 @@
 
 更换域名时重新运行同一命令。默认保留现有秘密；增加 `--rotate-secrets` 才会同时轮换 MyUrls Token 和 Redis 密码，轮换前必须按[运维手册](operations.md)安排停写和备份。
 
-使用预构建镜像时，`docker-deploy.sh --image` 会把引用写入 `.env`。后续只重新配置域名也会保留该引用。生产环境使用 `sha-*` 标签或 digest；不带 `--image` 的快速部署默认跟随 `latest`。
+使用预构建镜像时，`docker-deploy.sh --image` 会把引用写入 `.env`。后续只重新配置域名也会保留该引用。生产环境使用 `sha-*` 标签或 digest；不带 `--image` 的快速部署默认跟随 `docker.io/keleyaa/subweb:latest`。同一发行也发布为 `ghcr.io/keleyaa/subweb`，切换注册表时只需重新执行部署脚本并传入对应的完整 `--image` 引用。
 
 ## 秘密与内部地址
 
