@@ -124,6 +124,10 @@ rollback_new_services() {
       [ "$published_run_path" != "$run_root" ] || rm -f "$runtime_root/pids/$service.pid"
     fi
   done
+  if [ -f "$runtime_root/config/local.env" ]; then
+    configured_run_root=$(awk 'index($0, "RUN_ROOT=") == 1 { print substr($0, 10) }' "$runtime_root/config/local.env")
+    [ "$configured_run_root" != "$run_root" ] || rm -f "$runtime_root/config/local.env"
+  fi
   rm -rf "$run_root"
 }
 trap - EXIT HUP INT TERM
@@ -202,6 +206,17 @@ publish_pid_records() {
   for service in redis myurls subconverter vite nginx; do
     mv "$runtime_root/pids/.$service.pid.tmp.$$" "$runtime_root/pids/$service.pid"
   done
+  {
+    printf 'RUN_ROOT=%s\n' "$run_root"
+    printf 'LOCAL_VITE_PORT=%s\n' "$LOCAL_VITE_PORT"
+    printf 'LOCAL_SUBCONVERTER_PORT=%s\n' "$LOCAL_SUBCONVERTER_PORT"
+    printf 'LOCAL_MYURLS_PORT=%s\n' "$LOCAL_MYURLS_PORT"
+    printf 'LOCAL_REDIS_PORT=%s\n' "$LOCAL_REDIS_PORT"
+    printf 'LOCAL_APP_PORT=%s\n' "$LOCAL_APP_PORT"
+    printf 'LOCAL_API_PORT=%s\n' "$LOCAL_API_PORT"
+  } > "$runtime_root/config/local.env.tmp"
+  chmod 0600 "$runtime_root/config/local.env.tmp"
+  mv -f "$runtime_root/config/local.env.tmp" "$runtime_root/config/local.env"
   printf '%s\n' "$run_root" > "$runtime_root/active-run.tmp"
   chmod 0600 "$runtime_root/active-run.tmp"
   mv -f "$runtime_root/active-run.tmp" "$runtime_root/active-run"

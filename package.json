@@ -18,7 +18,7 @@
     "build": "vite build",
     "lint": "eslint src tests scripts vite.config.mjs eslint.config.js playwright.config.js",
     "lint:p1-04a": "eslint src/views/home/index.js src/network/index.js",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=1",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "verify:compose": "./scripts/validate-compose.sh",
