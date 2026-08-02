@@ -20,31 +20,47 @@ const decodeNumericXmlEntities = (source) =>
 const remoteResource =
   /(?:(?:^|[\s<])(?:xlink:)?href\s*=\s*["']|url\(\s*["']?|@import\s+["'])(?:https?:)?\/\//iu;
 const hasRemoteResource = (source) => remoteResource.test(decodeNumericXmlEntities(source));
-const withoutXmlComments = (source) => source.replace(/<!--[\s\S]*?-->/gu, '');
-
-const hasSvgRootWithViewBox = (source, viewBox) =>
-  new RegExp(`^\\s*<svg\\b(?=[^>]*\\sviewBox\\s*=\\s*["']${viewBox}["'])[^>]*>`, 'u').test(
-    withoutXmlComments(source),
+const withoutXmlCommentsAndCdata = (source) =>
+  source.replace(/<!--[\s\S]*?-->/gu, '').replace(/<!\[CDATA\[[\s\S]*?\]\]>/gu, '');
+const svgDocument = (source) =>
+  /^\s*(?:<\?xml[\s\S]*?\?>\s*)?<svg\b([^>]*)>([\s\S]*)<\/svg>\s*$/u.exec(
+    withoutXmlCommentsAndCdata(source),
   );
 
-const hasNonemptySvgTextElement = (source, name) =>
-  new RegExp(`<${name}\\b[^>]*>\\s*[^\\s<](?:[^<]*[^\\s<])?\\s*</${name}\\s*>`, 'u').test(
-    withoutXmlComments(source),
+const hasExactViewBox = (attributes, viewBox) =>
+  new RegExp(`(?:^|\\s)viewBox\\s*=\\s*["']${viewBox}["'](?=\\s|$)`, 'u').test(attributes);
+
+const hasNonemptySvgTextElement = (content, name) =>
+  new RegExp(`<${name}\\b[^>]*>\\s*[^\\s<](?:[^<]*[^\\s<])?\\s*</${name}\\s*>`, 'u').test(content);
+
+const hasCompleteSvgContract = (source, viewBox) => {
+  const match = svgDocument(source);
+  if (!match) return false;
+
+  const [, attributes, content] = match;
+  return (
+    hasExactViewBox(attributes, viewBox) &&
+    hasNonemptySvgTextElement(content, 'title') &&
+    hasNonemptySvgTextElement(content, 'desc')
   );
+};
 
 describe('README visual asset contract', () => {
-  it('requires actual SVG structure and closed nonempty accessibility text', () => {
-    const valid = '<svg viewBox="0 0 1200 360"><title>Subweb hero</title><desc>System overview</desc></svg>';
+  it('requires a complete SVG root and closed nonempty accessibility text', () => {
+    const valid =
+      '<?xml version="1.0"?><svg viewBox="0 0 1200 360"><title>Subweb hero</title><desc>System overview</desc></svg>';
+    const fakeComment =
+      '<svg viewBox="0 0 1200 360"><!-- <title>Fake title</title><desc>Fake description</desc> --></svg>';
+    const fakeCdata =
+      '<svg viewBox="0 0 1200 360"><![CDATA[<title>Fake title</title><desc>Fake description</desc>]]></svg>';
 
-    expect(hasSvgRootWithViewBox(valid, '0 0 1200 360')).toBe(true);
-    expect(hasSvgRootWithViewBox(valid, '0 0 1200 520')).toBe(false);
-    expect(hasSvgRootWithViewBox('<!-- <svg viewBox="0 0 1200 360"> -->', '0 0 1200 360')).toBe(false);
-    expect(hasNonemptySvgTextElement(valid, 'title')).toBe(true);
-    expect(hasNonemptySvgTextElement(valid, 'desc')).toBe(true);
-    expect(hasNonemptySvgTextElement('<!-- <title>Hidden</title> -->', 'title')).toBe(false);
-    expect(hasNonemptySvgTextElement('<title />', 'title')).toBe(false);
-    expect(hasNonemptySvgTextElement('<desc></desc>', 'desc')).toBe(false);
-    expect(hasNonemptySvgTextElement('title: Subweb hero', 'title')).toBe(false);
+    expect(hasCompleteSvgContract(valid, '0 0 1200 360')).toBe(true);
+    expect(hasCompleteSvgContract(valid, '0 0 1200 520')).toBe(false);
+    expect(hasCompleteSvgContract('<!-- <svg viewBox="0 0 1200 360"> -->', '0 0 1200 360')).toBe(false);
+    expect(hasCompleteSvgContract('<svg viewBox="0 0 1200 360"><title /><desc></desc></svg>', '0 0 1200 360')).toBe(false);
+    expect(hasCompleteSvgContract('title: Subweb hero', '0 0 1200 360')).toBe(false);
+    expect(hasCompleteSvgContract(fakeComment, '0 0 1200 360')).toBe(false);
+    expect(hasCompleteSvgContract(fakeCdata, '0 0 1200 360')).toBe(false);
   });
 
   it('detects remote resource references without rejecting namespaces or local fragments', () => {
@@ -79,9 +95,7 @@ describe('README visual asset contract', () => {
     (asset, viewBox) => {
       const source = read(path.join('docs/assets/readme', asset));
 
-      expect(hasSvgRootWithViewBox(source, viewBox)).toBe(true);
-      expect(hasNonemptySvgTextElement(source, 'title')).toBe(true);
-      expect(hasNonemptySvgTextElement(source, 'desc')).toBe(true);
+      expect(hasCompleteSvgContract(source, viewBox)).toBe(true);
       expect(source).not.toMatch(/<(?:script|foreignObject)\b/iu);
       expect(hasRemoteResource(source)).toBe(false);
     },

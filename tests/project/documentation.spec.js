@@ -5,6 +5,7 @@ import { requiredDocuments, verifyDocs } from '../../scripts/verify-docs.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 const renderedMarkdown = (source) =>
   source
     .replace(/<!--[\s\S]*?-->/gu, '')
@@ -13,7 +14,7 @@ const renderedMarkdown = (source) =>
 
 const hasEmbeddedReadmeImage = (source, asset) => {
   const imageTag = new RegExp(
-    `<img\\b(?=[^>]*\\ssrc\\s*=\\s*["']\\./docs/assets/readme/${asset}["'])(?=[^>]*\\salt\\s*=\\s*["'][^"']*[^\\s"'][^"']*["'])[^>]*>`,
+    `<img\\b(?=[^>]*\\ssrc\\s*=\\s*["']\\./docs/assets/readme/${escapeRegExp(asset)}["'])(?=[^>]*\\salt\\s*=\\s*["'][^"']*[^\\s"'][^"']*["'])[^>]*>`,
     'iu',
   );
   return imageTag.test(renderedMarkdown(source));
@@ -104,6 +105,9 @@ describe('documentation contract', () => {
     expect(hasEmbeddedReadmeImage(`<!-- ${image} -->`, asset)).toBe(false);
     expect(hasEmbeddedReadmeImage(`docs/assets/readme/${asset}`, asset)).toBe(false);
     expect(hasEmbeddedReadmeImage(`<img alt="" src="./docs/assets/readme/${asset}">`, asset)).toBe(false);
+    expect(
+      hasEmbeddedReadmeImage('<img alt="Wrong path" src="./docs/assets/readme/subweb-heroXsvg">', asset),
+    ).toBe(false);
   });
 
   it('embeds the hero and architecture proof as descriptive local HTML images', () => {
