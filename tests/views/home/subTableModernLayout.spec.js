@@ -140,6 +140,8 @@ describe('SubTable modern linear layout', () => {
     const shortUrlMethod = source.slice(source.indexOf('async getShortUrl()'), source.indexOf('\n    },\n  },\n};'));
 
     expect(shortUrlMethod).toContain('const requestConversionKey = this.result.conversionKey;');
+    expect(shortUrlMethod).toContain('new URLSearchParams()');
+    expect(shortUrlMethod).not.toContain('new FormData()');
     expect(shortUrlMethod).toMatch(
       /if \(!matchesConversionInput\(requestConversionKey, this\.conversionInput\)\) \{\s*return;\s*\}[\s\S]*?this\.result\.shortUrl = res\.data\.ShortUrl;[\s\S]*?this\.result\.shortUrlConversionKey = requestConversionKey;/
     );

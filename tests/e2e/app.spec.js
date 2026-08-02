@@ -14,7 +14,7 @@ function recordBrowserErrors(page) {
   return errors;
 }
 
-test('converts, copies, and creates a short link with browser-owned multipart headers', async ({ context, page }) => {
+test('converts, copies, and creates a short link with gateway-approved form encoding', async ({ context, page }) => {
   const browserErrors = recordBrowserErrors(page);
   let shortRequestContentType = '';
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
@@ -45,7 +45,7 @@ test('converts, copies, and creates a short link with browser-owned multipart he
   await page.getByRole('button', { name: '生成并复制短链' }).click();
   await expect(page.getByLabel('短链')).toHaveValue('https://ml1.one/e2e-result');
   await expect(page.getByRole('button', { name: '复制短链' })).toBeVisible();
-  expect(shortRequestContentType).toMatch(/^multipart\/form-data; boundary=/i);
+  expect(shortRequestContentType).toMatch(/^application\/x-www-form-urlencoded(?:;|$)/i);
   expect(browserErrors).toEqual([]);
 });
 

@@ -332,7 +332,7 @@ export default {
       const requestSubUrl = this.result.subUrl;
       let data;
       try {
-        data = new FormData();
+        data = new URLSearchParams();
         data.append('longUrl', btoa(requestSubUrl));
       } catch {
         this.$showDialog('error', '失败', '短链生成失败，请稍后重试');

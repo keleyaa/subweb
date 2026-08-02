@@ -213,6 +213,9 @@ const createShortUrlRequestConfig = function (shortUrl, data) {
     method: 'post',
     url: createServiceEndpoint(shortUrl, 'short'),
     data,
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
   };
 };
 

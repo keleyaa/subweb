@@ -37,26 +37,31 @@ describe('conversion action state', () => {
     expect(regexCheck('https://')).toBe(false);
   });
 
-  it('lets the browser set the multipart boundary for short-link FormData', () => {
-    const data = new FormData();
+  it('sends short-link data with the gateway-approved URL-encoded content type', () => {
+    const data = new URLSearchParams();
     const request = createShortUrlRequestConfig('https://ml1.one/', data);
 
     expect(request).toEqual({
       method: 'post',
       url: 'https://ml1.one/short',
       data,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
     });
-    expect(request).not.toHaveProperty('headers');
     expect(request).not.toHaveProperty('header');
   });
 
   it('joins service paths before existing query parameters and removes URL fragments', () => {
-    const data = new FormData();
+    const data = new URLSearchParams();
 
     expect(createShortUrlRequestConfig('https://short.example.test/base/?token=abc#fragment', data)).toEqual({
       method: 'post',
       url: 'https://short.example.test/base/short?token=abc',
       data,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
     });
     expect(
       getSubLink(
