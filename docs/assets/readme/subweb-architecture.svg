@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Subconverter Web service boundary</title>
+  <desc id="desc">Browser requests enter through public APP_DOMAIN and API_DOMAIN routes, pass the gateway, and reach internal SubConverter-Extended, MyUrls, and Redis services. The actual flows are subscription conversion, short-link creation, short-code redirect, and Redis persistence. Tokens stay server-side and do not enter the browser. Redis data remains internal and does not enter the browser.</desc>
+  <defs>
+    <linearGradient id="surface" x1="0" y1="0" x2="1200" y2="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F8FBFF"/>
+      <stop offset="0.62" stop-color="#F5F8FF"/>
+      <stop offset="1" stop-color="#F7F3FF"/>
+    </linearGradient>
+    <linearGradient id="blue-flow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#4D83F7"/>
+    </linearGradient>
+    <linearGradient id="purple-flow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6655E8"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <marker id="arrow-blue" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M1 1L11 6L1 11Z" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M1 1L11 6L1 11Z" fill="#8B5CF6"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="520" rx="30" fill="url(#surface)"/>
+  <path d="M48 152H1152" stroke="#D9E3F5" stroke-width="2"/>
+  <circle cx="1106" cy="78" r="156" fill="#E9E3FF" fill-opacity="0.38"/>
+  <circle cx="88" cy="466" r="150" fill="#E3EEFF" fill-opacity="0.42"/>
+
+  <g id="heading">
+    <text x="64" y="72" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="50" font-weight="750">Public -&gt; private</text>
+    <text x="64" y="116" fill="#475467" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="38" font-weight="650">公网入口到内部服务</text>
+  </g>
+
+  <g id="token-boundary" transform="translate(738 16)">
+    <rect width="398" height="120" rx="20" fill="#FFFFFF" fill-opacity="0.8" stroke="#C9D8F7" stroke-width="2"/>
+    <circle cx="30" cy="32" r="8" fill="#2563EB"/>
+    <text x="52" y="40" fill="#183B87" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="38" font-weight="750">Token stays</text>
+    <text x="52" y="75" fill="#183B87" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="38" font-weight="750">server-side</text>
+    <text x="52" y="111" fill="#475467" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="28" font-weight="700">Token 不进入浏览器</text>
+  </g>
+
+  <g id="browser" transform="translate(64 188)">
+    <rect width="158" height="146" rx="20" fill="#FFFFFF" fill-opacity="0.8" stroke="#BFD2FF" stroke-width="2"/>
+    <rect x="22" y="24" width="44" height="44" rx="13" fill="#2563EB"/>
+    <path d="M34 45H54M34 53H49" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+    <text x="79" y="102" text-anchor="middle" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="34" font-weight="750">Browser</text>
+  </g>
+
+  <g id="public-domains" transform="translate(250 178)">
+    <rect width="280" height="166" rx="22" fill="#FFFFFF" fill-opacity="0.74" stroke="#C9D8F7" stroke-width="2"/>
+    <rect x="14" y="18" width="252" height="56" rx="15" fill="#EEF5FF" stroke="#BFD2FF" stroke-width="2"/>
+    <circle cx="37" cy="46" r="8" fill="#2563EB"/>
+    <text x="42" y="58" fill="#101828" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="36" font-weight="700">APP_DOMAIN</text>
+    <rect x="14" y="92" width="252" height="56" rx="15" fill="#F5F1FF" stroke="#D7C7FF" stroke-width="2"/>
+    <circle cx="37" cy="120" r="8" fill="#8B5CF6"/>
+    <text x="42" y="132" fill="#101828" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="36" font-weight="700">API_DOMAIN</text>
+  </g>
+
+  <g id="gateway" transform="translate(548 188)">
+    <rect width="158" height="146" rx="20" fill="#FFFFFF" fill-opacity="0.86" stroke="#B8C8EC" stroke-width="2"/>
+    <path d="M24 37H48M36 25V49" stroke="#8B5CF6" stroke-width="5" stroke-linecap="round"/>
+    <text x="79" y="102" text-anchor="middle" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="34" font-weight="750">Gateway</text>
+  </g>
+
+  <g id="internal-services" transform="translate(746 146)">
+    <rect width="390" height="248" rx="24" fill="#101828" fill-opacity="0.94" stroke="#364766" stroke-width="2"/>
+    <text x="195" y="40" text-anchor="middle" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="38" font-weight="750">Internal only</text>
+    <text x="195" y="78" text-anchor="middle" fill="#CAD5E7" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="28" font-weight="700">仅内部网络</text>
+    <rect x="24" y="90" width="342" height="64" rx="10" fill="#20304D"/>
+    <text x="195" y="118" text-anchor="middle" fill="#FFFFFF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="32" font-weight="700">SubConverter</text>
+    <text x="195" y="145" text-anchor="middle" fill="#CAD5E7" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="28" font-weight="700">Extended</text>
+    <rect x="24" y="164" width="342" height="34" rx="9" fill="#263B64"/>
+    <text x="195" y="191" text-anchor="middle" fill="#FFFFFF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="28" font-weight="700">MyUrls</text>
+    <rect x="24" y="206" width="342" height="34" rx="9" fill="#31275C"/>
+    <text x="195" y="233" text-anchor="middle" fill="#FFFFFF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="28" font-weight="700">Redis</text>
+  </g>
+
+  <g id="route-arrows" fill="none" stroke-linecap="round" stroke-width="5">
+    <path d="M222 224H246" stroke="url(#blue-flow)" marker-end="url(#arrow-blue)"/>
+    <path d="M222 300H246" stroke="url(#purple-flow)" marker-end="url(#arrow-purple)"/>
+    <path d="M530 224H544" stroke="url(#blue-flow)" marker-end="url(#arrow-blue)"/>
+    <path d="M530 300H544" stroke="url(#purple-flow)" marker-end="url(#arrow-purple)"/>
+    <path d="M706 224C724 224 728 268 742 268" stroke="url(#blue-flow)" marker-end="url(#arrow-blue)"/>
+    <path d="M706 300C724 300 728 327 742 327" stroke="url(#purple-flow)" marker-end="url(#arrow-purple)"/>
+    <path d="M941 344V350" stroke="url(#purple-flow)" marker-end="url(#arrow-purple)"/>
+  </g>
+
+  <g id="actual-flows" transform="translate(64 404)">
+    <rect width="1072" height="94" rx="22" fill="#FFFFFF" fill-opacity="0.74" stroke="#D2DDF2" stroke-width="2"/>
+    <g id="convert-flow" transform="translate(26 18)">
+      <circle cx="18" cy="24" r="18" fill="#E8F0FF"/>
+      <text x="54" y="28" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="32" font-weight="750">Convert</text>
+      <text x="54" y="58" fill="#475467" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="24" font-weight="700">转换</text>
+    </g>
+    <g id="create-flow" transform="translate(292 18)">
+      <circle cx="18" cy="24" r="18" fill="#F0EBFF"/>
+      <text x="54" y="28" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="32" font-weight="750">Create</text>
+      <text x="54" y="58" fill="#475467" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="24" font-weight="700">创建</text>
+    </g>
+    <g id="redirect-flow" transform="translate(558 18)">
+      <circle cx="18" cy="24" r="18" fill="#E8F0FF"/>
+      <text x="54" y="28" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="32" font-weight="750">Redirect</text>
+      <text x="54" y="58" fill="#475467" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="24" font-weight="700">跳转</text>
+    </g>
+    <g id="persist-flow" transform="translate(824 18)">
+      <circle cx="18" cy="24" r="18" fill="#F0EBFF"/>
+      <text x="54" y="28" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="32" font-weight="750">Persist</text>
+      <text x="54" y="58" fill="#475467" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="24" font-weight="700">持久化</text>
+    </g>
+  </g>
+</svg>

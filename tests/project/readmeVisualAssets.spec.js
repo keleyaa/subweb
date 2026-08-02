@@ -283,6 +283,12 @@ describe('README visual asset contract', () => {
     expect(hasDisallowedSvgContent('<text>keyframes</text>')).toBe(false);
   });
 
+  it('keeps the visible Subconverter Web name in the hero accessibility title', () => {
+    const source = read('docs/assets/readme/subweb-hero.svg');
+
+    expect(source).toMatch(/<title\b[^>]*>\s*Subconverter Web\b/iu);
+  });
+
   it.each([
     ['subweb-hero.svg', '0 0 1200 360'],
     ['subweb-architecture.svg', '0 0 1200 520'],
