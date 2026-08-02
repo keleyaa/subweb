@@ -30,15 +30,33 @@ const namedHtmlEntities = {
   apos: "'",
   gt: '>',
   lt: '<',
-  newline: '\n',
-  nbsp: '\u00a0',
   quot: '"',
-  tab: '\t',
 };
+const nonVisibleHtmlEntityNames = new Set([
+  'emsp',
+  'ensp',
+  'hairsp',
+  'mediumspace',
+  'negativemediumspace',
+  'negativethickspace',
+  'negativethinspace',
+  'negativeverythinmathspace',
+  'newline',
+  'nbsp',
+  'tab',
+  'thinsp',
+  'verythickmathspace',
+  'verythinspace',
+  'zerowidthspace',
+]);
 const decodeHtmlEntities = (value) =>
-  decodeNumericHtmlEntities(value).replace(/&(amp|apos|gt|lt|newline|nbsp|quot|tab);/giu, (reference, name) =>
-    namedHtmlEntities[name.toLowerCase()] ?? reference,
-  );
+  decodeNumericHtmlEntities(value).replace(/&([a-z][a-z0-9]*);/giu, (reference, name) => {
+    const normalizedName = name.toLowerCase();
+    if (nonVisibleHtmlEntityNames.has(normalizedName)) return ' ';
+    return namedHtmlEntities[normalizedName] ?? reference;
+  });
+const hasVisibleHtmlText = (value) =>
+  decodeHtmlEntities(value).replace(/[\p{White_Space}\p{Cf}]+/gu, '') !== '';
 
 const imageTags = (source) => renderedMarkdown(source).match(/<img\b(?:[^<>"']|"[^"]*"|'[^']*')*>/giu) ?? [];
 const imageAttributes = (tag) => {
@@ -68,7 +86,7 @@ const hasEmbeddedReadmeImage = (source, asset) => {
       sources.length === 1 &&
       alternatives.length === 1 &&
       sources[0].value === expectedSource &&
-      decodeHtmlEntities(alternatives[0].value).trim() !== ''
+      hasVisibleHtmlText(alternatives[0].value)
     );
   });
 };
@@ -173,10 +191,34 @@ describe('documentation contract', () => {
         asset,
       ),
     ).toBe(false);
-    expect(hasEmbeddedReadmeImage('<img alt="&#32;&#10;" src="./docs/assets/readme/subweb-hero.svg">', asset)).toBe(false);
-    for (const alt of ['&Tab;', '&NewLine;', '&nbsp;', '&#32;', '&#10;', '&#x20']) {
+    for (const alt of [
+      '&#32;&#10;',
+      '&nbsp;',
+      '&ensp;',
+      '&emsp;',
+      '&thinsp;',
+      '&hairsp;',
+      '&MediumSpace;',
+      '&VeryThinSpace;',
+      '&VeryThickMathSpace;',
+      '&ZeroWidthSpace;',
+      '&NegativeVeryThinMathSpace;',
+      '&NegativeThinSpace;',
+      '&NegativeMediumSpace;',
+      '&NegativeThickSpace;',
+      '&Tab;',
+      '&NewLine;',
+      '&#32;',
+      '&#32',
+      '&#10;',
+      '&#x20;',
+      '&#x20',
+      '&#x200B;',
+      '&#x200B',
+    ]) {
       expect(hasEmbeddedReadmeImage(`<img alt="${alt}" src="./docs/assets/readme/subweb-hero.svg">`, asset)).toBe(false);
     }
+    expect(hasEmbeddedReadmeImage(`<img alt="订阅服务架构" src="./docs/assets/readme/${asset}">`, asset)).toBe(true);
   });
 
   it('embeds the hero and architecture proof as descriptive local HTML images', () => {

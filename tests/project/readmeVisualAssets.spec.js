@@ -64,7 +64,7 @@ const hasRemoteResource = (source) =>
   remoteResource.test(decodeCssEscapes(withoutCssComments(decodeNumericXmlEntities(source))));
 const hasDisallowedSvgContent = (source) =>
   /<(?:script|foreignObject|animateMotion|animateTransform|animate|set)\b/iu.test(source) ||
-  /@keyframes\b/iu.test(decodeCssEscapes(source));
+  /@(?:-[a-z]+-)?keyframes\b/iu.test(decodeCssEscapes(source));
 
 const parseXmlAttributes = (source) => {
   const attributes = [];
@@ -110,7 +110,7 @@ const parseSvgDocument = (source) => {
   let cursor = 0;
 
   const appendText = (text) => {
-    if (!hasOnlyLegalXmlEntities(text)) return false;
+    if (text.includes('<') || !hasOnlyLegalXmlEntities(text)) return false;
     if (stack.length) {
       stack.at(-1).text += decodeXmlEntities(text);
       return true;
@@ -182,6 +182,8 @@ describe('README visual asset contract', () => {
       '<?xml version="1.0"?><svg viewBox="0 0 1200 360"><title>Subweb hero</title><desc>System overview</desc></svg>';
     const cdataAccessibilityText =
       '<svg viewBox="0 0 1200 360"><title><![CDATA[Subweb hero]]></title><desc><![CDATA[System overview]]></desc></svg>';
+    const cdataTextWithLessThan =
+      '<svg viewBox="0 0 1200 360"><title><![CDATA[Subweb < hero]]></title><desc><![CDATA[System < overview]]></desc></svg>';
     const legalNamedEntity =
       '<svg viewBox="0 0 1200 360"><title>Subweb &amp; hero</title><desc>System overview</desc></svg>';
     const regularSvg =
@@ -208,9 +210,12 @@ describe('README visual asset contract', () => {
       '<svg viewBox="0 0 1200 360"><title>&bogus;</title><desc>System overview</desc></svg>';
     const unterminatedNumericEntity =
       '<svg viewBox="0 0 1200 360"><title>&#32</title><desc>System overview</desc></svg>';
+    const rawLessThanText =
+      '<svg viewBox="0 0 1200 360"><title>Subweb < hero</title><desc>System overview</desc></svg>';
 
     expect(hasCompleteSvgContract(valid, '0 0 1200 360')).toBe(true);
     expect(hasCompleteSvgContract(cdataAccessibilityText, '0 0 1200 360')).toBe(true);
+    expect(hasCompleteSvgContract(cdataTextWithLessThan, '0 0 1200 360')).toBe(true);
     expect(hasCompleteSvgContract(legalNamedEntity, '0 0 1200 360')).toBe(true);
     expect(hasCompleteSvgContract(regularSvg, '0 0 1200 360')).toBe(true);
     expect(hasCompleteSvgContract(valid, '0 0 1200 520')).toBe(false);
@@ -228,6 +233,7 @@ describe('README visual asset contract', () => {
     expect(hasCompleteSvgContract(whitespaceAccessibilityText, '0 0 1200 360')).toBe(false);
     expect(hasCompleteSvgContract(bogusEntity, '0 0 1200 360')).toBe(false);
     expect(hasCompleteSvgContract(unterminatedNumericEntity, '0 0 1200 360')).toBe(false);
+    expect(hasCompleteSvgContract(rawLessThanText, '0 0 1200 360')).toBe(false);
   });
 
   it('detects remote resource references without rejecting namespaces or local fragments', () => {
@@ -269,10 +275,12 @@ describe('README visual asset contract', () => {
       '<set />',
       '<style>@keyframes pulse {}</style>',
       '<style>@key\\000066rames pulse {}</style>',
+      '<style>@-webkit-keyframes pulse {}</style>',
     ]) {
       expect(hasDisallowedSvgContent(source)).toBe(true);
     }
     expect(hasDisallowedSvgContent('<rect width="1" height="1" />')).toBe(false);
+    expect(hasDisallowedSvgContent('<text>keyframes</text>')).toBe(false);
   });
 
   it.each([
