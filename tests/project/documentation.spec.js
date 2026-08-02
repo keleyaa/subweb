@@ -55,8 +55,11 @@ const decodeHtmlEntities = (value) =>
     if (nonVisibleHtmlEntityNames.has(normalizedName)) return ' ';
     return namedHtmlEntities[normalizedName] ?? reference;
   });
-const hasVisibleHtmlText = (value) =>
-  decodeHtmlEntities(value).replace(/[\p{White_Space}\p{Cf}]+/gu, '') !== '';
+const normalizeHtmlAltText = (value) =>
+  decodeHtmlEntities(value)
+    .replace(/&[a-z][a-z0-9]*;/giu, '')
+    .replace(/[\p{White_Space}\p{Cf}]+/gu, '');
+const hasVisibleHtmlText = (value) => /[\p{L}\p{N}]/u.test(normalizeHtmlAltText(value));
 
 const imageTags = (source) => renderedMarkdown(source).match(/<img\b(?:[^<>"']|"[^"]*"|'[^']*')*>/giu) ?? [];
 const imageAttributes = (tag) => {
@@ -218,6 +221,10 @@ describe('documentation contract', () => {
     ]) {
       expect(hasEmbeddedReadmeImage(`<img alt="${alt}" src="./docs/assets/readme/subweb-hero.svg">`, asset)).toBe(false);
     }
+    for (const alt of ['&NoBreak;', '&copy;']) {
+      expect(hasEmbeddedReadmeImage(`<img alt="${alt}" src="./docs/assets/readme/subweb-hero.svg">`, asset)).toBe(false);
+    }
+    expect(hasEmbeddedReadmeImage(`<img alt="Subconverter Web &copy;" src="./docs/assets/readme/${asset}">`, asset)).toBe(true);
     expect(hasEmbeddedReadmeImage(`<img alt="订阅服务架构" src="./docs/assets/readme/${asset}">`, asset)).toBe(true);
   });
 
