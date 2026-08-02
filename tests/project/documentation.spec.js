@@ -5,19 +5,63 @@ import { requiredDocuments, verifyDocs } from '../../scripts/verify-docs.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
-const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 const renderedMarkdown = (source) =>
   source
     .replace(/<!--[\s\S]*?-->/gu, '')
     .replace(/(?:```|~~~)[\s\S]*?(?:```|~~~)/gu, '')
     .replace(/`[^`\n]*`/gu, '');
 
-const hasEmbeddedReadmeImage = (source, asset) => {
-  const imageTag = new RegExp(
-    `<img\\b(?=[^>]*\\ssrc\\s*=\\s*["']\\./docs/assets/readme/${escapeRegExp(asset)}["'])(?=[^>]*\\salt\\s*=\\s*["'][^"']*[^\\s"'][^"']*["'])[^>]*>`,
-    'iu',
+const decodeNumericHtmlEntities = (value) =>
+  value.replace(/&#(?:x([0-9a-f]+)|([0-9]+));/giu, (reference, hexadecimal, decimal) => {
+    const codePoint = Number.parseInt(hexadecimal ?? decimal, hexadecimal ? 16 : 10);
+    if (
+      !Number.isSafeInteger(codePoint) ||
+      codePoint === 0 ||
+      codePoint > 0x10ffff ||
+      (codePoint >= 0xd800 && codePoint <= 0xdfff)
+    ) {
+      return reference;
+    }
+    return String.fromCodePoint(codePoint);
+  });
+
+const namedHtmlEntities = { amp: '&', apos: "'", gt: '>', lt: '<', nbsp: '\u00a0', quot: '"' };
+const decodeHtmlEntities = (value) =>
+  decodeNumericHtmlEntities(value).replace(/&(amp|apos|gt|lt|nbsp|quot);/giu, (reference, name) =>
+    namedHtmlEntities[name.toLowerCase()] ?? reference,
   );
-  return imageTag.test(renderedMarkdown(source));
+
+const imageTags = (source) => renderedMarkdown(source).match(/<img\b(?:[^<>"']|"[^"]*"|'[^']*')*>/giu) ?? [];
+const imageAttributes = (tag) => {
+  const attributes = [];
+  let remainder = tag.slice(4, tag.endsWith('/>') ? -2 : -1).trim();
+
+  while (remainder) {
+    const match = /^([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)')\s*/u.exec(remainder);
+    if (!match) return null;
+
+    attributes.push({ name: match[1].toLowerCase(), value: match[2] ?? match[3] });
+    remainder = remainder.slice(match[0].length);
+  }
+
+  return attributes;
+};
+
+const hasEmbeddedReadmeImage = (source, asset) => {
+  const expectedSource = `./docs/assets/readme/${asset}`;
+  return imageTags(source).some((tag) => {
+    const attributes = imageAttributes(tag);
+    if (!attributes) return false;
+
+    const sources = attributes.filter(({ name }) => name === 'src');
+    const alternatives = attributes.filter(({ name }) => name === 'alt');
+    return (
+      sources.length === 1 &&
+      alternatives.length === 1 &&
+      sources[0].value === expectedSource &&
+      decodeHtmlEntities(alternatives[0].value).trim() !== ''
+    );
+  });
 };
 
 describe('documentation contract', () => {
@@ -108,6 +152,20 @@ describe('documentation contract', () => {
     expect(
       hasEmbeddedReadmeImage('<img alt="Wrong path" src="./docs/assets/readme/subweb-heroXsvg">', asset),
     ).toBe(false);
+    expect(
+      hasEmbeddedReadmeImage(
+        '<img alt="Subweb hero architecture" src="./docs/assets/readme/subweb-hero.svg" src="./docs/assets/readme/wrong.svg">',
+        asset,
+      ),
+    ).toBe(false);
+    expect(
+      hasEmbeddedReadmeImage(
+        '<img alt="" alt="Subweb hero architecture" src="./docs/assets/readme/subweb-hero.svg">',
+        asset,
+      ),
+    ).toBe(false);
+    expect(hasEmbeddedReadmeImage('<img alt="&#32;&#10;" src="./docs/assets/readme/subweb-hero.svg">', asset)).toBe(false);
+    expect(hasEmbeddedReadmeImage('<img alt="&nbsp;" src="./docs/assets/readme/subweb-hero.svg">', asset)).toBe(false);
   });
 
   it('embeds the hero and architecture proof as descriptive local HTML images', () => {
