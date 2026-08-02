@@ -5,6 +5,19 @@ import { requiredDocuments, verifyDocs } from '../../scripts/verify-docs.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const renderedMarkdown = (source) =>
+  source
+    .replace(/<!--[\s\S]*?-->/gu, '')
+    .replace(/(?:```|~~~)[\s\S]*?(?:```|~~~)/gu, '')
+    .replace(/`[^`\n]*`/gu, '');
+
+const hasEmbeddedReadmeImage = (source, asset) => {
+  const imageTag = new RegExp(
+    `<img\\b(?=[^>]*\\ssrc\\s*=\\s*["']\\./docs/assets/readme/${asset}["'])(?=[^>]*\\salt\\s*=\\s*["'][^"']*[^\\s"'][^"']*["'])[^>]*>`,
+    'iu',
+  );
+  return imageTag.test(renderedMarkdown(source));
+};
 
 describe('documentation contract', () => {
   it('keeps the documentation graph complete and linkable', () => {
@@ -79,6 +92,25 @@ describe('documentation contract', () => {
       'ghcr.io/keleyaa/subweb',
     ]) {
       expect(readme).toContain(text);
+    }
+  });
+
+  it('requires local visual proof to be rendered HTML images with descriptive alt text', () => {
+    const asset = 'subweb-hero.svg';
+    const image = `<img alt="Subweb hero architecture" src="./docs/assets/readme/${asset}">`;
+
+    expect(hasEmbeddedReadmeImage(image, asset)).toBe(true);
+    expect(hasEmbeddedReadmeImage(`\`\`\`html\n${image}\n\`\`\``, asset)).toBe(false);
+    expect(hasEmbeddedReadmeImage(`<!-- ${image} -->`, asset)).toBe(false);
+    expect(hasEmbeddedReadmeImage(`docs/assets/readme/${asset}`, asset)).toBe(false);
+    expect(hasEmbeddedReadmeImage(`<img alt="" src="./docs/assets/readme/${asset}">`, asset)).toBe(false);
+  });
+
+  it('embeds the hero and architecture proof as descriptive local HTML images', () => {
+    const readme = read('README.md');
+
+    for (const asset of ['subweb-hero.svg', 'subweb-architecture.svg']) {
+      expect(hasEmbeddedReadmeImage(readme, asset)).toBe(true);
     }
   });
 });
