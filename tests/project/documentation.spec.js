@@ -12,7 +12,7 @@ const renderedMarkdown = (source) =>
     .replace(/`[^`\n]*`/gu, '');
 
 const decodeNumericHtmlEntities = (value) =>
-  value.replace(/&#(?:x([0-9a-f]+)|([0-9]+));/giu, (reference, hexadecimal, decimal) => {
+  value.replace(/&#(?:x([0-9a-f]+)|([0-9]+));?/giu, (reference, hexadecimal, decimal) => {
     const codePoint = Number.parseInt(hexadecimal ?? decimal, hexadecimal ? 16 : 10);
     if (
       !Number.isSafeInteger(codePoint) ||
@@ -25,9 +25,18 @@ const decodeNumericHtmlEntities = (value) =>
     return String.fromCodePoint(codePoint);
   });
 
-const namedHtmlEntities = { amp: '&', apos: "'", gt: '>', lt: '<', nbsp: '\u00a0', quot: '"' };
+const namedHtmlEntities = {
+  amp: '&',
+  apos: "'",
+  gt: '>',
+  lt: '<',
+  newline: '\n',
+  nbsp: '\u00a0',
+  quot: '"',
+  tab: '\t',
+};
 const decodeHtmlEntities = (value) =>
-  decodeNumericHtmlEntities(value).replace(/&(amp|apos|gt|lt|nbsp|quot);/giu, (reference, name) =>
+  decodeNumericHtmlEntities(value).replace(/&(amp|apos|gt|lt|newline|nbsp|quot|tab);/giu, (reference, name) =>
     namedHtmlEntities[name.toLowerCase()] ?? reference,
   );
 
@@ -165,7 +174,9 @@ describe('documentation contract', () => {
       ),
     ).toBe(false);
     expect(hasEmbeddedReadmeImage('<img alt="&#32;&#10;" src="./docs/assets/readme/subweb-hero.svg">', asset)).toBe(false);
-    expect(hasEmbeddedReadmeImage('<img alt="&nbsp;" src="./docs/assets/readme/subweb-hero.svg">', asset)).toBe(false);
+    for (const alt of ['&Tab;', '&NewLine;', '&nbsp;', '&#32;', '&#10;', '&#x20']) {
+      expect(hasEmbeddedReadmeImage(`<img alt="${alt}" src="./docs/assets/readme/subweb-hero.svg">`, asset)).toBe(false);
+    }
   });
 
   it('embeds the hero and architecture proof as descriptive local HTML images', () => {

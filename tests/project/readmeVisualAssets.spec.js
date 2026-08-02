@@ -4,27 +4,67 @@ import { describe, expect, it } from 'vitest';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const isLegalXmlCodePoint = (codePoint) =>
+  Number.isSafeInteger(codePoint) &&
+  (codePoint === 0x9 ||
+    codePoint === 0xa ||
+    codePoint === 0xd ||
+    (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
+    (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
+    (codePoint >= 0x10000 && codePoint <= 0x10ffff));
 const decodeNumericXmlEntities = (source) =>
   source.replace(/&#(?:x([0-9a-f]+)|([0-9]+));/giu, (reference, hexadecimal, decimal) => {
     const codePoint = Number.parseInt(hexadecimal ?? decimal, hexadecimal ? 16 : 10);
-    if (
-      !Number.isSafeInteger(codePoint) ||
-      codePoint === 0 ||
-      codePoint > 0x10ffff ||
-      (codePoint >= 0xd800 && codePoint <= 0xdfff)
-    ) {
-      return reference;
-    }
-    return String.fromCodePoint(codePoint);
+    return isLegalXmlCodePoint(codePoint) ? String.fromCodePoint(codePoint) : reference;
   });
+const namedXmlEntities = { amp: '&', apos: "'", gt: '>', lt: '<', quot: '"' };
+const decodeXmlEntities = (source) =>
+  decodeNumericXmlEntities(source).replace(/&(amp|apos|gt|lt|quot);/gu, (reference, name) =>
+    namedXmlEntities[name] ?? reference,
+  );
+const isLegalXmlEntity = (reference) => {
+  if (Object.hasOwn(namedXmlEntities, reference.slice(1, -1))) return true;
+
+  const match = /^&#(?:x([0-9A-Fa-f]+)|([0-9]+));$/u.exec(reference);
+  if (!match) return false;
+
+  const [, hexadecimal, decimal] = match;
+  return isLegalXmlCodePoint(Number.parseInt(hexadecimal ?? decimal, hexadecimal ? 16 : 10));
+};
+const hasOnlyLegalXmlEntities = (source) => {
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    const ampersand = source.indexOf('&', cursor);
+    if (ampersand === -1) return true;
+
+    const match = /^&(?:amp|apos|gt|lt|quot|#(?:[0-9]+|x[0-9A-Fa-f]+));/u.exec(source.slice(ampersand));
+    if (!match || !isLegalXmlEntity(match[0])) return false;
+    cursor = ampersand + match[0].length;
+  }
+
+  return true;
+};
 const withoutCssComments = (source) => source.replace(/\/\*[\s\S]*?\*\//gu, '');
+const decodeCssEscapes = (source) =>
+  source.replace(/\\(?:([0-9a-f]{1,6})(?:\r\n|[\t\n\r\f ])?|([\s\S]))/giu, (reference, hexadecimal, escaped) => {
+    if (!hexadecimal) return escaped;
+
+    const codePoint = Number.parseInt(hexadecimal, 16);
+    return Number.isSafeInteger(codePoint) &&
+      codePoint > 0 &&
+      codePoint <= 0x10ffff &&
+      (codePoint < 0xd800 || codePoint > 0xdfff)
+      ? String.fromCodePoint(codePoint)
+      : '\ufffd';
+  });
 const remoteResource =
   /(?:(?:^|[\s<])(?:xlink:)?href\s*=\s*["']|url\(\s*["']?|@import\s*["'])(?:https?:)?\/\//iu;
-const hasRemoteResource = (source) => remoteResource.test(withoutCssComments(decodeNumericXmlEntities(source)));
+const hasRemoteResource = (source) =>
+  remoteResource.test(decodeCssEscapes(withoutCssComments(decodeNumericXmlEntities(source))));
 const hasDisallowedSvgContent = (source) =>
-  /<(?:script|foreignObject|animate|animateTransform|set)\b/iu.test(source) || /@keyframes\b/iu.test(source);
-const withoutXmlCommentsAndCdata = (source) =>
-  source.replace(/<!--[\s\S]*?-->/gu, '').replace(/<!\[CDATA\[[\s\S]*?\]\]>/gu, '');
+  /<(?:script|foreignObject|animateMotion|animateTransform|animate|set)\b/iu.test(source) ||
+  /@keyframes\b/iu.test(decodeCssEscapes(source));
 
 const parseXmlAttributes = (source) => {
   const attributes = [];
@@ -34,7 +74,9 @@ const parseXmlAttributes = (source) => {
     const match = /^([A-Za-z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')\s*/u.exec(remainder);
     if (!match) return null;
 
-    attributes.push({ name: match[1], value: match[2] ?? match[3] });
+    const value = match[2] ?? match[3];
+    if (!hasOnlyLegalXmlEntities(value)) return null;
+    attributes.push({ name: match[1], value });
     remainder = remainder.slice(match[0].length);
   }
 
@@ -59,15 +101,38 @@ const parseXmlTag = (tag) => {
 };
 
 const parseSvgDocument = (source) => {
-  const markup = withoutXmlCommentsAndCdata(source).replace(/^\s*<\?xml[\s\S]*?\?>\s*/u, '');
+  const declaration = /^\s*<\?xml[\s\S]*?\?>\s*/u.exec(source);
+  if (declaration && !hasOnlyLegalXmlEntities(declaration[0])) return null;
+
+  const markup = source.replace(/^\s*<\?xml[\s\S]*?\?>\s*/u, '');
   const roots = [];
   const stack = [];
   let cursor = 0;
 
-  for (const match of markup.matchAll(/<[^<>]*>/gu)) {
+  const appendText = (text) => {
+    if (!hasOnlyLegalXmlEntities(text)) return false;
+    if (stack.length) {
+      stack.at(-1).text += decodeXmlEntities(text);
+      return true;
+    }
+    return !text.trim();
+  };
+
+  for (const match of markup.matchAll(/<!--[\s\S]*?-->|<!\[CDATA\[([\s\S]*?)\]\]>|<[^<>]*>/gu)) {
     const text = markup.slice(cursor, match.index);
-    if (stack.length) stack.at(-1).text += text;
-    else if (text.trim()) return null;
+    if (!appendText(text)) return null;
+
+    if (match[0].startsWith('<!--')) {
+      cursor = match.index + match[0].length;
+      continue;
+    }
+
+    if (match[1] !== undefined) {
+      if (!stack.length) return null;
+      stack.at(-1).text += match[1];
+      cursor = match.index + match[0].length;
+      continue;
+    }
 
     const tag = parseXmlTag(match[0]);
     if (!tag) return null;
@@ -85,14 +150,14 @@ const parseSvgDocument = (source) => {
     cursor = match.index + match[0].length;
   }
 
-  if (markup.slice(cursor).trim() || stack.length || roots.length !== 1) return null;
+  if (!appendText(markup.slice(cursor)) || stack.length || roots.length !== 1) return null;
 
   const [rootNode] = roots;
   return rootNode.name === 'svg' && !rootNode.selfClosing ? rootNode : null;
 };
 
 const hasMeaningfulSvgText = (element) =>
-  !element.selfClosing && element.children.length === 0 && decodeNumericXmlEntities(element.text).trim() !== '';
+  !element.selfClosing && element.children.length === 0 && element.text.trim() !== '';
 
 const hasCompleteSvgContract = (source, viewBox) => {
   const rootNode = parseSvgDocument(source);
@@ -115,6 +180,10 @@ describe('README visual asset contract', () => {
   it('requires a complete SVG root and closed nonempty accessibility text', () => {
     const valid =
       '<?xml version="1.0"?><svg viewBox="0 0 1200 360"><title>Subweb hero</title><desc>System overview</desc></svg>';
+    const cdataAccessibilityText =
+      '<svg viewBox="0 0 1200 360"><title><![CDATA[Subweb hero]]></title><desc><![CDATA[System overview]]></desc></svg>';
+    const legalNamedEntity =
+      '<svg viewBox="0 0 1200 360"><title>Subweb &amp; hero</title><desc>System overview</desc></svg>';
     const regularSvg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360"><title>Subweb hero</title><desc>System overview</desc><defs><linearGradient id="glow"><stop offset="0%" /></linearGradient></defs><rect width="1200" height="360" /><path d="M0 0 L1 1" /><text x="32" y="48">Focus</text></svg>';
     const fakeComment =
@@ -135,8 +204,14 @@ describe('README visual asset contract', () => {
       '<svg viewBox="0 0 1200 360"><title>Subweb hero</title><desc>System overview</svg>';
     const whitespaceAccessibilityText =
       '<svg viewBox="0 0 1200 360"><title>&#32;&#10;</title><desc>&#32;&#10;</desc></svg>';
+    const bogusEntity =
+      '<svg viewBox="0 0 1200 360"><title>&bogus;</title><desc>System overview</desc></svg>';
+    const unterminatedNumericEntity =
+      '<svg viewBox="0 0 1200 360"><title>&#32</title><desc>System overview</desc></svg>';
 
     expect(hasCompleteSvgContract(valid, '0 0 1200 360')).toBe(true);
+    expect(hasCompleteSvgContract(cdataAccessibilityText, '0 0 1200 360')).toBe(true);
+    expect(hasCompleteSvgContract(legalNamedEntity, '0 0 1200 360')).toBe(true);
     expect(hasCompleteSvgContract(regularSvg, '0 0 1200 360')).toBe(true);
     expect(hasCompleteSvgContract(valid, '0 0 1200 520')).toBe(false);
     expect(hasCompleteSvgContract('<!-- <svg viewBox="0 0 1200 360"> -->', '0 0 1200 360')).toBe(false);
@@ -151,6 +226,8 @@ describe('README visual asset contract', () => {
     expect(hasCompleteSvgContract(unclosedPath, '0 0 1200 360')).toBe(false);
     expect(hasCompleteSvgContract(unclosedDescription, '0 0 1200 360')).toBe(false);
     expect(hasCompleteSvgContract(whitespaceAccessibilityText, '0 0 1200 360')).toBe(false);
+    expect(hasCompleteSvgContract(bogusEntity, '0 0 1200 360')).toBe(false);
+    expect(hasCompleteSvgContract(unterminatedNumericEntity, '0 0 1200 360')).toBe(false);
   });
 
   it('detects remote resource references without rejecting namespaces or local fragments', () => {
@@ -163,6 +240,8 @@ describe('README visual asset contract', () => {
       '@import url(//cdn.example.com/style.css)',
       'url(/* comment */https://example.com/image.svg)',
       '@import/* comment */"https://example.com/style.css"',
+      'url("http\\3a \\2f \\2f 127.0.0.1:18080/remote-image")',
+      '@import "http\\3a \\2f \\2f 127.0.0.1:18080/remote.css"',
       'href="&#104;ttps://example.com/image.svg"',
     ]) {
       expect(hasRemoteResource(source)).toBe(true);
@@ -174,6 +253,7 @@ describe('README visual asset contract', () => {
       'data-href="https://example.com/image.svg"',
       'aria-href="https://example.com/image.svg"',
       '@import "./local.css"',
+      'url(#gradient)',
     ]) {
       expect(hasRemoteResource(source)).toBe(false);
     }
@@ -185,8 +265,10 @@ describe('README visual asset contract', () => {
       '<foreignObject />',
       '<animate />',
       '<animateTransform />',
+      '<animateMotion />',
       '<set />',
       '<style>@keyframes pulse {}</style>',
+      '<style>@key\\000066rames pulse {}</style>',
     ]) {
       expect(hasDisallowedSvgContent(source)).toBe(true);
     }
