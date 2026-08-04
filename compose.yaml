@@ -1,5 +1,14 @@
 name: subweb
 
+x-runtime-environment: &runtime-environment
+  TZ: Asia/Shanghai
+
+x-runtime-logging: &runtime-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 x-runtime-security: &runtime-security
   read_only: true
   cap_drop:
@@ -8,6 +17,7 @@ x-runtime-security: &runtime-security
     - no-new-privileges:true
   restart: unless-stopped
   stop_grace_period: 10s
+  logging: *runtime-logging
 
 x-gateway-common: &gateway-common
   <<: *runtime-security
@@ -16,6 +26,7 @@ x-gateway-common: &gateway-common
   image: "${SUBWEB_IMAGE:-subweb:local}"
   user: "101:101"
   environment: &gateway-environment
+    <<: *runtime-environment
     API_URL: "${API_URL:?Set API_URL with scripts/configure.sh}"
     SHORT_URL: "${SHORT_URL:?Set SHORT_URL with scripts/configure.sh}"
     APP_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
@@ -55,6 +66,7 @@ services:
     image: "docker.io/library/redis:8.10.0-alpine@sha256:5cca2f8a01ef2264c52dac86f14ec6a5abe973a93331e1b62522cfc5e63e4691"
     user: "999:1000"
     environment:
+      <<: *runtime-environment
       REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
     command:
       - /bin/sh
@@ -86,6 +98,7 @@ services:
     image: "ghcr.io/keleyaa/myurls:v1.11@sha256:f00046cd6c68986781ac9bf13d43fc4db3dbedb8815146a3510ef325cd5b98b0"
     user: "65532:65532"
     environment:
+      <<: *runtime-environment
       MYURLS_PORT: "8080"
       MYURLS_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
       MYURLS_PROTO: https
@@ -114,6 +127,7 @@ services:
     <<: *runtime-security
     image: "ghcr.io/aethersailor/subconverter-extended:v1.2.0@sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f"
     environment:
+      <<: *runtime-environment
       MANAGED_CONFIG_PREFIX: "${API_URL:?Set API_URL with scripts/configure.sh}"
       SUBCONVERTER_SECURITY_PROFILE: public
       SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: "false"

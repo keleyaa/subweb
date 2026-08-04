@@ -24,7 +24,7 @@ for value in "$output_directory" "$app_domain" "$api_domain"; do
 done
 
 case "$output_directory" in
-  /private/tmp/*|/tmp/*|/var/folders/*) ;;
+  /private/tmp/*|/tmp/*|/var/folders/*|/private/var/folders/*) ;;
   *) fail '输出目录必须是系统临时目录中的安全绝对路径' ;;
 esac
 

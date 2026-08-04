@@ -4,6 +4,7 @@ import {
   mkdtemp,
   mkdir,
   readFile,
+  realpath,
   rm,
   stat,
   writeFile,
@@ -36,6 +37,21 @@ afterEach(async () => {
 });
 
 describe('integration test certificate creation', () => {
+  it('accepts the canonical macOS temporary directory path', async () => {
+    const parent = await temporaryDirectory('subweb-certificate-canonical-');
+    const canonicalParent = await realpath(parent);
+    const output = join(canonicalParent, 'certificate');
+    await mkdir(output);
+
+    const result = spawnSync(
+      'sh',
+      [certificateCreator, output, 'app.test', 'api.app.test'],
+      { cwd: root, encoding: 'utf8' },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+  });
+
   it('creates a private matching SAN certificate only inside an empty absolute directory', async () => {
     const parent = await temporaryDirectory('subweb-certificate-parent-');
     const output = join(parent, 'certificate');

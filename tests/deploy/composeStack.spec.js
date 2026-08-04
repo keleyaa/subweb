@@ -183,6 +183,11 @@ describe('integrated Compose stack', () => {
   it('hardens all services and gates dependents on real health checks', async () => {
     const config = await renderProfile('behind-proxy');
     for (const [name, service] of Object.entries(config.services)) {
+      expect(service.environment.TZ).toBe('Asia/Shanghai');
+      expect(service.logging).toEqual({
+        driver: 'json-file',
+        options: { 'max-file': '3', 'max-size': '10m' },
+      });
       expect(service.cap_drop).toContain('ALL');
       expect(service.security_opt).toContain('no-new-privileges:true');
       expect(service.restart).toBe('unless-stopped');

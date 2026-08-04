@@ -7,6 +7,8 @@ project_root=$(CDPATH= cd -- "$script_directory/../.." && pwd -P)
 runtime_root=$project_root/.runtime/local
 secrets_file=$project_root/.runtime/local/secrets.env
 sources_file=$project_root/.runtime/local/config/sources.env
+TZ=Asia/Shanghai
+export TZ
 
 # shellcheck source=lib/common.sh
 . "$script_directory/lib/common.sh"

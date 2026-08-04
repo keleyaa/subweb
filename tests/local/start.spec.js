@@ -23,6 +23,8 @@ describe('atomic local source startup', () => {
     expect(source).toContain('node "$project_root/node_modules/vite/bin/vite.js"');
     expect(source).not.toContain('npm run serve');
     expect(source).toContain('MyUrls log tail (secrets redacted):');
+    expect(source).toContain('TZ=Asia/Shanghai');
+    expect(source).toContain('export TZ');
     expect(source).toContain('gsub(token, "[REDACTED]")');
     expect(subconverter).toBeLessThan(vite);
     expect(vite).toBeLessThan(nginx);

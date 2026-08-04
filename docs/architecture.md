@@ -24,6 +24,11 @@
 
 短链 Token 只存在于 `.env`、本机私有运行目录或平台秘密变量中。浏览器看到的 `/conf/config.js` 只包含公开 URL 和预设。网关必须先匹配 `/short-api/`，再匹配短码回退，避免创建请求被当成短码。
 
+所有 Docker 服务显式使用 `Asia/Shanghai`，标准输出由 Compose 统一轮转。Gateway 只把
+单段短码路由记为 `/:shortKey`，不把真实短码写入访问日志；成功健康检查也不进入访问
+日志。MyUrls 的内部日志策略由独立的 `keleyaa/MyUrls` 镜像版本负责，Subweb 只锁定已经
+发布并验证的镜像摘要。
+
 ## 数据流与信任边界
 
 1. 浏览器把订阅 URL 和用户选项组成转换链接。打开转换链接时，SubConverter 及其访问的远程规则会看到订阅地址。

@@ -16,7 +16,12 @@ http {
   client_body_temp_path @@NGINX_CLIENT_TEMP@@;
   proxy_temp_path @@NGINX_PROXY_TEMP@@;
 
-  log_format gateway_privacy '$request_method $uri $status';
+  map $uri $privacy_route {
+    default $uri;
+    "~^/[A-Za-z0-9_-]{1,64}$" "/:shortKey";
+  }
+
+  log_format gateway_privacy '$time_iso8601 $request_method $privacy_route $status';
   access_log @@NGINX_ACCESS_LOG@@ gateway_privacy;
 
   server {

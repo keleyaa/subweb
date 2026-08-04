@@ -154,6 +154,23 @@ describe('documentation contract', () => {
     expect(maintenance).toContain('packages: write');
   });
 
+  it('documents the production logging privacy and retention contract', () => {
+    const security = read('docs/security.md');
+    const operations = read('docs/operations.md');
+    const architecture = read('docs/architecture.md');
+
+    for (const document of [security, operations, architecture]) {
+      expect(document).toContain('Asia/Shanghai');
+      expect(document).toContain('短码');
+    }
+    for (const text of ['路由模板', '成功的 `/healthz`', '10 MB', '3 个']) {
+      expect(operations).toContain(text);
+    }
+    expect(security).toContain('print_debug_info = false');
+    expect(security).toContain('verbose');
+    expect(security).toContain('持有即可访问');
+  });
+
   it('keeps the bilingual product story and local visual proof explicit', () => {
     const readme = read('README.md');
 

@@ -90,7 +90,9 @@ describe('local source configuration derivation', () => {
     expect(nginx).toContain('http://127.0.0.1:18092');
     expect(nginx).toContain('http://127.0.0.1:15500');
     expect(nginx).toContain('a'.repeat(64));
-    expect(nginx).toContain('$request_method $uri $status');
+    expect(nginx).toContain('map $uri $privacy_route');
+    expect(nginx).toContain('"~^/[A-Za-z0-9_-]{1,64}$" "/:shortKey";');
+    expect(nginx).toContain('$time_iso8601 $request_method $privacy_route $status');
     expect(nginx).not.toMatch(/log_format[^\n]*\$request_uri/);
 
     for (const name of ['config.js', 'redis.conf', 'subconverter.toml', 'nginx.conf']) {

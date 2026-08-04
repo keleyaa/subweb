@@ -14,8 +14,10 @@ LABEL org.opencontainers.image.title="Subweb" \
   org.opencontainers.image.licenses="GPL-3.0-only"
 
 USER root
-RUN apk add --no-cache openssl=3.5.7-r0 \
+RUN apk add --no-cache openssl=3.5.7-r0 tzdata=2026c-r0 \
   && rm -f /etc/nginx/conf.d/default.conf
+
+ENV TZ=Asia/Shanghai
 
 COPY --chown=101:101 nginx/templates /etc/nginx/gateway/templates
 COPY --chown=101:101 nginx/snippets /etc/nginx/gateway/snippets

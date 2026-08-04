@@ -13,6 +13,8 @@ describe('Docker runtime contract', () => {
     expect(finalStage).toMatch(/^FROM nginxinc\/nginx-unprivileged:1\.30\.4-alpine@sha256:[0-9a-f]{64}/m);
     expect(finalStage).toContain('org.opencontainers.image.source="https://github.com/keleyaa/subweb"');
     expect(finalStage).toContain('RUN apk add --no-cache openssl=3.5.7-r0');
+    expect(finalStage).toMatch(/tzdata=[^\s\\]+/u);
+    expect(finalStage).toContain('ENV TZ=Asia/Shanghai');
     expect(finalStage).toContain('EXPOSE 8080 8443');
     expect(finalStage).toContain('HEALTHCHECK');
     expect(finalStage).not.toContain('GATEWAY_MODE" = platform');
@@ -33,6 +35,12 @@ describe('Docker runtime contract', () => {
     const compose = await readFile(rootFile('compose.yaml'), 'utf8');
 
     expect(compose).toContain('x-gateway-common:');
+    expect(compose).toContain('x-runtime-environment: &runtime-environment');
+    expect(compose).toContain('TZ: Asia/Shanghai');
+    expect(compose).toContain('x-runtime-logging: &runtime-logging');
+    expect(compose).toContain('driver: json-file');
+    expect(compose).toContain('max-size: "10m"');
+    expect(compose).toContain('max-file: "3"');
     expect(compose).toContain('gateway-http:');
     expect(compose).toContain('gateway-tls:');
     expect(compose).toContain('behind-proxy');

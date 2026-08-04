@@ -9,9 +9,10 @@ gateway 根据 Host 分离应用与 API，并在 `/short-api/` 代理中注入 M
 ## 敏感数据
 
 - 订阅 URL 可能包含访问凭据。SubConverter 会接收它，创建短链时 MyUrls/Redis 也会保存包含它的长链接。
-- Base64 不是加密。短码一旦泄漏，持有者通常可以访问跳转目标。
+- Base64 不是加密。短码是“持有即可访问”的凭据；一旦泄漏，持有者通常可以访问跳转目标。
 - `.env`、`.runtime/`、证书私钥、平台变量、Redis 备份和测试哨兵不得提交或粘贴到公开日志。
-- 网关和后端日志应只记录方法、状态、耗时等必要信息，禁止记录完整 query、请求体、Authorization 或 Redis URL。
+- 网关和后端日志应只记录时间、方法、路由模板、状态和耗时等必要信息，禁止记录完整 query、请求体、Authorization、Redis URL、真实短码、客户端 IP 或 User-Agent。
+- 生产环境固定使用 `Asia/Shanghai`。SubConverter 必须保持 `log_level = "info"` 和 `print_debug_info = false`；禁止启用 verbose，因为详细请求目标可能包含订阅 URL。
 
 ## 供应链
 

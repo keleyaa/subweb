@@ -17,7 +17,18 @@ docker compose config --services
 tail -n 200 .runtime/local/logs/nginx.log
 ```
 
-日志分享前删除域名以外的 query、订阅 URL、Token、Redis URL 和短码目标。
+Docker 服务和 Gateway 镜像统一使用 `Asia/Shanghai`。Gateway 访问日志只记录 ISO 8601
+时间、方法、隐私安全的路由模板和状态码；真实短码统一显示为 `/:shortKey`，不记录
+Query、请求体、Authorization、IP 或 User-Agent。MyUrls 新版镜像采用同一策略；在
+Subweb 锁定该新版镜像前，当前 v1.11 的内部 `access.log` 仍可能记录真实短码、IP 和
+User-Agent，应限制 Docker 管理权限，并避免复制 `/app/logs` 内容。
+
+所有容器的 `json-file` 标准输出日志限制为单文件 10 MB、最多 3 个文件。成功的 `/healthz`
+不写 Gateway 访问日志；MyUrls 新版同样抑制成功记录，但失败健康检查保留。
+健康检查本身必须保留，因为 Compose 启动依赖和 `--wait` 使用其状态。
+
+日志分享前仍应检查并删除 query、订阅 URL、Token、Redis URL 和真实短码。生产环境不要
+启用 SubConverter verbose 或 `print_debug_info = true`。
 
 ## Redis 备份
 
