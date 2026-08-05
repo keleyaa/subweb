@@ -58,8 +58,8 @@ For an existing reverse proxy such as Nginx, OpenResty, Baota, 1Panel, or Cloudf
 
 ```sh
 ./scripts/docker-deploy.sh --mode behind-proxy \
-  --app-domain sub.example.com \
-  --api-domain api.example.com
+  --app-domain sub.ml1.one \
+  --api-domain api.ml1.one
 docker compose ps
 ```
 
@@ -67,9 +67,9 @@ The script creates the untracked `.env`, MyUrls token, and Redis password for yo
 
 脚本会自动创建不提交的 `.env`、MyUrls Token 和 Redis 密码。网关镜像同时发布到 `docker.io/keleyaa/subweb` 与 `ghcr.io/keleyaa/subweb`。生产环境应通过 `--image` 指定已发行的 `sha-*` 镜像标签；不要根据本地提交猜测远端标签。
 
-The maintainer's display deployment uses `ml1.one` and `api.ml1.one` as examples only. Replace both domains with names you control before deploying your own instance.
+The maintainer's display deployment uses `sub.ml1.one` and `api.ml1.one` as examples only. Replace both domains with names you control before deploying your own instance.
 
-维护者展示部署使用 `ml1.one` 与 `api.ml1.one`，它们仅是示例。部署自己的实例前，请替换为你控制的两个域名。
+维护者展示部署使用 `sub.ml1.one` 与 `api.ml1.one`，它们仅是示例。部署自己的实例前，请替换为你控制的两个域名。
 
 When there is no outer proxy, `direct-tls` is available only when ports 80/443 are unused and you already have one certificate covering both domains. The project does not require Caddy and does not obtain or renew certificates. Full proxy, TLS, update, backup, and rollback instructions are in [Docker deployment](docs/deployment-docker.md).
 

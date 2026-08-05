@@ -83,6 +83,8 @@ describe('integrated Compose stack', () => {
     expectHealthBounds(config.services.redis);
     expectHealthBounds(config.services.myurls);
     expectHealthBounds(config.services.subconverter);
+    expect(config.services.myurls.environment.MYURLS_RATE_LIMIT_RPS).toBe('5');
+    expect(config.services.myurls.environment.MYURLS_RATE_LIMIT_BURST).toBe('10');
   });
 
   it('publishes only loopback HTTP in behind-proxy mode', async () => {

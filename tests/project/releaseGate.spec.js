@@ -38,6 +38,8 @@ describe('release evidence and command gate', () => {
   it('publishes one multi-platform release to Docker Hub and GHCR', () => {
     const source = fs.readFileSync(path.join(root, '.github/workflows/docker-build-release.yml'), 'utf8');
 
+    expect(source.match(/uses: actions\/checkout@/g)).toHaveLength(2);
+    expect(source.match(/persist-credentials: false/g)).toHaveLength(2);
     expect(source).toContain('packages: write');
     expect(source).toContain('registry: ghcr.io');
     expect(source).toContain('username: ${{ github.actor }}');

@@ -37,7 +37,7 @@ describe('home workspace layout', () => {
     expect(source).toContain('class="home-workspace"');
     expect(source).toContain('class="home-workspace__inner"');
     expect(source).toContain('aria-labelledby="conversion-title"');
-    expect(source).toContain('<h2 id="conversion-title" class="visually-hidden">订阅转换</h2>');
+    expect(source).toContain('<h1 id="conversion-title" class="visually-hidden">订阅转换</h1>');
     expect(source).toContain('<SubTable />');
     expect(source.match(/<SubTable/g)).toHaveLength(1);
   });
@@ -73,7 +73,7 @@ describe('home workspace layout', () => {
     const source = await readFile(sourceUrl, 'utf8');
 
     expect(source).toContain('<main class="home-workspace" aria-labelledby="conversion-title">');
-    expect(source).toContain('<h2 id="conversion-title" class="visually-hidden">订阅转换</h2>');
+    expect(source).toContain('<h1 id="conversion-title" class="visually-hidden">订阅转换</h1>');
     expect(source).not.toContain('presentation');
     expect(source).not.toContain('uxMode');
     expect(source).not.toContain('data-ux-mode');

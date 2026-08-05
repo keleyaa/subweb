@@ -14,6 +14,8 @@
 
 `APP_DOMAIN` 与 `API_DOMAIN` 必须不同，但指向同一网关。
 
+维护者展示部署的实际域名为 `sub.ml1.one`（应用）和 `api.ml1.one`（API）；部署其他实例时应替换为自己的域名。
+
 | 入口 | 路由 | 目标 |
 | --- | --- | --- |
 | `https://APP_DOMAIN/` | 静态文件与前端 history fallback | Subconverter Web |

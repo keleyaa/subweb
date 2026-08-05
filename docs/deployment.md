@@ -35,6 +35,6 @@ git pull --ff-only origin main
 
 `git status --short` 有输出时先确认这些本地改动是否需要保留，不要直接覆盖。进入项目后用 `pwd` 确认当前目录以 `/subweb` 结尾，并用 `test -f compose.yaml` 确认文件完整。
 
-无论采用哪种方式，`ml1.one` 与 `api.ml1.one` 都只是维护者展示值。部署者需要准备两个不同域名，并让它们指向同一公网 gateway；应用 Host 提供网页和短链，API Host 提供转换接口。
+维护者展示部署使用 `sub.ml1.one` 与 `api.ml1.one`。它们只是展示值，其他部署者需要准备自己的两个不同域名，并让它们指向同一公网 gateway；应用 Host 提供网页和短链，API Host 提供转换接口。
 
 生产前同时阅读[配置](configuration.md)、[架构](architecture.md)、[安全](security.md)和[运维](operations.md)。

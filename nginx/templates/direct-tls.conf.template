@@ -26,6 +26,9 @@ http {
 
   log_format gateway_privacy '$time_iso8601 $request_method $privacy_route $status';
   access_log /dev/stdout gateway_privacy;
+  limit_req_zone $binary_remote_addr zone=subweb_api:10m rate=60r/m;
+  limit_req_zone $binary_remote_addr zone=subweb_short:10m rate=20r/m;
+  limit_req_status 429;
 
   resolver @@NGINX_RESOLVER@@ ipv6=off valid=30s;
 

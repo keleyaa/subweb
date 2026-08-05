@@ -4,7 +4,7 @@
 
 | 变量 | 默认展示值 | 可公开 | 生效方式 |
 | --- | --- | --- | --- |
-| `APP_DOMAIN` | `ml1.one` | 是 | `configure.sh` 写入 `.env`，重建网关容器 |
+| `APP_DOMAIN` | `sub.ml1.one` | 是 | `configure.sh` 写入 `.env`，重建网关容器 |
 | `API_DOMAIN` | `api.ml1.one` | 是 | 同上；必须与应用域名不同 |
 | `API_URL` | 从 `API_DOMAIN` 派生为 HTTPS URL | 是 | 写入浏览器 `apiUrl` |
 | `SHORT_URL` | 从 `APP_DOMAIN` 派生为 `https://APP_DOMAIN/short-api` | 是 | 写入浏览器 `shortUrl` |
@@ -27,6 +27,8 @@
 | --- | --- | --- | --- |
 | `MYURLS_API_TOKEN` | `configure.sh` 或平台秘密系统 | 否 | 网关注入、MyUrls 校验；轮换需同时更新两端 |
 | `REDIS_PASSWORD` | `configure.sh` | 否 | Docker 和本机 Redis；不进入浏览器 |
+| `MYURLS_RATE_LIMIT_RPS` | `5` | 否 | 短链创建接口每秒令牌数，由 Compose/本机启动固定启用 |
+| `MYURLS_RATE_LIMIT_BURST` | `10` | 否 | 短链创建接口突发容量 |
 | `SUBCONVERTER_UPSTREAM` | 部署编排 | 否 | Docker 默认 `http://subconverter:25500` |
 | `MYURLS_UPSTREAM` | 部署编排 | 否 | Docker 默认 `http://myurls:8080` |
 
@@ -38,8 +40,8 @@
 
 字段规则：
 
-- `apiUrl`：完整 HTTP(S) URL；无效时回退到 `https://api.ml1.one`。
-- `shortUrl`：完整 HTTP(S) URL；空字符串关闭短链；无效非空值回退到 `https://ml1.one`。
+- `apiUrl`：完整 HTTPS URL；仅本机开发允许 `http://127.0.0.1` 或 `http://localhost`；无效时回退到 `https://api.ml1.one`。
+- `shortUrl`：完整 HTTPS URL；仅本机开发允许 `http://127.0.0.1` 或 `http://localhost`；空字符串关闭短链；无效非空值回退到 `https://ml1.one`。
 - `menuItem`：只接受 GitHub 仓库根链接，显示在页脚。
 - `remoteConfigOptions`：名称非空且 URL 完整的公开远程配置列表。
 

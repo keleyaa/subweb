@@ -105,6 +105,8 @@ services:
       MYURLS_REDIS_CONN: redis:6379
       MYURLS_REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
       MYURLS_API_TOKEN: "${MYURLS_API_TOKEN:?Set MYURLS_API_TOKEN with scripts/configure.sh}"
+      MYURLS_RATE_LIMIT_RPS: "5"
+      MYURLS_RATE_LIMIT_BURST: "10"
     depends_on:
       redis:
         condition: service_healthy

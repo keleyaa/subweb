@@ -28,9 +28,11 @@ const input = {
 };
 
 describe('conversion action state', () => {
-  it('accepts only complete HTTP(S) URLs', () => {
+  it('accepts HTTPS URLs and HTTP loopback URLs only', () => {
     expect(regexCheck('https://api.example.test/path?value=1')).toBe(true);
     expect(regexCheck('http://127.0.0.1:25500')).toBe(true);
+    expect(regexCheck('http://localhost:25500')).toBe(true);
+    expect(regexCheck('http://api.example.test')).toBe(false);
     expect(regexCheck('prefixhttps://api.example.test')).toBe(false);
     expect(regexCheck('javascript:alert(1)')).toBe(false);
     expect(regexCheck('https://user:password@api.example.test')).toBe(false);

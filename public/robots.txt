@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /sub
+Disallow: /short-api/
+Disallow: /healthz
+Disallow: /*?*
+
+Sitemap: https://sub.ml1.one/sitemap.xml

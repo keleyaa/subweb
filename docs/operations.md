@@ -78,7 +78,21 @@ chmod 700 .runtime/redis-backups
 
 ## 域名与证书
 
+维护者展示部署使用 `sub.ml1.one` 和 `api.ml1.one`。其他部署者更换域名时，应同时更新两个 DNS 记录、`.env`、外层代理和证书中的 SAN。
+
 更换域名：更新两个 DNS 记录，重新运行 `configure.sh`，更新外层代理或 SAN 证书，执行 `validate-compose.sh`。源码构建执行 `docker compose up -d --build --wait`；镜像部署执行 `docker compose up -d --no-build --pull always --wait`，再验证网页、API、短链创建与旧短码。
+
+## 公开发现性与搜索收录
+
+`APP_DOMAIN` 是唯一应被收录的公开站点。维护者展示部署为 `https://sub.ml1.one/`。在可写的本机源码目录中，启动脚本会将 HTML canonical、Open Graph URL 和 `sitemap.xml` 中的展示域名替换为实际 `APP_DOMAIN`；Docker 镜像默认使用只读根文件系统，启动时不会改写构建产物。其他部署者应在构建镜像前替换 `index.html` 与 `public/sitemap.xml` 中的展示域名，或将其作为 SEO 元数据默认值保留，实际访问域名仍由 `APP_DOMAIN` 配置。
+
+主页提供描述、Open Graph、`SoftwareApplication` JSON-LD、`robots.txt` 和单页 `sitemap.xml`。将自己部署后的 `https://APP_DOMAIN/sitemap.xml` 提交到 Google Search Console 与 Bing Webmaster 即可；不要向搜索平台提交 `API_DOMAIN`。
+
+API、转换请求、短链创建、短码跳转和带 query 的页面均不应被索引。网关为 API 与短链路由返回 `X-Robots-Tag: noindex, nofollow, noarchive`，而 `robots.txt` 只是爬虫提示，不能替代访问控制，也不会消除已泄漏的 URL。
+
+网关转换接口默认限制为每个来源地址每分钟 60 次，短链创建接口限制为每分钟 20 次；MyUrls 内部再限制为每秒 5 次、突发 10 次。出现 429 时应先检查外层代理是否把所有用户汇聚成同一个来源地址，再按实际流量调整外层策略，不要直接关闭内部限流。
+
+公开文档应只保留可验证的能力、部署方式、安全边界、版本和来源说明。不得把订阅 URL、短链、Token、用户配置、日志样本或请求 query 写入 Schema、sitemap、页面示例、截图或公开工单。
 
 `direct-tls` 证书续期后先验证文件权限与完整链，执行 `docker compose exec gateway-tls nginx -t`，再重启 gateway。`behind-proxy` 的证书续期由宝塔、1Panel、Nginx、OpenResty、Cloudflare 或其他外层服务负责。
 

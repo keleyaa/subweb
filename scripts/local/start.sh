@@ -153,10 +153,12 @@ start_local_service() {
         MYURLS_PORT=$LOCAL_MYURLS_PORT \
         MYURLS_DOMAIN="127.0.0.1:$LOCAL_APP_PORT" \
         MYURLS_PROTO=http \
-        MYURLS_REDIS_CONN="127.0.0.1:$LOCAL_REDIS_PORT" \
-        MYURLS_REDIS_PASSWORD=$redis_password \
-        MYURLS_API_TOKEN=$myurls_api_token \
-        exec ./myurls) >> "$log_file" 2>&1 &
+         MYURLS_REDIS_CONN="127.0.0.1:$LOCAL_REDIS_PORT" \
+         MYURLS_REDIS_PASSWORD=$redis_password \
+         MYURLS_API_TOKEN=$myurls_api_token \
+         MYURLS_RATE_LIMIT_RPS=5 \
+         MYURLS_RATE_LIMIT_BURST=10 \
+         exec ./myurls) >> "$log_file" 2>&1 &
       health_url="http://127.0.0.1:$LOCAL_MYURLS_PORT/healthz"
       ;;
     subconverter)

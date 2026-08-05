@@ -1,4 +1,6 @@
 location / {
+  add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+  limit_req zone=subweb_api burst=10 nodelay;
 @@API_PROXY_HEADERS@@
   set $subconverter_upstream "@@SUBCONVERTER_UPSTREAM@@";
   proxy_pass $subconverter_upstream$request_uri;

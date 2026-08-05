@@ -8,6 +8,16 @@ location = /favicon.svg {
   try_files $uri =404;
 }
 
+location = /robots.txt {
+  default_type text/plain;
+  try_files $uri =404;
+}
+
+location = /sitemap.xml {
+  default_type application/xml;
+  try_files $uri =404;
+}
+
 location ^~ /assets/ {
   expires 1y;
   try_files $uri =404;
@@ -19,6 +29,8 @@ location ^~ /conf/ {
 }
 
 location = /short-api/short {
+  add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+  limit_req zone=subweb_short burst=5 nodelay;
   limit_except POST {
     deny all;
   }
@@ -34,10 +46,12 @@ location = /short-api/short {
 }
 
 location ^~ /short-api/ {
+  add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
   return 404;
 }
 
 location ~ "^/[A-Za-z0-9_-]{1,64}$" {
+  add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
   limit_except GET HEAD {
     deny all;
   }

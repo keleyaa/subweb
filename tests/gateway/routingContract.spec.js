@@ -12,6 +12,8 @@ describe('gateway routing contract', () => {
     for (const route of [
       'location = /healthz',
       'location = /favicon.svg',
+      'location = /robots.txt',
+      'location = /sitemap.xml',
       'location ^~ /assets/',
       'location ^~ /conf/',
       'location = /short-api/short',
@@ -24,6 +26,7 @@ describe('gateway routing contract', () => {
     expect(shortCodePosition).toBeGreaterThan(-1);
     expect(routes).toContain('limit_except GET HEAD');
     expect(routes).toContain('try_files $uri $uri/ /index.html');
+    expect(routes).toContain('add_header X-Robots-Tag "noindex, nofollow, noarchive" always;');
   });
 
   it('accepts only POST for short creation, caps its body, overwrites authorization, and targets exactly /short', async () => {
@@ -67,6 +70,7 @@ describe('gateway routing contract', () => {
     expect(proxyHeaders).toContain('proxy_set_header Host @@PUBLIC_HOST@@;');
     expect(proxyHeaders).toContain('proxy_set_header X-Forwarded-Host @@PUBLIC_HOST@@;');
     expect(proxyHeaders).toContain('proxy_set_header X-Forwarded-Proto @@PUBLIC_SCHEME@@;');
+    expect(routes).toContain('add_header X-Robots-Tag "noindex, nofollow, noarchive" always;');
   });
 
   it.each(['http.conf.template', 'direct-tls.conf.template'])('returns 421 for unknown hosts without an upstream default in %s', async (name) => {
@@ -84,5 +88,7 @@ describe('gateway routing contract', () => {
 
     expect(template).toContain('resolver @@NGINX_RESOLVER@@ ipv6=off valid=30s;');
     expect(template).not.toContain('resolver 127.0.0.11');
+    expect(template).toContain('limit_req_zone $binary_remote_addr zone=subweb_api:10m rate=60r/m;');
+    expect(template).toContain('limit_req_zone $binary_remote_addr zone=subweb_short:10m rate=20r/m;');
   });
 });

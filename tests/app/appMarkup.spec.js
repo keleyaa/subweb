@@ -13,9 +13,28 @@ describe('application mount markup', () => {
     expect(indexHtml).toContain('<html lang="zh-CN">');
     expect(indexHtml).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />');
     expect(indexHtml).toContain('<title>Subconverter Web</title>');
+    expect(indexHtml).toContain('<meta name="description" content="自托管订阅转换与短链服务，提供统一网关、隐私边界和 Docker 部署。" />');
+    expect(indexHtml).toContain('<link rel="canonical" href="https://sub.ml1.one/" />');
+    expect(indexHtml).toContain('<meta property="og:url" content="https://sub.ml1.one/" />');
+    expect(indexHtml).toContain('<script type="application/ld+json">');
+    expect(indexHtml).toContain('"@type": "SoftwareApplication"');
     expect(indexHtml).toContain('<strong>Subconverter Web 需要启用 JavaScript 才能运行。</strong>');
     expect(indexHtml).toContain('<noscript>');
     expect(indexHtml).toContain('<script type="module" src="/src/main.js"></script>');
+  });
+
+  it('ships crawler discovery files for the public display deployment', async () => {
+    const [robots, sitemap] = await Promise.all([
+      readFile(new URL('../../public/robots.txt', import.meta.url), 'utf8'),
+      readFile(new URL('../../public/sitemap.xml', import.meta.url), 'utf8'),
+    ]);
+
+    expect(robots).toContain('Sitemap: https://sub.ml1.one/sitemap.xml');
+    expect(robots).toContain('Disallow: /sub');
+    expect(robots).toContain('Disallow: /short-api/');
+    expect(sitemap).toContain('<loc>https://sub.ml1.one/</loc>');
+    expect(sitemap).not.toContain('api.ml1.one');
+    expect(sitemap).not.toMatch(/<loc>[^<]*\?[^<]*<\/loc>/u);
   });
 
   it('uses the standalone project mark rather than the retired favicon', async () => {

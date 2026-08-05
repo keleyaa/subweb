@@ -6,6 +6,7 @@ node_modules
 /.claude
 /output
 /prototypes
+/docs/superpowers/
 /coverage
 /playwright-report
 /test-results

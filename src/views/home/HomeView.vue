@@ -1,7 +1,7 @@
 <template>
   <main class="home-workspace" aria-labelledby="conversion-title">
     <div class="home-workspace__inner">
-      <h2 id="conversion-title" class="visually-hidden">订阅转换</h2>
+      <h1 id="conversion-title" class="visually-hidden">订阅转换</h1>
       <SubTable />
     </div>
   </main>

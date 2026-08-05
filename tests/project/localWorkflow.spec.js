@@ -7,6 +7,7 @@ const verifierPath = new URL('../../scripts/verify-local-source.sh', import.meta
 describe('local source workflow contract', () => {
   it('covers both supported operating systems and always stops owned services', async () => {
     const workflow = await readFile(workflowPath, 'utf8');
+    expect(workflow).toContain('persist-credentials: false');
     expect(workflow).toContain('macos-15');
     expect(workflow).toContain('ubuntu-24.04');
     expect(workflow).toContain('uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16');

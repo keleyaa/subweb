@@ -3,6 +3,7 @@ set -eu
 
 config_template=${CONFIG_TEMPLATE:-/app/public/conf/config.js}
 config_file=${CONFIG_FILE:-/usr/share/nginx/html/conf/config.js}
+site_root=${SITE_ROOT:-/usr/share/nginx/html}
 gateway_renderer=${GATEWAY_RENDERER:-/app/render-gateway-config.sh}
 gateway_template_root=${GATEWAY_TEMPLATE_ROOT:-/etc/nginx/gateway}
 gateway_config_file=${GATEWAY_CONFIG_FILE:-/tmp/nginx/nginx.conf}
@@ -25,19 +26,24 @@ escape_config_value() {
     | sed 's/[\\&#]/\\&/g'
 }
 
-replace_config_value() {
-  old_value=$1
-  new_value=$2
+replace_file_value() {
+  target_file=$1
+  old_value=$2
+  new_value=$3
   escaped_value=$(escape_config_value "$new_value")
-  temp_file="${config_file}.$$"
+  temp_file="${target_file}.$$"
 
-  if sed "s#${old_value}#${escaped_value}#g" "$config_file" > "$temp_file"; then
-    mv "$temp_file" "$config_file" \
-      || fail "无法写入运行时配置: ${config_file}"
+  if sed "s#${old_value}#${escaped_value}#g" "$target_file" > "$temp_file"; then
+    mv "$temp_file" "$target_file" \
+      || fail "无法写入运行时文件: ${target_file}"
   else
     rm -f "$temp_file"
-    fail "无法写入运行时配置: ${config_file}"
+    fail "无法写入运行时文件: ${target_file}"
   fi
+}
+
+replace_config_value() {
+  replace_file_value "$config_file" "$1" "$2"
 }
 
 if [ ! -f "$config_file" ]; then
@@ -68,6 +74,16 @@ if [ "${SHORT_URL+x}" = x ]; then
   replace_config_value 'https://ml1.one' "$SHORT_URL"
 else
   printf '%s\n' '当前为默认短链接地址: https://ml1.one'
+fi
+
+if [ -n "${APP_DOMAIN:-}" ] && [ -w "$site_root" ]; then
+  public_scheme=${PUBLIC_SCHEME:-https}
+  public_origin="${public_scheme}://${APP_DOMAIN}"
+  for public_file in "$site_root/index.html" "$site_root/sitemap.xml"; do
+    if [ -f "$public_file" ]; then
+      replace_file_value "$public_file" 'https://sub.ml1.one' "$public_origin"
+    fi
+  done
 fi
 
 check_tls_file() {

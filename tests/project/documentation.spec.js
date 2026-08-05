@@ -169,6 +169,9 @@ describe('documentation contract', () => {
     expect(security).toContain('print_debug_info = false');
     expect(security).toContain('verbose');
     expect(security).toContain('持有即可访问');
+    expect(security).toContain('SSRF');
+    expect(security).toContain('开放重定向');
+    expect(security).toContain('MYURLS_IMAGE');
   });
 
   it('keeps the bilingual product story and local visual proof explicit', () => {

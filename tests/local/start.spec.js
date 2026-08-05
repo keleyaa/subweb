@@ -26,6 +26,8 @@ describe('atomic local source startup', () => {
     expect(source).toContain('TZ=Asia/Shanghai');
     expect(source).toContain('export TZ');
     expect(source).toContain('gsub(token, "[REDACTED]")');
+    expect(source).toContain('MYURLS_RATE_LIMIT_RPS=5');
+    expect(source).toContain('MYURLS_RATE_LIMIT_BURST=10');
     expect(subconverter).toBeLessThan(vite);
     expect(vite).toBeLessThan(nginx);
     expect(source).toContain('rollback_new_services');

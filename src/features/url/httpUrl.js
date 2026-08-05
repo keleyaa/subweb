@@ -5,9 +5,12 @@ export function isValidHttpUrl(value) {
 
   try {
     const url = new URL(value);
+    const isLoopbackHttp =
+      url.protocol === 'http:' &&
+      (url.hostname === '127.0.0.1' || url.hostname === 'localhost');
 
     return (
-      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      (url.protocol === 'https:' || isLoopbackHttp) &&
       Boolean(url.hostname) &&
       !url.username &&
       !url.password

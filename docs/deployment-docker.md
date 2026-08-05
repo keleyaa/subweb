@@ -6,7 +6,7 @@ Docker Compose 启动 gateway、SubConverter、MyUrls 和 Redis。Gateway、SubC
 
 - Docker Engine 24+ 与 Docker Compose v2。
 - Git 与可以访问 GitHub、Docker Hub、GHCR 的网络。
-- 两个不同域名，例如 `example.com` 和 `api.example.com`，都解析到同一入口。
+- 两个不同域名解析到同一入口。维护者展示部署使用 `sub.ml1.one` 和 `api.ml1.one`；其他部署者请替换为自己控制的域名。
 - 选择 `behind-proxy` 或 `direct-tls`，不要同时启用。
 
 先确认 Docker 已安装并且当前用户能够使用：
@@ -72,8 +72,8 @@ Gateway 的每次正式发行由同一次多架构构建同时推送到两个公
 
 ```sh
 ./scripts/docker-deploy.sh --mode behind-proxy \
-  --app-domain sub.example.com \
-  --api-domain api.example.com
+  --app-domain sub.ml1.one \
+  --api-domain api.ml1.one
 ```
 
 脚本执行成功后已经完成启动，不需要再手工执行 `docker compose up`。检查状态和本机入口：
@@ -81,7 +81,7 @@ Gateway 的每次正式发行由同一次多架构构建同时推送到两个公
 ```sh
 docker compose ps
 docker compose logs --tail=100 gateway-http myurls subconverter redis
-curl -fsS -H 'Host: sub.example.com' http://127.0.0.1:18080/healthz
+curl -fsS -H 'Host: sub.ml1.one' http://127.0.0.1:18080/healthz
 ```
 
 没有外层代理且已有覆盖两个域名的证书时：
@@ -132,11 +132,11 @@ MyUrls 也默认跟随 `ghcr.io/keleyaa/myurls:latest`。该标签只会在 MyUr
 
 ```sh
 ./scripts/configure.sh --mode behind-proxy \
-  --app-domain sub.example.com --api-domain api.example.com
+  --app-domain sub.ml1.one --api-domain api.ml1.one
 ./scripts/validate-compose.sh
 docker compose up -d --build --wait
 docker compose ps
-curl -fsS -H 'Host: sub.example.com' http://127.0.0.1:18080/healthz
+curl -fsS -H 'Host: sub.ml1.one' http://127.0.0.1:18080/healthz
 ```
 
 Compose 固定绑定 `127.0.0.1:${SUBWEB_PORT:-18080}`。通用 Nginx 配置为两个站点指向同一 upstream：
@@ -144,7 +144,7 @@ Compose 固定绑定 `127.0.0.1:${SUBWEB_PORT:-18080}`。通用 Nginx 配置为�
 ```nginx
 server {
   listen 443 ssl;
-  server_name example.com;
+  server_name sub.ml1.one;
   location / {
     proxy_pass http://127.0.0.1:18080;
     proxy_set_header Host $host;
@@ -154,7 +154,7 @@ server {
 }
 server {
   listen 443 ssl;
-  server_name api.example.com;
+  server_name api.ml1.one;
   location / {
     proxy_pass http://127.0.0.1:18080;
     proxy_set_header Host $host;

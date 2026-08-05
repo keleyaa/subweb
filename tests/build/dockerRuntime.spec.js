@@ -87,6 +87,8 @@ describe('Docker runtime contract', () => {
     expect(routes).toContain('location = /healthz');
     expect(routes).toContain("try_files $uri $uri/ /index.html");
     expect(nginx).toContain('Content-Security-Policy');
+    expect(nginx).toContain("connect-src 'self' https: http://127.0.0.1:* http://localhost:*");
+    expect(nginx).not.toContain("connect-src 'self' https: http:;");
     expect(nginx).toContain('X-Content-Type-Options');
     expect(nginx).toContain('Referrer-Policy');
   });
