@@ -1,6 +1,6 @@
 # Docker 部署
 
-Docker Compose 启动 gateway、SubConverter、MyUrls 和 Redis。所有外部镜像都由摘要锁定；Redis 卷 `redis-data` 是唯一业务持久数据。
+Docker Compose 启动 gateway、SubConverter、MyUrls 和 Redis。Gateway、SubConverter 和 Redis 使用锁定镜像；MyUrls 默认引用 `ghcr.io/keleyaa/myurls:latest`，该标签仅由其稳定发行更新。Redis 卷 `redis-data` 是唯一业务持久数据。
 
 ## 前置条件
 
@@ -119,6 +119,8 @@ docker compose up -d --no-build --pull always --wait
 ```
 
 `latest` 会随新发行变化，适合体验和主动跟随更新；`sha-*` 标签或镜像 digest 适合可审计生产部署。Docker Hub 与 GHCR 都不可用时，不要退回不明来源镜像，可按“从源码构建”流程在本机生成 Gateway。快速部署仍是四容器 Compose 架构，不是把 Redis、MyUrls 和 SubConverter 塞入 Gateway 单体镜像。
+
+MyUrls 也默认跟随 `ghcr.io/keleyaa/myurls:latest`。该标签只会在 MyUrls 的完整稳定版本标签（`vX.Y.Z`）发布成功后移动；它当前不存在或拉取失败时，不要把镜像名称改成来源不明的镜像，应先完成对应 MyUrls 稳定发行。需要冻结或回滚时，在不提交的 `.env` 中加入 `MYURLS_IMAGE=ghcr.io/keleyaa/myurls@sha256:<已验证摘要>`，再运行 `./scripts/validate-compose.sh` 和 `docker compose up -d --no-build --pull always --wait`。
 
 ## 从源码构建
 

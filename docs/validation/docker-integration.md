@@ -10,7 +10,7 @@
 | Docker Compose | `v5.3.1` |
 | 测试入口 | `scripts/verify-integrated-stack.sh` |
 
-## 锁定镜像
+## 集成验证镜像
 
 | 服务 | 版本 | OCI index digest |
 | --- | --- | --- |
@@ -19,7 +19,7 @@
 | Redis | `8.10.0-alpine` | `sha256:5cca2f8a01ef2264c52dac86f14ec6a5abe973a93331e1b62522cfc5e63e4691` |
 | SubConverter-Extended | `v1.2.0` | `sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f` |
 
-完整的源代码 tag、commit、平台 digest 和内部端口记录见 `deploy/versions.lock.json`。
+完整的源代码 tag、commit、平台 digest 和内部端口记录见 `deploy/versions.lock.json`。生产 Compose 默认使用 `ghcr.io/keleyaa/myurls:latest`；验证脚本在临时环境中显式设定 `MYURLS_IMAGE` 为锁文件内的 MyUrls 基线，避免远端可变标签使回归结果不可重复。
 
 ## 验证结果
 

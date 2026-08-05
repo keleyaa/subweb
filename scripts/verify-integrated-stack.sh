@@ -32,6 +32,22 @@ script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repository_root=$(CDPATH= cd -- "$script_directory/.." && pwd)
 compose_file=$repository_root/compose.yaml
 certificate_creator=$repository_root/scripts/test-support/create-test-certificate.sh
+node "$repository_root/scripts/verify-version-locks.mjs" >/dev/null \
+  || { printf '%s\n' 'MyUrls 集成测试镜像锁无效' >&2; exit 1; }
+myurls_test_image=$(node - "$repository_root/deploy/versions.lock.json" <<'NODE'
+const fs = require('node:fs');
+const lock = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const image = lock.services?.myurls?.image;
+if (
+  !image ||
+  typeof image.reference !== 'string' ||
+  typeof image.digest !== 'string'
+) {
+  process.exit(1);
+}
+process.stdout.write(`${image.reference}@${image.digest}`);
+NODE
+) || { printf '%s\n' '无法读取 MyUrls 集成测试镜像锁' >&2; exit 1; }
 temporary_root=${TMPDIR:-/tmp}
 case "$temporary_root" in /*) ;; *) printf '%s\n' 'TMPDIR 必须是绝对路径' >&2; exit 1 ;; esac
 [ -d "$temporary_root" ] \
@@ -166,6 +182,7 @@ write_environment() {
     printf 'SUBWEB_PORT=%s\n' "$host_port"
     printf 'TLS_CERT_PATH=%s\n' "$certificate_path"
     printf 'TLS_KEY_PATH=%s\n' "$key_path"
+    printf 'MYURLS_IMAGE=%s\n' "$myurls_test_image"
     printf 'MYURLS_API_TOKEN=%s\n' "$myurls_api_token"
     printf 'REDIS_PASSWORD=%s\n' "$redis_password"
   } > "$env_file"

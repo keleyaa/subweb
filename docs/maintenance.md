@@ -7,7 +7,7 @@
 - MyUrls 必须在独立 `/Users/li/Desktop/GitHub/MyUrls` 仓库维护，不把其源码、`.git` 或构建产物复制进 Subweb。
 - SubConverter-Extended 使用官方上游锁定产物，不在本仓库做隐式补丁。
 
-来源变化必须同步更新[第三方来源](third-party-sources.md)、锁文件、README 和相关测试。
+来源变化必须同步更新[第三方来源](third-party-sources.md)、锁文件、README 和相关测试；MyUrls 的 `latest` 发行策略也必须同步更新其工作流和部署说明。
 
 ## 必须提交与禁止提交
 
@@ -64,7 +64,7 @@ docker buildx imagetools inspect ghcr.io/keleyaa/subweb:sha-<提交短 SHA>
 
 ## 锁定更新
 
-外部服务升级先核验正式 tag、commit、manifest digest、amd64/arm64 digest 和许可证，再更新 [`deploy/versions.lock.json`](../deploy/versions.lock.json)。运行锁校验、对应服务测试和两个 Docker profile 的全链路验证。禁止在生产示例使用 `latest`，也不能把本地未发布 commit 写成远端可拉取镜像。
+外部服务升级先核验正式 tag、commit、manifest digest、amd64/arm64 digest 和许可证，再更新 [`deploy/versions.lock.json`](../deploy/versions.lock.json)。运行锁校验、对应服务测试和两个 Docker profile 的全链路验证。MyUrls 是唯一允许默认使用 `latest` 的服务，且该标签只能由 MyUrls 的完整稳定发行推进；其他生产示例禁止使用 `latest`，也不能把本地未发布 commit 写成远端可拉取镜像。
 
 ## 提交与推送
 

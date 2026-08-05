@@ -183,6 +183,8 @@ describe('integrated Docker gateway stack', () => {
     expect(source).not.toContain('pkill');
     expect(source).toContain('temporary_root=${TMPDIR:-/tmp}');
     expect(source).not.toContain('mktemp -d /private/tmp');
+    expect(source).toContain('scripts/verify-version-locks.mjs');
+    expect(source).toContain("printf 'MYURLS_IMAGE=%s\\n' \"$myurls_test_image\"");
   });
 
   it('requires controlled evidence for each TLS rejection and probes loopback ports', async () => {

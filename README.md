@@ -24,8 +24,8 @@ Subconverter Web 是 Subweb 的一体化自托管方案，将订阅转换、短�
 - **一个受控网关。** 网关按 Host 路由，并在服务端注入 MyUrls Token，浏览器不会取得该 Token。
 - **Internal services.** SubConverter-Extended performs conversion, MyUrls creates and resolves short links, and Redis is the only business persistence layer.
 - **内部服务。** SubConverter-Extended 负责转换，MyUrls 创建和解析短链，Redis 是唯一业务持久层。
-- **Reproducible releases.** The gateway, MyUrls, SubConverter-Extended, and Redis are pinned or built from recorded versions; only Redis data must be preserved for recovery.
-- **可复现发行。** 网关、MyUrls、SubConverter-Extended 与 Redis 均使用记录的版本锁定或构建；恢复时只需重点保留 Redis 数据。
+- **Controlled update policy.** The gateway, SubConverter-Extended, and Redis use recorded versions; MyUrls follows its published `latest` stable release by default. Preserve Redis data for recovery, and use an explicit MyUrls image override only for a controlled rollback.
+- **受控更新策略。** Gateway、SubConverter-Extended 与 Redis 使用记录的版本；MyUrls 默认跟随其已发布的稳定 `latest`。恢复时重点保留 Redis 数据；需要受控回滚时再显式覆盖 MyUrls 镜像。
 
 ## Service Boundary / 服务边界
 
@@ -117,9 +117,9 @@ The interface is an independent adaptation guided by Apple platform material, hi
 
 界面以 Apple 平台的材质、层级和可访问性原则，以及 MyUrls 页面克制的产品气质为方法参考；没有复制第三方代码、DOM、CSS、图片、图标或商标。
 
-Pinned versions, image digests, licenses, and modification boundaries are recorded in [third-party sources](docs/third-party-sources.md).
+Pinned versions, image digests, licenses, modification boundaries, and the MyUrls `latest` policy are recorded in [third-party sources](docs/third-party-sources.md).
 
-锁定版本、镜像摘要、许可证与修改边界见[第三方来源](docs/third-party-sources.md)。
+锁定版本、镜像摘要、许可证、修改边界及 MyUrls `latest` 策略见[第三方来源](docs/third-party-sources.md)。
 
 ## Documentation / 文档
 

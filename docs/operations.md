@@ -17,11 +17,11 @@ docker compose config --services
 tail -n 200 .runtime/local/logs/nginx.log
 ```
 
-Docker 服务和 Gateway 镜像统一使用 `Asia/Shanghai`。Gateway 访问日志只记录 ISO 8601
+Docker 服务和 Gateway 镜像统一使用 `Asia/Shanghai`。Gateway 与 MyUrls 访问日志只记录 ISO 8601
 时间、方法、隐私安全的路由模板和状态码；真实短码统一显示为 `/:shortKey`，不记录
-Query、请求体、Authorization、IP 或 User-Agent。MyUrls 新版镜像采用同一策略；在
-Subweb 锁定该新版镜像前，当前 v1.11 的内部 `access.log` 仍可能记录真实短码、IP 和
-User-Agent，应限制 Docker 管理权限，并避免复制 `/app/logs` 内容。
+Query、请求体、Authorization、IP 或 User-Agent。Compose 默认跟随 MyUrls 的稳定 `latest`；仅在该
+镜像发布成功后才具备这套日志策略。发布前或需要审计特定版本时，应在 `.env` 中显式指定已验证镜像，
+并始终限制 Docker 管理权限，避免复制 `/app/logs` 内容。
 
 所有容器的 `json-file` 标准输出日志限制为单文件 10 MB、最多 3 个文件。成功的 `/healthz`
 不写 Gateway 访问日志；MyUrls 新版同样抑制成功记录，但失败健康检查保留。
@@ -78,7 +78,7 @@ npm run verify:locks
 ./scripts/validate-compose.sh
 ```
 
-记录 Git commit、四个服务 digest、Compose profile 和已验证 Redis 备份。升级后检查健康、两个 Host、转换、短链创建、旧短码、日志脱敏和内部端口。失败时切回原 commit/digest；应用组件可重建，Redis 数据按已演练备份恢复。
+记录 Git commit、Gateway/SubConverter/Redis digest、实际解析的 MyUrls digest、Compose profile 和已验证 Redis 备份。升级后检查健康、两个 Host、转换、短链创建、旧短码、日志脱敏和内部端口。失败时切回原 commit/digest；应用组件可重建，Redis 数据按已演练备份恢复。
 
 比较两个锁文件时先运行预检。Redis 主版本变化必须提供已验证备份和显式确认：
 
@@ -90,7 +90,7 @@ npm run verify:locks
   --confirm-redis-major
 ```
 
-MyUrls 与 SubConverter 属于独立上游：先在各自边界验证，再更新本仓库锁文件。未发布的本地 commit 不能用于生产锁定。
+MyUrls 与 SubConverter 属于独立上游：先在各自边界验证，再更新本仓库锁文件。MyUrls 默认 `latest` 只应由其完整稳定版本发行推进；未发布的本地 commit 不能当作远端可拉取镜像。需要冻结 MyUrls 时使用 `.env` 的 `MYURLS_IMAGE` 覆盖。
 
 ## 常见故障
 

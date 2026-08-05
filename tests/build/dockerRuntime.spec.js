@@ -50,7 +50,9 @@ describe('Docker runtime contract', () => {
     expect(compose).toContain('no-new-privileges:true');
     expect(compose).toContain('cap_drop:');
     expect(compose).toContain('- ALL');
-    expect(compose).not.toContain(':latest');
+    expect(compose).toContain(
+      'image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:latest}"',
+    );
   });
 
   it('ships reusable runtime smoke verification and environment examples', async () => {

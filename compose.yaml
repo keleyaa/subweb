@@ -95,7 +95,7 @@ services:
 
   myurls:
     <<: *runtime-security
-    image: "ghcr.io/keleyaa/myurls:v1.11@sha256:f00046cd6c68986781ac9bf13d43fc4db3dbedb8815146a3510ef325cd5b98b0"
+    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:latest}"
     user: "65532:65532"
     environment:
       <<: *runtime-environment

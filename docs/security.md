@@ -16,7 +16,7 @@ gateway 根据 Host 分离应用与 API，并在 `/short-api/` 代理中注入 M
 
 ## 供应链
 
-外部生产镜像由 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 固定 tag、commit、manifest digest 和平台 digest。更新时验证上游发布、许可证、架构摘要、容器健康、集成测试和漏洞扫描；生产回滚使用 digest，不依赖可变 tag。发布流程应保留 SBOM、provenance 和源码 SHA 对应关系。
+Gateway、SubConverter 和 Redis 的外部生产镜像由 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 固定 tag、commit、manifest digest 和平台 digest。MyUrls 是明确例外：Compose 默认引用其稳定发行推进的 `latest`，而集成验证使用锁文件中的已验证基线。更新时验证上游发布、许可证、架构摘要、容器健康、集成测试和漏洞扫描；需要生产回滚时使用 `MYURLS_IMAGE` 指定 digest，不依赖可变 tag。发布流程应保留 SBOM、provenance 和源码 SHA 对应关系。
 
 远程配置由第三方维护，可能继续引用其他规则集。选择预设等于授权转换后端读取这些来源；部署者应定期审查[远程配置来源](remote-config-sources.md)。
 
