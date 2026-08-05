@@ -14,8 +14,8 @@ describe('integrated stack privacy sentinel', () => {
       expect(source).toContain(service);
     }
     expect(source).toContain('哨兵泄漏数=%s');
-    expect(source).toContain('?token=$sentinel_value');
-    expect(source).not.toContain('?marker=$sentinel_value');
+    expect(source).toContain('?subscription_token=$sentinel_value');
+    expect(source).not.toContain('?token=$sentinel_value');
     expect(source).toContain('grep -Fq "$subscription_url" "$service_log"');
     expect(source).not.toMatch(/printf[^\n]*"\$(?:sentinel_value|secret_value)"/i);
     expect(source).not.toMatch(/set\s+-x/);

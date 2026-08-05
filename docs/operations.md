@@ -23,12 +23,26 @@ Query、请求体、Authorization、IP 或 User-Agent。Compose 默认跟随 MyU
 镜像发布成功后才具备这套日志策略。发布前或需要审计特定版本时，应在 `.env` 中显式指定已验证镜像，
 并始终限制 Docker 管理权限，避免复制 `/app/logs` 内容。
 
-所有容器的 `json-file` 标准输出日志限制为单文件 10 MB、最多 3 个文件。成功的 `/healthz`
+所有容器的 `json-file` 标准输出日志限制为单文件 10 MB、最多 3 个文件。SubConverter 的输出先经过
+项目内置过滤器：完整 URI、编码后的 `url`/`link` 请求来源和 Authorization 会变为 `[redacted]`；成功的 `/healthz`
 不写 Gateway 访问日志；MyUrls 新版同样抑制成功记录，但失败健康检查保留。
 健康检查本身必须保留，因为 Compose 启动依赖和 `--wait` 使用其状态。
 
 日志分享前仍应检查并删除 query、订阅 URL、Token、Redis URL 和真实短码。生产环境不要
-启用 SubConverter verbose 或 `print_debug_info = true`。
+启用 SubConverter verbose 或 `print_debug_info = true`；Compose 每次启动都会强制恢复安全日志配置。
+
+若升级前的 SubConverter 日志已经包含真实订阅 URL，先轮换订阅凭据，再只重建该服务以移除当前 Docker
+容器日志。不要添加 `-v`，否则会一并删除 `/base` 运行卷：
+
+```sh
+docker compose rm -sf subconverter
+docker compose up -d --no-build --force-recreate subconverter
+docker compose logs --tail=100 subconverter
+```
+
+本机源码模式的历史文件是 `.runtime/local/logs/subconverter.log`。停止本机栈后，确认凭据已轮换、无需保留
+诊断证据时再清空该单个文件；不要删除 `.runtime/local/redis` 或整个 `.runtime/local/` 目录。任何已上传到
+日志平台、备份系统或工单的旧副本都需要在对应系统中单独清除。
 
 ## Redis 备份
 

@@ -24,14 +24,16 @@ SUBCONVERTER_SECURITY_PROFILE=public
 SUBCONVERTER_ALLOW_PUBLIC_UPLOAD=false
 ```
 
-镜像工作目录为 `/base`，启动命令为 `/usr/local/bin/start-subconverter`。未显式挂载配置
-时，启动脚本会从镜像内的 `/base/pref.example.toml` 生成非空的 `/base/pref.toml`，然后以
-该文件启动服务。部署自定义配置时只挂载 `/base/pref.toml`；不要覆盖整个 `/base`，以免
-遮盖镜像自带资源。`/base/stats` 仅在启用统计功能时需要持久化。
+镜像工作目录为 `/base`，启动命令为 `/usr/local/bin/start-subconverter`。上游镜像在未显式
+设置 `PREF_PATH` 时会从 `/base/pref.example.toml` 生成 `/base/pref.toml`。这是上游单独运行时的
+通用行为；本项目的 Compose 不使用该持久配置路径，以免部署者的旧配置恢复详细请求日志。不要覆盖整个
+`/base`，以免遮盖镜像自带资源。`/base/stats` 仅在启用统计功能时需要持久化。
 
-集成 Compose 不挂载本目录中的自定义偏好设置，`config/` 只用 README 保留空目录策略：
-没有经过固定镜像验证的覆盖文件就不提交，也不编造最小 TOML。实际容器检查确认，固定镜像
-仍需以 root 启动，但根文件系统可以保持只读。版本绑定命名卷
+集成 Compose 不接受部署者留在卷内的 `pref.toml` 作为运行配置。每次启动都会从固定镜像的
+`pref.example.toml` 在 `/base` 中重新派生 `pref.subweb.toml`，强制 `log_level = "warn"` 与
+`print_debug_info = false`，避免旧命名卷重新启用详细请求日志。SubConverter 标准输出还会在进入 Docker
+日志驱动前经过项目过滤器，完整 URI、编码 `url`/`link` 参数和 Authorization 值不会写入容器日志。
+实际容器检查确认，固定镜像仍需以 root 启动，但根文件系统可以保持只读。版本绑定命名卷
 `subconverter-runtime-v1-2-0` 挂到 `/base`
 时，Docker 首次挂载会把镜像中完整的 `/base` 复制进空卷，启动脚本可在其中生成
 `pref.toml`，同时不会开放宿主机端口或放宽 `cap_drop: ALL`、

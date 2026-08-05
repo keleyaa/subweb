@@ -179,6 +179,16 @@ describe('integrated Compose stack', () => {
       SUBCONVERTER_SECURITY_PROFILE: 'public',
       SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: 'false',
     });
+    expect(config.services.subconverter.command).toEqual([
+      '/bin/sh',
+      '/usr/local/bin/subweb-subconverter-entrypoint',
+    ]);
+    expect(config.services.subconverter.tmpfs).toContain('/run/subconverter:mode=0700');
+    expect(config.services.subconverter.volumes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ target: '/usr/local/bin/subweb-subconverter-entrypoint', read_only: true }),
+      expect.objectContaining({ target: '/usr/local/bin/subweb-log-supervisor', read_only: true }),
+      expect.objectContaining({ target: '/usr/local/bin/subweb-log-filter.awk', read_only: true }),
+    ]));
   });
 
   it('hardens all services and gates dependents on real health checks', async () => {
@@ -218,13 +228,13 @@ describe('integrated Compose stack', () => {
       ]),
     );
     expect(config.volumes[subconverterRuntimeVolume]).toBeTruthy();
-    expect(config.services.subconverter.volumes).toEqual([
+    expect(config.services.subconverter.volumes).toEqual(expect.arrayContaining([
       expect.objectContaining({
         source: subconverterRuntimeVolume,
         target: '/base',
         type: 'volume',
       }),
-    ]);
+    ]));
     expect(config.services.subconverter.ports).toBeUndefined();
     expect(config.services.subconverter.expose).toBeUndefined();
   });

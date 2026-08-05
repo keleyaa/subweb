@@ -257,7 +257,7 @@ verify_business_contracts() {
   printf '%s' "$app_body" | grep -q 'Subconverter Web' || fail 'APP Host 未返回 Subweb'
   printf '%s\n' 'APP Host=通过'
 
-  subscription_url="https://raw.githubusercontent.com/Aethersailor/SubConverter-Extended/v1.2.0/tests/fixtures/sample-subscription.txt?token=$sentinel_value"
+  subscription_url="https://raw.githubusercontent.com/Aethersailor/SubConverter-Extended/v1.2.0/tests/fixtures/sample-subscription.txt?subscription_token=$sentinel_value"
   encoded_subscription=$(url_encode "$subscription_url")
   # shellcheck disable=SC2086
   http_request $curl_tls_args -H 'Host: api.app.test' \

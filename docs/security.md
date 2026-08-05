@@ -12,7 +12,9 @@ gateway 根据 Host 分离应用与 API，并在 `/short-api/` 代理中注入 M
 - Base64 不是加密。短码是“持有即可访问”的凭据；一旦泄漏，持有者通常可以访问跳转目标。
 - `.env`、`.runtime/`、证书私钥、平台变量、Redis 备份和测试哨兵不得提交或粘贴到公开日志。
 - 网关和后端日志应只记录时间、方法、路由模板、状态和耗时等必要信息，禁止记录完整 query、请求体、Authorization、Redis URL、真实短码、客户端 IP 或 User-Agent。
-- 生产环境固定使用 `Asia/Shanghai`。SubConverter 必须保持 `log_level = "info"` 和 `print_debug_info = false`；禁止启用 verbose，因为详细请求目标可能包含订阅 URL。
+- Subweb 不信任 SubConverter 上游的参数白名单脱敏。Docker 与本机源码模式都在 SubConverter 标准输出进入日志前移除完整 URI、`url`/`link` 等请求来源参数和 Authorization 值；即使订阅服务使用非标准 Token 参数名，日志也不应保留可访问的订阅地址。
+- 生产环境固定使用 `Asia/Shanghai`。运行时从上游默认配置重新生成受控的 SubConverter 偏好文件，强制 `log_level = "warn"`、`print_debug_info = false`，不会复用命名卷中可能开启 verbose 的旧配置。
+- 历史日志不可能由新版本自动追溯脱敏。若旧日志出现真实订阅 URL，先在订阅提供方轮换凭据，再按部署文档删除旧 SubConverter 容器或本机日志；已被导出到备份或第三方日志平台的副本也必须单独处理。
 
 ## 供应链
 

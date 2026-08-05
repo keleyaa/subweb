@@ -165,7 +165,9 @@ start_local_service() {
         MANAGED_CONFIG_PREFIX="http://127.0.0.1:$LOCAL_API_PORT" \
         SUBCONVERTER_SECURITY_PROFILE=public \
         SUBCONVERTER_ALLOW_PUBLIC_UPLOAD=false \
-        exec "$run_root/subconverter" -f "$run_root/subconverter.toml") \
+        SUBWEB_LOG_RUNTIME_DIR="$run_root" \
+        exec "$project_root/scripts/subconverter-log-supervisor.sh" \
+          "$run_root/subconverter" -f "$run_root/subconverter.toml") \
         >> "$log_file" 2>&1 &
       health_url="http://127.0.0.1:$LOCAL_SUBCONVERTER_PORT/healthz"
       ;;

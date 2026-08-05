@@ -29,6 +29,9 @@ allow_public_upload = true
 listen = "0.0.0.0"
 port = 25500
 serve_file_root = "web"
+[advanced]
+log_level = "info"
+print_debug_info = false
 `);
   const mimeTypes = join(directory, 'mime.types');
   await writeFile(mimeTypes, 'types { text/html html; application/javascript js; text/css css; }\n');
@@ -82,6 +85,8 @@ describe('local source configuration derivation', () => {
     expect(subconverter).toContain('allow_public_upload = false');
     expect(subconverter).toContain('listen = "127.0.0.1"');
     expect(subconverter).toContain('port = 15500');
+    expect(subconverter).toContain('log_level = "warn"');
+    expect(subconverter).toContain('print_debug_info = false');
 
     const nginx = await readFile(join(runRoot, 'nginx.conf'), 'utf8');
     expect(nginx).toContain('listen 127.0.0.1:19080;');

@@ -26,8 +26,9 @@
 
 所有 Docker 服务显式使用 `Asia/Shanghai`，标准输出由 Compose 统一轮转。Gateway 只把
 单段短码路由记为 `/:shortKey`，不把真实短码写入访问日志；成功健康检查也不进入访问
-日志。MyUrls 的内部日志策略由独立的 `keleyaa/MyUrls` 镜像版本负责，Subweb 只锁定已经
-发布并验证的镜像摘要。
+日志。SubConverter 通过监督器输出日志：在 Docker 的 `json-file` 或本机日志文件接收文本前，完整 URI 和
+请求来源参数会被移除；受控偏好文件同时阻止旧运行卷重新启用 verbose。MyUrls 的内部日志策略由独立的
+`keleyaa/MyUrls` 镜像版本负责，Subweb 只锁定已经发布并验证的镜像摘要。
 
 ## 数据流与信任边界
 

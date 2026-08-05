@@ -133,6 +133,29 @@ services:
       SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: "false"
     volumes:
       - subconverter-runtime-v1-2-0:/base
+      - type: bind
+        source: ./scripts/subconverter-docker-entrypoint.sh
+        target: /usr/local/bin/subweb-subconverter-entrypoint
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./scripts/subconverter-log-supervisor.sh
+        target: /usr/local/bin/subweb-log-supervisor
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./scripts/subconverter-log-filter.awk
+        target: /usr/local/bin/subweb-log-filter.awk
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /run/subconverter:mode=0700
+    command:
+      - /bin/sh
+      - /usr/local/bin/subweb-subconverter-entrypoint
     healthcheck:
       test:
         - CMD

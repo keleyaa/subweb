@@ -99,9 +99,9 @@ Subscription URLs can contain credentials. They are visible to SubConverter when
 
 订阅链接可能携带凭据。转换时 SubConverter 会看到它，而短链会把完整转换链接保存到 Redis。短码不是加密；获得短码的人通常可以跟随跳转。
 
-Keep `.env`, `.runtime/`, certificates, Redis backups, platform variables, and logs containing sensitive requests out of Git and public issue reports. The browser configuration contains only public URLs and presets; the MyUrls token and Redis password stay server-side.
+Keep `.env`, `.runtime/`, certificates, Redis backups, platform variables, and historical diagnostic logs out of Git and public issue reports. Subweb sanitizes new SubConverter logs, but old containers, backups, and external log platforms may still retain raw requests. The browser configuration contains only public URLs and presets; the MyUrls token and Redis password stay server-side.
 
-请勿将 `.env`、`.runtime/`、证书、Redis 备份、平台变量或包含敏感请求的日志提交到 Git 或公开问题报告。浏览器配置只包含公开 URL 与预设；MyUrls Token 与 Redis 密码仅保留在服务端。
+请勿将 `.env`、`.runtime/`、证书、Redis 备份、平台变量或历史诊断日志提交到 Git 或公开问题报告。Subweb 会脱敏新的 SubConverter 日志，但旧容器、备份和外部日志平台仍可能保留原始请求。浏览器配置只包含公开 URL 与预设；MyUrls Token 与 Redis 密码仅保留在服务端。
 
 Read [Security boundary](docs/security.md) before exposing the stack publicly.
 

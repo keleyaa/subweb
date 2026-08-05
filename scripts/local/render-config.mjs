@@ -134,6 +134,8 @@ const main = async () => {
   subconverterConfig = updateTomlKey(subconverterConfig, 'security', 'allow_public_upload', 'false');
   subconverterConfig = updateTomlKey(subconverterConfig, 'server', 'listen', '"127.0.0.1"');
   subconverterConfig = updateTomlKey(subconverterConfig, 'server', 'port', String(ports.subconverter));
+  subconverterConfig = updateTomlKey(subconverterConfig, 'advanced', 'log_level', '"warn"');
+  subconverterConfig = updateTomlKey(subconverterConfig, 'advanced', 'print_debug_info', 'false');
 
   const snippetsRoot = join(projectRoot, 'nginx/snippets');
   const appSource = await readFile(join(snippetsRoot, 'app-routes.conf.template'), 'utf8');
