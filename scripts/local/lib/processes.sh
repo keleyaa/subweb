@@ -48,7 +48,7 @@ process_command() {
 
 process_start_identity() {
   process_ps_bin=${PROCESS_PS_BIN:-ps}
-  "$process_ps_bin" -p "$1" -o lstart= 2>/dev/null | awk '{$1=$1; print}'
+  TZ=UTC LC_ALL=C "$process_ps_bin" -p "$1" -o lstart= 2>/dev/null | awk '{$1=$1; print}'
 }
 
 process_is_running() {

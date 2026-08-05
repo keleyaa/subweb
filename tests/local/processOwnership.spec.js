@@ -48,7 +48,43 @@ esac
   return fakePs;
 };
 
+const makeTimeZoneAwareFakePs = async (directory) => {
+  const fakePs = join(directory, 'timezone-aware-fake-ps');
+  await writeFile(fakePs, `#!/bin/sh
+case "$*" in
+  *lstart=*) printf 'timezone=%s locale=%s\\n' "\${TZ:-unset}" "\${LC_ALL:-unset}" ;;
+  *) exit 1 ;;
+esac
+`);
+  await chmod(fakePs, 0o700);
+  return fakePs;
+};
+
 describe('local source process ownership', () => {
+  it('uses a UTC process-start identity independent of the caller time zone', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'subweb-process-timezone-'));
+    temporaryDirectories.push(directory);
+    const fakePs = await makeTimeZoneAwareFakePs(directory);
+
+    const result = spawnSync(
+      'sh',
+      ['-c', '. "$1"; process_start_identity 42', 'sh', processLibrary],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          TZ: 'Asia/Shanghai',
+          LC_ALL: 'zh_CN.UTF-8',
+          PROCESS_PS_BIN: fakePs,
+        },
+      },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout.trim()).toBe('timezone=UTC locale=C');
+  });
+
   it('deletes a stale forged record without signaling an unrelated process', async () => {
     const child = spawn('sleep', ['30'], { stdio: 'ignore' });
     children.push(child);

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const operation = (name) => path.join(root, 'scripts/operations', name);
+const operationsVerifier = path.join(root, 'scripts/verify-redis-operations.sh');
 
 describe('Redis operations safety contracts', () => {
   it.each([
@@ -44,5 +45,13 @@ describe('Redis operations safety contracts', () => {
     expect(verify).toContain('--logfile /tmp/redis.log');
     expect(verify).toContain('DBSIZE');
     expect(verify).toContain('readonly');
+  });
+
+  it('pins the MyUrls image from the version lock for the temporary operations stack', () => {
+    const verifier = fs.readFileSync(operationsVerifier, 'utf8');
+
+    expect(verifier).toContain('scripts/verify-version-locks.mjs');
+    expect(verifier).toContain('deploy/versions.lock.json');
+    expect(verifier).toContain("printf 'MYURLS_IMAGE=%s\\n' \"$myurls_test_image\"");
   });
 });

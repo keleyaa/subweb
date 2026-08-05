@@ -9,6 +9,22 @@ command -v openssl >/dev/null 2>&1 || { printf '%s\n' '缺少 openssl' >&2; exit
 
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 project_root=$(CDPATH= cd -- "$script_directory/.." && pwd -P)
+node "$project_root/scripts/verify-version-locks.mjs" >/dev/null \
+  || { printf '%s\n' 'MyUrls 运维测试镜像锁无效' >&2; exit 1; }
+myurls_test_image=$(node - "$project_root/deploy/versions.lock.json" <<'NODE'
+const fs = require('node:fs');
+const lock = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const image = lock.services?.myurls?.image;
+if (
+  !image ||
+  typeof image.reference !== 'string' ||
+  typeof image.digest !== 'string'
+) {
+  process.exit(1);
+}
+process.stdout.write(`${image.reference}@${image.digest}`);
+NODE
+) || { printf '%s\n' '无法读取 MyUrls 运维测试镜像锁' >&2; exit 1; }
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/subweb-redis-operations.XXXXXX")
 project_name=subweb-redis-operations-$(openssl rand -hex 6)
 env_file=$temporary_directory/stack.env
@@ -41,6 +57,7 @@ trap cleanup EXIT HUP INT TERM
   printf 'API_URL=https://api.app.test\n'
   printf 'SHORT_URL=https://app.test/short-api\n'
   printf 'SUBWEB_PORT=%s\n' "$host_port"
+  printf 'MYURLS_IMAGE=%s\n' "$myurls_test_image"
   printf 'MYURLS_API_TOKEN=%s\n' "$token"
   printf 'REDIS_PASSWORD=%s\n' "$password"
 } > "$env_file"
