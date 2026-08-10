@@ -187,10 +187,20 @@ describe('integrated Compose stack', () => {
     ]);
     expect(config.services.subconverter.tmpfs).toContain('/run/subconverter:mode=0700');
     expect(config.services.subconverter.volumes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        source: `${new URL('../../deploy/subconverter/gai.conf', import.meta.url).pathname}`,
+        target: '/etc/gai.conf',
+        read_only: true,
+      }),
       expect.objectContaining({ target: '/usr/local/bin/subweb-subconverter-entrypoint', read_only: true }),
       expect.objectContaining({ target: '/usr/local/bin/subweb-log-supervisor', read_only: true }),
       expect.objectContaining({ target: '/usr/local/bin/subweb-log-filter.awk', read_only: true }),
     ]));
+    const gaiConfiguration = await readFile(
+      new URL('../../deploy/subconverter/gai.conf', import.meta.url),
+      'utf8',
+    );
+    expect(gaiConfiguration).toMatch(/^precedence ::ffff:0:0\/96 100$/m);
   });
 
   it('hardens all services and gates dependents on real health checks', async () => {

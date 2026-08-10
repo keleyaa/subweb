@@ -135,6 +135,14 @@ services:
       SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: "false"
     volumes:
       - subconverter-runtime-v1-2-0:/base
+      # Prefer IPv4 for SubConverter's glibc/libcurl requests when the Docker
+      # host resolves IPv6 but has no functional IPv6 egress route.
+      - type: bind
+        source: ./deploy/subconverter/gai.conf
+        target: /etc/gai.conf
+        read_only: true
+        bind:
+          create_host_path: false
       - type: bind
         source: ./scripts/subconverter-docker-entrypoint.sh
         target: /usr/local/bin/subweb-subconverter-entrypoint

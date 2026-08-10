@@ -44,6 +44,11 @@ SUBCONVERTER_ALLOW_PUBLIC_UPLOAD=false
 规则生成；升级或回滚会自然创建对应版本的新卷，避免旧 `/base` 遮盖新镜像。Docker 不会
 自动删除旧版本卷，确认新版本验证通过后才能手动删除旧卷。
 
+集成 Compose 还会将本目录的 `gai.conf` 只读挂载到 `/etc/gai.conf`。当 Docker 主机能解析 IPv6 地址却
+没有可用 IPv6 默认路由时，这会让 SubConverter 使用的 glibc/libcurl 优先选择 IPv4，减少远程规则集下载
+因 IPv6 黑洞失败的概率。该策略不开放端口、不设置代理，也不修改其他容器；更新后只需重建
+`subconverter` 服务即可生效。
+
 ## 已验证的 HTTP 行为
 
 以下行为均在固定 digest 的 `linux/arm64` 容器上实际确认：

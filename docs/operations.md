@@ -31,6 +31,25 @@ Query、请求体、Authorization、IP 或 User-Agent。Compose 默认跟随 MyU
 日志分享前仍应检查并删除 query、订阅 URL、Token、Redis URL 和真实短码。生产环境不要
 启用 SubConverter verbose 或 `print_debug_info = true`；Compose 每次启动都会强制恢复安全日志配置。
 
+## SubConverter 出站网络
+
+Compose 将项目受控的 `deploy/subconverter/gai.conf` 只读挂载到 SubConverter。该文件让 glibc/libcurl
+在 DNS 同时返回 IPv4 和 IPv6、但 Docker 主机没有可用 IPv6 出站路由时优先选择 IPv4，避免远程规则集因
+IPv6 黑洞出现可恢复重试或拉取失败。它不改变公开端口、DNS、代理、订阅处理规则或其他容器的网络行为。
+
+更新本仓库后，先验证 Compose，再仅重建 SubConverter 即可使配置生效：
+
+```sh
+./scripts/validate-compose.sh
+docker compose up -d --no-build --force-recreate --wait subconverter
+docker compose exec -T subconverter cat /etc/gai.conf
+docker compose logs --tail=100 subconverter
+```
+
+如果主机已经具备稳定 IPv6 出站，该偏好仍可安全保留；它不是禁用 IPv6，也不能修复目标规则源自身不可达、
+DNS 故障或代理配置错误。需要撤销时，移除该 bind mount 后重建 `subconverter`，不要通过关闭 Docker 网络
+或添加不受控的全局代理处理。
+
 若升级前的 SubConverter 日志已经包含真实订阅 URL，先轮换订阅凭据，再只重建该服务以移除当前 Docker
 容器日志。不要添加 `-v`，否则会一并删除 `/base` 运行卷：
 
