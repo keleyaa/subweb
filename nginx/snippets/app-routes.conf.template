@@ -43,11 +43,13 @@ location = /short-api/short {
 @@APP_PROXY_HEADERS@@
   set $myurls_upstream "@@MYURLS_UPSTREAM@@";
   proxy_pass $myurls_upstream/short$is_args$args;
+@@SECURITY_HEADERS@@
 }
 
 location ^~ /short-api/ {
   add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
   return 404;
+@@SECURITY_HEADERS@@
 }
 
 location ~ "^/[A-Za-z0-9_-]{1,64}$" {
@@ -59,6 +61,7 @@ location ~ "^/[A-Za-z0-9_-]{1,64}$" {
   proxy_set_header Authorization "";
   set $myurls_upstream "@@MYURLS_UPSTREAM@@";
   proxy_pass $myurls_upstream$request_uri;
+@@SECURITY_HEADERS@@
 }
 
 location / {

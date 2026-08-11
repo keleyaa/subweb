@@ -31,7 +31,7 @@ health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{
 temporary="$output.tmp.$$"
 trap 'rm -f "$temporary"' EXIT HUP INT TERM
 save_result=$(docker compose exec -T redis sh -eu -c \
-  'redis-cli --no-auth-warning -a "$REDIS_PASSWORD" --raw SAVE') \
+  'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning --raw SAVE') \
   || operations_fail 'Redis SAVE failed.'
 [ "$save_result" = OK ] || operations_fail 'Redis SAVE did not return OK.'
 docker compose cp redis:/data/dump.rdb "$temporary" >/dev/null \

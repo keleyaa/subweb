@@ -78,7 +78,7 @@ curl --noproxy '*' --fail --silent --show-error \
 
 redis_dbsize() {
   docker compose exec -T redis sh -eu -c \
-    'redis-cli --no-auth-warning -a "$REDIS_PASSWORD" DBSIZE' | awk 'NF { value=$1 } END { print value }'
+    'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning DBSIZE' | awk 'NF { value=$1 } END { print value }'
 }
 created_count=$(redis_dbsize)
 [ "$created_count" -gt 0 ] || { printf '%s\n' '短链创建后 Redis 仍为空' >&2; exit 1; }
@@ -87,7 +87,7 @@ created_count=$(redis_dbsize)
 "$script_directory/operations/verify-redis-backup.sh" --backup "$backup_file" >/dev/null
 
 docker compose exec -T redis sh -eu -c \
-  'redis-cli --no-auth-warning -a "$REDIS_PASSWORD" FLUSHDB >/dev/null'
+  'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning FLUSHDB >/dev/null'
 cleared_count=$(redis_dbsize)
 [ "$cleared_count" -eq 0 ] || { printf '%s\n' 'Redis FLUSHDB 后仍有数据' >&2; exit 1; }
 missing_status=$(curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}' \

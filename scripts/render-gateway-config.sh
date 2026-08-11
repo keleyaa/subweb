@@ -214,6 +214,7 @@ rendered_config="$temp_dir/nginx.conf"
 
 cleanup() {
   rm -f "$rendered_config" "$app_expanded" "$api_expanded" "$assembled"
+  rm -f "$app_expanded.security" "$api_expanded.security"
   rmdir "$temp_dir" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -237,7 +238,32 @@ expand_proxy_marker() {
 expand_proxy_marker "$app" '@@APP_PROXY_HEADERS@@' '@@APP_DOMAIN@@' "$app_expanded"
 expand_proxy_marker "$api" '@@API_PROXY_HEADERS@@' '@@API_DOMAIN@@' "$api_expanded"
 
-awk -v security="$security" -v content_type_map="$content_type_map" -v app="$app_expanded" -v api="$api_expanded" '
+# Locations that declare their own add_header no longer inherit the server-level
+# security headers (nginx add_header inheritance rule); expand them in place so
+# proxied and short-link responses carry the same CSP/header set. In direct-tls
+# mode the server-level HSTS line also does not reach these locations, so it is
+# added here; behind-proxy deliberately defers HSTS to the outer TLS entry.
+case "$GATEWAY_MODE" in
+  direct-tls) location_hsts='add_header Strict-Transport-Security "max-age=31536000" always;' ;;
+  *) location_hsts= ;;
+esac
+expand_security_marker() {
+  source_file=$1
+  destination=$2
+  awk -v security="$security" -v hsts="$location_hsts" '
+    index($0, "@@SECURITY_HEADERS@@") {
+      while ((getline line < security) > 0) print line
+      if (hsts != "") print hsts
+      close(security)
+      next
+    }
+    { print }
+  ' "$source_file" > "$destination"
+}
+expand_security_marker "$app_expanded" "$app_expanded.security"
+expand_security_marker "$api_expanded" "$api_expanded.security"
+
+awk -v security="$security" -v content_type_map="$content_type_map" -v app="$app_expanded.security" -v api="$api_expanded.security" '
   function emit(file, line) {
     while ((getline line < file) > 0) print line
     close(file)

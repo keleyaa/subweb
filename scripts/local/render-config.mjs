@@ -146,8 +146,12 @@ const main = async () => {
   const shortStart = appSource.indexOf('location = /short-api/short');
   const fallbackStart = appSource.lastIndexOf('location / {');
   if (shortStart < 0 || fallbackStart <= shortStart) fail('shared APP routes changed unexpectedly');
+  // Locations with their own add_header do not inherit server-level security
+  // headers; expand the marker so short-link responses carry the same set.
+  const securityHeadersIndented = indent(securityHeaders.trimEnd(), 2);
+  const expandSecurityHeaders = (source) => source.replaceAll('@@SECURITY_HEADERS@@', () => securityHeadersIndented);
   let sharedShortRoutes = appSource.slice(shortStart, fallbackStart).trim();
-  sharedShortRoutes = sharedShortRoutes
+  sharedShortRoutes = expandSecurityHeaders(sharedShortRoutes)
     .replaceAll('@@APP_PROXY_HEADERS@@', () => renderProxyHeaders(proxySource, `127.0.0.1:${ports.app}`).trimEnd())
     .replaceAll('@@MYURLS_MAX_BODY_BYTES@@', '1048576')
     .replaceAll('@@MYURLS_API_TOKEN@@', myurlsToken)
@@ -170,9 +174,11 @@ location / {
 ${indent(renderProxyHeaders(proxySource, `127.0.0.1:${ports.app}`).trimEnd(), 2)}
   proxy_pass http://127.0.0.1:${ports.vite}$request_uri;
 }`;
-  const localApiRoutes = apiSource
-    .replaceAll('@@API_PROXY_HEADERS@@', () => renderProxyHeaders(proxySource, `127.0.0.1:${ports.api}`).trimEnd())
-    .replaceAll('@@SUBCONVERTER_UPSTREAM@@', `http://127.0.0.1:${ports.subconverter}`);
+  const localApiRoutes = expandSecurityHeaders(
+    apiSource
+      .replaceAll('@@API_PROXY_HEADERS@@', () => renderProxyHeaders(proxySource, `127.0.0.1:${ports.api}`).trimEnd())
+      .replaceAll('@@SUBCONVERTER_UPSTREAM@@', `http://127.0.0.1:${ports.subconverter}`),
+  );
 
   let nginxConfig = await readFile(join(projectRoot, 'deploy/local/nginx.conf.template'), 'utf8');
   const replacements = {

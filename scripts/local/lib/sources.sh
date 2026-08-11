@@ -58,6 +58,8 @@ ensure_pinned_source() {
   case "$service_name" in *[!a-z0-9-]*|'') source_error 'invalid source service name'; return 1 ;; esac
   case "$source_commit" in *[!0-9a-f]*|'') source_error 'invalid source commit'; return 1 ;; esac
   [ "${#source_commit}" -eq 40 ] || { source_error 'source commit must be a full SHA'; return 1; }
+  source_repository=$(github_repository_from_url "$source_url") \
+    || { source_error 'source URL must be a supported GitHub repository URL'; return 1; }
 
   if [ -n "$provided_checkout" ]; then
     case "$provided_checkout" in /*) ;; *) source_error 'provided source checkout must be absolute'; return 1 ;; esac
@@ -73,7 +75,7 @@ ensure_pinned_source() {
   if [ ! -e "$checkout/.git" ]; then
     [ ! -e "$checkout" ] || { source_error "incomplete source cache already exists: $checkout"; return 1; }
     temporary_checkout=$(mktemp -d "$service_cache/.clone.XXXXXX") || return 1
-    if ! git clone --no-checkout "$source_url" "$temporary_checkout" \
+    if ! git clone --no-checkout -- "$source_url" "$temporary_checkout" \
       || ! git -C "$temporary_checkout" checkout --detach "$source_commit"; then
       rm -rf "$temporary_checkout"
       source_error "cannot clone locked source for $service_name"

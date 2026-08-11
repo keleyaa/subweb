@@ -51,6 +51,17 @@ child_status=$?
 set -e
 child_pid=
 
+# Drain the filter with a bounded grace period: a grandchild that inherited the
+# FIFO write end would otherwise keep awk alive forever and block this wait.
+filter_wait_seconds=15
+elapsed=0
+while kill -0 "$filter_pid" 2>/dev/null && [ "$elapsed" -lt "$filter_wait_seconds" ]; do
+  sleep 1
+  elapsed=$((elapsed + 1))
+done
+if kill -0 "$filter_pid" 2>/dev/null; then
+  kill -TERM "$filter_pid" 2>/dev/null || true
+fi
 set +e
 wait "$filter_pid"
 set -e
