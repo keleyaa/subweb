@@ -9,11 +9,11 @@ describe('Docker runtime contract', () => {
     const dockerfile = await readFile(rootFile('Dockerfile'), 'utf8');
     const finalStage = dockerfile.slice(dockerfile.lastIndexOf('FROM '));
 
-    expect(dockerfile).toMatch(/^FROM node:24-alpine@sha256:[0-9a-f]{64} AS build/m);
-    expect(finalStage).toMatch(/^FROM nginxinc\/nginx-unprivileged:1\.30\.4-alpine@sha256:[0-9a-f]{64}/m);
+    expect(dockerfile).toMatch(/^FROM node:alpine AS build/m);
+    expect(finalStage).toMatch(/^FROM nginxinc\/nginx-unprivileged:alpine/m);
     expect(finalStage).toContain('org.opencontainers.image.source="https://github.com/keleyaa/subweb"');
-    expect(finalStage).toContain('RUN apk add --no-cache openssl=3.5.7-r0');
-    expect(finalStage).toMatch(/tzdata=[^\s\\]+/u);
+    expect(finalStage).toContain('RUN apk add --no-cache openssl tzdata');
+    expect(finalStage).toContain('tzdata');
     expect(finalStage).toContain('ENV TZ=Asia/Shanghai');
     expect(finalStage).toContain('EXPOSE 8080 8443');
     expect(finalStage).toContain('HEALTHCHECK');

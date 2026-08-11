@@ -1,9 +1,10 @@
 # SubConverter-Extended 容器契约基线
 
-本目录记录 Subweb 集成实际使用并已验证的最小容器契约。版本和 digest 的唯一机器可读
-来源是 [`../versions.lock.json`](../versions.lock.json)，部署文件不得改用浮动标签。
+本目录记录 Subweb 集成实际使用并已验证的容器契约与安全配置。生产 Compose 跟随
+`ghcr.io/aethersailor/subconverter-extended:latest` 浮动标签；[`../versions.lock.json`](../versions.lock.json)
+保留集成测试与回滚使用的已验证基线，并作为 `verify:locks` 校验的机器可读依据。
 
-## 固定产物
+## 已验证基线（集成测试使用）
 
 - 正式版本：`v1.2.0`
 - 源码提交：`4db6a63f078f27da2cfb6cc90d47eb2dbd80c1cd`
@@ -33,16 +34,17 @@ SUBCONVERTER_ALLOW_PUBLIC_UPLOAD=false
 `pref.example.toml` 在 `/base` 中重新派生 `pref.subweb.toml`，强制 `log_level = "warn"` 与
 `print_debug_info = false`，避免旧命名卷重新启用详细请求日志。SubConverter 标准输出还会在进入 Docker
 日志驱动前经过项目过滤器，完整 URI、编码 `url`/`link` 参数和 Authorization 值不会写入容器日志。
-实际容器检查确认，固定镜像仍需以 root 启动，但根文件系统可以保持只读。版本绑定命名卷
-`subconverter-runtime-v1-2-0` 挂到 `/base`
+实际容器检查确认，固定镜像仍需以 root 启动，但根文件系统可以保持只读。命名卷
+`subconverter-runtime` 挂到 `/base`
 时，Docker 首次挂载会把镜像中完整的 `/base` 复制进空卷，启动脚本可在其中生成
 `pref.toml`，同时不会开放宿主机端口或放宽 `cap_drop: ALL`、
 `no-new-privileges:true`。
 
-`subconverter-runtime-v1-2-0` 只是可重建的镜像运行时副本，不是 Redis 那类业务持久数据，
-部署不得依赖其中保存业务状态。卷名由锁文件版本按“转小写、连续非字母数字替换为单个连字符”
-规则生成；升级或回滚会自然创建对应版本的新卷，避免旧 `/base` 遮盖新镜像。Docker 不会
-自动删除旧版本卷，确认新版本验证通过后才能手动删除旧卷。
+`subconverter-runtime` 只是可重建的镜像运行时副本，不是 Redis 那类业务持久数据，
+部署不得依赖其中保存业务状态。跟随 `latest` 升级镜像后，Docker 不会把新镜像的
+`/base` 复制进已有卷，因此升级后需先删除旧卷（如 `docker compose down` 后
+`docker volume rm subweb_subconverter-runtime`）让新镜像重新填充 `/base`；确认新版本
+验证通过后再执行，并保留旧卷直到确认无需回滚。
 
 集成 Compose 还会将本目录的 `gai.conf` 只读挂载到 `/etc/gai.conf`。当 Docker 主机能解析 IPv6 地址却
 没有可用 IPv6 默认路由时，这会让 SubConverter 使用的 glibc/libcurl 优先选择 IPv4，减少远程规则集下载

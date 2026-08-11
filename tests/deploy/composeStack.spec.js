@@ -6,13 +6,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const root = new URL('../../', import.meta.url);
 const composePath = new URL('compose.yaml', root).pathname;
-const lockPath = new URL('deploy/versions.lock.json', root);
-const locked = JSON.parse(await readFile(lockPath, 'utf8')).services;
-const imageFor = (name) => `${locked[name].image.reference}@${locked[name].image.digest}`;
+const latestRedisImage = 'docker.io/library/redis:latest';
 const latestMyurlsImage = 'ghcr.io/keleyaa/myurls:latest';
-const runtimeVolumeFor = (tag) =>
-  `subconverter-runtime-${tag.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
-const subconverterRuntimeVolume = runtimeVolumeFor(locked.subconverter.source.tag);
+const latestSubconverterImage = 'ghcr.io/aethersailor/subconverter-extended:latest';
+const subconverterRuntimeVolume = 'subconverter-runtime';
 const testSecret = '0123456789abcdef'.repeat(4);
 
 let fixtureDirectory;
@@ -128,12 +125,12 @@ describe('integrated Compose stack', () => {
     expect(gatewayTls).toContain('target: /run/tls/privkey.pem');
   });
 
-  it('uses locked base images, a floating MyUrls image, and a named Redis data volume', async () => {
+  it('uses floating latest images for all services and a named Redis data volume', async () => {
     const config = await renderProfile('behind-proxy');
     expect(config.services['gateway-http'].image).toBe('docker.io/keleyaa/subweb:sha-2bf1a9f');
-    expect(config.services.redis.image).toBe(imageFor('redis'));
+    expect(config.services.redis.image).toBe(latestRedisImage);
     expect(config.services.myurls.image).toBe(latestMyurlsImage);
-    expect(config.services.subconverter.image).toBe(imageFor('subconverter'));
+    expect(config.services.subconverter.image).toBe(latestSubconverterImage);
     expect(config.volumes['redis-data']).toBeTruthy();
     expect(config.services.redis.volumes).toContainEqual(
       expect.objectContaining({ source: 'redis-data', target: '/data', type: 'volume' }),

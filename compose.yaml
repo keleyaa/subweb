@@ -63,7 +63,7 @@ x-gateway-common: &gateway-common
 services:
   redis:
     <<: *runtime-security
-    image: "docker.io/library/redis:8.10.0-alpine@sha256:5cca2f8a01ef2264c52dac86f14ec6a5abe973a93331e1b62522cfc5e63e4691"
+    image: "docker.io/library/redis:latest"
     user: "999:1000"
     environment:
       <<: *runtime-environment
@@ -130,14 +130,14 @@ services:
     # The pinned upstream process still requires root, while a runtime volume
     # makes /base writable without making the root filesystem writable.
     <<: *runtime-security
-    image: "ghcr.io/aethersailor/subconverter-extended:v1.2.0@sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f"
+    image: "ghcr.io/aethersailor/subconverter-extended:latest"
     environment:
       <<: *runtime-environment
       MANAGED_CONFIG_PREFIX: "${API_URL:?Set API_URL with scripts/configure.sh}"
       SUBCONVERTER_SECURITY_PROFILE: public
       SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: "false"
     volumes:
-      - subconverter-runtime-v1-2-0:/base
+      - subconverter-runtime:/base
       # Prefer IPv4 for SubConverter's glibc/libcurl requests when the Docker
       # host resolves IPv6 but has no functional IPv6 egress route.
       - type: bind
@@ -224,4 +224,4 @@ services:
 
 volumes:
   redis-data:
-  subconverter-runtime-v1-2-0:
+  subconverter-runtime:

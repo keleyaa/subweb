@@ -1,4 +1,4 @@
-FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS build
+FROM node:alpine AS build
 
 WORKDIR /app
 COPY package*.json ./
@@ -6,7 +6,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.30.4-alpine@sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49
+FROM nginxinc/nginx-unprivileged:alpine
 
 LABEL org.opencontainers.image.title="Subweb" \
   org.opencontainers.image.description="A minimal frontend for subscription conversion backends" \
@@ -14,7 +14,7 @@ LABEL org.opencontainers.image.title="Subweb" \
   org.opencontainers.image.licenses="GPL-3.0-only"
 
 USER root
-RUN apk add --no-cache openssl=3.5.7-r0 tzdata=2026c-r0 \
+RUN apk add --no-cache openssl tzdata \
   && rm -f /etc/nginx/conf.d/default.conf
 
 ENV TZ=Asia/Shanghai
