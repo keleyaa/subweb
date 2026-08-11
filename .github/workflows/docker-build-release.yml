@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -20,6 +21,11 @@ env:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      # Activate the real-nginx Content-Type gate and the Docker integration
+      # wrappers that are otherwise skipIf-gated out of every vitest run.
+      RUN_NGINX_GATEWAY_TESTS: "1"
+      RUN_DOCKER_INTEGRATION: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -87,6 +93,9 @@ jobs:
 
   release:
     needs: quality
+    # PRs and manual runs on feature branches must not push images: quality
+    # gates run everywhere, but publishing stays reserved for main.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
