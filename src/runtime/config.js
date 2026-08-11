@@ -1,6 +1,10 @@
 import { isValidHttpUrl } from '@/features/url/httpUrl';
 import { getGithubRepositoryLabel } from '@/features/site/github';
 
+// Defaults point at the author's public endpoints and are only used when a
+// deployment provides no runtime config. Docker deployments always override
+// them via start.sh (API_URL/SHORT_URL); `npm run dev` without configuration
+// sends subscription content to these defaults.
 export const DEFAULT_RUNTIME_CONFIG = {
   apiUrl: 'https://api.ml1.one',
   shortUrl: 'https://ml1.one',

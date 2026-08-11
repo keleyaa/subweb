@@ -112,6 +112,7 @@ describe('container runtime configuration', () => {
     await copyFile(new URL('../../public/conf/config.js', import.meta.url), template);
     await writeFile(join(siteRoot, 'index.html'), '<link rel="canonical" href="https://sub.ml1.one/" />');
     await writeFile(join(siteRoot, 'sitemap.xml'), '<loc>https://sub.ml1.one/</loc>');
+    await writeFile(join(siteRoot, 'robots.txt'), 'Sitemap: https://sub.ml1.one/sitemap.xml\n');
     await writeFile(nginx, '#!/bin/sh\nexit 0\n');
     await writeFile(renderer, '#!/bin/sh\nexit 0\n');
     await Promise.all([nginx, renderer].map((file) => chmod(file, 0o755)));
@@ -134,5 +135,7 @@ describe('container runtime configuration', () => {
     expect(result).toMatchObject({ code: 0 });
     await expect(readFile(join(siteRoot, 'index.html'), 'utf8')).resolves.toContain('https://self-hosted.example/');
     await expect(readFile(join(siteRoot, 'sitemap.xml'), 'utf8')).resolves.toContain('https://self-hosted.example/');
+    await expect(readFile(join(siteRoot, 'robots.txt'), 'utf8')).resolves.toContain('https://self-hosted.example/sitemap.xml');
+    await expect(readFile(join(siteRoot, 'robots.txt'), 'utf8')).resolves.not.toContain('sub.ml1.one');
   });
 });

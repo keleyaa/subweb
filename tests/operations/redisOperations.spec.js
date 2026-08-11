@@ -22,8 +22,13 @@ describe('Redis operations safety contracts', () => {
   it('keeps secrets out of host command arguments and requires explicit restore confirmation', () => {
     const backup = fs.readFileSync(operation('backup-redis.sh'), 'utf8');
     const restore = fs.readFileSync(operation('restore-redis.sh'), 'utf8');
-    expect(backup).toContain("redis-cli --no-auth-warning -a \"$REDIS_PASSWORD\"");
+    const verifier = fs.readFileSync(operationsVerifier, 'utf8');
+    expect(backup).toContain('REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning --raw SAVE');
+    expect(backup).not.toContain('-a "$REDIS_PASSWORD"');
     expect(backup).not.toMatch(/docker compose exec[^\n]*REDIS_PASSWORD/u);
+    expect(verifier).toContain('REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning DBSIZE');
+    expect(verifier).toContain('REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning FLUSHDB');
+    expect(verifier).not.toContain('-a "$REDIS_PASSWORD"');
     expect(restore).toContain('--confirm-stop-writes');
     expect(restore).toContain('Pre-restore backup retained');
     expect(restore).toContain('install -m 0644 "$snapshot" "$restore_staging"');

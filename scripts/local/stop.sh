@@ -25,6 +25,7 @@ if [ -z "$run_root" ] && [ -f "$active_run_file" ] && [ ! -L "$active_run_file" 
   IFS= read -r run_root < "$active_run_file" || true
 fi
 case "$run_root" in "$runtime_root"/runs/*) ;; *) run_root= ;; esac
+case "$run_root" in "$runtime_root"/runs/*/*) run_root= ;; esac
 
 stop_failed=0
 for service in nginx vite subconverter myurls redis; do

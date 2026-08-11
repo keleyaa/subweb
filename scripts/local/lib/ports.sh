@@ -50,7 +50,7 @@ assert_port_available() {
   if port_has_listener "$port"; then
     port_error "$variable_name port $port is already in use"
     if command -v lsof >/dev/null 2>&1; then
-      lsof -nP -iTCP:"$port" -sTCP:LISTEN >&2 2>/dev/null || true
+      lsof -nP -iTCP:"$port" -sTCP:LISTEN >&2 || true
     fi
     return 1
   else

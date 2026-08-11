@@ -121,7 +121,10 @@ if redis-server --help 2>&1 | grep -q -- '--test-memory'; then
 fi
 
 started_services=
+rollback_done=0
 rollback_new_services() {
+  [ "$rollback_done" -eq 0 ] || return 0
+  rollback_done=1
   for service in $started_services; do
     rm -f "$runtime_root/pids/.$service.pid.tmp.$$"
     stop_owned_process "$run_root/pids/$service.pid" || true

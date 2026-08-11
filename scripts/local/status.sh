@@ -35,11 +35,14 @@ read_state_value() {
 
 run_root=$(read_state_value RUN_ROOT 2>/dev/null || true)
 case "$run_root" in "$runtime_root"/runs/*) ;; *) run_root= ;; esac
+case "$run_root" in "$runtime_root"/runs/*/*) run_root= ;; esac
 
 process_owned_and_running() {
   service=$1
   record_file=$runtime_root/pids/$service.pid
-  [ -f "$record_file" ] && [ ! -L "$record_file" ] || return 1
+  [ -f "$record_file" ] || return 1
+  # A symlinked record is a tamper signal: report stale, not stopped.
+  [ ! -L "$record_file" ] || return 2
   pid=$(read_process_record_field "$record_file" PID 2>/dev/null || true)
   recorded_service=$(read_process_record_field "$record_file" SERVICE 2>/dev/null || true)
   recorded_run_path=$(read_process_record_field "$record_file" RUN_PATH 2>/dev/null || true)

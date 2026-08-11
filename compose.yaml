@@ -95,6 +95,9 @@ services:
 
   myurls:
     <<: *runtime-security
+    # Follows MyUrls stable releases by default (documented supply-chain
+    # exception, see docs/security.md); pin MYURLS_IMAGE to an immutable
+    # tag/digest for reproducible production rollbacks.
     image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:latest}"
     user: "65532:65532"
     environment:

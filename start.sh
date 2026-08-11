@@ -79,7 +79,7 @@ fi
 if [ -n "${APP_DOMAIN:-}" ] && [ -w "$site_root" ]; then
   public_scheme=${PUBLIC_SCHEME:-https}
   public_origin="${public_scheme}://${APP_DOMAIN}"
-  for public_file in "$site_root/index.html" "$site_root/sitemap.xml"; do
+  for public_file in "$site_root/index.html" "$site_root/sitemap.xml" "$site_root/robots.txt"; do
     if [ -f "$public_file" ]; then
       replace_file_value "$public_file" 'https://sub.ml1.one' "$public_origin"
     fi

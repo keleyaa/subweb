@@ -73,11 +73,17 @@ for occupied_port in "$vite_port" "$subconverter_port" "$myurls_port" "$redis_po
   node - "$occupied_port" <<'NODE' &
 const net = require('node:net');
 const server = net.createServer();
+server.once('error', () => process.exit(1));
 server.listen(Number(process.argv[2]), '127.0.0.1');
 setInterval(() => {}, 1000);
 NODE
   listener_pid=$!
   node -e 'setTimeout(() => {}, 500)'
+  if ! kill -0 "$listener_pid" 2>/dev/null; then
+    kill -TERM "$listener_pid" 2>/dev/null || true
+    wait "$listener_pid" 2>/dev/null || true
+    fail "端口 $occupied_port 无法建立测试监听器（可能已被外部进程占用）"
+  fi
   if "$project_root/scripts/local/start.sh" > "$verification_root/occupied.out" 2>&1; then
     kill -TERM "$listener_pid" 2>/dev/null || true
     wait "$listener_pid" 2>/dev/null || true

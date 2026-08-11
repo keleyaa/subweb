@@ -4,7 +4,7 @@
       <span class="footer-bar__mark" aria-hidden="true">GH</span>
       <span class="footer-bar__copy">
         <strong>{{ repositoryLabel }}</strong>
-        <small>Vue 3 · MIT</small>
+        <small>Vue 3 · GPL-3.0</small>
       </span>
       <span class="footer-bar__external" aria-hidden="true">↗</span>
     </a>

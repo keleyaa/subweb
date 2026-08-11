@@ -27,7 +27,8 @@ mkdir -p "$runtime_backup_directory"
 chmod 0700 "$runtime_backup_directory"
 rollback_backup=$runtime_backup_directory/pre-restore-$(date -u +%Y%m%dT%H%M%SZ).rdb
 "$operations_script_directory/backup-redis.sh" --output "$rollback_backup"
-restore_staging=$runtime_backup_directory/.restore-staging.$$
+restore_staging=$(mktemp "$runtime_backup_directory/.restore-staging.XXXXXX") \
+  || operations_fail 'unable to create restore staging file'
 trap 'rm -f "$restore_staging"' EXIT HUP INT TERM
 
 cd "$operations_project_root"
@@ -36,7 +37,7 @@ docker compose stop redis >/dev/null
 
 install_snapshot() {
   snapshot=$1
-  install -m 0644 "$snapshot" "$restore_staging"
+  install -m 0644 "$snapshot" "$restore_staging" || return 1
   if docker compose run --rm --no-deps \
     -v "$restore_staging:/restore.rdb:ro" \
     --entrypoint sh redis -eu -c \

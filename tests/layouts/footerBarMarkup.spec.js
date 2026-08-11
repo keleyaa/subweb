@@ -14,7 +14,7 @@ describe('FooterBar source contract', () => {
     expect(source).toContain('rel="noopener noreferrer"');
     expect(source).toContain('aria-label="在新窗口打开 GitHub 项目"');
     expect(source).toContain('<strong>{{ repositoryLabel }}</strong>');
-    expect(source).toContain('<small>Vue 3 · MIT</small>');
+    expect(source).toContain('<small>Vue 3 · GPL-3.0</small>');
     expect(source).toContain('class="footer-bar__external"');
     expect(source).toContain("import { getGithubMenuItem, getGithubRepositoryLabel } from '@/features/site/github';");
     expect(source).toContain('menuItems: Array.isArray(window.config?.menuItem) ? window.config.menuItem : []');

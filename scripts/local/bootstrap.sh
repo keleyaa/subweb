@@ -129,8 +129,18 @@ prepared_subconverter_revision=
 if [ "$prepared_subconverter_revision" != "$subconverter_commit" ]; then
   rm -rf "$subconverter_work_source"
   mkdir -p "$subconverter_work_source"
-  git -C "$subconverter_source" archive "$subconverter_commit" \
-    | tar -x -C "$subconverter_work_source"
+  # Never pipe git archive into tar: macOS BSD tar reports success on empty
+  # input, which would mask a failed archive and leave a broken source tree.
+  subconverter_archive=$runtime_root/build/.subconverter-archive.$$
+  trap 'rm -f "$subconverter_archive"' EXIT HUP INT TERM
+  if ! git -C "$subconverter_source" archive "$subconverter_commit" > "$subconverter_archive" \
+    || ! tar -x -f "$subconverter_archive" -C "$subconverter_work_source"; then
+    rm -f "$subconverter_archive"
+    local_error '无法解包锁定版本的 SubConverter 源码'
+    exit 1
+  fi
+  rm -f "$subconverter_archive"
+  trap - EXIT HUP INT TERM
   printf '%s\n' "$subconverter_commit" > "$subconverter_source_marker"
 fi
 
@@ -150,7 +160,8 @@ if [ ! -d "$project_root/node_modules" ] || [ "$installed_digest" != "$lock_dige
 fi
 
 myurls_binary=$runtime_root/bin/myurls
-myurls_binary_temp=$runtime_root/bin/.myurls.$$
+myurls_binary_temp=$(mktemp "$runtime_root/bin/.myurls.XXXXXX") \
+  || { local_error '无法创建 MyUrls 临时产物路径'; exit 1; }
 trap 'rm -f "$myurls_binary_temp"' EXIT HUP INT TERM
 (cd "$myurls_source" && go build -trimpath -o "$myurls_binary_temp" .)
 chmod 0700 "$myurls_binary_temp"
@@ -193,7 +204,7 @@ if [ "$installed_libcron_revision" != "$libcron_commit" ] \
   rm -rf "$libcron_build"
   cmake -S "$libcron_source" -B "$libcron_build" -DCMAKE_BUILD_TYPE=Release
   cmake --build "$libcron_build" --config Release --target libcron --parallel "$build_jobs"
-  libcron_library=$(find "$libcron_build" "$libcron_source/libcron/out" -type f -name liblibcron.a -print | sed -n '1p')
+  libcron_library=$(find "$libcron_build" "$libcron_source/libcron/out" -type f -name liblibcron.a -print 2>/dev/null | sed -n '1p')
   [ -n "$libcron_library" ] || { local_error 'libcron build did not produce liblibcron.a'; exit 1; }
   install -m 0644 "$libcron_library" "$subconverter_dependency_prefix/lib/liblibcron.a"
   mkdir -p "$subconverter_dependency_prefix/include/libcron" "$subconverter_dependency_prefix/include/date"
