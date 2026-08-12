@@ -307,6 +307,16 @@ NODE
   printf '%s\n' 'Redis 重启持久性=通过'
 
   assert_internal_ports_private
+
+  # 漂移检测工具自检：本栈卷为新建，镜像与运行卷内容必然一致，应返回 0。
+  # 该工具同时暴露 "latest 镜像升级后运行卷沿用旧 /base" 的运维风险。
+  COMPOSE_FILE=$compose_file COMPOSE_ENV_FILES=$env_file COMPOSE_PROJECT_NAME=$project_name \
+    "$repository_root/scripts/verify-subconverter-runtime.sh" \
+    > "$temporary_directory/runtime-drift.out" \
+    || fail 'SubConverter runtime drift check failed on a fresh stack'
+  grep -q 'runtime volume matches the resolved image' "$temporary_directory/runtime-drift.out" \
+    || fail 'SubConverter runtime drift check produced unexpected output'
+  printf '%s\n' 'SubConverter 运行卷漂移检测=通过'
 }
 
 scan_logs() {
