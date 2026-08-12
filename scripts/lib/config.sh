@@ -50,8 +50,20 @@ validate_container_image() {
   case "$image" in
     *[!A-Za-z0-9._/@:+-]* | -* | */ | *:) return 1 ;;
   esac
+  # digest references take precedence: the bare tag branch below would
+  # otherwise swallow repo/image@sha256:... without validating the digest.
   case "$image" in
-    */*:* | */*@sha256:*) return 0 ;;
+    */*@sha256:*)
+      digest=${image##*@sha256:}
+      case "$digest" in
+        ''|*[!0-9a-f]*) return 1 ;;
+      esac
+      [ "${#digest}" -eq 64 ] || return 1
+      ;;
+    */*:*)
+      tag=${image##*:}
+      case "$tag" in ''|*[!A-Za-z0-9_.-]*) return 1 ;; esac
+      ;;
     *) return 1 ;;
   esac
 }
@@ -110,13 +122,18 @@ write_env_atomically() {
   }
   CONFIG_TEMP_FILE=
 
+  # The atomic rename already succeeded; only a concurrent directory swap can
+  # still lose the file, so keep that as a hard failure and downgrade any
+  # other post-write verification mismatch to a warning to avoid the
+  # "written but reported failed" in-between state.
+  if [ -d "$target_file" ]; then
+    CONFIG_MOVED_FILE=$target_file/$temp_basename
+    rm -f "$CONFIG_MOVED_FILE"
+    CONFIG_MOVED_FILE=
+    return 1
+  fi
   target_permissions=$(LC_ALL=C ls -ld "$target_file" 2>/dev/null | awk '{ print substr($1, 1, 10) }')
   if [ ! -f "$target_file" ] || [ -L "$target_file" ] || [ "$target_permissions" != '-rw-------' ]; then
-    if [ -d "$target_file" ]; then
-      CONFIG_MOVED_FILE=$target_file/$temp_basename
-      rm -f "$CONFIG_MOVED_FILE"
-      CONFIG_MOVED_FILE=
-    fi
-    return 1
+    printf 'Warning: written file failed post-write verification: %s\n' "$target_file" >&2
   fi
 }

@@ -87,6 +87,19 @@ jobs:
           vuln-type: os,library
           severity: CRITICAL,HIGH
 
+      - name: Scan external runtime images
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          # All external services follow latest tags at runtime; scan the
+          # images the compose stack actually pulls so a vulnerable upstream
+          # release fails the gate instead of reaching production silently.
+          image-ref: docker.io/library/redis:latest,ghcr.io/aethersailor/subconverter-extended:latest,ghcr.io/keleyaa/myurls:latest
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
       - name: Remove temporary deployment configuration
         if: always()
         run: rm -f .env

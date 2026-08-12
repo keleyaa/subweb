@@ -87,7 +87,9 @@ const renderProxyHeaders = (source, publicHost) => source
 const indent = (source, spaces) => source.split('\n').map((line) => (line ? `${' '.repeat(spaces)}${line}` : line)).join('\n');
 
 const writePrivateAtomically = async (path, contents) => {
-  const temporaryPath = `${path}.tmp.${process.pid}`;
+  // Random suffix avoids a stale same-PID temp file from a crashed run making
+  // the exclusive-create flag fail with EEXIST.
+  const temporaryPath = `${path}.tmp.${process.pid}.${Math.random().toString(36).slice(2, 10)}`;
   try {
     await writeFile(temporaryPath, contents, { mode: 0o600, flag: 'wx' });
     await rename(temporaryPath, path);
