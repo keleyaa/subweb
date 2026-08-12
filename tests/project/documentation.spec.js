@@ -255,4 +255,31 @@ describe('documentation contract', () => {
       expect(hasEmbeddedReadmeImage(readme, asset)).toBe(true);
     }
   });
+
+  it('keeps the follow-the-latest image policy out of stale pinning language', () => {
+    // 自 follow-the-latest 策略（commit 59da405）生效后，这些文档不得再出现
+    // 固定镜像/唯一 latest/旧版本卷名等过时表述；docs/validation 下的历史
+    // 验证记录允许保留时点注记，不列入本断言。
+    const policyDocuments = [
+      'README.md',
+      'docs/deployment-docker.md',
+      'docs/architecture.md',
+      'docs/maintenance.md',
+      'docs/operations.md',
+      'docs/security.md',
+      'docs/third-party-sources.md',
+      'deploy/subconverter/README.md',
+      'deploy/subconverter/config/README.md',
+    ];
+    for (const file of policyDocuments) {
+      const source = read(file);
+      expect(source, file).not.toContain('使用锁定镜像');
+      expect(source, file).not.toContain('固定镜像摘要');
+      expect(source, file).not.toContain('固定 digest');
+      expect(source, file).not.toContain('唯一允许');
+      expect(source, file).not.toContain('禁止使用 `latest`');
+      expect(source, file).not.toContain('subconverter-runtime-v1-2-0');
+      expect(source, file).not.toContain('卷名绑定锁文件版本');
+    }
+  });
 });

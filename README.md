@@ -24,8 +24,8 @@ Subconverter Web 是 Subweb 的一体化自托管方案，将订阅转换、短�
 - **一个受控网关。** 网关按 Host 路由，并在服务端注入 MyUrls Token，浏览器不会取得该 Token。
 - **Internal services.** SubConverter-Extended performs conversion, MyUrls creates and resolves short links, and Redis is the only business persistence layer.
 - **内部服务。** SubConverter-Extended 负责转换，MyUrls 创建和解析短链，Redis 是唯一业务持久层。
-- **Follow-the-latest update policy.** All external images (gateway base, Redis, SubConverter-Extended, MyUrls) follow their published `latest` tags; the version lock keeps verified baselines for integration testing and rollback. Preserve Redis data for recovery, and pin an explicit image override only for a controlled rollback.
-- **跟随最新版更新策略。** 所有外部镜像（网关基础镜像、Redis、SubConverter-Extended、MyUrls）默认跟随其已发布的稳定 `latest`；版本锁保留集成测试与回滚的已验证基线。恢复时重点保留 Redis 数据；需要受控回滚时再显式覆盖镜像。
+- **Follow-the-latest update policy.** All external images (gateway base, Redis, SubConverter-Extended, MyUrls) follow their published `latest` tags; the version lock keeps verified baselines for the MyUrls integration tests and rollback references. Preserve Redis data for recovery, and pin an explicit image override only for a controlled rollback.
+- **跟随最新版更新策略。** 所有外部镜像（网关基础镜像、Redis、SubConverter-Extended、MyUrls）默认跟随其已发布的稳定 `latest`；版本锁保留 MyUrls 集成测试基线与各服务回滚参考。恢复时重点保留 Redis 数据；需要受控回滚时再显式覆盖镜像。
 
 ## Service Boundary / 服务边界
 

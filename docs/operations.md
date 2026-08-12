@@ -125,7 +125,9 @@ npm run verify:locks
 ./scripts/validate-compose.sh
 ```
 
-记录 Git commit、Gateway/SubConverter/Redis digest、实际解析的 MyUrls digest、Compose profile 和已验证 Redis 备份。升级后检查健康、两个 Host、转换、短链创建、旧短码、日志脱敏和内部端口。失败时切回原 commit/digest；应用组件可重建，Redis 数据按已演练备份恢复。
+记录 Git commit、实际解析的各服务镜像 digest（`docker compose images`）、Compose profile 和已验证 Redis 备份。升级后检查健康、两个 Host、转换、短链创建、旧短码、日志脱敏和内部端口。失败时切回原 commit，必要时在 `.env` 以 `SUBWEB_IMAGE`/`MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE` 的 digest 覆盖镜像回滚；应用组件可重建，Redis 数据按已演练备份恢复。
+
+SubConverter 镜像更新后必须重建运行时卷 `subconverter-runtime`（`docker compose down` 后 `docker volume rm subweb_subconverter-runtime` 再 `up -d --wait`）——Docker 只对空卷做 copy-up，跳过此步会静默沿用旧 `/base` 模板。`redis-data` 是业务数据，禁止以任何方式删除。
 
 比较两个锁文件时先运行预检。Redis 主版本变化必须提供已验证备份和显式确认：
 
@@ -137,7 +139,7 @@ npm run verify:locks
   --confirm-redis-major
 ```
 
-MyUrls 与 SubConverter 属于独立上游：先在各自边界验证，再更新本仓库锁文件。MyUrls 默认 `latest` 只应由其完整稳定版本发行推进；未发布的本地 commit 不能当作远端可拉取镜像。需要冻结 MyUrls 时使用 `.env` 的 `MYURLS_IMAGE` 覆盖。
+MyUrls 与 SubConverter 属于独立上游：先在各自边界验证，再更新本仓库锁文件的已验证基线。所有运行时镜像默认跟随各自 `latest`；未发布的本地 commit 不能当作远端可拉取镜像。需要冻结某个镜像时使用 `.env` 的 `MYURLS_IMAGE`/`SUBWEB_IMAGE` 覆盖。
 
 ## 常见故障
 

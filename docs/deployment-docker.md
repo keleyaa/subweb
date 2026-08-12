@@ -1,6 +1,6 @@
 # Docker 部署
 
-Docker Compose 启动 gateway、SubConverter、MyUrls 和 Redis。Gateway、SubConverter 和 Redis 使用锁定镜像；MyUrls 默认引用 `ghcr.io/keleyaa/myurls:latest`，该标签仅由其稳定发行更新。Redis 卷 `redis-data` 是唯一业务持久数据。
+Docker Compose 启动 gateway、SubConverter、MyUrls 和 Redis。所有外部镜像默认跟随各自的 `latest` 标签；[`deploy/versions.lock.json`](../deploy/versions.lock.json) 保留集成测试与回滚使用的已验证基线。Redis 卷 `redis-data` 是唯一业务持久数据。
 
 ## 前置条件
 
@@ -268,7 +268,17 @@ docker compose build --pull
 docker compose up -d --build --wait
 ```
 
-失败时切回记录的 commit，恢复对应锁定镜像并重新启动。Redis 主版本变化必须经过单独的备份/恢复兼容验证，不能盲目复用已被新主版写入的数据卷。
+失败时切回记录的 commit，必要时在 `.env` 中以 `SUBWEB_IMAGE`/`MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE` 指定已验证 digest 回滚，并重新启动。Redis 主版本变化必须经过单独的备份/恢复兼容验证，不能盲目复用已被新主版写入的数据卷。
+
+SubConverter 镜像更新后，其运行时卷 `subconverter-runtime` 不会自动获得新镜像的 `/base` 内容（Docker 只对空卷做 copy-up）。确认新版本通过集成验证后，重建该卷让新镜像重新填充配置模板：
+
+```sh
+docker compose down
+docker volume rm subweb_subconverter-runtime
+docker compose up -d --wait
+```
+
+跳过此步骤会静默沿用旧 `/base` 模板、profiles 与 snippets（新二进制 + 旧配置，健康检查不会告警）。Redis 的 `redis-data` 是业务数据，永远不要用上述方式删除。
 
 ## 验证与排错
 

@@ -1,6 +1,6 @@
 # 第三方来源与变更边界
 
-生产 Compose 的所有外部镜像（Redis、SubConverter-Extended、Nginx 基础镜像、MyUrls）默认跟随各自 `latest` 浮动标签；[`deploy/versions.lock.json`](../deploy/versions.lock.json) 保留集成测试与回滚使用的已验证基线（验证日期 2026-08-01），并作为 `verify:locks` 校验的机器可读依据。
+生产 Compose 的所有外部镜像（Redis、SubConverter-Extended、Nginx 基础镜像、MyUrls）默认跟随各自 `latest` 浮动标签；[`deploy/versions.lock.json`](../deploy/versions.lock.json) 保留已验证基线（验证日期 2026-08-01）：MyUrls 集成测试直接消费其 digest，其余服务作为回滚参考，并作为 `verify:locks` 校验的机器可读依据。需要冻结时在 `.env` 设置 `MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE`/`SUBWEB_IMAGE`。
 
 | 项目 | 当前来源 | 运行时镜像 | 已验证基线（测试/回滚） | 本仓库是否修改其源码 | 许可证/边界 |
 | --- | --- | --- | --- | --- | --- |

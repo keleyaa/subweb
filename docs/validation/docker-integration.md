@@ -12,6 +12,11 @@
 
 ## 集成验证镜像
 
+> **历史记录说明**：下表为 2026-08-02 验证时点使用的锁定镜像。自 commit `59da405`
+> 起生产 Compose 与集成验证的 Redis/SubConverter-Extended/Gateway 基础镜像均跟随各自
+> `latest`；当前仅有 MyUrls 的集成验证继续使用锁文件基线（验证脚本在临时环境中显式设定
+> `MYURLS_IMAGE` 为锁文件内的 digest，避免远端可变标签使回归结果不可重复）。
+
 | 服务 | 版本 | OCI index digest |
 | --- | --- | --- |
 | Gateway 基础镜像 | nginx-unprivileged `1.30.4-alpine` | `sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49` |
@@ -19,7 +24,7 @@
 | Redis | `8.10.0-alpine` | `sha256:5cca2f8a01ef2264c52dac86f14ec6a5abe973a93331e1b62522cfc5e63e4691` |
 | SubConverter-Extended | `v1.2.0` | `sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f` |
 
-完整的源代码 tag、commit、平台 digest 和内部端口记录见 `deploy/versions.lock.json`。生产 Compose 默认使用 `ghcr.io/keleyaa/myurls:latest`；验证脚本在临时环境中显式设定 `MYURLS_IMAGE` 为锁文件内的 MyUrls 基线，避免远端可变标签使回归结果不可重复。
+完整的源代码 tag、commit、平台 digest 和内部端口记录见 `deploy/versions.lock.json`。
 
 ## 验证结果
 

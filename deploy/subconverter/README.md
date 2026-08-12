@@ -1,8 +1,10 @@
 # SubConverter-Extended 容器契约基线
 
 本目录记录 Subweb 集成实际使用并已验证的容器契约与安全配置。生产 Compose 跟随
-`ghcr.io/aethersailor/subconverter-extended:latest` 浮动标签；[`../versions.lock.json`](../versions.lock.json)
-保留集成测试与回滚使用的已验证基线，并作为 `verify:locks` 校验的机器可读依据。
+`ghcr.io/aethersailor/subconverter-extended:latest` 浮动标签，集成测试同样跑 latest；
+[`../versions.lock.json`](../versions.lock.json) 保留已验证基线作为回滚参考与
+`verify:locks` 校验的机器可读依据。需要冻结版本时在 `.env` 设置
+`SUBCONVERTER_IMAGE`（可指向锁文件中的 digest）。
 
 ## 已验证基线（集成测试使用）
 
@@ -30,11 +32,11 @@ SUBCONVERTER_ALLOW_PUBLIC_UPLOAD=false
 通用行为；本项目的 Compose 不使用该持久配置路径，以免部署者的旧配置恢复详细请求日志。不要覆盖整个
 `/base`，以免遮盖镜像自带资源。`/base/stats` 仅在启用统计功能时需要持久化。
 
-集成 Compose 不接受部署者留在卷内的 `pref.toml` 作为运行配置。每次启动都会从固定镜像的
+集成 Compose 不接受部署者留在卷内的 `pref.toml` 作为运行配置。每次启动都会从镜像自带的
 `pref.example.toml` 在 `/base` 中重新派生 `pref.subweb.toml`，强制 `log_level = "warn"` 与
 `print_debug_info = false`，避免旧命名卷重新启用详细请求日志。SubConverter 标准输出还会在进入 Docker
 日志驱动前经过项目过滤器，完整 URI、编码 `url`/`link` 参数和 Authorization 值不会写入容器日志。
-实际容器检查确认，固定镜像仍需以 root 启动，但根文件系统可以保持只读。命名卷
+实际容器检查确认，该上游镜像仍需以 root 启动，但根文件系统可以保持只读。命名卷
 `subconverter-runtime` 挂到 `/base`
 时，Docker 首次挂载会把镜像中完整的 `/base` 复制进空卷，启动脚本可在其中生成
 `pref.toml`，同时不会开放宿主机端口或放宽 `cap_drop: ALL`、
@@ -53,7 +55,7 @@ SUBCONVERTER_ALLOW_PUBLIC_UPLOAD=false
 
 ## 已验证的 HTTP 行为
 
-以下行为均在固定 digest 的 `linux/arm64` 容器上实际确认：
+以下行为均在锁定基线的 `linux/arm64` 容器上实际确认：
 
 - `GET /healthz` 返回 HTTP 200，可作为容器健康探测；
 - `GET /version` 返回 HTTP 200 和非空版本响应；

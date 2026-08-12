@@ -5,9 +5,9 @@
 | 组件 | 来源与责任 | 持久数据 |
 | --- | --- | --- |
 | Subweb 网关与前端 | 本仓库维护 UI、路由、鉴权注入、部署和测试 | 无 |
-| SubConverter-Extended | 官方上游提供转换引擎，本仓库固定镜像摘要并配置公共安全模式 | 可重建运行目录 |
-| MyUrls | `keleyaa/MyUrls` 提供短链 API，本仓库固定已发布镜像摘要 | 无，数据在 Redis |
-| Redis | 保存短码到长链接的映射 | `redis-data` 是唯一业务持久卷 |
+| SubConverter-Extended | 官方上游提供转换引擎，Compose 跟随 `latest` 并配置公共安全模式；锁文件保留已验证基线 | 可重建运行目录 |
+| MyUrls | `keleyaa/MyUrls` 提供短链 API，Compose 跟随 `latest`；锁文件保留已验证基线 | 无，数据在 Redis |
+| Redis | 保存短码到长链接的映射；Compose 跟随 `latest` | `redis-data` 是唯一业务持久卷 |
 | Nginx | 同一入口承载静态页面和 Host/路径路由 | 无 |
 
 ## 请求路径
@@ -30,7 +30,7 @@
 单段短码路由记为 `/:shortKey`，不把真实短码写入访问日志；成功健康检查也不进入访问
 日志。SubConverter 通过监督器输出日志：在 Docker 的 `json-file` 或本机日志文件接收文本前，完整 URI 和
 请求来源参数会被移除；受控偏好文件同时阻止旧运行卷重新启用 verbose。MyUrls 的内部日志策略由独立的
-`keleyaa/MyUrls` 镜像版本负责，Subweb 只锁定已经发布并验证的镜像摘要。
+`keleyaa/MyUrls` 镜像版本负责，Subweb 在锁文件中保留已经发布并验证的镜像摘要作为集成测试与回滚基线。
 
 ## 数据流与信任边界
 
