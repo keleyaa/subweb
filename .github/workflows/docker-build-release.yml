@@ -59,8 +59,9 @@ jobs:
       - name: Verify container runtime
         run: npm run verify:container
 
-      # Resolve mutable defaults once so integration tests and vulnerability
-      # scans inspect the same artifacts while deployments keep following latest.
+      # Resolve runtime defaults once so integration tests and vulnerability
+      # scans inspect the same artifacts while Redis stays on its stable 8 line.
+      # MyUrls and SubConverter-Extended continue following latest.
       - name: Resolve external runtime images
         shell: bash
         run: |
@@ -78,7 +79,7 @@ jobs:
             }
             echo "${variable}=${repository}@${digest}" >> "$GITHUB_ENV"
           }
-          resolve_image REDIS_IMAGE docker.io/library/redis:latest
+          resolve_image REDIS_IMAGE docker.io/library/redis:8-alpine
           resolve_image SUBCONVERTER_IMAGE ghcr.io/aethersailor/subconverter-extended:latest
           resolve_image MYURLS_IMAGE ghcr.io/keleyaa/myurls:latest
 
@@ -110,10 +111,10 @@ jobs:
           vuln-type: os,library
           severity: CRITICAL,HIGH
 
-      # All external services follow latest tags at runtime; scan each image
-      # the compose stack actually pulls so a vulnerable upstream release
-      # fails the gate instead of reaching production silently. Kept as three
-      # steps because trivy rejects comma-separated image-ref lists.
+      # Redis follows its stable 8 line; the other external services follow
+      # latest. Scan each image the compose stack actually pulls so a vulnerable
+      # upstream release fails the gate instead of reaching production silently.
+      # Kept as three steps because trivy rejects comma-separated image-ref lists.
       - name: Scan external runtime images (Redis)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:

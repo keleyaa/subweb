@@ -158,7 +158,7 @@ docker_port_is_available() {
   port_probe_container="subweb-port-probe-$project_suffix-$probe_port"
   if ! docker run --detach --rm --name "$port_probe_container" \
     --publish "$probe_port:6379" \
-    "${REDIS_IMAGE:-docker.io/library/redis:latest}" \
+    "${REDIS_IMAGE:-docker.io/library/redis:8-alpine}" \
     redis-server --save '' --appendonly no \
     > "$temporary_directory/port-probe-$probe_port.log" 2>&1; then
     return 1
@@ -408,7 +408,7 @@ start_port_listener() {
   listener_container="subweb-port-blocker-$project_suffix-$listener_port"
   docker run --detach --rm --name "$listener_container" \
     --publish "$listener_port:6379" \
-    "${REDIS_IMAGE:-docker.io/library/redis:latest}" \
+    "${REDIS_IMAGE:-docker.io/library/redis:8-alpine}" \
     redis-server --save '' --appendonly no \
     > "$temporary_directory/listener.log" 2>&1 || return 1
   deadline=$(( $(date +%s) + 10 ))

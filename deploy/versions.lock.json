@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-18T20:58:00Z",
+  "verifiedAt": "2026-08-18T21:48:00Z",
   "services": {
     "gatewayBase": {
       "source": {
@@ -52,7 +52,7 @@
       },
       "image": {
         "reference": "docker.io/library/redis:8.10.0-alpine",
-        "digest": "sha256:5cca2f8a01ef2264c52dac86f14ec6a5abe973a93331e1b62522cfc5e63e4691",
+        "digest": "sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241",
         "platforms": {
           "linux/amd64": "sha256:a6a88248ad5b0c724b7f2b380b7d21f46097db158b2b077ef85bcb97f90aee3a",
           "linux/arm64": "sha256:0f8941c253cc39d98439a608dcb4f0a840b54421cc5109a68c72b2d2d223cea5"

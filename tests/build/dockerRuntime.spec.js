@@ -164,7 +164,7 @@ describe('Docker runtime contract', () => {
       expect(verifier).toContain("printf 'SUBCONVERTER_IMAGE=%s\\n'");
     }
     expect(integrationVerifier).toContain(
-      '"${REDIS_IMAGE:-docker.io/library/redis:latest}"',
+      '"${REDIS_IMAGE:-docker.io/library/redis:8-alpine}"',
     );
     expect(workflow).not.toContain('Static verification only');
   });

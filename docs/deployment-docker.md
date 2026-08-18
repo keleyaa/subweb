@@ -1,6 +1,6 @@
 # Docker 部署
 
-Docker Compose 启动 gateway、SubConverter、MyUrls 和 Redis。所有外部镜像默认跟随各自的 `latest` 标签；[`deploy/versions.lock.json`](../deploy/versions.lock.json) 保留集成测试与回滚使用的已验证基线。Redis 卷 `redis-data` 是唯一业务持久数据。
+Docker Compose 启动 gateway、SubConverter、MyUrls 和 Redis。Redis 默认使用稳定主线 `docker.io/library/redis:8-alpine`；MyUrls 和 SubConverter 默认跟随各自的 `latest` 标签。[`deploy/versions.lock.json`](../deploy/versions.lock.json) 保留集成测试与回滚使用的已验证基线，且可通过 `REDIS_IMAGE` 显式冻结或回滚 Redis。Redis 卷 `redis-data` 是唯一业务持久数据。
 
 ## 前置条件
 

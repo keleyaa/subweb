@@ -63,7 +63,7 @@ x-gateway-common: &gateway-common
 services:
   redis:
     <<: *runtime-security
-    image: "${REDIS_IMAGE:-docker.io/library/redis:latest}"
+    image: "${REDIS_IMAGE:-docker.io/library/redis:8-alpine}"
     user: "999:1000"
     environment:
       <<: *runtime-environment

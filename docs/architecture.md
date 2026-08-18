@@ -7,7 +7,7 @@
 | Subweb 网关与前端 | 本仓库维护 UI、路由、鉴权注入、部署和测试 | 无 |
 | SubConverter-Extended | 官方上游提供转换引擎，Compose 跟随 `latest` 并配置公共安全模式；锁文件保留已验证基线 | 可重建运行目录 |
 | MyUrls | `keleyaa/MyUrls` 提供短链 API，Compose 跟随 `latest`；锁文件保留已验证基线 | 无，数据在 Redis |
-| Redis | 保存短码到长链接的映射；Compose 跟随 `latest` | `redis-data` 是唯一业务持久卷 |
+| Redis | 保存短码到长链接的映射；Compose 使用稳定主线 `docker.io/library/redis:8-alpine` | `redis-data` 是唯一业务持久卷 |
 | Nginx | 同一入口承载静态页面和 Host/路径路由 | 无 |
 
 ## 请求路径

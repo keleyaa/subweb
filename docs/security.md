@@ -25,9 +25,9 @@ gateway 根据 Host 分离应用与 API，并在 `/short-api/` 代理中注入 M
 
 ## 供应链
 
-Gateway 与所有外部生产镜像（Redis、SubConverter-Extended、Nginx 基础镜像、MyUrls）在 Compose 中默认跟随各自 `latest` 浮动标签；[`deploy/versions.lock.json`](../deploy/versions.lock.json) 保留已验证基线（tag、commit、manifest digest 和平台 digest）——MyUrls 集成测试直接消费其 digest，其余服务作为回滚参考。更新镜像时验证上游发布、许可证、架构摘要、容器健康、集成测试和漏洞扫描，并运行 `verify:integration:*` 确认无回归；CI 的 trivy 步骤会扫描运行时跟随的三个 latest 镜像，有 CRITICAL/HIGH 漏洞时发布门禁失败。
+Gateway、MyUrls 和 SubConverter-Extended 在 Compose 中默认跟随各自 `latest` 浮动标签；Redis 默认使用稳定主线 `docker.io/library/redis:8-alpine`，避免跨主版本漂移。[`deploy/versions.lock.json`](../deploy/versions.lock.json) 保留已验证基线（tag、commit、manifest digest 和平台 digest）——MyUrls 集成测试直接消费其 digest，其余服务作为回滚参考。更新镜像时验证上游发布、许可证、架构摘要、容器健康、集成测试和漏洞扫描，并运行 `verify:integration:*` 确认无回归；CI 的 trivy 步骤会扫描实际运行时镜像，有 CRITICAL/HIGH 漏洞时发布门禁失败。
 
-跟随 `latest` 意味着供应链不可完全复现，也无法依赖镜像 tag 精确回滚。对公开生产服务，需要受控回滚时应在 `.env` 中通过 `SUBWEB_IMAGE`/`MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE` 指定已验证 digest；SBOM、provenance 和源码 SHA 对应关系可作为定位回滚点的补充。发布流程仍应保留这些产物。SubConverter 镜像更新后必须重建 `subconverter-runtime` 卷（见[部署文档](deployment-docker.md)）。
+跟随 `latest` 意味着供应链不可完全复现，也无法依赖镜像 tag 精确回滚；`redis:8-alpine` 仍会随 Redis 8 补丁版本变化。对公开生产服务，需要受控回滚时应在 `.env` 中通过 `SUBWEB_IMAGE`/`MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE` 指定已验证 digest；SBOM、provenance 和源码 SHA 对应关系可作为定位回滚点的补充。发布流程仍应保留这些产物。SubConverter 镜像更新后必须重建 `subconverter-runtime` 卷（见[部署文档](deployment-docker.md)）。
 
 远程配置由第三方维护，可能继续引用其他规则集。选择预设等于授权转换后端读取这些来源；部署者应定期审查[远程配置来源](remote-config-sources.md)。
 

@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const root = new URL('../../', import.meta.url);
 const composePath = new URL('compose.yaml', root).pathname;
-const latestRedisImage = 'docker.io/library/redis:latest';
+const stableRedisImage = 'docker.io/library/redis:8-alpine';
 const latestMyurlsImage = 'ghcr.io/keleyaa/myurls:latest';
 const latestSubconverterImage = 'ghcr.io/aethersailor/subconverter-extended:latest';
 const subconverterRuntimeVolume = 'subconverter-runtime';
@@ -125,10 +125,10 @@ describe('integrated Compose stack', () => {
     expect(gatewayTls).toContain('target: /run/tls/privkey.pem');
   });
 
-  it('uses floating latest images for all services and a named Redis data volume', async () => {
+  it('uses the stable Redis 8 line, floating latest images for other services, and a named Redis data volume', async () => {
     const config = await renderProfile('behind-proxy');
     expect(config.services['gateway-http'].image).toBe('docker.io/keleyaa/subweb:sha-2bf1a9f');
-    expect(config.services.redis.image).toBe(latestRedisImage);
+    expect(config.services.redis.image).toBe(stableRedisImage);
     expect(config.services.myurls.image).toBe(latestMyurlsImage);
     expect(config.services.subconverter.image).toBe(latestSubconverterImage);
     expect(config.volumes['redis-data']).toBeTruthy();
