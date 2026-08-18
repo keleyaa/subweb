@@ -32,9 +32,11 @@ script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repository_root=$(CDPATH= cd -- "$script_directory/.." && pwd)
 compose_file=$repository_root/compose.yaml
 certificate_creator=$repository_root/scripts/test-support/create-test-certificate.sh
-node "$repository_root/scripts/verify-version-locks.mjs" >/dev/null \
-  || { printf '%s\n' 'MyUrls 集成测试镜像锁无效' >&2; exit 1; }
-myurls_test_image=$(node - "$repository_root/deploy/versions.lock.json" <<'NODE'
+myurls_test_image=${MYURLS_IMAGE:-}
+if [ -z "$myurls_test_image" ]; then
+  node "$repository_root/scripts/verify-version-locks.mjs" >/dev/null \
+    || { printf '%s\n' 'MyUrls 集成测试镜像锁无效' >&2; exit 1; }
+  myurls_test_image=$(node - "$repository_root/deploy/versions.lock.json" <<'NODE'
 const fs = require('node:fs');
 const lock = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const image = lock.services?.myurls?.image;
@@ -47,7 +49,8 @@ if (
 }
 process.stdout.write(`${image.reference}@${image.digest}`);
 NODE
-) || { printf '%s\n' '无法读取 MyUrls 集成测试镜像锁' >&2; exit 1; }
+  ) || { printf '%s\n' '无法读取 MyUrls 集成测试镜像锁' >&2; exit 1; }
+fi
 temporary_root=${TMPDIR:-/tmp}
 case "$temporary_root" in /*) ;; *) printf '%s\n' 'TMPDIR 必须是绝对路径' >&2; exit 1 ;; esac
 [ -d "$temporary_root" ] \

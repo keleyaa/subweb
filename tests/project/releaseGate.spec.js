@@ -47,13 +47,26 @@ describe('release evidence and command gate', () => {
 
     for (const suffix of [
       'latest',
-      '${{ steps.tag.outputs.date_tag }}',
-      'sha-${{ steps.tag.outputs.short_sha }}',
+      '${RELEASE_TAG}',
+      'sha-${SHORT_SHA}',
     ]) {
-      expect(source).toContain('docker.io/${{ env.DOCKERHUB_IMAGE }}:' + suffix);
-      expect(source).toContain('ghcr.io/${{ env.GHCR_IMAGE }}:' + suffix);
+      expect(source).toContain('docker.io/${DOCKERHUB_IMAGE}:' + suffix);
     }
+    for (const suffix of [
+      'latest',
+      '${RELEASE_TAG}',
+      'sha-${SHORT_SHA}',
+    ]) {
+      expect(source).toContain('ghcr.io/${GHCR_IMAGE}:' + suffix);
+    }
+    expect(source).toContain(
+      'ghcr.io/${{ env.GHCR_IMAGE }}:sha-${{ steps.tag.outputs.short_sha }}',
+    );
 
+    expect(source).toContain('Scan release candidate');
+    expect(source).toContain('ghcr.io/${{ env.GHCR_IMAGE }}@${{ steps.image.outputs.digest }}');
+    expect(source).toContain('docker buildx imagetools create');
+    expect(source).toContain('Published digest mismatch');
     expect(source).toContain('dockerhub_reference');
     expect(source).toContain('ghcr_reference');
   });

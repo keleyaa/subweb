@@ -1,67 +1,74 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
-  <title id="title">Subconverter Web - Self-hosted subscription delivery</title>
-  <desc id="desc">A self-hosted stack for subscription conversion and short links. The visual traces input to convert to share.</desc>
+  <title id="title">Subconverter Web</title>
+  <desc id="desc">A self-hosted subscription delivery stack. APP_DOMAIN and API_DOMAIN enter one gateway, then route privately to SubConverter, MyUrls, and Redis.</desc>
   <defs>
-    <linearGradient id="surface" x1="0" y1="0" x2="1200" y2="360" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#F8FBFF"/>
-      <stop offset="0.56" stop-color="#F5F8FF"/>
-      <stop offset="1" stop-color="#F7F3FF"/>
+    <linearGradient id="ground" x1="0" y1="0" x2="1200" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#080B14"/>
+      <stop offset="0.58" stop-color="#0C1220"/>
+      <stop offset="1" stop-color="#111329"/>
     </linearGradient>
-    <linearGradient id="flow" x1="660" y1="122" x2="1124" y2="266" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2563EB"/>
-      <stop offset="1" stop-color="#8B5CF6"/>
+    <linearGradient id="trace" x1="654" y1="0" x2="1128" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6F9FFF"/>
+      <stop offset="0.55" stop-color="#6EDAE6"/>
+      <stop offset="1" stop-color="#BC92FF"/>
     </linearGradient>
-    <linearGradient id="halo" x1="1032" y1="4" x2="850" y2="342" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#E4EAFE" stop-opacity="0.95"/>
-      <stop offset="1" stop-color="#EEE7FF" stop-opacity="0"/>
-    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(1018 205) rotate(180) scale(390 248)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7258C8" stop-opacity="0.26"/>
+      <stop offset="0.5" stop-color="#3178D4" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#080B14" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft-glow" x="-30%" y="-100%" width="160%" height="300%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
   </defs>
 
-  <rect width="1200" height="360" rx="28" fill="url(#surface)"/>
-  <path d="M0 284C214 226 401 250 578 316V360H0Z" fill="#E9F0FF"/>
-  <circle cx="1076" cy="18" r="250" fill="url(#halo)"/>
-  <path d="M64 284H566" stroke="#D5E1F5" stroke-width="2"/>
+    <rect width="1200" height="360" rx="26" fill="url(#ground)"/>
+  <rect x="1" y="1" width="1198" height="358" rx="25" fill="none" stroke="#DCE7FF" stroke-opacity="0.14" stroke-width="2"/>
+  <rect width="1200" height="360" rx="26" fill="url(#glow)"/>
 
-  <g id="title-block" transform="translate(64 58)">
-    <rect width="370" height="40" rx="20" fill="#E8F0FF"/>
-    <circle cx="21" cy="20" r="7" fill="#2563EB"/>
-    <text x="42" y="28" fill="#2563EB" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="24" font-weight="700" letter-spacing="1.2">SELF-HOSTED DELIVERY</text>
-
-    <text x="0" y="112" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="56" font-weight="750">Subconverter Web</text>
-    <text x="0" y="158" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="36" font-weight="650">Self-hosted subscription</text>
-    <text x="0" y="198" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="36" font-weight="650">delivery</text>
-    <text x="0" y="246" fill="#475467" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="36" font-weight="600">自托管订阅转换发行栈</text>
+  <g transform="translate(64 58)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif">
+    <text x="0" y="23" fill="#6F9FFF" font-size="20" font-weight="700" letter-spacing="3">SUBSCRIPTION DELIVERY STACK</text>
+    <text x="0" y="100" fill="#F2F5FF" font-size="62" font-weight="760">Subconverter Web</text>
+    <text x="0" y="151" fill="#DCE5F7" font-size="32" font-weight="620">Convert. Shorten. Deliver.</text>
+    <text x="0" y="198" fill="#AAB8D0" font-size="28" font-weight="560">自托管订阅转换与短链发行栈</text>
+    <path d="M0 238H462" stroke="#DCE7FF" stroke-opacity="0.16" stroke-width="2"/>
+    <text x="0" y="279" fill="#8290A9" font-size="20" font-weight="560">ONE PUBLIC GATEWAY  /  THREE PRIVATE SERVICES</text>
   </g>
 
-  <g id="input-convert-share" transform="translate(614 45)">
-    <rect width="522" height="270" rx="24" fill="#FFFFFF" fill-opacity="0.72" stroke="#D9E3F5" stroke-width="2"/>
+  <g transform="translate(620 57)">
+    <rect width="516" height="286" rx="22" fill="#141B2B" fill-opacity="0.78" stroke="#DCE7FF" stroke-opacity="0.16" stroke-width="2"/>
+    <circle cx="24" cy="24" r="4" fill="#6F9FFF"/>
+    <circle cx="40" cy="24" r="4" fill="#6EDAE6"/>
+    <circle cx="56" cy="24" r="4" fill="#BC92FF"/>
+    <text x="486" y="29" text-anchor="end" fill="#75839C" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">PRIVATE BY DEFAULT</text>
 
-    <g id="input-card" transform="translate(24 61)">
-      <rect width="144" height="148" rx="18" fill="#F2F6FF" stroke="#BFD2FF" stroke-width="2"/>
-      <rect x="18" y="26" width="44" height="44" rx="13" fill="#2563EB"/>
-      <path d="M30 47H50M30 55H45" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
-      <text x="25" y="120" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="40" font-weight="700">Input</text>
+    <path d="M30 91H179" stroke="#6F9FFF" stroke-opacity="0.24" stroke-width="14" stroke-linecap="round" filter="url(#soft-glow)"/>
+    <path d="M30 199H179" stroke="#BC92FF" stroke-opacity="0.22" stroke-width="14" stroke-linecap="round" filter="url(#soft-glow)"/>
+    <path d="M30 91H179M30 199H179" stroke="url(#trace)" stroke-width="3" stroke-linecap="round"/>
+
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="21" font-weight="650">
+      <text x="30" y="78" fill="#B8CAEA">APP_DOMAIN</text>
+      <text x="30" y="186" fill="#D4C3F5">API_DOMAIN</text>
     </g>
 
-    <path d="M172 135H184" stroke="url(#flow)" stroke-width="6" stroke-linecap="round"/>
-    <path d="M179 126L189 135L179 144" fill="none" stroke="#4B71EB" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
-
-    <g id="convert-card" transform="translate(192 61)">
-      <rect width="164" height="148" rx="18" fill="#F5F1FF" stroke="#D7C7FF" stroke-width="2"/>
-      <rect x="18" y="26" width="44" height="44" rx="13" fill="#7457E8"/>
-      <path d="M30 49H51M46 42L53 49L46 56" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="4" y="120" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="40" font-weight="700">Convert</text>
+    <g transform="translate(179 58)">
+      <rect width="132" height="174" rx="18" fill="#18243A" stroke="#6F9FFF" stroke-opacity="0.68" stroke-width="2"/>
+      <path d="M66 35V139M39 62H66M39 112H66M66 87H94" fill="none" stroke="#6F9FFF" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="39" cy="62" r="6" fill="#6F9FFF"/>
+      <circle cx="39" cy="112" r="6" fill="#BC92FF"/>
+      <circle cx="94" cy="87" r="6" fill="#6EDAE6"/>
+      <text x="66" y="158" text-anchor="middle" fill="#F2F5FF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">Gateway</text>
     </g>
 
-    <path d="M364 135H376" stroke="url(#flow)" stroke-width="6" stroke-linecap="round"/>
-    <path d="M371 126L381 135L371 144" fill="none" stroke="#8B5CF6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M311 103H346M311 145H346M311 187H346" stroke="url(#trace)" stroke-width="3" stroke-linecap="round"/>
 
-    <g id="share-card" transform="translate(384 61)">
-      <rect width="122" height="148" rx="18" fill="#EEF5FF" stroke="#BFD2FF" stroke-width="2"/>
-      <rect x="18" y="26" width="44" height="44" rx="13" fill="#2563EB"/>
-      <path d="M32 57L49 40M39 40H49V50M31 58H48" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="4" y="120" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="40" font-weight="700">Share</text>
+    <g transform="translate(346 67)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+      <rect width="140" height="44" rx="10" fill="#152B38" stroke="#6EDAE6" stroke-opacity="0.52"/>
+      <text x="70" y="29" text-anchor="middle" fill="#C8F6FA" font-size="18" font-weight="650">SubConverter</text>
+      <rect y="55" width="140" height="44" rx="10" fill="#211E3C" stroke="#BC92FF" stroke-opacity="0.52"/>
+      <text x="70" y="84" text-anchor="middle" fill="#E4D9FA" font-size="18" font-weight="650">MyUrls</text>
+      <rect y="110" width="140" height="44" rx="10" fill="#18243A" stroke="#6F9FFF" stroke-opacity="0.52"/>
+      <text x="70" y="139" text-anchor="middle" fill="#D5E3FF" font-size="18" font-weight="650">Redis</text>
     </g>
   </g>
 </svg>

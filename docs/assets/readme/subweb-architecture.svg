@@ -1,114 +1,81 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
-  <title id="title">Subconverter Web service boundary</title>
-  <desc id="desc">Browser requests enter through public APP_DOMAIN and API_DOMAIN routes, pass the gateway, and reach internal SubConverter-Extended, MyUrls, and Redis services. The actual flows are subscription conversion, short-link creation, short-code redirect, and Redis persistence. Tokens stay server-side and do not enter the browser. Redis data remains internal and does not enter the browser.</desc>
+  <title id="title">Subconverter Web request paths</title>
+  <desc id="desc">The browser reaches APP_DOMAIN and API_DOMAIN through one gateway. Subscription conversion routes to SubConverter. Short-link creation and redirects route to MyUrls, which persists mappings in Redis. Credentials stay on the server.</desc>
   <defs>
-    <linearGradient id="surface" x1="0" y1="0" x2="1200" y2="520" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#F8FBFF"/>
-      <stop offset="0.62" stop-color="#F5F8FF"/>
-      <stop offset="1" stop-color="#F7F3FF"/>
+    <linearGradient id="ground" x1="0" y1="0" x2="1200" y2="520" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F4F7FF"/>
+      <stop offset="1" stop-color="#EEF2FC"/>
     </linearGradient>
-    <linearGradient id="blue-flow" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#2563EB"/>
-      <stop offset="1" stop-color="#4D83F7"/>
+    <linearGradient id="flow" x1="206" y1="0" x2="1090" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1769FF"/>
+      <stop offset="0.58" stop-color="#417DDB"/>
+      <stop offset="1" stop-color="#7257D6"/>
     </linearGradient>
-    <linearGradient id="purple-flow" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#6655E8"/>
-      <stop offset="1" stop-color="#8B5CF6"/>
-    </linearGradient>
-    <marker id="arrow-blue" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto">
-      <path d="M1 1L11 6L1 11Z" fill="#2563EB"/>
-    </marker>
-    <marker id="arrow-purple" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto">
-      <path d="M1 1L11 6L1 11Z" fill="#8B5CF6"/>
+    <marker id="arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M1 1L11 6L1 11Z" fill="#417DDB"/>
     </marker>
   </defs>
 
-  <rect width="1200" height="520" rx="30" fill="url(#surface)"/>
-  <path d="M48 152H1152" stroke="#D9E3F5" stroke-width="2"/>
-  <circle cx="1106" cy="78" r="156" fill="#E9E3FF" fill-opacity="0.38"/>
-  <circle cx="88" cy="466" r="150" fill="#E3EEFF" fill-opacity="0.42"/>
+  <rect width="1200" height="520" rx="26" fill="url(#ground)"/>
+  <rect x="1" y="1" width="1198" height="518" rx="25" fill="none" stroke="#5D739B" stroke-opacity="0.22" stroke-width="2"/>
 
-  <g id="heading">
-    <text x="64" y="72" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="50" font-weight="750">Public -&gt; private</text>
-    <text x="64" y="116" fill="#475467" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="38" font-weight="650">公网入口到内部服务</text>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif">
+    <text x="54" y="68" fill="#12192A" font-size="42" font-weight="750">One gateway. Explicit boundaries.</text>
+    <text x="54" y="107" fill="#59667D" font-size="24" font-weight="560">一个公网入口，转换、短链与数据各守其边界</text>
+    <text x="1146" y="68" text-anchor="end" fill="#1769FF" font-size="19" font-weight="700" letter-spacing="1.5">TOKEN STAYS SERVER-SIDE</text>
   </g>
 
-  <g id="token-boundary" transform="translate(738 16)">
-    <rect width="398" height="120" rx="20" fill="#FFFFFF" fill-opacity="0.8" stroke="#C9D8F7" stroke-width="2"/>
-    <circle cx="30" cy="32" r="8" fill="#2563EB"/>
-    <text x="52" y="40" fill="#183B87" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="38" font-weight="750">Token stays</text>
-    <text x="52" y="75" fill="#183B87" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="38" font-weight="750">server-side</text>
-    <text x="52" y="111" fill="#475467" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="28" font-weight="700">Token 不进入浏览器</text>
+  <path d="M205 239H325M475 204H590M475 274H590M756 204H846M756 274H846M1012 274H1090" fill="none" stroke="url(#flow)" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow)"/>
+
+  <g transform="translate(54 171)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <rect width="150" height="136" rx="18" fill="#FFFFFF" stroke="#A9BBDD" stroke-width="2"/>
+    <path d="M39 48H111M39 66H91" stroke="#1769FF" stroke-width="5" stroke-linecap="round"/>
+    <text x="75" y="106" text-anchor="middle" fill="#12192A" font-size="23" font-weight="700">Browser</text>
   </g>
 
-  <g id="browser" transform="translate(64 188)">
-    <rect width="158" height="146" rx="20" fill="#FFFFFF" fill-opacity="0.8" stroke="#BFD2FF" stroke-width="2"/>
-    <rect x="22" y="24" width="44" height="44" rx="13" fill="#2563EB"/>
-    <path d="M34 45H54M34 53H49" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
-    <text x="79" y="102" text-anchor="middle" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="34" font-weight="750">Browser</text>
+  <g transform="translate(326 158)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+    <rect width="150" height="162" rx="18" fill="#FFFFFF" stroke="#86A8E8" stroke-width="2"/>
+    <text x="75" y="50" text-anchor="middle" fill="#1769FF" font-size="19" font-weight="700">APP_DOMAIN</text>
+    <path d="M24 75H126" stroke="#CFD9EA" stroke-width="2"/>
+    <text x="75" y="111" text-anchor="middle" fill="#7257D6" font-size="19" font-weight="700">API_DOMAIN</text>
+    <text x="75" y="143" text-anchor="middle" fill="#657087" font-size="16">PUBLIC</text>
   </g>
 
-  <g id="public-domains" transform="translate(250 178)">
-    <rect width="280" height="166" rx="22" fill="#FFFFFF" fill-opacity="0.74" stroke="#C9D8F7" stroke-width="2"/>
-    <rect x="14" y="18" width="252" height="56" rx="15" fill="#EEF5FF" stroke="#BFD2FF" stroke-width="2"/>
-    <circle cx="37" cy="46" r="8" fill="#2563EB"/>
-    <text x="42" y="58" fill="#101828" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="36" font-weight="700">APP_DOMAIN</text>
-    <rect x="14" y="92" width="252" height="56" rx="15" fill="#F5F1FF" stroke="#D7C7FF" stroke-width="2"/>
-    <circle cx="37" cy="120" r="8" fill="#8B5CF6"/>
-    <text x="42" y="132" fill="#101828" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="36" font-weight="700">API_DOMAIN</text>
+  <g transform="translate(590 158)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <rect width="166" height="162" rx="18" fill="#152037" stroke="#6F9FFF" stroke-width="2"/>
+    <path d="M83 37V99M55 68H111" stroke="#6F9FFF" stroke-width="5" stroke-linecap="round"/>
+    <text x="83" y="132" text-anchor="middle" fill="#F2F5FF" font-size="24" font-weight="700">Gateway</text>
   </g>
 
-  <g id="gateway" transform="translate(548 188)">
-    <rect width="158" height="146" rx="20" fill="#FFFFFF" fill-opacity="0.86" stroke="#B8C8EC" stroke-width="2"/>
-    <path d="M24 37H48M36 25V49" stroke="#8B5CF6" stroke-width="5" stroke-linecap="round"/>
-    <text x="79" y="102" text-anchor="middle" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="34" font-weight="750">Gateway</text>
+  <g transform="translate(846 143)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+    <rect width="166" height="76" rx="14" fill="#E8F7FA" stroke="#55AEB9" stroke-width="2"/>
+    <text x="83" y="35" text-anchor="middle" fill="#174C55" font-size="19" font-weight="700">SubConverter</text>
+    <text x="83" y="58" text-anchor="middle" fill="#477078" font-size="15">CONVERT</text>
+    <rect y="115" width="166" height="76" rx="14" fill="#F0EBFF" stroke="#8E76D8" stroke-width="2"/>
+    <text x="83" y="149" text-anchor="middle" fill="#3C2C70" font-size="20" font-weight="700">MyUrls</text>
+    <text x="83" y="173" text-anchor="middle" fill="#67558F" font-size="15">SHORTEN · REDIRECT</text>
   </g>
 
-  <g id="internal-services" transform="translate(746 146)">
-    <rect width="390" height="248" rx="24" fill="#101828" fill-opacity="0.94" stroke="#364766" stroke-width="2"/>
-    <text x="195" y="40" text-anchor="middle" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="38" font-weight="750">Internal only</text>
-    <text x="195" y="78" text-anchor="middle" fill="#CAD5E7" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="28" font-weight="700">仅内部网络</text>
-    <rect x="24" y="90" width="342" height="64" rx="10" fill="#20304D"/>
-    <text x="195" y="118" text-anchor="middle" fill="#FFFFFF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="32" font-weight="700">SubConverter</text>
-    <text x="195" y="145" text-anchor="middle" fill="#CAD5E7" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="28" font-weight="700">Extended</text>
-    <rect x="24" y="164" width="342" height="34" rx="9" fill="#263B64"/>
-    <text x="195" y="191" text-anchor="middle" fill="#FFFFFF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="28" font-weight="700">MyUrls</text>
-    <rect x="24" y="206" width="342" height="34" rx="9" fill="#31275C"/>
-    <text x="195" y="233" text-anchor="middle" fill="#FFFFFF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="28" font-weight="700">Redis</text>
+  <g transform="translate(1090 258)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+    <rect width="76" height="76" rx="38" fill="#E9F0FF" stroke="#7095D9" stroke-width="2"/>
+    <path d="M20 29C20 21 56 21 56 29V49C56 57 20 57 20 49ZM20 29C20 37 56 37 56 29M20 39C20 47 56 47 56 39" fill="none" stroke="#356CCB" stroke-width="3"/>
+    <text x="38" y="101" text-anchor="middle" fill="#39465B" font-size="17" font-weight="700">Redis</text>
   </g>
 
-  <g id="route-arrows" fill="none" stroke-linecap="round" stroke-width="5">
-    <path d="M222 224H246" stroke="url(#blue-flow)" marker-end="url(#arrow-blue)"/>
-    <path d="M222 300H246" stroke="url(#purple-flow)" marker-end="url(#arrow-purple)"/>
-    <path d="M530 224H544" stroke="url(#blue-flow)" marker-end="url(#arrow-blue)"/>
-    <path d="M530 300H544" stroke="url(#purple-flow)" marker-end="url(#arrow-purple)"/>
-    <path d="M706 224C724 224 728 268 742 268" stroke="url(#blue-flow)" marker-end="url(#arrow-blue)"/>
-    <path d="M706 300C724 300 728 327 742 327" stroke="url(#purple-flow)" marker-end="url(#arrow-purple)"/>
-    <path d="M941 344V350" stroke="url(#purple-flow)" marker-end="url(#arrow-purple)"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="650">
+    <text x="532" y="187" text-anchor="middle" fill="#4A70B5">HOST ROUTING</text>
+    <text x="532" y="303" text-anchor="middle" fill="#7257D6">TOKEN INJECTION</text>
+    <text x="800" y="187" text-anchor="middle" fill="#337A84">/sub</text>
+    <text x="800" y="303" text-anchor="middle" fill="#7257D6">/short</text>
   </g>
 
-  <g id="actual-flows" transform="translate(64 404)">
-    <rect width="1072" height="94" rx="22" fill="#FFFFFF" fill-opacity="0.74" stroke="#D2DDF2" stroke-width="2"/>
-    <g id="convert-flow" transform="translate(26 18)">
-      <circle cx="18" cy="24" r="18" fill="#E8F0FF"/>
-      <text x="54" y="28" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="32" font-weight="750">Convert</text>
-      <text x="54" y="58" fill="#475467" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="24" font-weight="700">转换</text>
-    </g>
-    <g id="create-flow" transform="translate(292 18)">
-      <circle cx="18" cy="24" r="18" fill="#F0EBFF"/>
-      <text x="54" y="28" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="32" font-weight="750">Create</text>
-      <text x="54" y="58" fill="#475467" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="24" font-weight="700">创建</text>
-    </g>
-    <g id="redirect-flow" transform="translate(558 18)">
-      <circle cx="18" cy="24" r="18" fill="#E8F0FF"/>
-      <text x="54" y="28" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="32" font-weight="750">Redirect</text>
-      <text x="54" y="58" fill="#475467" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="24" font-weight="700">跳转</text>
-    </g>
-    <g id="persist-flow" transform="translate(824 18)">
-      <circle cx="18" cy="24" r="18" fill="#F0EBFF"/>
-      <text x="54" y="28" fill="#101828" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="32" font-weight="750">Persist</text>
-      <text x="54" y="58" fill="#475467" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="24" font-weight="700">持久化</text>
-    </g>
+  <rect x="54" y="374" width="1092" height="62" rx="14" fill="#FFFFFF" fill-opacity="0.74" stroke="#A9BBDD" stroke-opacity="0.6"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="650">
+    <text x="80" y="412" fill="#1769FF">APP</text>
+    <text x="134" y="412" fill="#59667D">UI · /short-api/short · /:shortKey</text>
+    <text x="566" y="412" fill="#7257D6">API</text>
+    <text x="620" y="412" fill="#59667D">/sub · /healthz</text>
+    <text x="924" y="412" fill="#1F7A35">PRIVATE</text>
+    <text x="1012" y="412" fill="#59667D">no ports</text>
   </g>
 </svg>

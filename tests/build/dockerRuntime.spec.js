@@ -143,6 +143,12 @@ describe('Docker runtime contract', () => {
     expect(workflow).toContain('provenance: mode=max');
     expect(workflow).toContain('sbom: true');
     expect(workflow).toContain('sha-${{ steps.tag.outputs.short_sha }}');
+    expect(workflow).toContain('Resolve external runtime images');
+    expect(workflow).toContain('image-ref: ${{ env.REDIS_IMAGE }}');
+    expect(workflow).toContain('image-ref: ${{ env.SUBCONVERTER_IMAGE }}');
+    expect(workflow).toContain('image-ref: ${{ env.MYURLS_IMAGE }}');
+    expect(workflow).toContain('Scan release candidate');
+    expect(workflow).toContain('docker buildx imagetools create');
     expect(workflow).not.toContain('Static verification only');
   });
 });

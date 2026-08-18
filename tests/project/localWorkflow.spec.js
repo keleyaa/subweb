@@ -10,7 +10,7 @@ describe('local source workflow contract', () => {
     expect(workflow).toContain('persist-credentials: false');
     expect(workflow).toContain('macos-15');
     expect(workflow).toContain('ubuntu-24.04');
-    expect(workflow).toContain('uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16');
+    expect(workflow).toContain('uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e');
     expect(workflow).toContain('go-version: 1.26.5');
     expect(workflow).toContain('./scripts/local/bootstrap.sh && ./scripts/local/bootstrap.sh');
     expect(workflow).toContain('./scripts/local/start.sh');

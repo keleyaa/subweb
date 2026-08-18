@@ -4,139 +4,109 @@
 
 **自托管订阅转换发行栈。**
 
+Subconverter Web turns one browser workflow into one deployable boundary：订阅转换由 `SubConverter-Extended` 完成，短链由 `MyUrls` 创建和跳转，映射持久化在 Redis；浏览器只接触统一 Gateway，MyUrls Token 始终留在服务端。
+
 <p align="center">
-  <img src="./docs/assets/readme/subweb-hero.svg" width="100%" alt="Subconverter Web self-hosted subscription delivery from input through conversion to sharing">
+  <img src="./docs/assets/readme/subweb-hero.svg" width="100%" alt="Subconverter Web routes two public domains through one gateway to private SubConverter, MyUrls, and Redis services">
 </p>
+
+## 先看它能做什么
+
+真实界面只有一个主要任务：粘贴订阅内容，选择转换目标，生成可复制的结果；需要时再创建短链。下面的截图来自当前应用，而不是概念 mockup。
 
 <p align="center">
   <img src="./docs/assets/subconverter-web.png" width="100%" alt="Subconverter Web single-page subscription conversion interface">
 </p>
 
-Subconverter Web is the Subweb-integrated stack for subscription conversion, short links, Redis-backed persistence, and one controlled gateway. A browser reaches only the application and API domains; the conversion engine, short-link service, and Redis stay behind that boundary.
+- **转换**：通过 `API_DOMAIN/sub` 调用 SubConverter-Extended。
+- **短链**：浏览器请求同源 `APP_DOMAIN/short-api/short`，Gateway 注入服务端 Token 后调用 MyUrls。
+- **跳转**：访问 `APP_DOMAIN/:shortKey`，由 MyUrls 从 Redis 读取完整映射并返回 redirect。
+- **持久化**：Redis 是唯一业务数据卷；Gateway 和前端不保存业务数据。
 
-Subconverter Web 是 Subweb 的一体化自托管方案，将订阅转换、短链、Redis 持久化和统一网关放在同一套部署中。浏览器只访问应用域名和 API 域名；转换引擎、短链服务与 Redis 均保持在内部边界之后。
-
-## What You Run / 运行内容
-
-- **Two public domains.** `APP_DOMAIN` serves the web app, short-link creation proxy, and short-code redirects. `API_DOMAIN` serves `/sub` and other conversion routes.
-- **两个公网域名。** `APP_DOMAIN` 提供网页、短链创建代理与短码跳转；`API_DOMAIN` 提供 `/sub` 等转换路由。
-- **One controlled gateway.** It routes by host and injects the MyUrls token server-side, so the browser never receives that token.
-- **一个受控网关。** 网关按 Host 路由，并在服务端注入 MyUrls Token，浏览器不会取得该 Token。
-- **Internal services.** SubConverter-Extended performs conversion, MyUrls creates and resolves short links, and Redis is the only business persistence layer.
-- **内部服务。** SubConverter-Extended 负责转换，MyUrls 创建和解析短链，Redis 是唯一业务持久层。
-- **Follow-the-latest update policy.** All external images (gateway base, Redis, SubConverter-Extended, MyUrls) follow their published `latest` tags; the version lock keeps verified baselines for the MyUrls integration tests and rollback references. Preserve Redis data for recovery, and pin an explicit image override only for a controlled rollback.
-- **跟随最新版更新策略。** 所有外部镜像（网关基础镜像、Redis、SubConverter-Extended、MyUrls）默认跟随其已发布的稳定 `latest`；版本锁保留 MyUrls 集成测试基线与各服务回滚参考。恢复时重点保留 Redis 数据；需要受控回滚时再显式覆盖镜像。
-
-## Service Boundary / 服务边界
+## 边界如何工作
 
 <p align="center">
-  <img src="./docs/assets/readme/subweb-architecture.svg" width="100%" alt="Browser reaches app and API domains through the gateway to internal SubConverter-Extended, MyUrls, and Redis services; the MyUrls token stays server-side and Redis data does not enter the browser">
+  <img src="./docs/assets/readme/subweb-architecture.svg" width="100%" alt="Browser reaches APP_DOMAIN and API_DOMAIN through one gateway, then private SubConverter, MyUrls, and Redis services">
 </p>
 
-The gateway is the public boundary. Conversion links are handled by SubConverter-Extended; short-link creation is sent to the same-origin `/short-api/short` route, where the gateway adds the server-side token before MyUrls writes the mapping to Redis. Resolving a short code returns a redirect from MyUrls.
+- `APP_DOMAIN`：静态前端、短链创建代理、短码跳转。
+- `API_DOMAIN`：`/sub` 转换路由和 SubConverter 健康检查。
+- **Gateway**：按 Host 路由，并在服务端注入 MyUrls Bearer Token；内部服务不发布宿主机端口。
+- **SubConverter-Extended**：转换引擎。
+- **MyUrls**：短链 `create / redirect` API。
+- **Redis**：短链映射的持久层。
 
-网关是唯一公网边界。转换链接由 SubConverter-Extended 处理；创建短链时，浏览器请求同源 `/short-api/short`，网关在转交 MyUrls 前注入仅在服务端保存的 Token，并由 MyUrls 把映射写入 Redis。访问短码时，MyUrls 返回跳转。
+## 快速部署
 
-## Deploy / 部署
+### Docker Compose（推荐）
 
-### Docker
-
-Use Docker Compose for a server deployment. The first command sequence clones the repository into a dedicated directory; run every later project command from that `subweb` directory.
-
-服务器部署建议使用 Docker Compose。首次执行会将仓库克隆到独立目录；之后所有项目命令都必须在该 `subweb` 目录中运行。
+需要两个你控制的域名：一个给应用，一个给 API。已有 Nginx、OpenResty、宝塔、1Panel 或 Cloudflare Tunnel 时，使用 `behind-proxy`；例如 `sub.ml1.one` 与 `api.ml1.one` 仅作展示，部署时请替换为你控制的域名。外层代理负责公网 TLS，Compose 只把 Gateway 绑定到 loopback。
 
 ```sh
-mkdir -p "$HOME/apps"
-cd "$HOME/apps"
+mkdir -p "$HOME/apps" && cd "$HOME/apps"
 git clone https://github.com/keleyaa/subweb.git
 cd subweb
-```
 
-For an existing reverse proxy such as Nginx, OpenResty, Baota, 1Panel, or Cloudflare Tunnel, run the published-image deployment. Replace both example domains with domains you control.
-
-已有 Nginx、OpenResty、宝塔、1Panel 或 Cloudflare Tunnel 等外层反向代理时，使用已发布镜像部署。请将两个示例域名替换为自己的域名。
-
-```sh
 ./scripts/docker-deploy.sh --mode behind-proxy \
-  --app-domain sub.ml1.one \
-  --api-domain api.ml1.one
+  --app-domain sub.example.com \
+  --api-domain api.example.com
+
 docker compose ps
 ```
 
-The script creates the untracked `.env`, MyUrls token, and Redis password for you. Published gateway images are available from `docker.io/keleyaa/subweb` and `ghcr.io/keleyaa/subweb`. For a reproducible production rollout, pass an issued `sha-*` image tag with `--image`; do not guess tags from a local commit.
+脚本会生成不提交的 `.env`、MyUrls Token 和 Redis 密码。Gateway 镜像同时发布到 `docker.io/keleyaa/subweb` 与 `ghcr.io/keleyaa/subweb`；生产环境可以通过 `--image` 指定已发行的 `sha-*` Gateway 镜像。默认运行时镜像跟随各自已发布的稳定 `latest`，需要受控回滚时在 `.env` 显式覆盖 `MYURLS_IMAGE`、`REDIS_IMAGE`、`SUBCONVERTER_IMAGE` 或 `SUBWEB_IMAGE`。
 
-脚本会自动创建不提交的 `.env`、MyUrls Token 和 Redis 密码。网关镜像同时发布到 `docker.io/keleyaa/subweb` 与 `ghcr.io/keleyaa/subweb`。生产环境应通过 `--image` 指定已发行的 `sha-*` 镜像标签；不要根据本地提交猜测远端标签。
+没有外层代理时，可使用 `direct-tls`，前提是 80/443 未被占用，并且已有一张同时覆盖两个域名的证书：
 
-The maintainer's display deployment uses `sub.ml1.one` and `api.ml1.one` as examples only. Replace both domains with names you control before deploying your own instance.
+```sh
+./scripts/docker-deploy.sh --mode direct-tls \
+  --app-domain sub.example.com \
+  --api-domain api.example.com \
+  --tls-cert /absolute/path/fullchain.pem \
+  --tls-key /absolute/path/privkey.pem
+```
 
-维护者展示部署使用 `sub.ml1.one` 与 `api.ml1.one`，它们仅是示例。部署自己的实例前，请替换为你控制的两个域名。
+项目不依赖 Caddy，也不会申请或续期证书。完整说明见 [Docker 部署](docs/deployment-docker.md)。
 
-When there is no outer proxy, `direct-tls` is available only when ports 80/443 are unused and you already have one certificate covering both domains. The project does not require Caddy and does not obtain or renew certificates. Full proxy, TLS, update, backup, and rollback instructions are in [Docker deployment](docs/deployment-docker.md).
+### 本机源码运行
 
-没有外层代理时，只有在 80/443 未占用并且已拥有覆盖两个域名的证书时才可使用 `direct-tls`。本项目不依赖 Caddy，也不会申请或续期证书。完整的反向代理、TLS、升级、备份与回滚说明见 [Docker 部署](docs/deployment-docker.md)。
-
-### Local Source Runtime / 本机源码运行
-
-Use the source runtime for local development and verification. It builds the pinned MyUrls and SubConverter sources, then starts Redis, the two backend services, Vite, and two local gateway entries.
-
-本机源码运行适合开发与验证。它会构建锁定的 MyUrls 和 SubConverter 源码，并启动 Redis、两个后端服务、Vite 与两个本机网关入口。
+适合开发和集成验证；默认只监听 loopback：
 
 ```sh
 git clone https://github.com/keleyaa/subweb.git
 cd subweb
 ./scripts/local/bootstrap.sh
 ./scripts/local/start.sh
-./scripts/local/status.sh
 ```
 
-Open `http://127.0.0.1:18080/` after startup, then stop the local stack with `./scripts/local/stop.sh`. This mode is loopback-only by default and is not the default public-production route.
+启动后访问 `http://127.0.0.1:18080/`，查看状态：
 
-启动后访问 `http://127.0.0.1:18080/`，结束时运行 `./scripts/local/stop.sh`。本模式默认只监听 loopback，不是默认的公网生产部署方式。
+```sh
+./scripts/local/status.sh
+./scripts/local/stop.sh
+```
 
-## Security Boundary / 安全边界
+## 重要的安全边界
 
-Subscription URLs can contain credentials. They are visible to SubConverter when converted, and a short link stores the complete conversion URL in Redis. A short code is not encryption; anyone who receives it can normally follow its redirect.
+订阅 URL 可能携带凭据。转换时 SubConverter 会看到它；创建短链时，完整转换 URL 会写入 Redis。**短码不是加密**，拿到短码的人通常可以跟随跳转。
 
-订阅链接可能携带凭据。转换时 SubConverter 会看到它，而短链会把完整转换链接保存到 Redis。短码不是加密；获得短码的人通常可以跟随跳转。
+请勿把以下内容提交到 Git、截图、Schema、sitemap 或公开 issue：
 
-Keep `.env`, `.runtime/`, certificates, Redis backups, platform variables, and historical diagnostic logs out of Git and public issue reports. Subweb sanitizes new SubConverter logs, but old containers, backups, and external log platforms may still retain raw requests. The browser configuration contains only public URLs and presets; the MyUrls token and Redis password stay server-side.
+- `.env`、`.runtime/`、证书和 Redis 备份；
+- 订阅 URL、请求 query、真实短码、Token、Redis URL 或日志样本；
+- 历史诊断日志的未脱敏副本。
 
-请勿将 `.env`、`.runtime/`、证书、Redis 备份、平台变量或历史诊断日志提交到 Git 或公开问题报告。Subweb 会脱敏新的 SubConverter 日志，但旧容器、备份和外部日志平台仍可能保留原始请求。浏览器配置只包含公开 URL 与预设；MyUrls Token 与 Redis 密码仅保留在服务端。
+浏览器配置只包含公开 URL 与预设；MyUrls Token 和 Redis 密码留在服务端。公开部署前先阅读[安全边界](docs/security.md)。
 
-Read [Security boundary](docs/security.md) before exposing the stack publicly.
+## Fork 与来源说明
 
-在公网部署前，请阅读[安全边界](docs/security.md)。
+- [架构说明](docs/architecture.md) · [运行时配置](docs/configuration.md) · [部署索引](docs/deployment.md)
+- [Docker 部署](docs/deployment-docker.md) · [本机源码运行](docs/deployment-local.md) · [运维手册](docs/operations.md)
+- [安全边界](docs/security.md) · [第三方来源与变更边界](docs/third-party-sources.md)
+- [界面设计规范](docs/interface-design.md) · [远程配置来源](docs/remote-config-sources.md) · [维护与发布](docs/maintenance.md)
 
-## Source Lineage / Fork 与来源说明
+本仓库 [`keleyaa/subweb`](https://github.com/keleyaa/subweb) 源自 [`stilleshan/subweb`](https://github.com/stilleshan/subweb)，现独立维护。短链服务使用维护者 fork 的 [`keleyaa/MyUrls`](https://github.com/keleyaa/MyUrls)，其上游为 [`CareyWang/MyUrls`](https://github.com/CareyWang/MyUrls)；转换服务使用 [`Aethersailor/SubConverter-Extended`](https://github.com/Aethersailor/SubConverter-Extended)；界面以 Apple 平台的材质、层级和可访问性原则为方法参考，没有复制第三方代码、DOM、CSS、图片、图标或商标；集成基线、许可证与变更边界记录在[第三方来源](docs/third-party-sources.md)。
 
-This repository, [`keleyaa/subweb`](https://github.com/keleyaa/subweb), began as a fork of [`stilleshan/subweb`](https://github.com/stilleshan/subweb) and is now independently maintained for this integrated stack. The short-link service is the maintainer fork [`keleyaa/MyUrls`](https://github.com/keleyaa/MyUrls), whose upstream is [`CareyWang/MyUrls`](https://github.com/CareyWang/MyUrls). Conversion uses the official, actively maintained [`Aethersailor/SubConverter-Extended`](https://github.com/Aethersailor/SubConverter-Extended) project without carrying its source in this repository.
+## License
 
-本仓库 [`keleyaa/subweb`](https://github.com/keleyaa/subweb) fork 自 [`stilleshan/subweb`](https://github.com/stilleshan/subweb)，现作为这套一体化栈独立维护。短链服务使用维护者 fork 的 [`keleyaa/MyUrls`](https://github.com/keleyaa/MyUrls)，其上游为 [`CareyWang/MyUrls`](https://github.com/CareyWang/MyUrls)；转换服务直接使用持续维护的官方 [`Aethersailor/SubConverter-Extended`](https://github.com/Aethersailor/SubConverter-Extended)，不在本仓库携带其源码。
-
-The interface is an independent adaptation guided by Apple platform material, hierarchy, and accessibility principles and the restrained MyUrls page; it does not copy third-party code, DOM, CSS, images, icons, or trademarks.
-
-界面以 Apple 平台的材质、层级和可访问性原则，以及 MyUrls 页面克制的产品气质为方法参考；没有复制第三方代码、DOM、CSS、图片、图标或商标。
-
-Runtime `latest` tags, verified lock baselines, licenses, and modification boundaries are recorded in [third-party sources](docs/third-party-sources.md).
-
-运行时 `latest` 标签、已验证锁基线、许可证及修改边界见[第三方来源](docs/third-party-sources.md)。
-
-## Documentation / 文档
-
-- [Architecture / 架构说明](docs/architecture.md)
-- [Runtime configuration / 运行时配置](docs/configuration.md)
-- [Deployment index / 部署索引](docs/deployment.md)
-- [Local source runtime / 本机源码运行](docs/deployment-local.md)
-- [Docker deployment / Docker 部署](docs/deployment-docker.md)
-- [Security boundary / 安全边界](docs/security.md)
-- [Operations / 运维手册](docs/operations.md)
-- [Third-party sources / 第三方来源](docs/third-party-sources.md)
-- [Interface design / 界面设计规范](docs/interface-design.md)
-- [Remote configuration sources / 远程配置来源](docs/remote-config-sources.md)
-- [Maintenance and releases / 维护与发布](docs/maintenance.md)
-
-## License / 许可证
-
-The repository code is licensed under [GPL-3.0](LICENSE). Integrated components and remote configuration sources keep their own licenses.
-
-本仓库代码采用 [GPL-3.0](LICENSE)；集成组件与远程配置来源继续遵循各自许可证。
+本仓库代码采用 [GPL-3.0](LICENSE)；集成组件和远程配置来源继续遵循各自许可证。
