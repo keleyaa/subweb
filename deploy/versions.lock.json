@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-18T19:19:31Z",
+  "verifiedAt": "2026-08-18T20:58:00Z",
   "services": {
     "gatewayBase": {
       "source": {
@@ -67,7 +67,7 @@
         "url": "https://github.com/Aethersailor/SubConverter-Extended",
         "repository": "Aethersailor/SubConverter-Extended",
         "tag": "v1.2.0",
-        "commit": "4db6a63f078f27da2cfb6cc90d47eb2dbd80c1cd",
+        "commit": "1f82e6e022c4463a952aab34cd77249b3f2b197d",
         "prerelease": false
       },
       "image": {
