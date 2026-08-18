@@ -161,6 +161,7 @@ start_local_service() {
          MYURLS_API_TOKEN=$myurls_api_token \
          MYURLS_RATE_LIMIT_RPS=5 \
          MYURLS_RATE_LIMIT_BURST=10 \
+         MYURLS_MAX_BODY_BYTES=1048576 \
          exec ./myurls) >> "$log_file" 2>&1 &
       health_url="http://127.0.0.1:$LOCAL_MYURLS_PORT/healthz"
       ;;

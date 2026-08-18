@@ -95,7 +95,7 @@ describe('integrated service artifact locks', () => {
   it.each([
     'docker.io/nginxinc/nginx-unprivileged:1.30.4-alpine',
     'docker.io/library/redis:8.10.0-alpine',
-    'ghcr.io/keleyaa/myurls:v1.11',
+    'ghcr.io/keleyaa/myurls:v1.13.0',
     'ghcr.io/aethersailor/subconverter-extended:v1.2.0',
   ])('accepts the tagged image reference %s', (reference) => {
     const candidate = structuredClone(lock);
@@ -126,7 +126,7 @@ describe('integrated service artifact locks', () => {
     );
   });
 
-  it.each(['release-1.30.4', '8.10.0', 'v1.11', 'v1.2.0'])(
+  it.each(['release-1.30.4', '8.10.0', 'v1.13.0', 'v1.2.0'])(
     'accepts the source tag %s',
     (tag) => {
       const candidate = structuredClone(lock);

@@ -116,8 +116,21 @@ esac
 env_file=$PWD/.env
 [ ! -d "$env_file" ] || fail '.env target must not be a directory or a symlink to a directory.'
 
+image_settings=
+for image_key in MYURLS_IMAGE REDIS_IMAGE SUBCONVERTER_IMAGE; do
+  if [ -f "$env_file" ]; then
+    if existing_image=$(load_existing_image "$env_file" "$image_key"); then
+      image_settings="${image_settings}${image_key}=${existing_image}
+"
+    else
+      existing_image_status=$?
+      [ "$existing_image_status" -eq 1 ] || fail "Existing $image_key is duplicated or invalid."
+    fi
+  fi
+done
+
 if [ "$subweb_image_seen" -eq 0 ] && [ -f "$env_file" ]; then
-  if existing_image=$(load_existing_image "$env_file"); then
+  if existing_image=$(load_existing_image "$env_file" SUBWEB_IMAGE); then
     subweb_image=$existing_image
   else
     existing_image_status=$?
@@ -125,9 +138,8 @@ if [ "$subweb_image_seen" -eq 0 ] && [ -f "$env_file" ]; then
   fi
 fi
 
-subweb_image_setting=
 if [ -n "$subweb_image" ]; then
-  subweb_image_setting="SUBWEB_IMAGE=$subweb_image
+  image_settings="${image_settings}SUBWEB_IMAGE=$subweb_image
 "
 fi
 
@@ -146,7 +158,7 @@ APP_DOMAIN=$app_domain
 API_DOMAIN=$api_domain
 API_URL=https://$api_domain
 SHORT_URL=https://$app_domain/short-api
-${subweb_image_setting}TLS_CERT_PATH=$tls_cert
+${image_settings}TLS_CERT_PATH=$tls_cert
 TLS_KEY_PATH=$tls_key
 MYURLS_API_TOKEN=$myurls_api_token
 REDIS_PASSWORD=$redis_password
@@ -158,7 +170,7 @@ APP_DOMAIN=$app_domain
 API_DOMAIN=$api_domain
 API_URL=https://$api_domain
 SHORT_URL=https://$app_domain/short-api
-${subweb_image_setting}MYURLS_API_TOKEN=$myurls_api_token
+${image_settings}MYURLS_API_TOKEN=$myurls_api_token
 REDIS_PASSWORD=$redis_password
 EOF
 fi

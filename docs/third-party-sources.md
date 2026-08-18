@@ -1,16 +1,18 @@
 # 第三方来源与变更边界
 
-生产 Compose 的所有外部镜像（Redis、SubConverter-Extended、Nginx 基础镜像、MyUrls）默认跟随各自 `latest` 浮动标签；[`deploy/versions.lock.json`](../deploy/versions.lock.json) 保留已验证基线（验证日期 2026-08-01）：MyUrls 集成测试直接消费其 digest，其余服务作为回滚参考，并作为 `verify:locks` 校验的机器可读依据。需要冻结时在 `.env` 设置 `MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE`/`SUBWEB_IMAGE`。
+生产 Compose 的所有外部镜像（Redis、SubConverter-Extended、Nginx 基础镜像、MyUrls）默认跟随各自 `latest` 浮动标签；[`deploy/versions.lock.json`](../deploy/versions.lock.json) 保留已验证基线（验证日期 2026-08-18）：MyUrls 集成测试直接消费其 digest，其余服务作为回滚参考，并作为 `verify:locks` 校验的机器可读依据。需要冻结时在 `.env` 设置 `MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE`/`SUBWEB_IMAGE`。
 
 | 项目 | 当前来源 | 运行时镜像 | 已验证基线（测试/回滚） | 本仓库是否修改其源码 | 许可证/边界 |
 | --- | --- | --- | --- | --- | --- |
 | Subweb | [`stilleshan/subweb`](https://github.com/stilleshan/subweb) | `docker.io/keleyaa/subweb:latest` | 发布 tag `sha-*`/`latest` | 是，本仓库已独立重构 | 本仓库 GPL-3.0 |
-| MyUrls | [`keleyaa/MyUrls`](https://github.com/keleyaa/MyUrls)，原始上游 [`CareyWang/MyUrls`](https://github.com/CareyWang/MyUrls) | `ghcr.io/keleyaa/myurls:latest` | `v1.11`, commit `68527398a2b4019f7ee5a176eb8645f68055d0ae`, image digest `sha256:f00046cd6c68986781ac9bf13d43fc4db3dbedb8815146a3510ef325cd5b98b0` | 不在本仓库修改；独立仓库维护 | 以该仓库许可证为准 |
+| MyUrls | [`keleyaa/MyUrls`](https://github.com/keleyaa/MyUrls)，原始上游 [`CareyWang/MyUrls`](https://github.com/CareyWang/MyUrls) | `ghcr.io/keleyaa/myurls:latest` | `v1.13.0`, commit `7dc3db6a6347fe9db6e79cec053fece19553fe84`, image digest `sha256:b98836c038e070c8f889f391d63bd9535aee93ce91753f4bb30353f3395d0915` | 不在本仓库修改；独立仓库维护 | 以该仓库许可证为准 |
 | SubConverter-Extended | [`Aethersailor/SubConverter-Extended`](https://github.com/Aethersailor/SubConverter-Extended) | `ghcr.io/aethersailor/subconverter-extended:latest` | `v1.2.0`, commit `4db6a63f078f27da2cfb6cc90d47eb2dbd80c1cd`, image digest `sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f` | 否，只配置官方镜像 | 以官方仓库许可证为准 |
 | Redis | [`redis/redis`](https://github.com/redis/redis) | `docker.io/library/redis:latest` | `8.10.0`, image digest `sha256:5cca2f8a01ef2264c52dac86f14ec6a5abe973a93331e1b62522cfc5e63e4691` | 否 | 以 Redis 对应版本许可证为准 |
 | Nginx unprivileged | [`nginx/nginx`](https://github.com/nginx/nginx) 与官方 unprivileged image | `nginxinc/nginx-unprivileged:alpine` | `1.30.4`, image digest `sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49` | 只添加模板和启动配置 | 以 Nginx/镜像仓库许可证为准 |
 
-MyUrls 的 Redis URL/TLS 与日志脱敏支持已在独立工作树实现和测试，但尚未发布完整稳定 tag 与镜像摘要。它发布成功前 `ghcr.io/keleyaa/myurls:latest` 不存在；Subweb 的集成验证因此明确覆写为上述 `v1.11` 基线，生产部署则在稳定发行后自动跟随 `latest`。需要可重复发布或回滚时，部署者可以在不提交的 `.env` 中以 `MYURLS_IMAGE` 指定已验证 digest。
+MyUrls `v1.13.0` 已发布并推进 `ghcr.io/keleyaa/myurls:latest`；Subweb 的可重复集成验证使用上述
+`v1.13.0` digest，生产部署默认继续跟随 `latest`。需要可重复发布或回滚时，部署者可以在不提交的
+`.env` 中以 `MYURLS_IMAGE` 指定已验证 digest；`configure.sh` 会在重新生成配置时保留该覆盖值。
 
 ## 设计参考
 

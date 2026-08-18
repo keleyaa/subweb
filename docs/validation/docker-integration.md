@@ -20,7 +20,7 @@
 | 服务 | 版本 | OCI index digest |
 | --- | --- | --- |
 | Gateway 基础镜像 | nginx-unprivileged `1.30.4-alpine` | `sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49` |
-| MyUrls | `v1.11` | `sha256:f00046cd6c68986781ac9bf13d43fc4db3dbedb8815146a3510ef325cd5b98b0` |
+| MyUrls | `v1.13.0` | `sha256:b98836c038e070c8f889f391d63bd9535aee93ce91753f4bb30353f3395d0915` |
 | Redis | `8.10.0-alpine` | `sha256:5cca2f8a01ef2264c52dac86f14ec6a5abe973a93331e1b62522cfc5e63e4691` |
 | SubConverter-Extended | `v1.2.0` | `sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f` |
 

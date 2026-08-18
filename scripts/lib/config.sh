@@ -70,9 +70,11 @@ validate_container_image() {
 
 load_existing_image() {
   image_file=${1-}
+  image_key=${2-}
   [ -f "$image_file" ] || return 1
+  [ -n "$image_key" ] || return 2
 
-  image_value=$(awk 'index($0, "SUBWEB_IMAGE=") == 1 { count += 1; value = substr($0, 14) } END { if (count == 1) print value; else if (count > 1) exit 2; else exit 1 }' "$image_file")
+  image_value=$(awk -v key="$image_key" 'index($0, key "=") == 1 { count += 1; value = substr($0, length(key) + 2) } END { if (count == 1) print value; else if (count > 1) exit 2; else exit 1 }' "$image_file")
   image_status=$?
   [ "$image_status" -eq 0 ] || return "$image_status"
   validate_container_image "$image_value" || return 2

@@ -154,6 +154,48 @@ describe('safe deployment configuration CLI', () => {
     expect(parseEnv(await readFile(join(cwd, '.env'), 'utf8')).SUBWEB_IMAGE).toBe(image);
   });
 
+  it('preserves valid image overrides when regenerating deployment configuration', async () => {
+    const cwd = await makeDirectory();
+    const overrides = {
+      MYURLS_IMAGE: 'ghcr.io/keleyaa/myurls@sha256:' + 'a'.repeat(64),
+      REDIS_IMAGE: 'docker.io/library/redis:8.10.0-alpine',
+      SUBCONVERTER_IMAGE: 'ghcr.io/aethersailor/subconverter-extended:v1.2.0',
+      SUBWEB_IMAGE: 'docker.io/keleyaa/subweb:sha-2bf1a9f',
+    };
+    await writeFile(
+      join(cwd, '.env'),
+      [
+        ...Object.entries(overrides).map(([key, value]) => `${key}=${value}`),
+        `MYURLS_API_TOKEN=${'a'.repeat(64)}`,
+        `REDIS_PASSWORD=${'b'.repeat(64)}`,
+        '',
+      ].join('\n'),
+      { mode: 0o600 },
+    );
+
+    const result = runConfigure(cwd, behindProxyArgs);
+
+    expect(result.status).toBe(0);
+    expect(parseEnv(await readFile(join(cwd, '.env'), 'utf8'))).toMatchObject(overrides);
+  });
+
+  it('rejects a duplicated or invalid existing image override without changing the file', async () => {
+    const cwd = await makeDirectory();
+    const original = [
+      'MYURLS_IMAGE=ghcr.io/keleyaa/myurls:v1.13.0',
+      'MYURLS_IMAGE=ghcr.io/keleyaa/myurls:latest',
+      `MYURLS_API_TOKEN=${'a'.repeat(64)}`,
+      `REDIS_PASSWORD=${'b'.repeat(64)}`,
+      '',
+    ].join('\n');
+    await writeFile(join(cwd, '.env'), original, { mode: 0o600 });
+
+    const result = runConfigure(cwd, behindProxyArgs);
+
+    expect(result.status).not.toBe(0);
+    expect(await readFile(join(cwd, '.env'), 'utf8')).toBe(original);
+  });
+
   it('writes only the direct-tls profile and absolute TLS paths', async () => {
     const cwd = await makeDirectory();
     const args = [

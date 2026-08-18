@@ -169,10 +169,9 @@ describe('integrated Compose stack', () => {
       MYURLS_REDIS_CONN: 'redis:6379',
       MYURLS_REDIS_PASSWORD: testSecret,
       MYURLS_API_TOKEN: testSecret,
+      MYURLS_MAX_BODY_BYTES: '1048576',
     });
-    expect(config.services.myurls.tmpfs).toContainEqual(
-      expect.stringContaining('/app/logs:uid=65532,gid=65532,mode=0700'),
-    );
+    expect(config.services.myurls.tmpfs).toBeUndefined();
     expect(config.services.subconverter.environment).toMatchObject({
       MANAGED_CONFIG_PREFIX: 'https://api.example.com',
       SUBCONVERTER_SECURITY_PROFILE: 'public',
@@ -211,7 +210,7 @@ describe('integrated Compose stack', () => {
       expect(service.cap_drop).toContain('ALL');
       expect(service.security_opt).toContain('no-new-privileges:true');
       expect(service.restart).toBe('unless-stopped');
-      expect(service.stop_grace_period).toBe('10s');
+      expect(service.stop_grace_period).toBe(name === 'myurls' ? '20s' : '10s');
       if (name === 'subconverter') {
         expect(service.read_only).toBe(true);
         expect(service.user).toBeUndefined();

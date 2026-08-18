@@ -19,9 +19,9 @@ tail -n 200 .runtime/local/logs/nginx.log
 
 Docker 服务和 Gateway 镜像统一使用 `Asia/Shanghai`。Gateway 与 MyUrls 访问日志只记录 ISO 8601
 时间、方法、隐私安全的路由模板和状态码；真实短码统一显示为 `/:shortKey`，不记录
-Query、请求体、Authorization、IP 或 User-Agent。Compose 默认跟随 MyUrls 的稳定 `latest`；仅在该
-镜像发布成功后才具备这套日志策略。发布前或需要审计特定版本时，应在 `.env` 中显式指定已验证镜像，
-并始终限制 Docker 管理权限，避免复制 `/app/logs` 内容。
+Query、请求体、Authorization、IP 或 User-Agent。Compose 默认跟随 MyUrls 的稳定 `latest`；访问日志由
+MyUrls 写入 stdout，并由 Docker `json-file` 驱动统一轮转。需要审计特定版本时，应在 `.env` 中显式指定
+已验证镜像，并始终限制 Docker 管理权限。
 
 所有容器的 `json-file` 标准输出日志限制为单文件 10 MB、最多 3 个文件。SubConverter 的输出先经过
 项目内置过滤器：完整 URI、编码后的 `url`/`link` 请求来源和 Authorization 会变为 `[redacted]`；成功的 `/healthz`
