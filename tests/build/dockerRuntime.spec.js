@@ -95,6 +95,14 @@ describe('Docker runtime contract', () => {
 
   it('blocks releases until application, browser, container, and image checks pass', async () => {
     const workflow = await readFile(rootFile('.github/workflows/docker-build-release.yml'), 'utf8');
+    const integrationVerifier = await readFile(
+      rootFile('scripts/verify-integrated-stack.sh'),
+      'utf8',
+    );
+    const operationsVerifier = await readFile(
+      rootFile('scripts/verify-redis-operations.sh'),
+      'utf8',
+    );
     const packageJson = JSON.parse(await readFile(rootFile('package.json'), 'utf8'));
 
     for (const command of [
@@ -138,6 +146,8 @@ describe('Docker runtime contract', () => {
     expect(workflow).not.toMatch(/upload-artifact[\s\S]{0,500}(?:\.env|fullchain\.pem|privkey\.pem|compose\.log|services\.log)/);
     expect(workflow).toContain('aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25');
     expect(workflow).toContain('needs: quality');
+    expect(workflow).toContain('packages: write');
+    expect(workflow).not.toContain('id-token: write');
     expect(workflow).toContain('group: docker-release-${{ github.ref }}');
     expect(workflow).toContain('cancel-in-progress: false');
     expect(workflow).toContain('provenance: mode=max');
@@ -149,6 +159,13 @@ describe('Docker runtime contract', () => {
     expect(workflow).toContain('image-ref: ${{ env.MYURLS_IMAGE }}');
     expect(workflow).toContain('Scan release candidate');
     expect(workflow).toContain('docker buildx imagetools create');
+    for (const verifier of [integrationVerifier, operationsVerifier]) {
+      expect(verifier).toContain("printf 'REDIS_IMAGE=%s\\n'");
+      expect(verifier).toContain("printf 'SUBCONVERTER_IMAGE=%s\\n'");
+    }
+    expect(integrationVerifier).toContain(
+      '"${REDIS_IMAGE:-docker.io/library/redis:latest}"',
+    );
     expect(workflow).not.toContain('Static verification only');
   });
 });

@@ -158,7 +158,7 @@ docker_port_is_available() {
   port_probe_container="subweb-port-probe-$project_suffix-$probe_port"
   if ! docker run --detach --rm --name "$port_probe_container" \
     --publish "$probe_port:6379" \
-    docker.io/library/redis:latest \
+    "${REDIS_IMAGE:-docker.io/library/redis:latest}" \
     redis-server --save '' --appendonly no \
     > "$temporary_directory/port-probe-$probe_port.log" 2>&1; then
     return 1
@@ -185,7 +185,9 @@ write_environment() {
     printf 'SUBWEB_PORT=%s\n' "$host_port"
     printf 'TLS_CERT_PATH=%s\n' "$certificate_path"
     printf 'TLS_KEY_PATH=%s\n' "$key_path"
+    [ -z "${REDIS_IMAGE:-}" ] || printf 'REDIS_IMAGE=%s\n' "$REDIS_IMAGE"
     printf 'MYURLS_IMAGE=%s\n' "$myurls_test_image"
+    [ -z "${SUBCONVERTER_IMAGE:-}" ] || printf 'SUBCONVERTER_IMAGE=%s\n' "$SUBCONVERTER_IMAGE"
     printf 'MYURLS_API_TOKEN=%s\n' "$myurls_api_token"
     printf 'REDIS_PASSWORD=%s\n' "$redis_password"
   } > "$env_file"
@@ -406,7 +408,7 @@ start_port_listener() {
   listener_container="subweb-port-blocker-$project_suffix-$listener_port"
   docker run --detach --rm --name "$listener_container" \
     --publish "$listener_port:6379" \
-    docker.io/library/redis:latest \
+    "${REDIS_IMAGE:-docker.io/library/redis:latest}" \
     redis-server --save '' --appendonly no \
     > "$temporary_directory/listener.log" 2>&1 || return 1
   deadline=$(( $(date +%s) + 10 ))

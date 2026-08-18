@@ -60,7 +60,9 @@ trap cleanup EXIT HUP INT TERM
   printf 'API_URL=https://api.app.test\n'
   printf 'SHORT_URL=https://app.test/short-api\n'
   printf 'SUBWEB_PORT=%s\n' "$host_port"
+  [ -z "${REDIS_IMAGE:-}" ] || printf 'REDIS_IMAGE=%s\n' "$REDIS_IMAGE"
   printf 'MYURLS_IMAGE=%s\n' "$myurls_test_image"
+  [ -z "${SUBCONVERTER_IMAGE:-}" ] || printf 'SUBCONVERTER_IMAGE=%s\n' "$SUBCONVERTER_IMAGE"
   printf 'MYURLS_API_TOKEN=%s\n' "$token"
   printf 'REDIS_PASSWORD=%s\n' "$password"
 } > "$env_file"
