@@ -118,11 +118,7 @@ if [ "$short_domain_seen" -eq 1 ]; then
   [ "$normalized_short" != "$normalized_api" ] || fail 'SHORT and API domains must be different in three-domain mode.'
 else
   domain_mode=legacy
-  if [ -f "$PWD/.env" ]; then
-    short_domain=$app_domain
-  else
-    fail '--short-domain is required for a new deployment.'
-  fi
+  short_domain=$app_domain
 fi
 
 case "$mode" in
