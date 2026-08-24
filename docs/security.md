@@ -40,14 +40,13 @@ gateway 根据 Host 分离应用、API 和短链，并在两个短链创建代�
 - 拒绝的 CORS 请求仍会消耗服务端资源，因此需要限流保护
 - 外层代理不应移除或修改 CORS 响应头
 
-## APP 兼容入口（迁移期）
+## APP 短码兼容入口
 
 三域名部署后，`https://APP_DOMAIN/short-api/short` 和 `https://APP_DOMAIN/:key` 仍然可用：
 
-1. **目的**：兼容已分享的旧短链，允许渐进式迁移
-2. **路由优先级**：新短链返回 `SHORT_DOMAIN` URL，旧短链继续跳转
-3. **何时移除**：确认没有旧短链在使用后（观察 Gateway 日志中 `APP_DOMAIN` 短链访问量）
-4. **移除方式**：修改 `nginx/snippets/app-routes.conf.template`，移除短链路由，重新渲染和部署 Gateway 配置
+1. **用途**：兼容已经分享的短链，不改变默认三域名部署方式
+2. **新链路**：新短链始终返回 `SHORT_DOMAIN` URL
+3. **部署要求**：不需要单独的端口、证书或配置项，三个域名仍全部反代到同一个 Gateway 回环端口
 
 兼容入口的创建 POST 仍要求精确的 `Origin: https://APP_DOMAIN`，从而阻止跨站 simple request 写入；该入口不返回跨域授权头。
 

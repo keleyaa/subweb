@@ -21,6 +21,6 @@ npm ci
 
 GitHub Actions 在 `macos-15` 和 `ubuntu-24.04` 上执行同一生命周期；CI 只在安装编译工具与系统开发头文件阶段使用系统包管理器，业务脚本不调用 `sudo`。QuickJS 和 libcron 由 bootstrap 按锁定 SubConverter 源码中的依赖 revision 构建；Mihomo Go bridge 与 C++ 主程序在运行时源码副本中完成，不污染外部 checkout。MyUrls 的 `public` 运行资产会复制到本次隔离运行目录，不依赖用户当前工作目录。PID 所有权使用跨 `exec` 保持稳定的进程启动时间校验，避免 npm 或二进制命令行变化造成误判，同时防止 PID 复用时误杀无关进程。本机缺少 Go、CMake、pkg-config、Redis、Nginx 或系统开发包时，bootstrap 会一次性列出命令依赖；CMake 对缺失开发包会给出精确包名，安装后重试即可。
 
-## 当前工作站证据
+## 当前工作站证据（2026-08-25）
 
-截至 2026-08-02，本机源码生命周期的脚本、配置派生、状态聚合、优雅停止和单元测试已通过；实际维护工作站仍缺少 `go`、`cmake`、`redis-server`、`redis-cli` 和 `nginx`，因此不把该机器描述为端到端通过。GitHub Actions 的 macOS/Linux 任务负责真实构建与生命周期复现；失败日志曾确认缺少 `libcurl`、`yaml-cpp`、QuickJS、libcron、Mihomo bridge 和 MyUrls 静态运行资产，当前实现已把这些依赖与资产纳入锁定构建和隔离运行流程。
+本机源码生命周期的脚本、配置派生、状态聚合、优雅停止和单元测试已通过；实际维护工作站仍缺少 `go`、`cmake`、`redis-server`、`redis-cli` 和 `nginx`，因此不把该机器描述为端到端通过。GitHub Actions 的 macOS/Linux 任务会先安装编译工具、系统开发包和运行服务，再复现完整生命周期；QuickJS、libcron、Mihomo bridge 和 MyUrls 静态运行资产由 bootstrap 按锁定版本准备。

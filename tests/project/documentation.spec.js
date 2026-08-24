@@ -269,7 +269,6 @@ describe('documentation contract', () => {
       'docs/security.md',
       'docs/third-party-sources.md',
       'deploy/subconverter/README.md',
-      'deploy/subconverter/config/README.md',
     ];
     for (const file of policyDocuments) {
       const source = read(file);

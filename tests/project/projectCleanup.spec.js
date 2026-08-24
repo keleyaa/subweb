@@ -25,6 +25,9 @@ const removedArtifacts = [
   'docs/superpowers/specs/2026-08-24-myurls-frontend-gateway-design.md',
   'docs/superpowers/specs/2026-08-24-single-http-deployment-design.md',
   'docs/three-domain-documentation-guide.md',
+  'docs/prd-three-domain-separation.md',
+  'docs/implementation-status-three-domain.md',
+  'deploy/subconverter/config/README.md',
 ].map(rootFile);
 
 describe('project cleanup and independent-maintenance boundary', () => {

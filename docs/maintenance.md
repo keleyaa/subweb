@@ -46,7 +46,7 @@ git diff --check
 
 本机源码验证还需 `./scripts/verify-local-source.sh`，前提是当前主机已手动安装全部原生依赖。
 
-`npm run verify:release` 聚合安装、审计、质量、浏览器、锁、Compose、文档、容器、单一 HTTP 集成和证据门禁。它会重装依赖并运行较长时间，仅在准备发布的干净工作树执行。
+`npm run verify:release` 聚合安装、审计、质量、浏览器、锁、Compose、文档、容器、Redis 运维、单一 HTTP 集成和证据门禁。执行前先用 `./scripts/configure.sh` 生成临时 `.env`；它会重装依赖并运行较长时间，仅在准备发布的干净工作树执行。
 
 ## 容器镜像发行
 

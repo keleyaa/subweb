@@ -21,8 +21,8 @@
 | 入口 | 路由 | 目标 |
 | --- | --- | --- |
 | `https://APP_DOMAIN/` | 静态文件与前端 history fallback | Subconverter Web |
-| `https://APP_DOMAIN/short-api/*` | 兼容入口（迁移期） | MyUrls（见下方说明） |
-| `https://APP_DOMAIN/<short-code>` | 兼容入口（迁移期） | MyUrls 跳转 |
+| `https://APP_DOMAIN/short-api/*` | 已存在短码的兼容创建入口 | MyUrls（见下方说明） |
+| `https://APP_DOMAIN/<short-code>` | 已存在短码的兼容跳转入口 | MyUrls 跳转 |
 | `https://API_DOMAIN/sub` | 保留路径和查询 | SubConverter |
 | `https://API_DOMAIN/healthz` | 网关健康检查 | 网关 |
 | `https://SHORT_DOMAIN/`、`/app.js`、`/styles.css`、`/fonts/*` | MyUrls 前端及本地资源 | MyUrls |
@@ -39,11 +39,11 @@
 
 `SHORT_DOMAIN/` 的 MyUrls 前端使用同源 `POST /short`，只接受精确的 `Origin: https://SHORT_DOMAIN` 和带 boundary 的 `multipart/form-data`；该路径不需要 CORS 响应头。两条创建路径都会由 Gateway 清空客户端鉴权头并注入服务端 MyUrls Token。
 
-**APP 兼容入口**：三域名部署后，`https://APP_DOMAIN/short-api/*` 和 `https://APP_DOMAIN/<short-code>` 仍然可用，用于兼容已分享的旧短链。新短链返回 `https://SHORT_DOMAIN/<short-code>`。迁移完成后可移除 APP 域名下的短链路由。
+**APP 兼容入口**：三域名部署后，`https://APP_DOMAIN/short-api/*` 和 `https://APP_DOMAIN/<short-code>` 继续用于兼容已经分享的短链。新短链始终返回 `https://SHORT_DOMAIN/<short-code>`；该兼容入口不需要额外配置，也不构成另一种部署模式。
 
 兼容入口的创建 POST 同样要求精确的 `Origin: https://APP_DOMAIN`；它不返回跨域授权头，也不会透传客户端 `Authorization` 或 `Proxy-Authorization`。
 
-短链 Token 只存在于 `.env`、本机私有运行目录或平台秘密变量中。浏览器看到的 `/conf/config.js` 只包含公开 URL 和预设。APP 域名保留短链兼容入口，方便迁移旧短码；新短链始终返回 SHORT 域名。
+短链 Token 只存在于 `.env`、本机私有运行目录或平台秘密变量中。浏览器看到的 `/conf/config.js` 只包含公开 URL 和预设。APP 域名的兼容入口只服务已有短码；新短链始终返回 SHORT 域名。
 
 所有 Docker 服务显式使用 `Asia/Shanghai`，标准输出由 Compose 统一轮转。Gateway 只把
 单段短码路由记为 `/:shortKey`，不把真实短码写入访问日志；成功健康检查也不进入访问
@@ -62,7 +62,7 @@
 
 | 方式 | 公网入口 | TLS 责任 | 内部边界 |
 | --- | --- | --- | --- |
-| Docker 单一 HTTP | 外层代理 | 宝塔、1Panel、Nginx、OpenResty、Cloudflare 等负责 DNS/TLS/80/443 | Compose 只把网关绑定到 `127.0.0.1` |
+| Docker | 外层代理 | 宝塔、1Panel、Nginx、OpenResty、Cloudflare 等负责 DNS、TLS 和公网 80/443 | Compose 只把网关绑定到 `127.0.0.1` |
 | 本机源码 | 默认 loopback 端口 | 仅开发；公开时由外层代理负责 | 七个本机进程按 PID 所有权管理 |
 
 项目不要求 Caddy，也不会自动申请证书。Redis 卷或平台 Key Value/Redis 是备份、恢复和迁移的核心；其他组件应按 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 重建。

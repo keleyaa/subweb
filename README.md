@@ -20,7 +20,7 @@ Subconverter Web turns one browser workflow into one deployable boundary：订�
 
 - **转换**：通过 `API_DOMAIN/sub` 调用 SubConverter-Extended。
 - **短链**：默认 Docker 部署中，`SHORT_DOMAIN/` 提供 MyUrls 前端，浏览器同源请求 `SHORT_DOMAIN/short`；Subweb 主前端仍通过 `SHORT_DOMAIN/short-api/short` 创建，Gateway 注入服务端 Token 后调用 MyUrls。
-- **跳转**：访问 `SHORT_DOMAIN/:shortKey`（以及迁移期的 `APP_DOMAIN/:shortKey`），由 MyUrls 从 Redis 读取完整映射并返回 redirect。
+- **跳转**：访问 `SHORT_DOMAIN/:shortKey`，由 MyUrls 从 Redis 读取完整映射并返回 redirect；`APP_DOMAIN/:shortKey` 仅保留已存在短码的兼容跳转。
 - **持久化**：Redis 是唯一业务数据卷；Gateway 和前端不保存业务数据。
 
 ## 边界如何工作
@@ -29,7 +29,7 @@ Subconverter Web turns one browser workflow into one deployable boundary：订�
   <img src="./docs/assets/readme/subweb-architecture.svg" width="100%" alt="Browser reaches APP_DOMAIN and API_DOMAIN through one gateway, then private SubConverter, MyUrls, and Redis services">
 </p>
 
-- `APP_DOMAIN`：Subweb 静态前端，以及迁移期的短链创建/跳转兼容入口。
+- `APP_DOMAIN`：Subweb 静态前端，以及已存在短码的兼容创建/跳转入口；默认新短链不使用该入口。
 - `API_DOMAIN`：`/sub` 转换路由和 SubConverter 健康检查。
 - `SHORT_DOMAIN`：MyUrls 前端、同源短链创建、短码跳转和健康检查。
 - **Gateway**：按 Host 路由，并在服务端注入 MyUrls Bearer Token；内部服务不发布宿主机端口。
@@ -58,7 +58,7 @@ docker compose ps
 
 脚本会生成不提交的 `.env`、MyUrls Token 和 Redis 密码。Gateway 镜像同时发布到 `docker.io/keleyaa/subweb` 与 `ghcr.io/keleyaa/subweb`；生产环境可以通过 `--image` 指定已发行的 `sha-*` Gateway 镜像。Redis 默认使用稳定主线 `docker.io/library/redis:8-alpine`；MyUrls 和 SubConverter 继续跟随各自已发布的稳定 `latest`。需要受控回滚或冻结时在 `.env` 显式覆盖 `MYURLS_IMAGE`、`REDIS_IMAGE`、`SUBCONVERTER_IMAGE` 或 `SUBWEB_IMAGE`。
 
-短链返回 `https://short.example.com/abc123`；前端通过 CORS 跨域创建短链。迁移期间，`https://sub.example.com/abc123` 仍可访问（兼容入口）。
+短链返回 `https://short.example.com/abc123`；前端通过 CORS 跨域创建短链。`https://sub.example.com/abc123` 仅作为已存在短码的兼容入口，不需要额外配置。
 项目不依赖 Caddy，也不会申请或续期证书。完整说明见 [Docker 部署](docs/deployment-docker.md)。
 
 ### 本机源码运行

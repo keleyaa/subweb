@@ -1,26 +1,50 @@
-# 一体化实施基线
+# 当前验证基线
 
-## 记录信息
+本文只记录当前代码的可执行验证入口，不承担生产部署说明。部署步骤以
+[`docs/deployment.md`](../deployment.md) 和 [`docs/deployment-docker.md`](../deployment-docker.md) 为准。
 
-| 项目 | 值 |
-| --- | --- |
-| 日期 | 2026-08-01 17:35:46 UTC+08:00 |
-| Commit SHA | `6a26a2d0974a6765c8cc275a76f8d6bd29f6937b` |
-| Node.js | `v24.14.1` |
-| npm | `11.11.0` |
-| Docker Engine | `29.6.2`（build `dfc4efb1e2`） |
-| Docker Compose | `v5.3.1` |
+## 必需门禁
 
-## 命令结果
+```sh
+npm ci
+npm audit --audit-level=moderate
+npm run verify
+npm run test:e2e
+npm run verify:locks
+npm run verify:compose
+npm run verify:docs
+npm run verify:evidence
+npm run verify:operations
+npm run verify:integration
+git diff --check
+```
 
-| 状态 | 命令 | 退出码 | 失败分类 |
-| --- | --- | ---: | --- |
-| 通过 | `git status --short --branch` | 0 | 无 |
-| 通过 | `git log -3 --oneline --decorate` | 0 | 无 |
-| 通过 | `git remote -v` | 0 | 无 |
-| 通过 | `npm ci --cache /private/tmp/subweb-npm-cache-clean` | 0 | 无 |
-| 通过 | `npm run verify` | 0 | 无 |
-| 失败 | `npm run test:e2e`（受限沙箱内首次执行） | 1 | 执行环境限制：Chromium 无权注册 macOS Mach port；不是测试断言失败 |
-| 通过 | `npm run test:e2e`（允许启动浏览器后复验） | 0 | 无 |
-| 通过 | `npm audit --audit-level=moderate --cache /private/tmp/subweb-npm-cache-clean` | 0 | 无 |
-| 通过 | `docker compose config --quiet` | 0 | 无 |
+准备 Docker 验证时先生成临时配置：
+
+```sh
+./scripts/configure.sh \
+  --app-domain app.test \
+  --api-domain api.app.test \
+  --short-domain short.app.test
+```
+
+## 集成开关
+
+默认 `npm test` 只运行不依赖 Docker 的集成契约测试。Docker quality workflow 设置
+`RUN_DOCKER_INTEGRATION=1`，从而实际启动四服务 Compose 栈并验证：
+
+- APP、API、SHORT 三个 Host 的职责隔离；
+- SHORT 域名的 MyUrls 前端、同源创建和跳转；
+- APP 域名的已有短码兼容入口；
+- Redis 重启后的短链持久性；
+- 内部端口私有、Token 覆盖和日志隐私。
+
+## 本机源码门禁
+
+```sh
+./scripts/verify-local-source.sh
+```
+
+该脚本需要本机已安装 Go、CMake、pkg-config、Redis、Nginx 及对应开发包；GitHub Actions
+会在 macOS 和 Linux runner 上先安装这些依赖。本机缺少依赖时只能报告前置条件不足，不能将
+该结果解释为项目测试失败。

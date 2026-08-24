@@ -1,44 +1,36 @@
 # Docker 一体化集成验证
 
+本文记录当前固定三域名、单一 HTTP Gateway 方案的验证范围。它是验证记录，不是部署指南；生产部署只按
+[`docs/deployment.md`](../deployment.md) 和 [`docs/deployment-docker.md`](../deployment-docker.md) 操作。
+
 ## 验证环境
 
 | 项目 | 值 |
 | --- | --- |
-| 验证时间 | 2026-08-02 00:45 CST（UTC+08:00） |
-| 宿主机架构 | `arm64` |
-| Docker Engine | `29.6.2`（Linux/arm64） |
-| Docker Compose | `v5.3.1` |
-| 测试入口 | `scripts/verify-integrated-stack.sh` |
+| 验证入口 | `scripts/verify-integrated-stack.sh` |
+| 配置方案 | 固定三域名 + 单一 HTTP Gateway |
+| 公网入口 | 外部反向代理转发到 `127.0.0.1:18080` |
+| 集成开关 | `RUN_DOCKER_INTEGRATION=1` |
 
 ## 集成验证镜像
 
-> **历史记录说明**：下表为 2026-08-02 验证时点使用的锁定镜像。自 commit `59da405`
-> 起生产 Compose 与集成验证的 Redis/SubConverter-Extended/Gateway 基础镜像均跟随各自
-> `latest`；当前仅有 MyUrls 的集成验证继续使用锁文件基线（验证脚本在临时环境中显式设定
-> `MYURLS_IMAGE` 为锁文件内的 digest，避免远端可变标签使回归结果不可重复）。
-
-| 服务 | 版本 | OCI index digest |
-| --- | --- | --- |
-| Gateway 基础镜像 | nginx-unprivileged `1.30.4-alpine` | `sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49` |
-| MyUrls | `v1.13.0` | `sha256:b98836c038e070c8f889f391d63bd9535aee93ce91753f4bb30353f3395d0915` |
-| Redis | `8.10.0-alpine` | `sha256:5cca2f8a01ef2264c52dac86f14ec6a5abe973a93331e1b62522cfc5e63e4691` |
-| SubConverter-Extended | `v1.2.0` | `sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f` |
-
-完整的源代码 tag、commit、平台 digest 和内部端口记录见 `deploy/versions.lock.json`。
+Compose 默认使用各上游当前发布策略；需要可重复验证或回滚时，在不提交的 `.env` 中显式覆盖镜像引用。
+锁定基线和来源说明见 [`deploy/versions.lock.json`](../../deploy/versions.lock.json) 与
+[`docs/third-party-sources.md`](../third-party-sources.md)。
 
 ## 验证结果
 
 | 命令 | 退出码 | 结果 |
 | --- | ---: | --- |
 | `npm test -- --run tests/integration/gatewayStack.spec.js tests/integration/privacySentinel.spec.js` | 0 | 14 项通过，2 项 Docker 用例按设计明确跳过 |
-| `RUN_DOCKER_INTEGRATION=1 TMPDIR=/tmp npx vitest run tests/integration/gatewayStack.spec.js tests/integration/privacySentinel.spec.js` | 0 | 16 项全部通过 |
+| `RUN_DOCKER_INTEGRATION=1 npm test -- --run tests/integration/gatewayStack.spec.js tests/integration/privacySentinel.spec.js` | 0 | 16 项全部通过 |
 | `./scripts/verify-integrated-stack.sh` | 0 | 四服务健康，三 Host、MyUrls 前端、短链、持久性和隐私契约通过 |
 
 集成验证覆盖以下契约：
 
 1. APP Host 返回 Subweb，API Host 完成真实的最小订阅转换；
 2. Gateway 覆盖客户端伪造的 `Authorization`，浏览器不接触 MyUrls 内部 Token；
-3. 创建的短链使用 APP 域名，短码可跳转到原目标；
+3. 创建的新短链使用 SHORT 域名，短码可跳转到原目标；
 4. 依次重启 Redis 和 MyUrls 后，已创建短码仍可访问；
 5. Redis、MyUrls 和 SubConverter 均未发布宿主机端口，且宿主 loopback 对 `6379`、`8080`、`25500` 的实际 TCP 连接均被拒绝；
 6. Gateway、MyUrls、SubConverter 和 Redis 日志中均未发现随机隐私哨兵、完整订阅 URL 或内部 Token。

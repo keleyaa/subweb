@@ -107,7 +107,7 @@ docker compose down
 docker compose up -d --build --wait
 ```
 
-源码构建仍使用同一个 `gateway` 服务和同一个回环 HTTP 入口，不再有 `--mode`、TLS 路径、80/443 监听或 Compose profile。
+源码构建与镜像部署使用同一个 `gateway` 服务和同一个回环 HTTP 入口；公网反代和证书配置始终由部署者自己的入口负责。
 
 ## 验证
 
