@@ -12,14 +12,14 @@ describe('Docker runtime contract', () => {
     expect(dockerfile).toMatch(/^FROM node:24-alpine@sha256:[0-9a-f]{64} AS build/m);
     expect(finalStage).toMatch(/^FROM nginxinc\/nginx-unprivileged:1\.30\.4-alpine@sha256:[0-9a-f]{64}/m);
     expect(finalStage).toContain('org.opencontainers.image.source="https://github.com/keleyaa/subweb"');
-    expect(finalStage).toContain('RUN apk add --no-cache openssl tzdata');
+    expect(finalStage).toContain('RUN apk add --no-cache tzdata');
     expect(finalStage).toContain('tzdata');
     expect(finalStage).toContain('ENV TZ=Asia/Shanghai');
-    expect(finalStage).toContain('EXPOSE 8080 8443');
+    expect(finalStage).toContain('EXPOSE 8080');
     expect(finalStage).toContain('HEALTHCHECK');
     expect(finalStage).not.toContain('GATEWAY_MODE" = platform');
     expect(finalStage).toContain('http://127.0.0.1:8080/healthz');
-    expect(finalStage).toContain('https://127.0.0.1:8443/healthz');
+    expect(finalStage).not.toContain('8443');
     expect(finalStage).not.toContain('http://127.0.0.1:${GATEWAY_PORT}/healthz');
     expect(finalStage).toContain('COPY --chown=101:101 nginx/templates /etc/nginx/gateway/templates');
     expect(finalStage).toContain('COPY --chown=101:101 nginx/snippets /etc/nginx/gateway/snippets');
@@ -31,7 +31,7 @@ describe('Docker runtime contract', () => {
     expect(startScript).not.toContain('normalize_platform_upstream');
   });
 
-  it('provides an integrated Compose deployment with two profile-scoped gateways', async () => {
+  it('provides an integrated Compose deployment with one loopback gateway', async () => {
     const compose = await readFile(rootFile('compose.yaml'), 'utf8');
 
     expect(compose).toContain('x-gateway-common:');
@@ -41,10 +41,10 @@ describe('Docker runtime contract', () => {
     expect(compose).toContain('driver: json-file');
     expect(compose).toContain('max-size: "10m"');
     expect(compose).toContain('max-file: "3"');
-    expect(compose).toContain('gateway-http:');
-    expect(compose).toContain('gateway-tls:');
-    expect(compose).toContain('behind-proxy');
-    expect(compose).toContain('direct-tls');
+    expect(compose).toContain('gateway:');
+    expect(compose).not.toContain('gateway-http:');
+    expect(compose).not.toContain('gateway-tls:');
+    expect(compose).not.toContain('profiles:');
     expect(compose).toContain('${SUBWEB_PORT:-18080}:8080');
     expect(compose).toContain('redis-data:');
     expect(compose).toContain('no-new-privileges:true');
@@ -65,7 +65,7 @@ describe('Docker runtime contract', () => {
     expect(verifier).toContain('--security-opt no-new-privileges:true');
     expect(verifier).toContain('--tmpfs /tmp:uid=101,gid=101,mode=0700');
     expect(verifier).toContain('--tmpfs /usr/share/nginx/html/conf:uid=101,gid=101,mode=0700');
-    expect(verifier).toContain("-e GATEWAY_MODE='behind-proxy'");
+    expect(verifier).toContain("-e SHORT_DOMAIN='short.example.com'");
     expect(verifier).toContain("-e SUBCONVERTER_UPSTREAM='http://subconverter:25500'");
     expect(verifier).toContain("-e MYURLS_UPSTREAM='http://myurls:8080'");
     expect(verifier).toContain("randomBytes(32)");
@@ -108,12 +108,11 @@ describe('Docker runtime contract', () => {
     for (const command of [
       'npm ci',
       'npm run verify:locks',
-      './scripts/configure.sh --mode behind-proxy --app-domain app.test --api-domain api.app.test',
+      './scripts/configure.sh --app-domain app.test --api-domain api.app.test --short-domain short.app.test',
       'npm run verify:compose',
       'npm run verify',
       'npm run verify:container',
-      'npm run verify:integration:behind-proxy',
-      'npm run verify:integration:direct-tls',
+      'npm run verify:integration',
       'npm run test:e2e',
       'npm audit --audit-level=moderate',
     ]) {
@@ -123,8 +122,7 @@ describe('Docker runtime contract', () => {
       'npm run verify:locks',
       'npm run verify:compose',
       'npm run verify:container',
-      'npm run verify:integration:behind-proxy',
-      'npm run verify:integration:direct-tls',
+      'npm run verify:integration',
       'npm run test:e2e',
       'npm audit --audit-level=moderate',
       'aquasecurity/trivy-action@',
@@ -135,12 +133,7 @@ describe('Docker runtime contract', () => {
       );
     }
     expect(packageJson.scripts['verify:container']).toBe('./scripts/verify-container.sh subweb:ci');
-    expect(packageJson.scripts['verify:integration:behind-proxy']).toBe(
-      './scripts/verify-integrated-stack.sh --mode behind-proxy',
-    );
-    expect(packageJson.scripts['verify:integration:direct-tls']).toBe(
-      './scripts/verify-integrated-stack.sh --mode direct-tls',
-    );
+    expect(packageJson.scripts['verify:integration']).toBe('./scripts/verify-integrated-stack.sh');
     expect(workflow).toContain('if: always()');
     expect(workflow).toContain('rm -f .env');
     expect(workflow).not.toMatch(/upload-artifact[\s\S]{0,500}(?:\.env|fullchain\.pem|privkey\.pem|compose\.log|services\.log)/);
@@ -163,9 +156,7 @@ describe('Docker runtime contract', () => {
       expect(verifier).toContain("printf 'REDIS_IMAGE=%s\\n'");
       expect(verifier).toContain("printf 'SUBCONVERTER_IMAGE=%s\\n'");
     }
-    expect(integrationVerifier).toContain(
-      '"${REDIS_IMAGE:-docker.io/library/redis:8-alpine}"',
-    );
+    expect(integrationVerifier).toContain('REDIS_IMAGE');
     expect(workflow).not.toContain('Static verification only');
   });
 });

@@ -12,7 +12,7 @@
 
 ## 请求路径
 
-### 三域名模式（推荐）
+### 三域名入口
 
 `APP_DOMAIN`、`API_DOMAIN` 和 `SHORT_DOMAIN` 必须不同，但指向同一网关。前端、转换后端、短链服务职责独立，支持跨域 CORS。
 
@@ -43,19 +43,7 @@
 
 兼容入口的创建 POST 同样要求精确的 `Origin: https://APP_DOMAIN`；它不返回跨域授权头，也不会透传客户端 `Authorization` 或 `Proxy-Authorization`。
 
-### Legacy 双域名模式
-
-向后兼容的部署方式，短链服务在 `APP_DOMAIN` 下：
-
-| 入口 | 路由 | 目标 |
-| --- | --- | --- |
-| `https://APP_DOMAIN/` | 静态文件与前端 history fallback | Subconverter Web |
-| `https://APP_DOMAIN/short-api/short` | 去掉 `/short-api` 前缀并注入 `Authorization` | MyUrls `/short` |
-| `https://APP_DOMAIN/<short-code>` | 保留短码路径 | MyUrls 跳转 |
-| `https://API_DOMAIN/sub` | 保留路径和查询 | SubConverter |
-| `https://API_DOMAIN/healthz` | 网关健康检查 | 网关 |
-
-短链 Token 只存在于 `.env`、本机私有运行目录或平台秘密变量中。浏览器看到的 `/conf/config.js` 只包含公开 URL 和预设。网关必须先匹配 `/short-api/`，再匹配短码回退，避免创建请求被当成短码。
+短链 Token 只存在于 `.env`、本机私有运行目录或平台秘密变量中。浏览器看到的 `/conf/config.js` 只包含公开 URL 和预设。APP 域名保留短链兼容入口，方便迁移旧短码；新短链始终返回 SHORT 域名。
 
 所有 Docker 服务显式使用 `Asia/Shanghai`，标准输出由 Compose 统一轮转。Gateway 只把
 单段短码路由记为 `/:shortKey`，不把真实短码写入访问日志；成功健康检查也不进入访问
@@ -74,8 +62,7 @@
 
 | 方式 | 公网入口 | TLS 责任 | 内部边界 |
 | --- | --- | --- | --- |
-| Docker `behind-proxy` | 外层代理 | 宝塔、1Panel、Nginx、OpenResty、Cloudflare 等 | Compose 只把网关绑定到 `127.0.0.1` |
-| Docker `direct-tls` | 网关 80/443 | 部署者提供并续期证书（需覆盖所有域名） | MyUrls、Redis、SubConverter 仅在 Compose 网络 |
+| Docker 单一 HTTP | 外层代理 | 宝塔、1Panel、Nginx、OpenResty、Cloudflare 等负责 DNS/TLS/80/443 | Compose 只把网关绑定到 `127.0.0.1` |
 | 本机源码 | 默认 loopback 端口 | 仅开发；公开时由外层代理负责 | 七个本机进程按 PID 所有权管理 |
 
 项目不要求 Caddy，也不会自动申请证书。Redis 卷或平台 Key Value/Redis 是备份、恢复和迁移的核心；其他组件应按 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 重建。

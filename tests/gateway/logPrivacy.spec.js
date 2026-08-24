@@ -7,7 +7,6 @@ const rootFile = (path) => new URL(path, root);
 describe('gateway logging privacy', () => {
   it.each([
     'nginx/templates/http.conf.template',
-    'nginx/templates/direct-tls.conf.template',
     'deploy/local/nginx.conf.template',
   ])('logs only time, method, privacy-safe route, and status in %s', async (path) => {
     const template = await readFile(rootFile(path), 'utf8');

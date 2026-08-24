@@ -31,7 +31,7 @@ case "$*" in
   'compose version') exit 0 ;;
   'compose config --quiet') exit 0 ;;
   'compose config --format json')
-    printf '%s\\n' '{"services":{"gateway-http":{"ports":[{"published":"18080"}]},"redis":{},"myurls":{},"subconverter":{}}}'
+    printf '%s\\n' '{"services":{"gateway":{"ports":[{"published":"18080"}]},"redis":{},"myurls":{},"subconverter":{}}}'
     ;;
   'compose pull') exit "\${DOCKER_PULL_STATUS:-0}" ;;
   'compose up -d --no-build --pull always --wait') exit 0 ;;
@@ -45,7 +45,6 @@ esac
 
 const runDeploy = (root, extraArgs = [], env = {}) =>
   spawnSync('sh', [join(root, 'scripts/docker-deploy.sh'),
-    '--mode', 'behind-proxy',
     '--app-domain', 'example.com',
     '--api-domain', 'api.example.com',
     '--short-domain', 'short.example.com',

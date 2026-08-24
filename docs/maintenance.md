@@ -2,6 +2,8 @@
 
 ## 仓库边界
 
+常规部署从以下命令开始：`git clone https://github.com/keleyaa/subweb.git`，随后 `cd subweb`。
+
 - `origin` 只能指向当前维护仓库 [`keleyaa/subweb`](https://github.com/keleyaa/subweb)。
 - `upstream` 仅用于读取 Fork 起点 [`stilleshan/subweb`](https://github.com/stilleshan/subweb)，不得推送。
 - MyUrls 必须在独立 `/Users/li/Desktop/GitHub/MyUrls` 仓库维护，不把其源码、`.git` 或构建产物复制进 Subweb。
@@ -38,14 +40,13 @@ npm run verify:compose
 npm run verify:docs
 npm run verify:evidence
 npm run verify:operations
-npm run verify:integration:behind-proxy
-npm run verify:integration:direct-tls
+npm run verify:integration
 git diff --check
 ```
 
 本机源码验证还需 `./scripts/verify-local-source.sh`，前提是当前主机已手动安装全部原生依赖。
 
-`npm run verify:release` 聚合安装、审计、质量、浏览器、锁、Compose、文档、容器、两个 Docker profile 和证据门禁。它会重装依赖并运行较长时间，仅在准备发布的干净工作树执行。
+`npm run verify:release` 聚合安装、审计、质量、浏览器、锁、Compose、文档、容器、单一 HTTP 集成和证据门禁。它会重装依赖并运行较长时间，仅在准备发布的干净工作树执行。
 
 ## 容器镜像发行
 

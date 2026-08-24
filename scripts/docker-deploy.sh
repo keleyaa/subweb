@@ -9,22 +9,14 @@ fail() {
   exit 1
 }
 
-mode=
 app_domain=
 api_domain=
 short_domain=
-tls_cert=
-tls_key=
 image=docker.io/keleyaa/subweb:latest
 image_seen=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --mode)
-      [ "$#" -ge 2 ] || fail '--mode requires a value.'
-      mode=$2
-      shift 2
-      ;;
     --app-domain)
       [ "$#" -ge 2 ] || fail '--app-domain requires a value.'
       app_domain=$2
@@ -38,16 +30,6 @@ while [ "$#" -gt 0 ]; do
     --short-domain)
       [ "$#" -ge 2 ] || fail '--short-domain requires a value.'
       short_domain=$2
-      shift 2
-      ;;
-    --tls-cert)
-      [ "$#" -ge 2 ] || fail '--tls-cert requires a value.'
-      tls_cert=$2
-      shift 2
-      ;;
-    --tls-key)
-      [ "$#" -ge 2 ] || fail '--tls-key requires a value.'
-      tls_key=$2
       shift 2
       ;;
     --image)
@@ -66,23 +48,11 @@ docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
 
 cd "$PROJECT_DIRECTORY"
 
-if [ "$mode" = direct-tls ]; then
-  "$SCRIPT_DIRECTORY/configure.sh" \
-    --mode "$mode" \
-    --app-domain "$app_domain" \
-    --api-domain "$api_domain" \
-    --short-domain "$short_domain" \
-    --tls-cert "$tls_cert" \
-    --tls-key "$tls_key" \
-    --subweb-image "$image"
-else
-  "$SCRIPT_DIRECTORY/configure.sh" \
-    --mode "$mode" \
-    --app-domain "$app_domain" \
-    --api-domain "$api_domain" \
-    --short-domain "$short_domain" \
-    --subweb-image "$image"
-fi
+"$SCRIPT_DIRECTORY/configure.sh" \
+  --app-domain "$app_domain" \
+  --api-domain "$api_domain" \
+  --short-domain "$short_domain" \
+  --subweb-image "$image"
 
 "$SCRIPT_DIRECTORY/validate-compose.sh"
 docker compose pull

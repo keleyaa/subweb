@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | `APP_DOMAIN` | `sub.ml1.one` | 是 | `configure.sh` 写入 `.env`，重建网关容器 |
 | `API_DOMAIN` | `api.ml1.one` | 是 | 同上；必须与应用域名不同 |
-| `SHORT_DOMAIN` | 回退到 `APP_DOMAIN` | 是 | 同上；设置后启用三域名模式 |
+| `SHORT_DOMAIN` | 无 | 是 | 同上；必须与 APP/API 不同 |
 | `API_URL` | 从 `API_DOMAIN` 派生为 HTTPS URL | 是 | 写入浏览器 `apiUrl` |
 | `SHORT_URL` | 从 `SHORT_DOMAIN` 或 `APP_DOMAIN` 派生 | 是 | 写入浏览器 `shortUrl` |
 | `SUBWEB_IMAGE` | Compose 默认 `subweb:local` | 是 | `docker-deploy.sh` 写入已发布 Gateway 镜像；源码构建可不设置 |
@@ -14,23 +14,13 @@
 这些默认域名属于维护者展示部署。其他用户必须用自己的域名执行：
 
 ```sh
-# 三域名模式（推荐）
-./scripts/configure.sh --mode behind-proxy \
+./scripts/configure.sh \
   --app-domain sub.example.com \
   --api-domain api.example.com \
   --short-domain s.example.com
-
-# Legacy 双域名模式
-./scripts/configure.sh --mode behind-proxy \
-  --app-domain sub.example.com \
-  --api-domain api.example.com
 ```
 
-**SHORT_DOMAIN 说明**：
-- 设置后启用三域名模式，短链返回 `https://SHORT_DOMAIN/:key`
-- 未设置时使用 legacy 双域名模式，短链返回 `https://APP_DOMAIN/:key`
-- Direct-TLS 模式下，TLS 证书必须覆盖 `SHORT_DOMAIN`
-- 三域名模式下，前端通过 CORS 跨域创建短链
+三个域名始终启用，短链返回 `https://SHORT_DOMAIN/:key`。HTTPS 和证书由外层反向代理负责；项目内部只有回环 HTTP Gateway。
 
 更换域名时重新运行同一命令。默认保留现有秘密；增加 `--rotate-secrets` 才会同时轮换 MyUrls Token 和 Redis 密码，轮换前必须按[运维手册](operations.md)安排停写和备份。
 

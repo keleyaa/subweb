@@ -32,10 +32,9 @@
 | --- | ---: | --- |
 | `npm test -- --run tests/integration/gatewayStack.spec.js tests/integration/privacySentinel.spec.js` | 0 | 14 项通过，2 项 Docker 用例按设计明确跳过 |
 | `RUN_DOCKER_INTEGRATION=1 TMPDIR=/tmp npx vitest run tests/integration/gatewayStack.spec.js tests/integration/privacySentinel.spec.js` | 0 | 16 项全部通过 |
-| `./scripts/verify-integrated-stack.sh --mode behind-proxy` | 0 | 四服务健康，六项业务、持久性和隐私契约通过 |
-| `./scripts/verify-integrated-stack.sh --mode direct-tls` | 0 | HTTPS 主链路及四类拒绝路径全部通过 |
+| `./scripts/verify-integrated-stack.sh` | 0 | 四服务健康，三 Host、MyUrls 前端、短链、持久性和隐私契约通过 |
 
-两种模式均验证了以下契约：
+集成验证覆盖以下契约：
 
 1. APP Host 返回 Subweb，API Host 完成真实的最小订阅转换；
 2. Gateway 覆盖客户端伪造的 `Authorization`，浏览器不接触 MyUrls 内部 Token；
@@ -46,18 +45,9 @@
 
 隐私验证使用一次性随机订阅 URL，并将随机值放入上游已知会脱敏的 `token` 查询参数。脚本同时扫描完整 URL 和随机值，终端只输出泄漏计数，不输出哨兵、Token、Redis 密码或完整容器日志。
 
-## TLS 拒绝路径
+## TLS 边界
 
-`direct-tls` 模式在启动可用的对外 Gateway 前拒绝以下配置：
-
-| 失败类型 | 结果 |
-| --- | --- |
-| 证书或私钥文件缺失 | 拒绝 |
-| 证书与私钥不匹配 | 拒绝，HTTPS 不可用 |
-| 证书 SAN 不覆盖 API 域名 | 拒绝，HTTPS 不可用 |
-| 宿主机 80 或 443 端口被单独占用 | 两种情况均拒绝 |
-
-拒绝测试先用已构建镜像启动并确认 Redis、MyUrls 和 SubConverter 健康，再单独启动 Gateway。缺失文件场景匹配 Docker bind 错误；密钥和 SAN 场景匹配 Gateway 的精确启动错误；端口可用性由 Docker 实际试占 `80/443` 验证，避免把普通用户无权绑定低端口误判为占用；端口拒绝场景同时确认唯一命名的占用容器仍在运行、目标端口可建立 TCP 连接且 Compose 返回绑定失败。其他构建、拉取或内部依赖故障不会被计作 TLS 拒绝通过。
+项目不监听 80/443，也不读取证书文件。证书覆盖、HTTP 到 HTTPS 跳转、HSTS、WAF 和公网端口冲突属于外层反向代理；项目集成验证只检查回环 HTTP 路由和 Host 隔离。
 
 Redis 离线备份校验将服务日志写入独立文件，`DBSIZE` 输出不会被启动日志污染。恢复流程只在权限为 `0700` 的运维目录内创建短生命周期的只读暂存快照，使容器内 Redis 用户可读取宿主机 `0600` 备份；暂存文件在成功、失败或退出时删除，不以 root 身份运行 Redis。
 

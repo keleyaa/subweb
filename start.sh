@@ -8,7 +8,6 @@ gateway_renderer=${GATEWAY_RENDERER:-/app/render-gateway-config.sh}
 gateway_template_root=${GATEWAY_TEMPLATE_ROOT:-/etc/nginx/gateway}
 gateway_config_file=${GATEWAY_CONFIG_FILE:-/tmp/nginx/nginx.conf}
 nginx_bin=${NGINX_BIN:-nginx}
-openssl_bin=${OPENSSL_BIN:-openssl}
 
 fail() {
   printf '%s\n' "$1" >&2
@@ -93,55 +92,12 @@ else
 fi
 
 if [ -n "${APP_DOMAIN:-}" ] && [ -w "$site_root" ]; then
-  public_scheme=${PUBLIC_SCHEME:-https}
-  public_origin="${public_scheme}://${APP_DOMAIN}"
+  public_origin="https://${APP_DOMAIN}"
   for public_file in "$site_root/index.html" "$site_root/sitemap.xml" "$site_root/robots.txt"; do
     if [ -f "$public_file" ]; then
       replace_file_value "$public_file" 'https://sub.ml1.one' "$public_origin"
     fi
   done
-fi
-
-check_tls_file() {
-  kind=$1
-  path=$2
-  [ -f "$path" ] || fail "TLS ${kind}文件不存在"
-  [ -r "$path" ] || fail "当前容器用户无法读取 TLS ${kind}文件"
-
-  permissions=$(LC_ALL=C ls -ld "$path" | awk '{print $1}')
-  [ "$(printf '%s' "$permissions" | cut -c6)" != w ] \
-    && [ "$(printf '%s' "$permissions" | cut -c9)" != w ] \
-    || fail "TLS ${kind}文件不能允许组用户或其他用户写入"
-}
-
-validate_direct_tls() {
-  check_tls_file '证书' "$TLS_CERT_PATH"
-  check_tls_file '私钥' "$TLS_KEY_PATH"
-
-  "$openssl_bin" x509 -in "$TLS_CERT_PATH" -noout -checkhost "$APP_DOMAIN" >/dev/null 2>&1 \
-    || fail "TLS 证书不覆盖 APP_DOMAIN: $APP_DOMAIN"
-  "$openssl_bin" x509 -in "$TLS_CERT_PATH" -noout -checkhost "$API_DOMAIN" >/dev/null 2>&1 \
-    || fail "TLS 证书不覆盖 API_DOMAIN: $API_DOMAIN"
-  "$openssl_bin" x509 -in "$TLS_CERT_PATH" -noout -checkhost "$SHORT_DOMAIN" >/dev/null 2>&1 \
-    || fail "TLS 证书不覆盖 SHORT_DOMAIN: $SHORT_DOMAIN"
-  "$openssl_bin" pkey -in "$TLS_KEY_PATH" -check -noout >/dev/null 2>&1 \
-    || fail 'TLS 私钥格式无效'
-
-  cert_fingerprint=$(
-    "$openssl_bin" x509 -in "$TLS_CERT_PATH" -pubkey -noout 2>/dev/null \
-      | "$openssl_bin" pkey -pubin -outform DER 2>/dev/null \
-      | "$openssl_bin" dgst -sha256 2>/dev/null
-  ) || fail '无法读取 TLS 证书公钥指纹'
-  key_fingerprint=$(
-    "$openssl_bin" pkey -in "$TLS_KEY_PATH" -pubout -outform DER 2>/dev/null \
-      | "$openssl_bin" dgst -sha256 2>/dev/null
-  ) || fail '无法读取 TLS 私钥公钥指纹'
-  [ -n "$cert_fingerprint" ] && [ "$cert_fingerprint" = "$key_fingerprint" ] \
-    || fail 'TLS 证书和私钥不匹配'
-}
-
-if [ "${GATEWAY_MODE:-}" = direct-tls ]; then
-  validate_direct_tls
 fi
 
 [ -x "$gateway_renderer" ] || fail '网关配置渲染器不存在或不可执行'

@@ -1,5 +1,7 @@
 # PRD：前端、转换后端与短链三域名拆分
 
+> 历史设计文档：Docker 当前只支持固定的三域名 + 单一 HTTP Gateway。本文关于 Legacy、direct-tls、Compose profiles 和内部证书管理的内容仅保留作需求演进记录；新的部署说明以 `docs/deployment-docker.md` 为准。
+
 - **状态**：已实施（阶段 0-4 自动门禁通过；阶段 5 staging 待执行）
 - **版本**：1.0
 - **日期**：2026年08月24日
@@ -348,8 +350,7 @@ npm run build
 npm run verify:docs
 npm run verify:evidence
 npm run verify:compose
-npm run verify:integration:behind-proxy
-npm run verify:integration:direct-tls
+npm run verify:integration
 npm run verify:operations
 npm run test:e2e
 ```

@@ -122,8 +122,8 @@ describe('gateway routing contract', () => {
     expect(routes).toContain('add_header X-Robots-Tag "noindex, nofollow, noarchive" always;');
   });
 
-  it.each(['http.conf.template', 'direct-tls.conf.template'])('returns 421 for unknown hosts without an upstream default in %s', async (name) => {
-    const template = await readFile(rootFile(`nginx/templates/${name}`), 'utf8');
+  it('returns 421 for unknown hosts without an upstream default', async () => {
+    const template = await readFile(rootFile('nginx/templates/http.conf.template'), 'utf8');
     const defaultServerStart = template.indexOf('server_name _;');
     const defaultServerEnd = template.indexOf('\n  }', defaultServerStart);
     const defaultServer = template.slice(defaultServerStart, defaultServerEnd);
@@ -132,8 +132,8 @@ describe('gateway routing contract', () => {
     expect(defaultServer).not.toContain('proxy_pass');
   });
 
-  it.each(['http.conf.template', 'direct-tls.conf.template'])('uses a runtime resolver placeholder rather than Docker DNS in %s', async (name) => {
-    const template = await readFile(rootFile(`nginx/templates/${name}`), 'utf8');
+  it('uses a runtime resolver placeholder rather than Docker DNS', async () => {
+    const template = await readFile(rootFile('nginx/templates/http.conf.template'), 'utf8');
 
     expect(template).toContain('resolver @@NGINX_RESOLVER@@ ipv6=off valid=30s;');
     expect(template).not.toContain('resolver 127.0.0.11');

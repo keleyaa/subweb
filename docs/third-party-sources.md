@@ -20,4 +20,4 @@ MyUrls `v1.13.0` 已发布并推进 `ghcr.io/keleyaa/myurls:latest`；Subweb 的
 
 ## 远程配置
 
-远程配置预设不是本仓库代码，只有用户主动选择时才传给转换后端。其来源和许可证单独列在[远程配置来源](remote-config-sources.md)。Redis 默认跟随稳定主线 `redis:8-alpine`，其余运行时镜像按各自策略跟随 `latest`；升级前应核对上游发布说明、许可证和回归测试；每次镜像更新后运行集成验证（`verify:integration:*`）与漏洞扫描，确认通过再继续使用。需要受控回滚时在 `.env` 中用 `MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE`/`SUBWEB_IMAGE` 指定已验证 digest。
+远程配置预设不是本仓库代码，只有用户主动选择时才传给转换后端。其来源和许可证单独列在[远程配置来源](remote-config-sources.md)。Redis 默认跟随稳定主线 `redis:8-alpine`，其余运行时镜像按各自策略跟随 `latest`；升级前应核对上游发布说明、许可证和回归测试；每次镜像更新后运行 `npm run verify:integration` 与漏洞扫描，确认通过再继续使用。需要受控回滚时在 `.env` 中用 `MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE`/`SUBWEB_IMAGE` 指定已验证 digest。

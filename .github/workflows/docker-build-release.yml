@@ -48,7 +48,7 @@ jobs:
         run: npm run verify:docs && npm run verify:evidence
 
       - name: Create temporary Compose configuration
-        run: ./scripts/configure.sh --mode behind-proxy --app-domain app.test --api-domain api.app.test
+        run: ./scripts/configure.sh --app-domain app.test --api-domain api.app.test --short-domain short.app.test
 
       - name: Validate Compose
         run: npm run verify:compose
@@ -83,14 +83,11 @@ jobs:
           resolve_image SUBCONVERTER_IMAGE ghcr.io/aethersailor/subconverter-extended:latest
           resolve_image MYURLS_IMAGE ghcr.io/keleyaa/myurls:latest
 
-      - name: Verify integrated behind-proxy stack
-        run: npm run verify:integration:behind-proxy
+      - name: Verify integrated HTTP stack
+        run: npm run verify:integration
 
       - name: Verify Redis backup and restore lifecycle
         run: npm run verify:operations
-
-      - name: Verify integrated direct-tls stack
-        run: npm run verify:integration:direct-tls
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium

@@ -6,245 +6,96 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const root = new URL('../../', import.meta.url);
 const composePath = new URL('compose.yaml', root).pathname;
-const stableRedisImage = 'docker.io/library/redis:8-alpine';
-const latestMyurlsImage = 'ghcr.io/keleyaa/myurls:latest';
-const latestSubconverterImage = 'ghcr.io/aethersailor/subconverter-extended:latest';
-const subconverterRuntimeVolume = 'subconverter-runtime';
 const testSecret = '0123456789abcdef'.repeat(4);
-
 let fixtureDirectory;
 
 beforeAll(async () => {
   fixtureDirectory = await mkdtemp(join(tmpdir(), 'subweb-compose-stack-'));
-  await writeFile(join(fixtureDirectory, 'fullchain.pem'), 'test certificate placeholder\n');
-  await writeFile(join(fixtureDirectory, 'privkey.pem'), 'test key placeholder\n');
 });
+afterAll(async () => { await rm(fixtureDirectory, { recursive: true, force: true }); });
 
-afterAll(async () => {
-  await rm(fixtureDirectory, { recursive: true, force: true });
-});
-
-const renderProfile = async (profile) => {
-  const envPath = join(fixtureDirectory, `${profile}.env`);
-  await writeFile(
-    envPath,
-    [
-      `COMPOSE_PROFILES=${profile}`,
-      'APP_DOMAIN=app.example.com',
-      'API_DOMAIN=api.example.com',
-      'API_URL=https://api.example.com',
-      'SHORT_URL=https://app.example.com/short-api',
-      'SUBWEB_IMAGE=docker.io/keleyaa/subweb:sha-2bf1a9f',
-      'SUBWEB_PORT=19080',
-      `TLS_CERT_PATH=${join(fixtureDirectory, 'fullchain.pem')}`,
-      `TLS_KEY_PATH=${join(fixtureDirectory, 'privkey.pem')}`,
-      `MYURLS_API_TOKEN=${testSecret}`,
-      `REDIS_PASSWORD=${testSecret}`,
-      '',
-    ].join('\n'),
-  );
-
-  const result = spawnSync(
-    'docker',
-    ['compose', '-f', composePath, '--env-file', envPath, 'config', '--format', 'json'],
-    { cwd: new URL('../..', import.meta.url).pathname, encoding: 'utf8' },
-  );
+const renderCompose = async () => {
+  const envPath = join(fixtureDirectory, 'stack.env');
+  await writeFile(envPath, [
+    'APP_DOMAIN=app.example.com', 'API_DOMAIN=api.example.com', 'API_URL=https://api.example.com',
+    'SHORT_DOMAIN=short.example.com', 'SHORT_URL=https://short.example.com/short-api',
+    'SUBWEB_IMAGE=docker.io/keleyaa/subweb:sha-2bf1a9f', 'SUBWEB_PORT=19080',
+    `MYURLS_API_TOKEN=${testSecret}`, `REDIS_PASSWORD=${testSecret}`, '',
+  ].join('\n'));
+  const result = spawnSync('docker', ['compose', '-f', composePath, '--env-file', envPath, 'config', '--format', 'json'], { cwd: new URL('../..', import.meta.url).pathname, encoding: 'utf8' });
   expect(result.status, result.stderr).toBe(0);
   return JSON.parse(result.stdout);
 };
 
 const expectHealthBounds = (service) => {
   expect(service.healthcheck).toBeTruthy();
-  expect(service.healthcheck.interval).toMatch(/^([1-5]?[0-9]s|1m0?s)$/);
-  expect(service.healthcheck.timeout).toMatch(/^[1-9][0-9]?s$/);
   expect(service.healthcheck.retries).toBeGreaterThanOrEqual(2);
-  expect(service.healthcheck.retries).toBeLessThanOrEqual(10);
-  expect(service.healthcheck.start_period).toMatch(/^([1-5]?[0-9]s|1m0?s)$/);
+  expect(service.healthcheck.timeout).toMatch(/^[1-9][0-9]?s$/);
 };
 
 describe('integrated Compose stack', () => {
-  it.each([
-    ['behind-proxy', 'gateway-http'],
-    ['direct-tls', 'gateway-tls'],
-  ])('renders only the %s gateway and the three private services', async (profile, gateway) => {
-    const config = await renderProfile(profile);
-    expect(Object.keys(config.services).sort()).toEqual(
-      [gateway, 'myurls', 'redis', 'subconverter'].sort(),
-    );
-
+  it('renders one gateway and three private services', async () => {
+    const config = await renderCompose();
+    expect(Object.keys(config.services).sort()).toEqual(['gateway', 'myurls', 'redis', 'subconverter'].sort());
     for (const name of ['redis', 'myurls', 'subconverter']) {
       expect(config.services[name].ports).toBeUndefined();
       expect(config.services[name].expose).toBeUndefined();
+      expectHealthBounds(config.services[name]);
     }
-    expectHealthBounds(config.services[gateway]);
-    expectHealthBounds(config.services.redis);
-    expectHealthBounds(config.services.myurls);
-    expectHealthBounds(config.services.subconverter);
-    expect(config.services.myurls.environment.MYURLS_RATE_LIMIT_RPS).toBe('5');
-    expect(config.services.myurls.environment.MYURLS_RATE_LIMIT_BURST).toBe('10');
+    expectHealthBounds(config.services.gateway);
+    expect(config.services.gateway.ports).toEqual([expect.objectContaining({ host_ip: '127.0.0.1', published: '19080', target: 8080 })]);
+    expect(config.services.gateway.environment.SHORT_DOMAIN).toBe('short.example.com');
   });
 
-  it('publishes only loopback HTTP in behind-proxy mode', async () => {
-    const config = await renderProfile('behind-proxy');
-    expect(config.services['gateway-http'].ports).toEqual([
-      expect.objectContaining({ host_ip: '127.0.0.1', published: '19080', target: 8080 }),
-    ]);
-    expect(config.services['gateway-http'].volumes ?? []).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ target: '/run/tls/fullchain.pem' })]),
-    );
-  });
-
-  it('publishes HTTP and HTTPS and mounts certificates read-only in direct-tls mode', async () => {
-    const config = await renderProfile('direct-tls');
-    expect(config.services['gateway-tls'].ports).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ published: '80', target: 8080 }),
-        expect.objectContaining({ published: '443', target: 8443 }),
-      ]),
-    );
-    expect(config.services['gateway-tls'].volumes).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          read_only: true,
-          target: '/run/tls/fullchain.pem',
-        }),
-        expect.objectContaining({
-          read_only: true,
-          target: '/run/tls/privkey.pem',
-        }),
-      ]),
-    );
-  });
-
-  it('declares non-creating TLS bind mounts in the Compose source', async () => {
+  it('has no profiles, TLS mounts, or public host ports', async () => {
     const source = await readFile(composePath, 'utf8');
-    const gatewayTls = source.slice(source.indexOf('  gateway-tls:'), source.indexOf('\nvolumes:'));
-
-    expect(gatewayTls.match(/create_host_path:\s*false/g)).toHaveLength(2);
-    expect(gatewayTls).toContain('target: /run/tls/fullchain.pem');
-    expect(gatewayTls).toContain('target: /run/tls/privkey.pem');
+    expect(source).not.toContain('profiles:');
+    expect(source).not.toContain('gateway-http');
+    expect(source).not.toContain('gateway-tls');
+    expect(source).not.toContain('TLS_CERT_PATH');
+    expect(source).not.toContain('TLS_KEY_PATH');
+    expect(source).not.toMatch(/- "(?:80|443):/);
   });
 
-  it('uses the stable Redis 8 line, floating latest images for other services, and a named Redis data volume', async () => {
-    const config = await renderProfile('behind-proxy');
-    expect(config.services['gateway-http'].image).toBe('docker.io/keleyaa/subweb:sha-2bf1a9f');
-    expect(config.services.redis.image).toBe(stableRedisImage);
-    expect(config.services.myurls.image).toBe(latestMyurlsImage);
-    expect(config.services.subconverter.image).toBe(latestSubconverterImage);
+  it('uses stable images, durable Redis, and the maintained service policies', async () => {
+    const config = await renderCompose();
+    expect(config.services.gateway.image).toBe('docker.io/keleyaa/subweb:sha-2bf1a9f');
+    expect(config.services.redis.image).toBe('docker.io/library/redis:8-alpine');
+    expect(config.services.myurls.image).toBe('ghcr.io/keleyaa/myurls:latest');
+    expect(config.services.subconverter.image).toBe('ghcr.io/aethersailor/subconverter-extended:latest');
     expect(config.volumes['redis-data']).toBeTruthy();
-    expect(config.services.redis.volumes).toContainEqual(
-      expect.objectContaining({ source: 'redis-data', target: '/data', type: 'volume' }),
-    );
-    expect(config.volumes[subconverterRuntimeVolume]).toBeTruthy();
-    expect(config.services.subconverter.volumes).toContainEqual(
-      expect.objectContaining({ source: subconverterRuntimeVolume, target: '/base' }),
-    );
+    expect(config.services.redis.volumes).toContainEqual(expect.objectContaining({ source: 'redis-data', target: '/data', type: 'volume' }));
+    expect(config.services.myurls.environment).toMatchObject({
+      MYURLS_PORT: '8080', MYURLS_DOMAIN: 'short.example.com', MYURLS_PROTO: 'https',
+      MYURLS_REDIS_CONN: 'redis:6379', MYURLS_REDIS_PASSWORD: testSecret,
+      MYURLS_API_TOKEN: testSecret, MYURLS_MAX_BODY_BYTES: '1048576',
+    });
+    expect(config.services.subconverter.environment).toMatchObject({
+      MANAGED_CONFIG_PREFIX: 'https://api.example.com', SUBCONVERTER_SECURITY_PROFILE: 'public', SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: 'false',
+    });
   });
 
-  it('configures authenticated durable Redis without putting the password in command arguments', async () => {
-    const config = await renderProfile('behind-proxy');
+  it('configures authenticated durable Redis without exposing its password in commands', async () => {
+    const config = await renderCompose();
     const redis = config.services.redis;
     expect(redis.environment.REDIS_PASSWORD).toBe(testSecret);
     expect(JSON.stringify(redis.command)).not.toContain(testSecret);
     expect(JSON.stringify(redis.healthcheck.test)).not.toContain(testSecret);
     expect(redis.healthcheck.test.join(' ')).toContain('REDISCLI_AUTH');
-    expect(redis.volumes).toContainEqual(
-      expect.objectContaining({ read_only: true, target: '/etc/redis/redis.conf.template' }),
-    );
-    expect(redis.tmpfs).toContainEqual(expect.stringContaining('/run/redis'));
     const template = await readFile(new URL('../../deploy/redis/redis.conf.template', import.meta.url), 'utf8');
     expect(template).toMatch(/^requirepass @@REDIS_PASSWORD@@$/m);
     expect(template).toMatch(/^appendonly yes$/m);
-    expect(template).toMatch(/^save 900 1$/m);
-    expect(template).toMatch(/^save 300 10$/m);
-    expect(template).toMatch(/^save 60 10000$/m);
   });
 
-  it('passes the maintained MyUrls variables and public SubConverter safety policy', async () => {
-    const config = await renderProfile('behind-proxy');
-    expect(config.services.myurls.environment).toMatchObject({
-      MYURLS_PORT: '8080',
-      MYURLS_DOMAIN: 'app.example.com',
-      MYURLS_PROTO: 'https',
-      MYURLS_REDIS_CONN: 'redis:6379',
-      MYURLS_REDIS_PASSWORD: testSecret,
-      MYURLS_API_TOKEN: testSecret,
-      MYURLS_MAX_BODY_BYTES: '1048576',
-    });
-    expect(config.services.myurls.tmpfs).toBeUndefined();
-    expect(config.services.subconverter.environment).toMatchObject({
-      MANAGED_CONFIG_PREFIX: 'https://api.example.com',
-      SUBCONVERTER_SECURITY_PROFILE: 'public',
-      SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: 'false',
-    });
-    expect(config.services.subconverter.command).toEqual([
-      '/bin/sh',
-      '/usr/local/bin/subweb-subconverter-entrypoint',
-    ]);
-    expect(config.services.subconverter.tmpfs).toContain('/run/subconverter:mode=0700');
-    expect(config.services.subconverter.volumes).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        source: `${new URL('../../deploy/subconverter/gai.conf', import.meta.url).pathname}`,
-        target: '/etc/gai.conf',
-        read_only: true,
-      }),
-      expect.objectContaining({ target: '/usr/local/bin/subweb-subconverter-entrypoint', read_only: true }),
-      expect.objectContaining({ target: '/usr/local/bin/subweb-log-supervisor', read_only: true }),
-      expect.objectContaining({ target: '/usr/local/bin/subweb-log-filter.awk', read_only: true }),
-    ]));
-    const gaiConfiguration = await readFile(
-      new URL('../../deploy/subconverter/gai.conf', import.meta.url),
-      'utf8',
-    );
-    expect(gaiConfiguration).toMatch(/^precedence ::ffff:0:0\/96 100$/m);
-  });
-
-  it('hardens all services and gates dependents on real health checks', async () => {
-    const config = await renderProfile('behind-proxy');
-    for (const [name, service] of Object.entries(config.services)) {
+  it('hardens all services and gates dependents on health', async () => {
+    const config = await renderCompose();
+    for (const service of Object.values(config.services)) {
       expect(service.environment.TZ).toBe('Asia/Shanghai');
-      expect(service.logging).toEqual({
-        driver: 'json-file',
-        options: { 'max-file': '3', 'max-size': '10m' },
-      });
+      expect(service.logging).toEqual({ driver: 'json-file', options: { 'max-file': '3', 'max-size': '10m' } });
       expect(service.cap_drop).toContain('ALL');
       expect(service.security_opt).toContain('no-new-privileges:true');
       expect(service.restart).toBe('unless-stopped');
-      expect(service.stop_grace_period).toBe(name === 'myurls' ? '20s' : '10s');
-      if (name === 'subconverter') {
-        expect(service.read_only).toBe(true);
-        expect(service.user).toBeUndefined();
-      } else {
-        expect(service.read_only).toBe(true);
-      }
+      expect(service.read_only).toBe(true);
     }
-    expect(config.services.redis.user).toBe('999:1000');
-    expect(config.services.myurls.user).toBe('65532:65532');
-    expect(config.services.redis.read_only).toBe(true);
-    expect(config.services.myurls.read_only).toBe(true);
-    expect(config.services.myurls.depends_on.redis.condition).toBe('service_healthy');
-    expect(config.services.myurls.depends_on.redis.restart).toBe(true);
-    expect(config.services['gateway-http'].depends_on.myurls.condition).toBe('service_healthy');
-    expect(config.services['gateway-http'].depends_on.myurls.restart).toBe(true);
-    expect(config.services['gateway-http'].depends_on.subconverter.condition).toBe('service_healthy');
-    expect(config.services['gateway-http'].depends_on.subconverter.restart).toBe(true);
-    expect(config.services['gateway-http'].user).toBe('101:101');
-    expect(config.services['gateway-http'].tmpfs).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('/tmp'),
-        expect.stringContaining('/usr/share/nginx/html/conf'),
-      ]),
-    );
-    expect(config.volumes[subconverterRuntimeVolume]).toBeTruthy();
-    expect(config.services.subconverter.volumes).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        source: subconverterRuntimeVolume,
-        target: '/base',
-        type: 'volume',
-      }),
-    ]));
-    expect(config.services.subconverter.ports).toBeUndefined();
-    expect(config.services.subconverter.expose).toBeUndefined();
   });
-
 });

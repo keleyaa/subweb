@@ -14,7 +14,7 @@ LABEL org.opencontainers.image.title="Subweb" \
   org.opencontainers.image.licenses="GPL-3.0-only"
 
 USER root
-RUN apk add --no-cache openssl tzdata \
+RUN apk add --no-cache tzdata \
   && rm -f /etc/nginx/conf.d/default.conf
 
 ENV TZ=Asia/Shanghai
@@ -28,8 +28,8 @@ COPY --chown=101:101 --chmod=755 start.sh /app/start.sh
 
 USER 101
 
-EXPOSE 8080 8443
+EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD nginx -t -q -c /tmp/nginx/nginx.conf && if [ "$GATEWAY_MODE" = direct-tls ]; then wget --no-check-certificate -q -O /dev/null --header="Host: $APP_DOMAIN" https://127.0.0.1:8443/healthz; elif [ "$GATEWAY_MODE" = behind-proxy ]; then wget -q -O /dev/null --header="Host: $APP_DOMAIN" http://127.0.0.1:8080/healthz; else exit 1; fi
+  CMD nginx -t -q -c /tmp/nginx/nginx.conf && wget -q -O /dev/null --header="Host: $APP_DOMAIN" http://127.0.0.1:8080/healthz
 
 CMD ["/app/start.sh"]

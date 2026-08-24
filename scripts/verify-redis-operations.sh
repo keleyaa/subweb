@@ -54,11 +54,11 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 {
-  printf 'COMPOSE_PROFILES=behind-proxy\n'
   printf 'APP_DOMAIN=app.test\n'
   printf 'API_DOMAIN=api.app.test\n'
   printf 'API_URL=https://api.app.test\n'
-  printf 'SHORT_URL=https://app.test/short-api\n'
+  printf 'SHORT_DOMAIN=short.test\n'
+  printf 'SHORT_URL=https://short.test/short-api\n'
   printf 'SUBWEB_PORT=%s\n' "$host_port"
   [ -z "${REDIS_IMAGE:-}" ] || printf 'REDIS_IMAGE=%s\n' "$REDIS_IMAGE"
   printf 'MYURLS_IMAGE=%s\n' "$myurls_test_image"

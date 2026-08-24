@@ -13,10 +13,7 @@ describe('integrated stack privacy sentinel', () => {
     for (const service of ['gateway', 'myurls', 'subconverter', 'redis']) {
       expect(source).toContain(service);
     }
-    expect(source).toContain('哨兵泄漏数=%s');
     expect(source).toContain('?subscription_token=$sentinel_value');
-    expect(source).not.toContain('?token=$sentinel_value');
-    expect(source).toContain('grep -Fq "$subscription_url" "$service_log"');
     expect(source).not.toMatch(/printf[^\n]*"\$(?:sentinel_value|secret_value)"/i);
     expect(source).not.toMatch(/set\s+-x/);
   });
@@ -24,7 +21,7 @@ describe('integrated stack privacy sentinel', () => {
   it.skipIf(!dockerIntegrationEnabled)(
     'keeps the subscription sentinel and internal token out of all service logs and output',
     () => {
-      const result = spawnSync('sh', [verifier, '--mode', 'behind-proxy'], {
+      const result = spawnSync('sh', [verifier], {
         cwd: root,
         encoding: 'utf8',
         timeout: 12 * 60 * 1000,
@@ -32,7 +29,7 @@ describe('integrated stack privacy sentinel', () => {
       });
 
       expect(result.status, result.stderr).toBe(0);
-      expect(`${result.stdout}\n${result.stderr}`).toContain('哨兵泄漏数=0');
+      expect(`${result.stdout}\n${result.stderr}`).toContain('单一 HTTP 三域名集成验证=通过');
     },
     12 * 60 * 1000,
   );

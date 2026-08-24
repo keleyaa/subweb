@@ -2,11 +2,11 @@
 
 ## 暴露面
 
-生产环境只公开 gateway。Docker `behind-proxy` 固定绑定 loopback，`direct-tls` 只公开 80/443；Redis、MyUrls 和 SubConverter 不映射宿主机端口。
+生产环境只公开 gateway。Docker 固定绑定 loopback HTTP，公网 TLS 和 80/443 由外层反向代理负责；Redis、MyUrls 和 SubConverter 不映射宿主机端口。
 
 gateway 根据 Host 分离应用、API 和短链，并在两个短链创建代理中注入 MyUrls Token。浏览器、`/conf/config.js` 和响应正文都不应包含该 Token、Redis 密码或私网连接串。外层代理必须保留 Host，不应删除项目返回的 CSP、`X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy` 和 `Permissions-Policy`。HSTS 只有在整个域名确定长期使用 HTTPS 后才应由最外层 TLS 入口启用。
 
-## CORS 安全策略（三域名模式）
+## CORS 安全策略
 
 三域名部署时，Subweb 前端在 `APP_DOMAIN`，短链 API 在 `SHORT_DOMAIN`，需要 CORS（跨域资源共享）支持；`SHORT_DOMAIN/` 另外提供 MyUrls 的同源前端：
 
@@ -70,7 +70,7 @@ gateway 根据 Host 分离应用、API 和短链，并在两个短链创建代�
 
 ## 供应链
 
-Gateway、MyUrls 和 SubConverter-Extended 在 Compose 中默认跟随各自 `latest` 浮动标签；Redis 默认使用稳定主线 `docker.io/library/redis:8-alpine`，避免跨主版本漂移。[`deploy/versions.lock.json`](../deploy/versions.lock.json) 保留已验证基线（tag、commit、manifest digest 和平台 digest）——MyUrls 集成测试直接消费其 digest，其余服务作为回滚参考。更新镜像时验证上游发布、许可证、架构摘要、容器健康、集成测试和漏洞扫描，并运行 `verify:integration:*` 确认无回归；CI 的 trivy 步骤会扫描实际运行时镜像，有 CRITICAL/HIGH 漏洞时发布门禁失败。
+Gateway、MyUrls 和 SubConverter-Extended 在 Compose 中默认跟随各自 `latest` 浮动标签；Redis 默认使用稳定主线 `docker.io/library/redis:8-alpine`，避免跨主版本漂移。[`deploy/versions.lock.json`](../deploy/versions.lock.json) 保留已验证基线（tag、commit、manifest digest 和平台 digest）——MyUrls 集成测试直接消费其 digest，其余服务作为回滚参考。更新镜像时验证上游发布、许可证、架构摘要、容器健康、集成测试和漏洞扫描，并运行 `npm run verify:integration` 确认无回归；CI 的 trivy 步骤会扫描实际运行时镜像，有 CRITICAL/HIGH 漏洞时发布门禁失败。
 
 跟随 `latest` 意味着供应链不可完全复现，也无法依赖镜像 tag 精确回滚；`redis:8-alpine` 仍会随 Redis 8 补丁版本变化。对公开生产服务，需要受控回滚时应在 `.env` 中通过 `SUBWEB_IMAGE`/`MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE` 指定已验证 digest；SBOM、provenance 和源码 SHA 对应关系可作为定位回滚点的补充。发布流程仍应保留这些产物。SubConverter 镜像更新后必须重建 `subconverter-runtime` 卷（见[部署文档](deployment-docker.md)）。
 

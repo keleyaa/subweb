@@ -2,11 +2,11 @@
 
 **更新时间**：2026-08-24
 **PRD 文档**：`docs/prd-three-domain-separation.md`
-**当前状态**：阶段 0-4 已完成；阶段 5 需要真实 staging 环境
+**当前状态**：单一 HTTP 三域名部署已完成；阶段 5 需要真实 staging 环境
 
 ## 实施结论
 
-PRD 要求的 APP/API/SHORT 三域名模式、Legacy 兼容模式、Gateway 路由隔离、CORS 来源校验、TLS 三域名 SAN 校验、MyUrls 域名传播和本机七端口入口均已落地。集成验证脚本现在会显式传播 `DOMAIN_MODE`，direct-tls 预检请求由 Gateway 终止并返回 `204`。
+APP/API/SHORT 三域名、单一 HTTP Gateway、外部 TLS 边界、Gateway 路由隔离、CORS 来源校验、MyUrls 域名传播和本机七端口入口已落地。项目不再管理 Docker TLS 证书、80/443 或 Compose profile。
 
 启动脚本使用 POSIX shell 完成 `SHORT_URL` 安全转义，不再依赖最终 Nginx 镜像中不存在的 Python 运行时。Docker 基础镜像和锁文件使用 Nginx 1.30.4、Node 24 的 immutable digest。
 
@@ -26,7 +26,7 @@ PRD 要求的 APP/API/SHORT 三域名模式、Legacy 兼容模式、Gateway 路�
 - APP、API、SHORT 和未知 Host 路由矩阵已覆盖。
 - SHORT 路由不含前端 fallback；短码只允许单段 `[A-Za-z0-9_-]{1,64}`。
 - CORS 只允许精确 APP origin；允许的 OPTIONS 由 Gateway 返回 `204`，不访问 MyUrls。
-- direct-tls 要求证书覆盖 APP/API/SHORT 三个域名，并验证证书私钥匹配。
+- 外层反向代理负责证书覆盖、HTTP 跳转、HSTS 和公网 80/443。
 
 ### ✅ 阶段 3：MyUrls 与前端
 
@@ -38,7 +38,7 @@ PRD 要求的 APP/API/SHORT 三域名模式、Legacy 兼容模式、Gateway 路�
 
 - `LOCAL_SHORT_PORT=18083` 已纳入配置生成、启动、状态、停止、端口冲突和持久性验证。
 - README、架构、配置、安全、Docker/本机部署文档已同步三域名方案。
-- Docker、behind-proxy、direct-tls、Redis 备份恢复和浏览器流程均有可执行验证。
+- Docker 单一 HTTP、Redis 备份恢复和浏览器流程均有可执行验证。
 
 ## 自动门禁结果
 
@@ -50,8 +50,7 @@ PRD 要求的 APP/API/SHORT 三域名模式、Legacy 兼容模式、Gateway 路�
 | `npm run verify:compose` | ✅ 通过 |
 | `npm run verify:container` | ✅ 通过 |
 | `npm run verify:operations` | ✅ Redis 备份、清空、恢复通过 |
-| `npm run verify:integration:behind-proxy` | ✅ Legacy 三域相关业务、持久性、日志隐私通过 |
-| `npm run verify:integration:direct-tls` | ✅ Legacy、Three-domain、CORS、SAN/密钥/端口拒绝通过 |
+| `npm run verify:integration` | ✅ 三 Host、MyUrls 前端、短链、持久性、内部端口和日志隐私通过 |
 | `npm run test:e2e` | ✅ 28/28 通过 |
 | `npm audit --audit-level=moderate` | ✅ 0 vulnerabilities |
 

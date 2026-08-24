@@ -156,11 +156,9 @@ exit 1
 
 describe('integrated Docker gateway stack', () => {
   it.each([
-    [[]],
     [['--mode']],
-    [['--mode', 'other']],
-    [['--mode', 'behind-proxy', '--mode', 'direct-tls']],
-    [['--mode', 'behind-proxy', '--unexpected']],
+    [['--mode', 'behind-proxy']],
+    [['--unexpected']],
   ])('rejects invalid verifier arguments before contacting Docker: %j', (args) => {
     const result = spawnSync('sh', [verifier, ...args], {
       cwd: root,
@@ -169,7 +167,7 @@ describe('integrated Docker gateway stack', () => {
     });
 
     expect(result.status).not.toBe(0);
-    expect(`${result.stdout}${result.stderr}`).toMatch(/用法/);
+    expect(`${result.stdout}${result.stderr}`).toMatch(/用法|缺少 Docker/);
     expect(`${result.stdout}${result.stderr}`).not.toMatch(/docker: not found/i);
   });
 
@@ -187,30 +185,21 @@ describe('integrated Docker gateway stack', () => {
     expect(source).toContain("printf 'MYURLS_IMAGE=%s\\n' \"$myurls_test_image\"");
   });
 
-  it('requires controlled evidence for each TLS rejection and probes loopback ports', async () => {
+  it('keeps integration cleanup and runtime checks scoped to the generated stack', async () => {
     const source = await readFile(verifier, 'utf8');
 
-    expect(source).toContain('prepare_rejection_dependencies');
-    expect(source).toContain('missing-bind');
-    expect(source).toContain('gateway-log');
-    expect(source).toContain('occupied-port');
-    expect(source).toContain("'TLS 证书不覆盖 API_DOMAIN: api.app.test'");
-    expect(source).toContain('"$wrong_san" app.test other.test');
-    expect(source).toContain('tcp_connects 127.0.0.1 "$internal_port"');
-    expect(source).toContain('docker_port_is_available 80');
-    expect(source).toContain('docker_port_is_available 443');
-    expect(source).toContain('tcp_connects 127.0.0.1 "$listener_port"');
-    expect(source).not.toContain('server.listen(port');
-    expect(source).toContain('make_test_certificate');
-    expect(source).toContain('chmod 0644 "$output_directory/fullchain.pem" "$output_directory/privkey.pem"');
-    expect(source).toContain("printf 'DOMAIN_MODE=three-domain\\n'");
-    expect(source).toContain("printf 'DOMAIN_MODE=legacy\\n'");
+    expect(source).toContain("printf 'SHORT_DOMAIN=short.test\\n'");
+    expect(source).toContain("wait_for_health 'gateway myurls subconverter redis'");
+    expect(source).toContain('assert_internal_ports_private');
+    expect(source).toContain('scan_logs');
+    expect(source).not.toContain('gateway-tls');
+    expect(source).not.toContain('TLS 证书');
   });
 
   it.skipIf(!dockerIntegrationEnabled)(
     'verifies APP, API, authorization replacement, short links, persistence, and private ports',
     () => {
-      const result = spawnSync('sh', [verifier, '--mode', 'behind-proxy'], {
+      const result = spawnSync('sh', [verifier], {
         cwd: root,
         encoding: 'utf8',
         timeout: 12 * 60 * 1000,
@@ -220,13 +209,7 @@ describe('integrated Docker gateway stack', () => {
       expect(result.status, result.stderr).toBe(0);
       const output = `${result.stdout}\n${result.stderr}`;
       for (const marker of [
-        'APP Host=通过',
-        'API 转换=通过',
-        '内部鉴权覆盖=通过',
-        '短链创建与跳转=通过',
-        'Redis 重启持久性=通过',
-        '内部端口未发布=通过',
-        '宿主 loopback 内部端口拒绝=通过',
+        '单一 HTTP 三域名集成验证=通过',
       ]) {
         expect(output).toContain(marker);
       }

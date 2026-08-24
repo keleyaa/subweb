@@ -6,22 +6,7 @@ fail() {
   exit 1
 }
 
-read_profile_from_env_file() {
-  [ -f .env ] || return 1
-  awk 'index($0, "COMPOSE_PROFILES=") == 1 { count += 1; value = substr($0, 18) } END { if (count == 1) print value; else exit 1 }' .env
-}
-
-if [ "${COMPOSE_PROFILES+x}" = x ]; then
-  compose_profiles=$COMPOSE_PROFILES
-else
-  compose_profiles=$(read_profile_from_env_file) || fail 'COMPOSE_PROFILES must appear exactly once in .env.'
-fi
-
-case "$compose_profiles" in
-  behind-proxy) expected_gateway=gateway-http ;;
-  direct-tls) expected_gateway=gateway-tls ;;
-  *) fail 'COMPOSE_PROFILES must be exactly behind-proxy or direct-tls.' ;;
-esac
+expectedGateway="gateway"
 
 docker compose config --quiet
 
@@ -40,7 +25,6 @@ process.stdin.on("end", () => {
     process.exit(1);
   }
   const services = config.services ?? {};
-  const gatewayNames = ["gateway-http", "gateway-tls"];
   const hasOwnPorts = (service) =>
     service !== null &&
     typeof service === "object" &&
@@ -56,10 +40,9 @@ process.stdin.on("end", () => {
   );
   if (
     publishedServices.length !== 1 ||
-    publishedServices[0][0] !== expectedGateway ||
-    !gatewayNames.includes(publishedServices[0][0])
+    publishedServices[0][0] !== expectedGateway
   ) {
-    console.error(`Compose validation error: only ${expectedGateway} may publish ports for the selected profile.`);
+    console.error(`Compose validation error: only ${expectedGateway} may publish ports.`);
     process.exitCode = 1;
   }
   for (const name of ["redis", "myurls", "subconverter"]) {
@@ -75,6 +58,6 @@ process.stdin.on("end", () => {
     }
   }
 });
-' "$expected_gateway"
+' "$expectedGateway"
 
-printf 'Compose profile and published-port contract are valid.\n'
+printf 'Compose single-gateway and published-port contract are valid.\n'

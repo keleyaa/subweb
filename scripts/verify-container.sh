@@ -23,17 +23,13 @@ docker run -d --name "$container" \
   --tmpfs /usr/share/nginx/html/conf:uid=101,gid=101,mode=0700 \
   -e API_URL='https://converter.example.com/api?source=ci&mode=test' \
   -e SHORT_URL='https://short.example.com/path?source=ci&mode=test' \
-  -e GATEWAY_MODE='behind-proxy' \
   -e APP_DOMAIN='app.example.com' \
   -e API_DOMAIN='api.example.com' \
-  -e PUBLIC_SCHEME='https' \
-  -e GATEWAY_PORT='8080' \
+  -e SHORT_DOMAIN='short.example.com' \
   -e SUBCONVERTER_UPSTREAM='http://subconverter:25500' \
   -e MYURLS_UPSTREAM='http://myurls:8080' \
   -e MYURLS_API_TOKEN="$verification_token" \
   -e MYURLS_MAX_BODY_BYTES='1048576' \
-  -e TLS_CERT_PATH='' \
-  -e TLS_KEY_PATH='' \
   "$image" >/dev/null
 
 attempt=0

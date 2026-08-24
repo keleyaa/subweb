@@ -24,25 +24,6 @@ validate_domain() {
   done
 }
 
-validate_mode() {
-  case ${1-} in
-    behind-proxy | direct-tls) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-validate_absolute_path() {
-  path=${1-}
-  case "$path" in
-    /*) ;;
-    *) return 1 ;;
-  esac
-  case "$path" in
-    *[!A-Za-z0-9._/+@%=,-]*) return 1 ;;
-    *) return 0 ;;
-  esac
-}
-
 validate_container_image() {
   image=${1-}
   [ -n "$image" ] || return 1

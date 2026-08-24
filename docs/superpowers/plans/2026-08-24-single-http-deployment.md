@@ -22,7 +22,7 @@
 - 修改：`tests/gateway/configRendering.spec.js`
 - 修改：`tests/integration/gatewayStack.spec.js`
 
-- [ ] **步骤 1：重写配置 CLI 测试输入**
+- [x] **步骤 1：重写配置 CLI 测试输入**
 
 将共享参数改为：
 
@@ -36,7 +36,7 @@ const deploymentArgs = [
 
 新增断言：缺少 `--short-domain`、传入 `--mode`、`--tls-cert` 或 `--tls-key` 均在创建 `.env` 前失败；成功 `.env` 不包含 `COMPOSE_PROFILES`、`DOMAIN_MODE`、TLS 路径或 Gateway 模式变量。
 
-- [ ] **步骤 2：重写 Compose 和镜像部署测试**
+- [x] **步骤 2：重写 Compose 和镜像部署测试**
 
 测试 fixture 只渲染 `gateway` 服务：
 
@@ -51,11 +51,11 @@ expect(config.services.gateway.ports).toEqual([
 
 删除两个 profile、TLS 端口、证书挂载和双 Gateway 的断言，并让镜像部署 fixture 只接受不带 `--mode` 的命令行。
 
-- [ ] **步骤 3：重写 Gateway 启动和渲染测试**
+- [x] **步骤 3：重写 Gateway 启动和渲染测试**
 
 固定环境只使用 `APP_DOMAIN`、`API_DOMAIN`、`SHORT_DOMAIN`、MyUrls/SubConverter upstream 和秘密；断言 renderer 使用 HTTP 模板、端口 `8080`，启动前不会调用 OpenSSL，渲染结果包含三个 server 且不包含 `listen 8443`、TLS 证书或 `Strict-Transport-Security`。
 
-- [ ] **步骤 4：运行失败测试确认旧实现被锁定**
+- [x] **步骤 4：运行失败测试确认旧实现被锁定**
 
 运行：
 
@@ -81,7 +81,7 @@ npx vitest run tests/deploy/configureScript.spec.js tests/deploy/dockerImageDepl
 - 修改：`scripts/verify-redis-operations.sh`
 - 修改：`scripts/operations/restore-redis.sh`
 
-- [ ] **步骤 1：简化配置脚本参数和环境文件**
+- [x] **步骤 1：简化配置脚本参数和环境文件**
 
 删除 `--mode`、`--tls-cert`、`--tls-key` 解析及 Direct-TLS 分支；三个域名改为必填并验证互不相同。生成环境只写：
 
@@ -95,7 +95,7 @@ SHORT_URL=https://.../short-api
 
 保留秘密、镜像覆盖和轮换逻辑。
 
-- [ ] **步骤 2：合并 Compose Gateway 服务**
+- [x] **步骤 2：合并 Compose Gateway 服务**
 
 将 `gateway-http`/`gateway-tls` 合并为 `gateway`，固定环境和端口：
 
@@ -112,15 +112,15 @@ gateway:
 
 删除 profiles、TLS 环境、证书 volumes 和宿主机 `80`/`443` 映射；保留健康依赖、loopback 绑定、只读文件系统和内部服务无 ports。
 
-- [ ] **步骤 3：固定 renderer/startup/runtime 契约**
+- [x] **步骤 3：固定 renderer/startup/runtime 契约**
 
 让 `scripts/render-gateway-config.sh` 只加载 `nginx/templates/http.conf.template`，固定 HTTP 监听和 HTTPS 公共 URL；移除 Direct-TLS 模板选择、TLS 文件检查和 `openssl` 启动校验。`start.sh` 只执行配置渲染和 Nginx 启动。Dockerfile 只暴露 `8080`，健康检查固定使用 HTTP `8080/healthz`。
 
-- [ ] **步骤 4：更新内部运维脚本**
+- [x] **步骤 4：更新内部运维脚本**
 
 将容器名从 `gateway-http`/`gateway-tls` 收敛为 `gateway`，删除 profile 参数和证书环境；Redis 运维恢复、容器验证和 compose 校验只检查一个 Gateway。
 
-- [ ] **步骤 5：运行契约测试确认通过**
+- [x] **步骤 5：运行契约测试确认通过**
 
 运行任务 1 的 Vitest 命令，预期所有配置、Compose、启动和渲染测试通过。
 
@@ -138,11 +138,11 @@ gateway:
 - 修改：`tests/project/releaseGate.spec.js`
 - 修改：`docs/validation/docker-integration.md`
 
-- [ ] **步骤 1：把集成 verifier 改为单一命令**
+- [x] **步骤 1：把集成 verifier 改为单一命令**
 
 将用法从 `--mode behind-proxy|direct-tls` 改为无参数运行：生成三域名环境，启动 `gateway`，验证 APP/API/SHORT、MyUrls UI、multipart `/short`、CORS API、旧 APP 兼容入口、Redis 持久性和内部端口未发布。删除证书 SAN、端口占用和 TLS 拒绝分支。
 
-- [ ] **步骤 2：统一 npm 和发布门禁**
+- [x] **步骤 2：统一 npm 和发布门禁**
 
 将 package scripts 和 release stages 合并为单个：
 
@@ -152,7 +152,7 @@ gateway:
 
 删除两个旧 integration script 名称及其对应的 release-gate 断言。
 
-- [ ] **步骤 3：运行真实集成失败/通过检查**
+- [ ] **步骤 3：运行真实集成失败/通过检查**（当前环境 Docker daemon 不可用）
 
 先运行：
 
@@ -186,7 +186,7 @@ npm run verify:integration
 - 修改：`docs/three-domain-documentation-guide.md`
 - 修改：`docs/prd-three-domain-separation.md`
 
-- [ ] **步骤 1：统一部署命令和反代说明**
+- [x] **步骤 1：统一部署命令和反代说明**
 
 所有用户文档只保留：
 
@@ -199,11 +199,11 @@ npm run verify:integration
 
 反代说明只保留三个 HTTPS vhost 指向 `http://127.0.0.1:18080`，明确证书和 HTTPS 跳转由用户自己的入口处理。
 
-- [ ] **步骤 2：清理过期模式文案和契约**
+- [x] **步骤 2：清理过期模式文案和契约**
 
 用 `rg` 扫描当前文档和脚本，删除正式操作路径中的 `direct-tls`、`behind-proxy`、`COMPOSE_PROFILES`、TLS 路径和 Legacy/双域名部署命令；历史 PRD 若保留，明确标记为已被单一 HTTP 设计取代，不作为当前操作手册。
 
-- [ ] **步骤 3：验证文档契约**
+- [x] **步骤 3：验证文档契约**
 
 运行：
 
@@ -220,7 +220,7 @@ git diff --check
 
 **文件：** 任务 1-4 中列出的文件。
 
-- [ ] **步骤 1：运行质量门禁**
+- [x] **步骤 1：运行质量门禁**
 
 运行：
 
@@ -234,7 +234,7 @@ npm run verify:docs
 
 预期：所有测试、Lint、构建、Compose 和文档检查通过。
 
-- [ ] **步骤 2：检查最终差异和残留模式**
+- [x] **步骤 2：检查最终差异和残留模式**
 
 运行：
 

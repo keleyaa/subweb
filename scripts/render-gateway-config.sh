@@ -82,26 +82,17 @@ require_value() {
   [ "$is_set" = x ] || fail "缺少必需的网关配置: $name"
 }
 
-require_value GATEWAY_MODE "${GATEWAY_MODE+x}"
-DOMAIN_MODE=${DOMAIN_MODE:-legacy}
-case "$DOMAIN_MODE" in legacy|three-domain) ;; *) fail 'DOMAIN_MODE 只能是 legacy 或 three-domain' ;; esac
-SHORT_DOMAIN=${SHORT_DOMAIN:-${APP_DOMAIN:-}}
 require_value APP_DOMAIN "${APP_DOMAIN+x}"
 require_value API_DOMAIN "${API_DOMAIN+x}"
 require_value SHORT_DOMAIN "${SHORT_DOMAIN+x}"
-require_value PUBLIC_SCHEME "${PUBLIC_SCHEME+x}"
-require_value GATEWAY_PORT "${GATEWAY_PORT+x}"
 require_value SUBCONVERTER_UPSTREAM "${SUBCONVERTER_UPSTREAM+x}"
 require_value MYURLS_UPSTREAM "${MYURLS_UPSTREAM+x}"
 require_value MYURLS_API_TOKEN "${MYURLS_API_TOKEN+x}"
 require_value MYURLS_MAX_BODY_BYTES "${MYURLS_MAX_BODY_BYTES+x}"
-require_value TLS_CERT_PATH "${TLS_CERT_PATH+x}"
-require_value TLS_KEY_PATH "${TLS_KEY_PATH+x}"
 
-for external_value in "$GATEWAY_MODE" "$DOMAIN_MODE" "$APP_DOMAIN" "$API_DOMAIN" "$SHORT_DOMAIN" \
-  "$PUBLIC_SCHEME" "$GATEWAY_PORT" "$SUBCONVERTER_UPSTREAM" \
-  "$MYURLS_UPSTREAM" "$MYURLS_API_TOKEN" "$MYURLS_MAX_BODY_BYTES" \
-  "$TLS_CERT_PATH" "$TLS_KEY_PATH"; do
+for external_value in "$APP_DOMAIN" "$API_DOMAIN" "$SHORT_DOMAIN" \
+  "$SUBCONVERTER_UPSTREAM" "$MYURLS_UPSTREAM" "$MYURLS_API_TOKEN" \
+  "$MYURLS_MAX_BODY_BYTES"; do
   reject_control_characters "$external_value" \
     || fail '网关环境变量不能包含换行或回车'
 done
@@ -122,12 +113,6 @@ validate_upstream() {
   [ "$port" -ge 1 ] 2>/dev/null && [ "$port" -le 65535 ]
 }
 
-validate_absolute_path() {
-  value=$1
-  printf '%s\n' "$value" | grep -Eq '^/[A-Za-z0-9._/-]+$' || return 1
-  case "$value" in *'//'*) return 1 ;; esac
-}
-
 validate_ipv4() {
   value=$1
   printf '%s\n' "$value" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' \
@@ -143,29 +128,18 @@ validate_ipv4() {
   done
 }
 
-case "$GATEWAY_MODE" in
-  behind-proxy)
-    [ "$GATEWAY_PORT" = 8080 ] || fail 'behind-proxy 模式的容器端口必须为 8080'
-    http_listen=8080
-    ;;
-  direct-tls)
-    [ "$GATEWAY_PORT" = 8443 ] || fail 'direct-tls 模式的 HTTPS 容器端口必须为 8443'
-    http_listen=''
-    ;;
-  *) fail 'GATEWAY_MODE 只能是 behind-proxy 或 direct-tls' ;;
-esac
+http_listen=8080
+public_scheme=https
 
 validate_domain "$APP_DOMAIN" || fail 'APP_DOMAIN 不是有效的纯域名'
 validate_domain "$API_DOMAIN" || fail 'API_DOMAIN 不是有效的纯域名'
 validate_domain "$SHORT_DOMAIN" || fail 'SHORT_DOMAIN 不是有效的纯域名'
-[ "$APP_DOMAIN" != "$API_DOMAIN" ] || fail 'APP_DOMAIN 和 API_DOMAIN 不能相同'
-if [ "$DOMAIN_MODE" = three-domain ]; then
-  [ "$APP_DOMAIN" != "$SHORT_DOMAIN" ] || fail 'APP_DOMAIN 和 SHORT_DOMAIN 不能相同'
-  [ "$API_DOMAIN" != "$SHORT_DOMAIN" ] || fail 'API_DOMAIN 和 SHORT_DOMAIN 不能相同'
-fi
-case "$PUBLIC_SCHEME" in http|https) ;; *) fail 'PUBLIC_SCHEME 只能是 http 或 https' ;; esac
-[ "$GATEWAY_MODE" != direct-tls ] || [ "$PUBLIC_SCHEME" = https ] \
-  || fail 'direct-tls 模式的 PUBLIC_SCHEME 必须为 https'
+normalized_app=$(printf '%s' "$APP_DOMAIN" | tr '[:upper:]' '[:lower:]')
+normalized_api=$(printf '%s' "$API_DOMAIN" | tr '[:upper:]' '[:lower:]')
+normalized_short=$(printf '%s' "$SHORT_DOMAIN" | tr '[:upper:]' '[:lower:]')
+[ "$normalized_app" != "$normalized_api" ] || fail 'APP_DOMAIN 和 API_DOMAIN 不能相同'
+[ "$normalized_app" != "$normalized_short" ] || fail 'APP_DOMAIN 和 SHORT_DOMAIN 不能相同'
+[ "$normalized_api" != "$normalized_short" ] || fail 'API_DOMAIN 和 SHORT_DOMAIN 不能相同'
 
 validate_upstream "$SUBCONVERTER_UPSTREAM" || fail 'SUBCONVERTER_UPSTREAM 必须是无路径的 http:// 私网主机和端口'
 validate_upstream "$MYURLS_UPSTREAM" || fail 'MYURLS_UPSTREAM 必须是无路径的 http:// 私网主机和端口'
@@ -177,14 +151,6 @@ printf '%s\n' "$MYURLS_MAX_BODY_BYTES" | grep -Eq '^[0-9]+$' \
   || fail 'MYURLS_MAX_BODY_BYTES 必须为十进制字节数'
 [ "$MYURLS_MAX_BODY_BYTES" -ge 1 ] 2>/dev/null && [ "$MYURLS_MAX_BODY_BYTES" -le 16777216 ] \
   || fail 'MYURLS_MAX_BODY_BYTES 必须在 1 到 16777216 之间'
-
-if [ "$GATEWAY_MODE" = direct-tls ]; then
-  validate_absolute_path "$TLS_CERT_PATH" || fail 'TLS_CERT_PATH 必须是安全的绝对路径'
-  validate_absolute_path "$TLS_KEY_PATH" || fail 'TLS_KEY_PATH 必须是安全的绝对路径'
-else
-  [ -z "$TLS_CERT_PATH" ] && [ -z "$TLS_KEY_PATH" ] \
-    || fail '非 direct-tls 模式不能配置 TLS 路径'
-fi
 
 [ -r "$resolv_conf" ] || fail 'DNS resolver 配置文件不存在或不可读'
 nginx_resolver=$(awk '$1 == "nameserver" { print $2; exit }' "$resolv_conf")
@@ -199,10 +165,7 @@ validate_ipv4 "$nginx_resolver" || fail 'DNS resolver 必须包含有效的 IPv4
 output_dir=${output%/*}
 [ -d "$output_dir" ] || fail '网关配置输出目录不存在'
 
-case "$GATEWAY_MODE" in
-  direct-tls) template="$template_root/templates/direct-tls.conf.template" ;;
-  *) template="$template_root/templates/http.conf.template" ;;
-esac
+template="$template_root/templates/http.conf.template"
 
 security="$template_root/snippets/security-headers.conf"
 content_type_map="$template_root/snippets/content-type-map.conf"
@@ -252,13 +215,9 @@ expand_proxy_marker "$short_routes" '@@SHORT_PROXY_HEADERS@@' '@@SHORT_DOMAIN@@'
 
 # Locations that declare their own add_header no longer inherit the server-level
 # security headers (nginx add_header inheritance rule); expand them in place so
-# proxied and short-link responses carry the same CSP/header set. In direct-tls
-# mode the server-level HSTS line also does not reach these locations, so it is
-# added here; behind-proxy deliberately defers HSTS to the outer TLS entry.
-case "$GATEWAY_MODE" in
-  direct-tls) location_hsts='add_header Strict-Transport-Security "max-age=31536000" always;' ;;
-  *) location_hsts= ;;
-esac
+# proxied and short-link responses carry the same CSP/header set. TLS headers are
+# owned by the external reverse proxy.
+location_hsts=
 expand_security_marker() {
   source_file=$1
   destination=$2
@@ -277,25 +236,12 @@ expand_security_marker "$api_expanded" "$api_expanded.security"
 expand_security_marker "$short_expanded" "$short_expanded.security"
 
 short_server="$temp_dir/short-server.conf"
-if [ "$DOMAIN_MODE" = three-domain ]; then
-  if [ "$GATEWAY_MODE" = direct-tls ]; then
-    {
-      printf '%s\n' '  server {' '    listen 8443 ssl;' "    server_name $SHORT_DOMAIN;" "    ssl_certificate $TLS_CERT_PATH;" "    ssl_certificate_key $TLS_KEY_PATH;" '    add_header Strict-Transport-Security "max-age=31536000" always;'
-      cat "$security"
-      cat "$short_expanded.security"
-      printf '%s\n' '  }'
-    } > "$short_server"
-  else
-    {
-      printf '%s\n' '  server {' '    listen 8080;' "    server_name $SHORT_DOMAIN;"
-      cat "$security"
-      cat "$short_expanded.security"
-      printf '%s\n' '  }'
-    } > "$short_server"
-  fi
-else
-  : > "$short_server"
-fi
+{
+  printf '%s\n' '  server {' '    listen 8080;' "    server_name $SHORT_DOMAIN;"
+  cat "$security"
+  cat "$short_expanded.security"
+  printf '%s\n' '  }'
+} > "$short_server"
 
 awk -v security="$security" -v content_type_map="$content_type_map" -v app="$app_expanded.security" -v api="$api_expanded.security" -v short_server="$short_server" '
   function emit(file, line) {
@@ -315,13 +261,11 @@ sed \
   -e "s|@@APP_DOMAIN@@|$APP_DOMAIN|g" \
   -e "s|@@API_DOMAIN@@|$API_DOMAIN|g" \
   -e "s|@@SHORT_DOMAIN@@|$SHORT_DOMAIN|g" \
-  -e "s|@@PUBLIC_SCHEME@@|$PUBLIC_SCHEME|g" \
+  -e "s|@@PUBLIC_SCHEME@@|$public_scheme|g" \
   -e "s|@@SUBCONVERTER_UPSTREAM@@|$SUBCONVERTER_UPSTREAM|g" \
   -e "s|@@MYURLS_UPSTREAM@@|$MYURLS_UPSTREAM|g" \
   -e "s|@@MYURLS_API_TOKEN@@|$MYURLS_API_TOKEN|g" \
   -e "s|@@MYURLS_MAX_BODY_BYTES@@|$MYURLS_MAX_BODY_BYTES|g" \
-  -e "s|@@TLS_CERT_PATH@@|$TLS_CERT_PATH|g" \
-  -e "s|@@TLS_KEY_PATH@@|$TLS_KEY_PATH|g" \
   -e "s|@@NGINX_RESOLVER@@|$nginx_resolver|g" \
   "$assembled" > "$rendered_config"
 

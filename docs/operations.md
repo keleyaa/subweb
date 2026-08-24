@@ -6,11 +6,11 @@ Docker：
 
 ```sh
 docker compose ps
-docker compose logs --tail=200 gateway-http gateway-tls myurls subconverter redis
+docker compose logs --tail=200 gateway myurls subconverter redis
 docker compose config --services
 ```
 
-根据当前 profile，只会存在 `gateway-http` 或 `gateway-tls`。本机源码使用：
+Docker 只会存在一个 `gateway` 服务。本机源码使用：
 
 ```sh
 ./scripts/local/status.sh
@@ -97,7 +97,7 @@ chmod 700 .runtime/redis-backups
 
 ## 域名与证书
 
-维护者展示部署使用 `sub.ml1.one` 和 `api.ml1.one`。其他部署者更换域名时，应同时更新两个 DNS 记录、`.env`、外层代理和证书中的 SAN。
+维护者展示部署使用 `sub.ml1.one`、`api.ml1.one` 和 `s.ml1.one`。其他部署者更换域名时，应同时更新三个 DNS 记录、`.env`、外层代理和证书中的 SAN。
 
 更换域名：更新两个 DNS 记录，重新运行 `configure.sh`，更新外层代理或 SAN 证书，执行 `validate-compose.sh`。源码构建执行 `docker compose up -d --build --wait`；镜像部署执行 `docker compose up -d --no-build --pull always --wait`，再验证网页、API、短链创建与旧短码。
 
@@ -113,7 +113,7 @@ API、转换请求、短链创建、短码跳转和带 query 的页面均不应�
 
 公开文档应只保留可验证的能力、部署方式、安全边界、版本和来源说明。不得把订阅 URL、短链、Token、用户配置、日志样本或请求 query 写入 Schema、sitemap、页面示例、截图或公开工单。
 
-`direct-tls` 证书续期后先验证文件权限与完整链，执行 `docker compose exec gateway-tls nginx -t`，再重启 gateway。`behind-proxy` 的证书续期由宝塔、1Panel、Nginx、OpenResty、Cloudflare 或其他外层服务负责。
+证书续期、HTTP 到 HTTPS 跳转和 HSTS 均由宝塔、1Panel、Nginx、OpenResty、Cloudflare 或其他外层服务负责；项目只需继续提供回环 HTTP Gateway。
 
 ## 升级与回滚
 
@@ -125,7 +125,7 @@ npm run verify:locks
 ./scripts/validate-compose.sh
 ```
 
-记录 Git commit、实际解析的各服务镜像 digest（`docker compose images`）、Compose profile 和已验证 Redis 备份。升级后检查健康、两个 Host、转换、短链创建、旧短码、日志脱敏和内部端口。失败时切回原 commit，必要时在 `.env` 以 `SUBWEB_IMAGE`/`MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE` 的 digest 覆盖镜像回滚；应用组件可重建，Redis 数据按已演练备份恢复。
+记录 Git commit、实际解析的各服务镜像 digest（`docker compose images`）和已验证 Redis 备份。升级后检查健康、三个 Host、转换、短链创建、旧短码、日志脱敏和内部端口。失败时切回原 commit，必要时在 `.env` 以 `SUBWEB_IMAGE`/`MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE` 的 digest 覆盖镜像回滚；应用组件可重建，Redis 数据按已演练备份恢复。
 
 SubConverter 镜像更新后必须重建运行时卷 `subconverter-runtime`（`docker compose down` 后 `docker volume rm subweb_subconverter-runtime` 再 `up -d --wait`）——Docker 只对空卷做 copy-up，跳过此步会静默沿用旧 `/base` 模板。`redis-data` 是业务数据，禁止以任何方式删除。
 

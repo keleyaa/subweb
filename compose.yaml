@@ -31,9 +31,7 @@ x-gateway-common: &gateway-common
     SHORT_URL: "${SHORT_URL:?Set SHORT_URL with scripts/configure.sh}"
     APP_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
     API_DOMAIN: "${API_DOMAIN:?Set API_DOMAIN with scripts/configure.sh}"
-    DOMAIN_MODE: "${DOMAIN_MODE:-legacy}"
-    SHORT_DOMAIN: "${SHORT_DOMAIN:-${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}}"
-    PUBLIC_SCHEME: https
+    SHORT_DOMAIN: "${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
     SUBCONVERTER_UPSTREAM: http://subconverter:25500
     MYURLS_UPSTREAM: http://myurls:8080
     MYURLS_API_TOKEN: "${MYURLS_API_TOKEN:?Set MYURLS_API_TOKEN with scripts/configure.sh}"
@@ -52,11 +50,7 @@ x-gateway-common: &gateway-common
     test:
       - CMD-SHELL
       - >-
-        if [ "$${GATEWAY_MODE}" = direct-tls ]; then
-          wget --no-check-certificate -q -O /dev/null --header="Host: $${APP_DOMAIN}" https://127.0.0.1:8443/healthz;
-        else
-          wget -q -O /dev/null --header="Host: $${APP_DOMAIN}" http://127.0.0.1:8080/healthz;
-        fi
+        wget -q -O /dev/null --header="Host: $${APP_DOMAIN}" http://127.0.0.1:8080/healthz
     interval: 30s
     timeout: 5s
     retries: 3
@@ -105,7 +99,7 @@ services:
     environment:
       <<: *runtime-environment
       MYURLS_PORT: "8080"
-      MYURLS_DOMAIN: "${SHORT_DOMAIN:-${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}}"
+      MYURLS_DOMAIN: "${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
       MYURLS_PROTO: https
       MYURLS_REDIS_CONN: redis:6379
       MYURLS_REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
@@ -184,45 +178,10 @@ services:
       retries: 3
       start_period: 20s
 
-  gateway-http:
+  gateway:
     <<: *gateway-common
-    profiles:
-      - behind-proxy
-    environment:
-      <<: *gateway-environment
-      GATEWAY_MODE: behind-proxy
-      GATEWAY_PORT: "8080"
-      TLS_CERT_PATH: ""
-      TLS_KEY_PATH: ""
     ports:
       - "127.0.0.1:${SUBWEB_PORT:-18080}:8080"
-
-  gateway-tls:
-    <<: *gateway-common
-    profiles:
-      - direct-tls
-    environment:
-      <<: *gateway-environment
-      GATEWAY_MODE: direct-tls
-      GATEWAY_PORT: "8443"
-      TLS_CERT_PATH: /run/tls/fullchain.pem
-      TLS_KEY_PATH: /run/tls/privkey.pem
-    ports:
-      - "80:8080"
-      - "443:8443"
-    volumes:
-      - type: bind
-        source: "${TLS_CERT_PATH:-/dev/null}"
-        target: /run/tls/fullchain.pem
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: "${TLS_KEY_PATH:-/dev/null}"
-        target: /run/tls/privkey.pem
-        read_only: true
-        bind:
-          create_host_path: false
 
 volumes:
   redis-data:
