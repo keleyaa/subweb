@@ -46,9 +46,9 @@ const validatePorts = (source) => {
   } catch {
     fail('ports JSON is invalid');
   }
-  const names = ['vite', 'subconverter', 'myurls', 'redis', 'app', 'api'];
+  const names = ['vite', 'subconverter', 'myurls', 'redis', 'app', 'api', 'short'];
   if (ports === null || Array.isArray(ports) || Object.keys(ports).sort().join(',') !== [...names].sort().join(',')) {
-    fail('ports JSON must contain exactly six named ports');
+    fail(`ports JSON must contain exactly ${names.length} named ports: ${names.join(', ')}`);
   }
   for (const name of names) {
     if (!Number.isInteger(ports[name]) || ports[name] < 1 || ports[name] > 65535) fail(`${name} port is invalid`);
@@ -117,7 +117,7 @@ const main = async () => {
 
   let publicConfig = await readFile(join(projectRoot, 'public/conf/config.js'), 'utf8');
   publicConfig = replaceOnce(publicConfig, "apiUrl: 'https://api.ml1.one'", `apiUrl: 'http://127.0.0.1:${ports.api}'`, 'apiUrl');
-  publicConfig = replaceOnce(publicConfig, "shortUrl: 'https://ml1.one'", `shortUrl: 'http://127.0.0.1:${ports.app}/short-api'`, 'shortUrl');
+  publicConfig = replaceOnce(publicConfig, "shortUrl: ''", `shortUrl: 'http://127.0.0.1:${ports.short}/short-api'`, 'shortUrl');
 
   const redisTemplate = await readFile(join(projectRoot, 'deploy/local/redis.conf.template'), 'utf8');
   const redisData = join(projectRoot, '.runtime/local/redis');
@@ -142,6 +142,7 @@ const main = async () => {
   const snippetsRoot = join(projectRoot, 'nginx/snippets');
   const appSource = await readFile(join(snippetsRoot, 'app-routes.conf.template'), 'utf8');
   const apiSource = await readFile(join(snippetsRoot, 'api-routes.conf.template'), 'utf8');
+  const shortSource = await readFile(join(snippetsRoot, 'short-routes.conf.template'), 'utf8');
   const proxySource = await readFile(join(snippetsRoot, 'proxy-headers.conf.template'), 'utf8');
   const securityHeaders = await readFile(join(snippetsRoot, 'security-headers.conf'), 'utf8');
   const contentTypeMap = await readFile(join(snippetsRoot, 'content-type-map.conf'), 'utf8');
@@ -182,7 +183,20 @@ ${indent(renderProxyHeaders(proxySource, `127.0.0.1:${ports.app}`).trimEnd(), 2)
       .replaceAll('@@SUBCONVERTER_UPSTREAM@@', `http://127.0.0.1:${ports.subconverter}`),
   );
 
+  const localShortRoutes = expandSecurityHeaders(
+    shortSource
+      .replaceAll('@@SHORT_PROXY_HEADERS@@', () => renderProxyHeaders(proxySource, `127.0.0.1:${ports.short}`).trimEnd())
+      .replaceAll('@@MYURLS_MAX_BODY_BYTES@@', '1048576')
+      .replaceAll('@@MYURLS_API_TOKEN@@', myurlsToken)
+      .replaceAll('@@MYURLS_UPSTREAM@@', `http://127.0.0.1:${ports.myurls}`),
+  );
+
   let nginxConfig = await readFile(join(projectRoot, 'deploy/local/nginx.conf.template'), 'utf8');
+  nginxConfig = nginxConfig.replace('@@SHORT_SERVER@@', `  server {
+    listen 127.0.0.1:${ports.short};
+    server_name 127.0.0.1;
+${indent(localShortRoutes, 4)}
+  }`);
   const replacements = {
     '@@NGINX_PID_PATH@@': quoteNginx(join(runRoot, 'nginx.pid')),
     '@@NGINX_ERROR_LOG@@': quoteNginx(join(projectRoot, '.runtime/local/logs/nginx-error.log')),
@@ -193,6 +207,8 @@ ${indent(renderProxyHeaders(proxySource, `127.0.0.1:${ports.app}`).trimEnd(), 2)
     '@@NGINX_ACCESS_LOG@@': quoteNginx(join(projectRoot, '.runtime/local/logs/nginx-access.log')),
     '@@APP_PORT@@': String(ports.app),
     '@@API_PORT@@': String(ports.api),
+    '@@SHORT_PORT@@': String(ports.short),
+    '@@SHORT_ROUTES@@': indent(localShortRoutes.trimEnd(), 4),
     '@@SECURITY_HEADERS@@': indent(securityHeaders.trimEnd(), 4),
     '@@APP_ROUTES@@': indent(localAppRoutes, 4),
     '@@API_ROUTES@@': indent(localApiRoutes.trimEnd(), 4),

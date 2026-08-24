@@ -12,6 +12,7 @@ fail() {
 mode=
 app_domain=
 api_domain=
+short_domain=
 tls_cert=
 tls_key=
 image=docker.io/keleyaa/subweb:latest
@@ -32,6 +33,11 @@ while [ "$#" -gt 0 ]; do
     --api-domain)
       [ "$#" -ge 2 ] || fail '--api-domain requires a value.'
       api_domain=$2
+      shift 2
+      ;;
+    --short-domain)
+      [ "$#" -ge 2 ] || fail '--short-domain requires a value.'
+      short_domain=$2
       shift 2
       ;;
     --tls-cert)
@@ -65,6 +71,7 @@ if [ "$mode" = direct-tls ]; then
     --mode "$mode" \
     --app-domain "$app_domain" \
     --api-domain "$api_domain" \
+    --short-domain "$short_domain" \
     --tls-cert "$tls_cert" \
     --tls-key "$tls_key" \
     --subweb-image "$image"
@@ -73,6 +80,7 @@ else
     --mode "$mode" \
     --app-domain "$app_domain" \
     --api-domain "$api_domain" \
+    --short-domain "$short_domain" \
     --subweb-image "$image"
 fi
 

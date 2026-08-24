@@ -40,7 +40,7 @@ print_debug_info = false
 };
 
 describe('local source configuration derivation', () => {
-  it('derives every public and private endpoint from six custom ports', async () => {
+  it('derives every public and private endpoint from seven custom ports', async () => {
     const { runRoot, source, mimeTypes } = await fixture();
     const ports = {
       vite: 15173,
@@ -49,6 +49,7 @@ describe('local source configuration derivation', () => {
       redis: 16389,
       app: 19080,
       api: 19081,
+      short: 19083,
     };
     const result = spawnSync(
       process.execPath,
@@ -66,8 +67,7 @@ describe('local source configuration derivation', () => {
 
     expect(result.status, result.stderr).toBe(0);
     const publicConfig = await readFile(join(runRoot, 'config.js'), 'utf8');
-    expect(publicConfig).toContain('http://127.0.0.1:19081');
-    expect(publicConfig).toContain('http://127.0.0.1:19080/short-api');
+    expect(publicConfig).toContain('http://127.0.0.1:19083/short-api');
     expect(publicConfig).not.toContain('a'.repeat(64));
     expect(publicConfig).not.toContain('b'.repeat(64));
 

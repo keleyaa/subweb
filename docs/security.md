@@ -6,6 +6,47 @@
 
 gateway 根据 Host 分离应用与 API，并在 `/short-api/` 代理中注入 MyUrls Token。浏览器、`/conf/config.js` 和响应正文都不应包含该 Token、Redis 密码或私网连接串。外层代理必须保留 Host，不应删除项目返回的 CSP、`X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy` 和 `Permissions-Policy`。HSTS 只有在整个域名确定长期使用 HTTPS 后才应由最外层 TLS 入口启用。
 
+## CORS 安全策略（三域名模式）
+
+三域名部署时，前端在 `APP_DOMAIN`，短链 API 在 `SHORT_DOMAIN`，需要 CORS（跨域资源共享）支持：
+
+1. **Origin 验证**：
+   - Gateway 只允许来自 `https://APP_DOMAIN` 的短链创建请求
+   - 其他 Origin 的请求返回 403 Forbidden
+   - 使用 Nginx `map` 指令动态验证 `$http_origin`
+
+2. **预检请求（Preflight）**：
+   - 支持 OPTIONS 方法，返回 204 No Content
+   - 响应头包含：
+     - `Access-Control-Allow-Origin: https://APP_DOMAIN`
+     - `Access-Control-Allow-Methods: POST, OPTIONS`
+     - `Access-Control-Allow-Headers: Content-Type`
+     - `Vary: Origin`
+
+3. **Content-Type 验证**：
+   - 短链创建端点只接受 `application/x-www-form-urlencoded`
+   - 其他 Content-Type 返回 415 Unsupported Media Type
+
+4. **限流保护**：
+   - 短链创建：20 请求/分钟/IP（zone=subweb_short，burst=5）
+   - 适用于所有 Origin，包括 `APP_DOMAIN`
+
+**安全考虑**：
+- CORS 是浏览器保护机制，不是服务端访问控制
+- 即使通过 CORS 验证，Gateway 仍然验证并注入 Authorization 头
+- MyUrls Token 从不暴露给前端
+- 拒绝的 CORS 请求仍会消耗服务端资源，因此需要限流保护
+- 外层代理不应移除或修改 CORS 响应头
+
+## APP 兼容入口（迁移期）
+
+三域名部署后，`https://APP_DOMAIN/short-api/short` 和 `https://APP_DOMAIN/:key` 仍然可用：
+
+1. **目的**：兼容已分享的旧短链，允许渐进式迁移
+2. **路由优先级**：新短链返回 `SHORT_DOMAIN` URL，旧短链继续跳转
+3. **何时移除**：确认没有旧短链在使用后（观察 Gateway 日志中 `APP_DOMAIN` 短链访问量）
+4. **移除方式**：修改 `nginx/snippets/app-routes.conf.template`，移除短链路由，重新渲染和部署 Gateway 配置
+
 ## 敏感数据
 
 - 订阅 URL 可能包含访问凭据。SubConverter 会接收它，创建短链时 MyUrls/Redis 也会保存包含它的长链接。

@@ -37,12 +37,14 @@ trap 'exit 1' HUP INT TERM
 read_port() { awk -F= -v key="$1" '$1 == key { print $2 }' "$runtime_root/config/local.env"; }
 app_port=$(read_port LOCAL_APP_PORT)
 api_port=$(read_port LOCAL_API_PORT)
+short_port=$(read_port LOCAL_SHORT_PORT)
 vite_port=$(read_port LOCAL_VITE_PORT)
 subconverter_port=$(read_port LOCAL_SUBCONVERTER_PORT)
 myurls_port=$(read_port LOCAL_MYURLS_PORT)
 redis_port=$(read_port LOCAL_REDIS_PORT)
 curl --noproxy '*' --fail --silent "http://127.0.0.1:$app_port/" | grep -q 'Subconverter Web' || fail 'APP 功能哨兵失败'
 curl --noproxy '*' --fail --silent "http://127.0.0.1:$api_port/healthz" >/dev/null || fail 'API 功能哨兵失败'
+curl --noproxy '*' --fail --silent "http://127.0.0.1:$short_port/healthz" >/dev/null || fail 'SHORT 功能哨兵失败'
 url_encode() { URL_VALUE=$1 node -e 'process.stdout.write(encodeURIComponent(process.env.URL_VALUE))'; }
 subscription_url='https://raw.githubusercontent.com/Aethersailor/SubConverter-Extended/v1.2.0/tests/fixtures/sample-subscription.txt'
 encoded_subscription=$(url_encode "$subscription_url")
@@ -69,7 +71,7 @@ printf '%s\n' '默认端口转换、短链和跳转哨兵=通过'
 "$project_root/scripts/local/stop.sh" >/dev/null
 [ ! -e "$runtime_root/active-run" ] || fail 'stop 后仍存在 active-run'
 
-for occupied_port in "$vite_port" "$subconverter_port" "$myurls_port" "$redis_port" "$app_port" "$api_port"; do
+for occupied_port in "$vite_port" "$subconverter_port" "$myurls_port" "$redis_port" "$app_port" "$api_port" "$short_port"; do
   node - "$occupied_port" <<'NODE' &
 const net = require('node:net');
 const server = net.createServer();
@@ -94,7 +96,7 @@ NODE
   kill -TERM "$listener_pid" 2>/dev/null || true
   wait "$listener_pid" 2>/dev/null || true
 done
-printf '%s\n' '六个默认端口冲突均在启动前安全失败=通过'
+printf '%s\n' '七个默认端口冲突均在启动前安全失败=通过'
 
 custom_vite=$((app_port + 10))
 custom_subconverter=$((custom_vite + 1))
@@ -102,20 +104,29 @@ custom_myurls=$((custom_vite + 2))
 custom_redis=$((custom_vite + 3))
 custom_app=$((custom_vite + 4))
 custom_api=$((custom_vite + 5))
+custom_short=$((custom_vite + 6))
 LOCAL_VITE_PORT=$custom_vite LOCAL_SUBCONVERTER_PORT=$custom_subconverter LOCAL_MYURLS_PORT=$custom_myurls \
-LOCAL_REDIS_PORT=$custom_redis LOCAL_APP_PORT=$custom_app LOCAL_API_PORT=$custom_api \
+LOCAL_REDIS_PORT=$custom_redis LOCAL_APP_PORT=$custom_app LOCAL_API_PORT=$custom_api LOCAL_SHORT_PORT=$custom_short \
   "$project_root/scripts/local/start.sh" >/dev/null
 "$project_root/scripts/local/status.sh" >/dev/null || fail '自定义端口状态检查失败'
 [ "$(read_port LOCAL_APP_PORT)" = "$custom_app" ] || fail '自定义 APP 端口未派生'
 [ "$(read_port LOCAL_API_PORT)" = "$custom_api" ] || fail '自定义 API 端口未派生'
+[ "$(read_port LOCAL_SHORT_PORT)" = "$custom_short" ] || fail '自定义 SHORT 端口未派生'
+
+# 测试短链功能在 SHORT 端口上可用
+rm -f "$verification_root/short-redirect.headers"
+curl --noproxy '*' --silent --show-error -D "$verification_root/short-redirect.headers" -o /dev/null \
+  "http://127.0.0.1:$custom_short/$short_key" || fail 'SHORT 端口短链无法访问'
+grep -Fqi "Location: $long_url" "$verification_root/short-redirect.headers" || fail 'SHORT 端口短链目标不一致'
+
 rm -f "$verification_root/redirect.headers"
 curl --noproxy '*' --silent --show-error -D "$verification_root/redirect.headers" -o /dev/null \
   "http://127.0.0.1:$custom_app/$short_key" || fail '重启后旧短链无法访问'
 grep -Fqi "Location: $long_url" "$verification_root/redirect.headers" || fail '重启后旧短链目标不一致'
-printf '%s\n' '六个自定义端口派生和 Redis 持久性=通过'
+printf '%s\n' '七个自定义端口派生和 Redis 持久性=通过'
 "$project_root/scripts/local/stop.sh" >/dev/null
-for port in "$vite_port" "$subconverter_port" "$myurls_port" "$redis_port" "$app_port" "$api_port" \
-  "$custom_vite" "$custom_subconverter" "$custom_myurls" "$custom_redis" "$custom_app" "$custom_api"; do
+for port in "$vite_port" "$subconverter_port" "$myurls_port" "$redis_port" "$app_port" "$api_port" "$short_port" \
+  "$custom_vite" "$custom_subconverter" "$custom_myurls" "$custom_redis" "$custom_app" "$custom_api" "$custom_short"; do
   node - "$port" <<'NODE' || fail "端口未释放: $port"
 const net = require('node:net');
 const port = Number(process.argv[2]);

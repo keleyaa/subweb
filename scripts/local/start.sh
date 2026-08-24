@@ -55,8 +55,8 @@ load_optional_port() {
 : "${LOCAL_MYURLS_PORT:=$(load_optional_port LOCAL_MYURLS_PORT 18082)}"
 : "${LOCAL_REDIS_PORT:=$(load_optional_port LOCAL_REDIS_PORT 16379)}"
 : "${LOCAL_APP_PORT:=$(load_optional_port LOCAL_APP_PORT 18080)}"
-: "${LOCAL_API_PORT:=$(load_optional_port LOCAL_API_PORT 18081)}"
-export LOCAL_VITE_PORT LOCAL_SUBCONVERTER_PORT LOCAL_MYURLS_PORT LOCAL_REDIS_PORT LOCAL_APP_PORT LOCAL_API_PORT
+: "${LOCAL_SHORT_PORT:=$(load_optional_port LOCAL_SHORT_PORT 18083)}"
+export LOCAL_VITE_PORT LOCAL_SUBCONVERTER_PORT LOCAL_MYURLS_PORT LOCAL_REDIS_PORT LOCAL_APP_PORT LOCAL_API_PORT LOCAL_SHORT_PORT
 
 assert_all_local_ports() {
   seen_ports=' '
@@ -66,7 +66,8 @@ assert_all_local_ports() {
     "LOCAL_MYURLS_PORT $LOCAL_MYURLS_PORT" \
     "LOCAL_REDIS_PORT $LOCAL_REDIS_PORT" \
     "LOCAL_APP_PORT $LOCAL_APP_PORT" \
-    "LOCAL_API_PORT $LOCAL_API_PORT"; do
+    "LOCAL_API_PORT $LOCAL_API_PORT" \
+    "LOCAL_SHORT_PORT $LOCAL_SHORT_PORT"; do
     set -- $entry
     name=$1
     port=$2
@@ -104,9 +105,9 @@ find_nginx_mime_types() {
   return 1
 }
 nginx_mime_types=$(find_nginx_mime_types) || { local_error '无法定位 Nginx mime.types'; exit 1; }
-ports_json=$(printf '{"vite":%s,"subconverter":%s,"myurls":%s,"redis":%s,"app":%s,"api":%s}' \
+ports_json=$(printf '{"vite":%s,"subconverter":%s,"myurls":%s,"redis":%s,"app":%s,"api":%s,"short":%s}' \
   "$LOCAL_VITE_PORT" "$LOCAL_SUBCONVERTER_PORT" "$LOCAL_MYURLS_PORT" \
-  "$LOCAL_REDIS_PORT" "$LOCAL_APP_PORT" "$LOCAL_API_PORT")
+  "$LOCAL_REDIS_PORT" "$LOCAL_APP_PORT" "$LOCAL_API_PORT" "$LOCAL_SHORT_PORT")
 MYURLS_API_TOKEN=$myurls_api_token REDIS_PASSWORD=$redis_password \
   node "$script_directory/render-config.mjs" \
   --project-root "$project_root" \
@@ -154,7 +155,7 @@ start_local_service() {
     myurls)
       (cd "$run_root" && \
         MYURLS_PORT=$LOCAL_MYURLS_PORT \
-        MYURLS_DOMAIN="127.0.0.1:$LOCAL_APP_PORT" \
+        MYURLS_DOMAIN="127.0.0.1:$LOCAL_SHORT_PORT" \
         MYURLS_PROTO=http \
          MYURLS_REDIS_CONN="127.0.0.1:$LOCAL_REDIS_PORT" \
          MYURLS_REDIS_PASSWORD=$redis_password \
@@ -222,6 +223,7 @@ wait_for_http_health vite "http://127.0.0.1:$LOCAL_VITE_PORT/"
 start_local_service nginx
 wait_for_http_health nginx-app "http://127.0.0.1:$LOCAL_APP_PORT/healthz"
 wait_for_http_health nginx-api "http://127.0.0.1:$LOCAL_API_PORT/healthz"
+wait_for_http_health nginx-short "http://127.0.0.1:$LOCAL_SHORT_PORT/healthz"
 
 publish_pid_records() {
   for service in redis myurls subconverter vite nginx; do
@@ -239,6 +241,7 @@ publish_pid_records() {
     printf 'LOCAL_REDIS_PORT=%s\n' "$LOCAL_REDIS_PORT"
     printf 'LOCAL_APP_PORT=%s\n' "$LOCAL_APP_PORT"
     printf 'LOCAL_API_PORT=%s\n' "$LOCAL_API_PORT"
+    printf 'LOCAL_SHORT_PORT=%s\n' "$LOCAL_SHORT_PORT"
   } > "$runtime_root/config/local.env.tmp"
   chmod 0600 "$runtime_root/config/local.env.tmp"
   mv -f "$runtime_root/config/local.env.tmp" "$runtime_root/config/local.env"

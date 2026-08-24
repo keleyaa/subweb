@@ -6,7 +6,7 @@ Docker Compose 启动 gateway、SubConverter、MyUrls 和 Redis。Redis 默认�
 
 - Docker Engine 24+ 与 Docker Compose v2。
 - Git 与可以访问 GitHub、Docker Hub、GHCR 的网络。
-- 两个不同域名解析到同一入口。维护者展示部署使用 `sub.ml1.one` 和 `api.ml1.one`；其他部署者请替换为自己控制的域名。
+- 两个或三个域名解析到同一入口。维护者展示部署使用三域名模式（`sub.ml1.one`、`api.ml1.one`、`s.ml1.one`）；其他部署者请替换为自己控制的域名。
 - 选择 `behind-proxy` 或 `direct-tls`，不要同时启用。
 
 先确认 Docker 已安装并且当前用户能够使用：
@@ -68,13 +68,30 @@ Gateway 的每次正式发行由同一次多架构构建同时推送到两个公
 
 两个镜像源具有相同的 `latest`、日期提交标签、`sha-*` 标签和 manifest digest。部署者拉取公开镜像不需要登录；当某个注册表不可达或限流时，可以只替换 `--image` 的注册表前缀，不需要修改 Compose。
 
-已有宝塔、1Panel、Nginx、OpenResty、Cloudflare Tunnel 等反向代理时：
+### 三域名模式（推荐）
+
+前端、转换后端、短链服务使用独立域名，职责清晰，支持跨域 CORS。已有宝塔、1Panel、Nginx、OpenResty、Cloudflare Tunnel 等反向代理时：
+
+```sh
+./scripts/docker-deploy.sh --mode behind-proxy \
+  --app-domain sub.ml1.one \
+  --api-domain api.ml1.one \
+  --short-domain s.ml1.one
+```
+
+短链返回 `https://s.ml1.one/abc123`。迁移期间，`https://sub.ml1.one/abc123` 仍可访问（兼容入口）。
+
+### Legacy 双域名模式
+
+向后兼容的部署方式，短链服务在前端域名下：
 
 ```sh
 ./scripts/docker-deploy.sh --mode behind-proxy \
   --app-domain sub.ml1.one \
   --api-domain api.ml1.one
 ```
+
+短链返回 `https://sub.ml1.one/abc123`。
 
 脚本执行成功后已经完成启动，不需要再手工执行 `docker compose up`。检查状态和本机入口：
 

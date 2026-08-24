@@ -30,6 +30,25 @@ http {
   limit_req_zone $binary_remote_addr zone=subweb_short:10m rate=20r/m;
   limit_req_status 429;
 
+  map $http_origin $short_origin_allowed {
+    default 0;
+    "@@PUBLIC_SCHEME@@://@@APP_DOMAIN@@" 1;
+  }
+
+  map $http_origin $short_allowed_origin {
+    default "";
+    "@@PUBLIC_SCHEME@@://@@APP_DOMAIN@@" "@@PUBLIC_SCHEME@@://@@APP_DOMAIN@@";
+  }
+
+  map $http_origin $short_allowed_origin_unused {
+    default "";
+  }
+
+  map $http_content_type $short_content_type_allowed {
+    default 0;
+    "application/x-www-form-urlencoded" 1;
+  }
+
   resolver @@NGINX_RESOLVER@@ ipv6=off valid=30s;
 
   server {
@@ -55,4 +74,6 @@ http {
  @@SECURITY_HEADERS@@
  @@API_ROUTES@@
   }
+
+@@SHORT_SERVER@@
 }

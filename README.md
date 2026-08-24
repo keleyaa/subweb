@@ -4,10 +4,10 @@
 
 **自托管订阅转换发行栈。**
 
-Subconverter Web turns one browser workflow into one deployable boundary：订阅转换由 `SubConverter-Extended` 完成，短链由 `MyUrls` 创建和跳转，映射持久化在 Redis；浏览器只接触统一 Gateway，MyUrls Token 始终留在服务端。
+Subconverter Web turns one browser workflow into one deployable boundary：订阅转换由 `SubConverter-Extended` 完成，短链由 `MyUrls` 创建和跳转，映射持久化在 Redis；浏览器只接触统一 Gateway，MyUrls Token 始终留在服务端。支持三域名独立部署（前端、转换后端、短链服务各自独立域名）或 legacy 双域名模式。
 
 <p align="center">
-  <img src="./docs/assets/readme/subweb-hero.svg" width="100%" alt="Subconverter Web routes two public domains through one gateway to private SubConverter, MyUrls, and Redis services">
+  <img src="./docs/assets/readme/subweb-hero.svg" width="100%" alt="Subconverter Web routes public domains through one gateway to private SubConverter, MyUrls, and Redis services">
 </p>
 
 ## 先看它能做什么
@@ -56,9 +56,45 @@ docker compose ps
 
 脚本会生成不提交的 `.env`、MyUrls Token 和 Redis 密码。Gateway 镜像同时发布到 `docker.io/keleyaa/subweb` 与 `ghcr.io/keleyaa/subweb`；生产环境可以通过 `--image` 指定已发行的 `sha-*` Gateway 镜像。Redis 默认使用稳定主线 `docker.io/library/redis:8-alpine`；MyUrls 和 SubConverter 继续跟随各自已发布的稳定 `latest`。需要受控回滚或冻结时在 `.env` 显式覆盖 `MYURLS_IMAGE`、`REDIS_IMAGE`、`SUBCONVERTER_IMAGE` 或 `SUBWEB_IMAGE`。
 
-没有外层代理时，可使用 `direct-tls`，前提是 80/443 未被占用，并且已有一张同时覆盖两个域名的证书：
+#### 三域名模式（推荐）
+
+前端、转换后端、短链服务使用独立域名，职责清晰，支持跨域 CORS：
 
 ```sh
+./scripts/docker-deploy.sh --mode behind-proxy \
+  --app-domain sub.example.com \
+  --api-domain api.example.com \
+  --short-domain short.example.com
+```
+
+短链返回 `https://short.example.com/abc123`；前端通过 CORS 跨域创建短链。迁移期间，`https://sub.example.com/abc123` 仍可访问（兼容入口）。
+
+#### Legacy 双域名模式
+
+向后兼容的部署方式，短链服务在前端域名下：
+
+```sh
+./scripts/docker-deploy.sh --mode behind-proxy \
+  --app-domain sub.example.com \
+  --api-domain api.example.com
+```
+
+短链返回 `https://sub.example.com/abc123`。
+
+#### Direct-TLS 模式
+
+没有外层代理时，可使用 `direct-tls`，前提是 80/443 未被占用，并且已有一张覆盖所有域名的证书：
+
+```sh
+# 三域名 Direct-TLS（证书需覆盖三个域名）
+./scripts/docker-deploy.sh --mode direct-tls \
+  --app-domain sub.example.com \
+  --api-domain api.example.com \
+  --short-domain short.example.com \
+  --tls-cert /absolute/path/fullchain.pem \
+  --tls-key /absolute/path/privkey.pem
+
+# Legacy 双域名 Direct-TLS（证书需覆盖两个域名）
 ./scripts/docker-deploy.sh --mode direct-tls \
   --app-domain sub.example.com \
   --api-domain api.example.com \
@@ -70,7 +106,7 @@ docker compose ps
 
 ### 本机源码运行
 
-适合开发和集成验证；默认只监听 loopback：
+适合开发和集成验证；默认只监听 loopback，启动七个独立端口（Vite、SubConverter、MyUrls、Redis、前端、转换后端、短链服务）：
 
 ```sh
 git clone https://github.com/keleyaa/subweb.git
@@ -79,7 +115,7 @@ cd subweb
 ./scripts/local/start.sh
 ```
 
-启动后访问 `http://127.0.0.1:18080/`，查看状态：
+启动后访问 `http://127.0.0.1:18080/`（前端），短链服务在 `http://127.0.0.1:18083/`。查看状态：
 
 ```sh
 ./scripts/local/status.sh

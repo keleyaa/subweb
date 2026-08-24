@@ -37,6 +37,8 @@ const behindProxyArgs = [
   'example.com',
   '--api-domain',
   'api.example.com',
+  '--short-domain',
+  'short.example.com',
 ];
 
 const parseEnv = (contents) =>
@@ -125,8 +127,9 @@ describe('safe deployment configuration CLI', () => {
       COMPOSE_PROFILES: 'behind-proxy',
       APP_DOMAIN: 'example.com',
       API_DOMAIN: 'api.example.com',
+      SHORT_DOMAIN: 'short.example.com',
       API_URL: 'https://api.example.com',
-      SHORT_URL: 'https://example.com/short-api',
+      SHORT_URL: 'https://short.example.com/short-api',
     });
     expect(env.TLS_CERT_PATH).toBeUndefined();
     expect(env.TLS_KEY_PATH).toBeUndefined();
@@ -149,6 +152,7 @@ describe('safe deployment configuration CLI', () => {
       '--mode', 'behind-proxy',
       '--app-domain', 'new.example.com',
       '--api-domain', 'api.new.example.com',
+      '--short-domain', 'short.new.example.com',
     ]);
     expect(second.status).toBe(0);
     expect(parseEnv(await readFile(join(cwd, '.env'), 'utf8')).SUBWEB_IMAGE).toBe(image);
@@ -202,6 +206,7 @@ describe('safe deployment configuration CLI', () => {
       '--mode', 'direct-tls',
       '--app-domain', 'example.com',
       '--api-domain', 'api.example.com',
+      '--short-domain', 'short.example.com',
       '--tls-cert', '/absolute/fullchain.pem',
       '--tls-key', '/absolute/privkey.pem',
     ];
@@ -214,7 +219,8 @@ describe('safe deployment configuration CLI', () => {
     expect(env.TLS_CERT_PATH).toBe('/absolute/fullchain.pem');
     expect(env.TLS_KEY_PATH).toBe('/absolute/privkey.pem');
     expect(env.API_URL).toBe('https://api.example.com');
-    expect(env.SHORT_URL).toBe('https://example.com/short-api');
+    expect(env.SHORT_DOMAIN).toBe('short.example.com');
+    expect(env.SHORT_URL).toBe('https://short.example.com/short-api');
   });
 
   it('preserves valid secrets until explicitly asked to rotate them', async () => {
@@ -226,6 +232,7 @@ describe('safe deployment configuration CLI', () => {
       '--mode', 'behind-proxy',
       '--app-domain', 'new.example.com',
       '--api-domain', 'api.new.example.com',
+      '--short-domain', 'short.new.example.com',
     ]);
     const preserved = parseEnv(await readFile(join(cwd, '.env'), 'utf8'));
     expect(changed.status).toBe(0);
@@ -266,6 +273,7 @@ describe('safe deployment configuration CLI', () => {
       '--mode', 'direct-tls',
       '--app-domain', 'example.com',
       '--api-domain', 'api.example.com',
+      '--short-domain', 'short.example.com',
       '--tls-cert', '/absolute/fullchain.pem',
       '--tls-key', 'relative.key',
     ]);

@@ -1,6 +1,6 @@
 # 本机源码运行
 
-本方式会在本机按锁定 commit 获取并构建 MyUrls 与 SubConverter，启动 Redis、两个后端、Vite 和两个 Nginx gateway 入口。适合开发与验收，不是默认公网生产方案。
+本方式会在本机按锁定 commit 获取并构建 MyUrls 与 SubConverter，启动 Redis、两个后端、Vite 和三个 Nginx gateway 入口（七个独立端口）。适合开发与验收，不是默认公网生产方案。
 
 所有命令都必须在 Subweb 项目根目录执行，不要在其他项目目录执行，尤其不要在独立 MyUrls 仓库中运行这些脚本。
 
@@ -68,6 +68,17 @@ git pull --ff-only origin main
 ```text
 http://127.0.0.1:18080/
 ```
+
+**七个本机端口**（三域名模式）：
+- `http://127.0.0.1:5173/`：Vite 开发服务器（热重载）
+- `http://127.0.0.1:18080/`：前端 Gateway（Nginx）⭐ 主要访问入口
+- `http://127.0.0.1:18081/sub?...`：转换后端 Gateway（Nginx）
+- `http://127.0.0.1:18083/short-api/short`：短链服务 Gateway（Nginx）
+- `http://127.0.0.1:25500/`：SubConverter 直接端口（内部）
+- `http://127.0.0.1:18082/`：MyUrls 直接端口（内部）
+- `http://127.0.0.1:16379`：Redis 直接端口（内部）
+
+所有端口只监听 loopback（127.0.0.1），不暴露到公网。前端可以通过 `http://127.0.0.1:18083` 创建短链，短链跳转也在同一端口。
 
 结束本机运行时执行：
 

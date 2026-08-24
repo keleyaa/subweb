@@ -116,7 +116,12 @@ make_test_certificate() {
   output_directory=$1
   app_domain=$2
   api_domain=$3
-  "$certificate_creator" "$output_directory" "$app_domain" "$api_domain" >/dev/null
+  short_domain=${4:-}
+  if [ -n "$short_domain" ]; then
+    "$certificate_creator" "$output_directory" "$app_domain" "$api_domain" "$short_domain" >/dev/null
+  else
+    "$certificate_creator" "$output_directory" "$app_domain" "$api_domain" >/dev/null
+  fi
   chmod 0644 "$output_directory/fullchain.pem" "$output_directory/privkey.pem"
 }
 
@@ -175,13 +180,20 @@ write_environment() {
   profile=$1
   certificate_path=${2:-}
   key_path=${3:-}
+  short_domain=${4:-}
   umask 077
   {
     printf 'COMPOSE_PROFILES=%s\n' "$profile"
     printf 'APP_DOMAIN=app.test\n'
     printf 'API_DOMAIN=api.app.test\n'
-    printf 'API_URL=https://api.app.test\n'
-    printf 'SHORT_URL=https://app.test/short-api\n'
+    if [ -n "$short_domain" ]; then
+      printf 'SHORT_DOMAIN=%s\n' "$short_domain"
+      printf 'API_URL=https://api.app.test\n'
+      printf 'SHORT_URL=https://%s/short-api\n' "$short_domain"
+    else
+      printf 'API_URL=https://api.app.test\n'
+      printf 'SHORT_URL=https://app.test/short-api\n'
+    fi
     printf 'SUBWEB_PORT=%s\n' "$host_port"
     printf 'TLS_CERT_PATH=%s\n' "$certificate_path"
     printf 'TLS_KEY_PATH=%s\n' "$key_path"
@@ -451,6 +463,94 @@ else
   [ "$redirect_status" = 308 ] || fail 'HTTP 80 未返回 HTTPS 跳转'
   verify_business_contracts https 'https://127.0.0.1' 'https://127.0.0.1'
   scan_logs
+  printf '%s\n' 'Legacy 双域名模式=通过'
+  reset_stack
+
+  # 三域名模式测试
+  three_domain_cert=$temporary_directory/three-domain
+  mkdir "$three_domain_cert"
+  make_test_certificate "$three_domain_cert" app.test api.app.test short.test
+  write_environment direct-tls "$three_domain_cert/fullchain.pem" "$three_domain_cert/privkey.pem" short.test
+  compose up -d --build --wait --wait-timeout 240 > "$command_log" 2>&1 \
+    || fail 'three-domain 栈启动失败'
+  wait_for_health 'gateway-tls myurls subconverter redis' \
+    || fail 'three-domain 四服务未在时限内健康'
+
+  # 验证三个 Host 都可访问
+  curl_tls_args='--noproxy * --silent --show-error --insecure --max-time 10'
+  app_base=https://127.0.0.1
+  api_base=https://127.0.0.1
+  short_base=https://127.0.0.1
+
+  # shellcheck disable=SC2086
+  app_body=$(http_request $curl_tls_args -H 'Host: app.test' "$app_base/") \
+    || fail 'Three-domain APP Host 无法访问'
+  printf '%s' "$app_body" | grep -q 'Subconverter Web' || fail 'Three-domain APP Host 未返回 Subweb'
+
+  # shellcheck disable=SC2086
+  http_request $curl_tls_args -H 'Host: api.app.test' \
+    "$api_base/sub?target=clash&url=https://example.com/sub.txt" \
+    > "$temporary_directory/three-api.out" || fail 'Three-domain API Host 无法访问'
+
+  # 测试短链创建（使用 short.test Host）
+  three_short_key="t$(random_hex 8)"
+  three_long_url="https://three-domain.example.com/test?v=$(random_hex 8)"
+  three_form_body="longUrl=$(url_encode "$three_long_url")&shortKey=$three_short_key"
+  # shellcheck disable=SC2086
+  http_request $curl_tls_args -H 'Host: short.test' \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    -H 'Origin: https://app.test' \
+    --data "$three_form_body" "$short_base/short-api/short" \
+    > "$temporary_directory/three-short.json" || fail 'Three-domain 短链创建失败'
+
+  # 验证返回的短链 URL 使用 SHORT_DOMAIN
+  THREE_SHORT_JSON=$temporary_directory/three-short.json node <<'NODE' \
+    || fail 'Three-domain 短链响应不符合契约'
+const fs = require('node:fs');
+const payload = JSON.parse(fs.readFileSync(process.env.THREE_SHORT_JSON, 'utf8'));
+if (payload.Code !== 1 || typeof payload.ShortUrl !== 'string') process.exit(1);
+if (!payload.ShortUrl.startsWith('https://short.test/')) {
+  console.error('Expected short URL to start with https://short.test/, got:', payload.ShortUrl);
+  process.exit(1);
+}
+NODE
+
+  # 测试短链跳转
+  rm -f "$temporary_directory/three-redirect.headers"
+  # shellcheck disable=SC2086
+  http_request $curl_tls_args -D "$temporary_directory/three-redirect.headers" -o /dev/null \
+    -H 'Host: short.test' "$short_base/$three_short_key" || fail 'Three-domain 短码无法访问'
+  grep -Fqi "Location: $three_long_url" "$temporary_directory/three-redirect.headers" \
+    || fail 'Three-domain 短码未跳转到目标'
+
+  # 测试 CORS 预检请求
+  # shellcheck disable=SC2086
+  cors_status=$(curl $curl_tls_args -X OPTIONS -H 'Host: short.test' \
+    -H 'Origin: https://app.test' \
+    -H 'Access-Control-Request-Method: POST' \
+    -H 'Access-Control-Request-Headers: Content-Type' \
+    -o /dev/null -w '%{http_code}' "$short_base/short-api/short")
+  [ "$cors_status" = 204 ] || fail "Three-domain CORS 预检失败，状态码: $cors_status"
+
+  # 验证 APP 兼容入口仍然可用
+  compat_short_key="c$(random_hex 8)"
+  compat_long_url="https://compat.example.com/test?v=$(random_hex 8)"
+  compat_form_body="longUrl=$(url_encode "$compat_long_url")&shortKey=$compat_short_key"
+  # shellcheck disable=SC2086
+  http_request $curl_tls_args -H 'Host: app.test' \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    --data "$compat_form_body" "$app_base/short-api/short" \
+    > "$temporary_directory/compat-short.json" || fail 'Three-domain APP 兼容入口创建失败'
+
+  rm -f "$temporary_directory/compat-redirect.headers"
+  # shellcheck disable=SC2086
+  http_request $curl_tls_args -D "$temporary_directory/compat-redirect.headers" -o /dev/null \
+    -H 'Host: app.test' "$app_base/$compat_short_key" || fail 'Three-domain APP 兼容短码无法访问'
+  grep -Fqi "Location: $compat_long_url" "$temporary_directory/compat-redirect.headers" \
+    || fail 'Three-domain APP 兼容短码未跳转'
+
+  scan_logs
+  printf '%s\n' 'Three-domain 三域名模式=通过'
   reset_stack
 
   write_environment direct-tls "$temporary_directory/missing.pem" "$temporary_directory/missing.key"
@@ -469,6 +569,13 @@ else
   make_test_certificate "$wrong_san" app.test other.test
   write_environment direct-tls "$wrong_san/fullchain.pem" "$wrong_san/privkey.pem"
   expect_tls_rejection '证书不覆盖 API 域名' gateway-log 'TLS 证书不覆盖 API_DOMAIN: api.app.test'
+
+  # 测试三域名模式下的证书覆盖验证
+  wrong_short=$temporary_directory/wrong-short
+  mkdir "$wrong_short"
+  make_test_certificate "$wrong_short" app.test api.app.test
+  write_environment direct-tls "$wrong_short/fullchain.pem" "$wrong_short/privkey.pem" short.test
+  expect_tls_rejection '三域名证书不覆盖 SHORT_DOMAIN' gateway-log 'TLS 证书不覆盖 SHORT_DOMAIN: short.test'
 
   write_environment direct-tls "$certificate_directory/fullchain.pem" "$certificate_directory/privkey.pem"
   start_port_listener 80 || fail '无法启动本任务的 80 端口占用监听器'

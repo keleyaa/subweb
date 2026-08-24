@@ -7,7 +7,7 @@ import { getGithubRepositoryLabel } from '@/features/site/github';
 // sends subscription content to these defaults.
 export const DEFAULT_RUNTIME_CONFIG = {
   apiUrl: 'https://api.ml1.one',
-  shortUrl: 'https://ml1.one',
+  shortUrl: '',
   menuItem: [{ title: 'GitHub', link: 'https://github.com/keleyaa/subweb', target: '_blank' }],
   remoteConfigOptions: [
     {

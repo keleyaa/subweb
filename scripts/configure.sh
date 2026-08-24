@@ -31,6 +31,8 @@ app_domain=
 app_domain_seen=0
 api_domain=
 api_domain_seen=0
+short_domain=
+short_domain_seen=0
 tls_cert=
 tls_cert_seen=0
 tls_key=
@@ -60,6 +62,13 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || fail '--api-domain requires a value.'
       api_domain=$2
       api_domain_seen=1
+      shift 2
+      ;;
+    --short-domain)
+      [ "$short_domain_seen" -eq 0 ] || fail '--short-domain may be provided only once.'
+      [ "$#" -ge 2 ] || fail '--short-domain requires a value.'
+      short_domain=$2
+      short_domain_seen=1
       shift 2
       ;;
     --tls-cert)
@@ -100,6 +109,21 @@ validate_domain "$api_domain" || fail 'API domain must be a plain hostname witho
 normalized_app=$(printf '%s' "$app_domain" | tr '[:upper:]' '[:lower:]')
 normalized_api=$(printf '%s' "$api_domain" | tr '[:upper:]' '[:lower:]')
 [ "$normalized_app" != "$normalized_api" ] || fail 'APP and API domains must be different.'
+
+if [ "$short_domain_seen" -eq 1 ]; then
+  domain_mode=three-domain
+  validate_domain "$short_domain" || fail 'SHORT domain must be a plain hostname without scheme, path, or port.'
+  normalized_short=$(printf '%s' "$short_domain" | tr '[:upper:]' '[:lower:]')
+  [ "$normalized_short" != "$normalized_app" ] || fail 'SHORT and APP domains must be different in three-domain mode.'
+  [ "$normalized_short" != "$normalized_api" ] || fail 'SHORT and API domains must be different in three-domain mode.'
+else
+  domain_mode=legacy
+  if [ -f "$PWD/.env" ]; then
+    short_domain=$app_domain
+  else
+    fail '--short-domain is required for a new deployment.'
+  fi
+fi
 
 case "$mode" in
   behind-proxy)
@@ -154,10 +178,12 @@ fi
 if [ "$mode" = direct-tls ]; then
   write_env_atomically "$env_file" <<EOF
 COMPOSE_PROFILES=$mode
+DOMAIN_MODE=$domain_mode
 APP_DOMAIN=$app_domain
 API_DOMAIN=$api_domain
 API_URL=https://$api_domain
-SHORT_URL=https://$app_domain/short-api
+SHORT_DOMAIN=$short_domain
+SHORT_URL=https://$short_domain/short-api
 ${image_settings}TLS_CERT_PATH=$tls_cert
 TLS_KEY_PATH=$tls_key
 MYURLS_API_TOKEN=$myurls_api_token
@@ -166,10 +192,12 @@ EOF
 else
   write_env_atomically "$env_file" <<EOF
 COMPOSE_PROFILES=$mode
+DOMAIN_MODE=$domain_mode
 APP_DOMAIN=$app_domain
 API_DOMAIN=$api_domain
 API_URL=https://$api_domain
-SHORT_URL=https://$app_domain/short-api
+SHORT_DOMAIN=$short_domain
+SHORT_URL=https://$short_domain/short-api
 ${image_settings}MYURLS_API_TOKEN=$myurls_api_token
 REDIS_PASSWORD=$redis_password
 EOF

@@ -21,9 +21,7 @@ escape_config_value() {
 '*|*''*) fail '配置环境变量不能包含换行符' ;;
   esac
 
-  printf '%s' "$1" \
-    | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g" \
-    | sed 's/[\\&#]/\\&/g'
+  printf '%s' "$1" | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g"
 }
 
 replace_file_value() {
@@ -31,9 +29,10 @@ replace_file_value() {
   old_value=$2
   new_value=$3
   escaped_value=$(escape_config_value "$new_value")
+  sed_escaped=$(printf '%s' "$escaped_value" | sed 's/[\\&]/\\&/g')
   temp_file="${target_file}.$$"
 
-  if sed "s#${old_value}#${escaped_value}#g" "$target_file" > "$temp_file"; then
+  if sed "s#${old_value}#${sed_escaped}#g" "$target_file" > "$temp_file"; then
     mv "$temp_file" "$target_file" \
       || fail "无法写入运行时文件: ${target_file}"
   else
@@ -68,12 +67,24 @@ fi
 if [ "${SHORT_URL+x}" = x ]; then
   if [ -n "$SHORT_URL" ]; then
     printf '当前短链接地址为: %s\n' "$SHORT_URL"
+    python3 <<'PYTHON_SCRIPT'
+import sys, os, re
+url = os.environ["SHORT_URL"]
+# JavaScript 字符串转义：每个 \ 需要变成 \\（源码中是四个反斜杠才能产生一个 \）
+# 先转义反斜杠，再转义单引号
+url = url.replace("\\", "\\\\\\\\").replace("'", "\\'")
+config_file = os.environ["CONFIG_FILE"]
+with open(config_file, "r") as f:
+    content = f.read()
+content = re.sub(r"shortUrl: ''", f"shortUrl: '{url}'", content)
+with open(config_file, "w") as f:
+    f.write(content)
+PYTHON_SCRIPT
   else
     printf '%s\n' '当前已关闭短链接功能'
   fi
-  replace_config_value 'https://ml1.one' "$SHORT_URL"
 else
-  printf '%s\n' '当前为默认短链接地址: https://ml1.one'
+  printf '%s\n' '当前短链接功能依赖部署时配置'
 fi
 
 if [ -n "${APP_DOMAIN:-}" ] && [ -w "$site_root" ]; then
@@ -106,6 +117,8 @@ validate_direct_tls() {
     || fail "TLS 证书不覆盖 APP_DOMAIN: $APP_DOMAIN"
   "$openssl_bin" x509 -in "$TLS_CERT_PATH" -noout -checkhost "$API_DOMAIN" >/dev/null 2>&1 \
     || fail "TLS 证书不覆盖 API_DOMAIN: $API_DOMAIN"
+  "$openssl_bin" x509 -in "$TLS_CERT_PATH" -noout -checkhost "$SHORT_DOMAIN" >/dev/null 2>&1 \
+    || fail "TLS 证书不覆盖 SHORT_DOMAIN: $SHORT_DOMAIN"
   "$openssl_bin" pkey -in "$TLS_KEY_PATH" -check -noout >/dev/null 2>&1 \
     || fail 'TLS 私钥格式无效'
 

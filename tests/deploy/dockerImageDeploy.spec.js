@@ -48,6 +48,7 @@ const runDeploy = (root, extraArgs = [], env = {}) =>
     '--mode', 'behind-proxy',
     '--app-domain', 'example.com',
     '--api-domain', 'api.example.com',
+    '--short-domain', 'short.example.com',
     ...extraArgs,
   ], {
     cwd: root,

@@ -42,4 +42,11 @@ http {
 @@SECURITY_HEADERS@@
  @@API_ROUTES@@
   }
+
+  server {
+    listen 127.0.0.1:@@SHORT_PORT@@;
+    server_name 127.0.0.1;
+
+@@SHORT_ROUTES@@
+  }
 }

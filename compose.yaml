@@ -31,6 +31,8 @@ x-gateway-common: &gateway-common
     SHORT_URL: "${SHORT_URL:?Set SHORT_URL with scripts/configure.sh}"
     APP_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
     API_DOMAIN: "${API_DOMAIN:?Set API_DOMAIN with scripts/configure.sh}"
+    DOMAIN_MODE: "${DOMAIN_MODE:-legacy}"
+    SHORT_DOMAIN: "${SHORT_DOMAIN:-${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}}"
     PUBLIC_SCHEME: https
     SUBCONVERTER_UPSTREAM: http://subconverter:25500
     MYURLS_UPSTREAM: http://myurls:8080
@@ -103,7 +105,7 @@ services:
     environment:
       <<: *runtime-environment
       MYURLS_PORT: "8080"
-      MYURLS_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
+      MYURLS_DOMAIN: "${SHORT_DOMAIN:-${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}}"
       MYURLS_PROTO: https
       MYURLS_REDIS_CONN: redis:6379
       MYURLS_REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"

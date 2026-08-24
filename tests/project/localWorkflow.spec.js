@@ -27,8 +27,10 @@ describe('local source workflow contract', () => {
     expect(verifier).toContain('订阅转换哨兵');
     expect(verifier).toContain('/short-api/short');
     expect(verifier).toContain('重启后旧短链');
-    expect(verifier).toContain('六个默认端口冲突');
-    expect(verifier).toContain('六个自定义端口派生');
+    expect(verifier).toContain('七个默认端口冲突');
+    expect(verifier).toContain('七个自定义端口派生');
     expect(verifier).toContain('端口未释放');
+    expect(verifier).toContain('SHORT 功能哨兵');
+    expect(verifier).toContain('LOCAL_SHORT_PORT');
   });
 });

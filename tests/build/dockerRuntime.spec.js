@@ -76,7 +76,7 @@ describe('Docker runtime contract', () => {
     expect(verifier).toContain('grep -Fq "$verification_token"');
     expect(verifier.match(/--header='Host: app\.example\.com'/g)).toHaveLength(2);
     expect(example).toContain('API_URL=https://api.ml1.one');
-    expect(example).toContain('SHORT_URL=https://ml1.one');
+    expect(example).toContain('SHORT_URL=https://s.ml1.one/short-api');
     expect(example).toContain('SUBWEB_PORT=18080');
   });
 

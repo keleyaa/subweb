@@ -26,7 +26,7 @@ describe('normalizeRuntimeConfig', () => {
   it('uses the maintained service defaults and opt-in public configuration presets when configuration is absent', () => {
     expect(normalizeRuntimeConfig()).toEqual({
       apiUrl: 'https://api.ml1.one',
-      shortUrl: 'https://ml1.one',
+      shortUrl: '',
       menuItem: [{ title: 'GitHub', link: 'https://github.com/keleyaa/subweb', target: '_blank' }],
       remoteConfigOptions: DEFAULT_REMOTE_CONFIG_OPTIONS,
     });
@@ -121,7 +121,8 @@ describe('normalizeRuntimeConfig', () => {
 
     expect(window.config).toEqual(DEFAULT_RUNTIME_CONFIG);
     expect(startScript).toContain("replace_config_value 'https://api.ml1.one' \"$API_URL\"");
-    expect(startScript).toContain("replace_config_value 'https://ml1.one' \"$SHORT_URL\"");
+    expect(startScript).toContain('shortUrl: \'\'');
+    expect(startScript).toContain('SHORT_URL');
     expect(startScript).not.toContain('SITE_NAME');
   });
 });
