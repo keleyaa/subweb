@@ -27,6 +27,16 @@ http {
   limit_req_zone $binary_remote_addr zone=subweb_short:10m rate=20r/m;
   limit_req_status 429;
 
+  map $http_origin $short_origin_allowed {
+    default 0;
+    "http://127.0.0.1:@@APP_PORT@@" 1;
+  }
+
+  map $http_origin $short_allowed_origin {
+    default "";
+    "http://127.0.0.1:@@APP_PORT@@" "http://127.0.0.1:@@APP_PORT@@";
+  }
+
   server {
     listen 127.0.0.1:@@APP_PORT@@;
     server_name 127.0.0.1;

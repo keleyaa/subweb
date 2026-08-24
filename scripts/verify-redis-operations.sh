@@ -77,7 +77,8 @@ cd "$project_root"
 docker compose up -d --build --wait >/dev/null
 
 curl --noproxy '*' --fail --silent --show-error \
-  -H 'Host: app.test' -H 'Content-Type: application/x-www-form-urlencoded' \
+  -H 'Host: app.test' -H 'Origin: https://app.test' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
   --data "longUrl=$long_url&shortKey=$short_key" \
   "http://127.0.0.1:$host_port/short-api/short" >/dev/null
 

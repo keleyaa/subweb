@@ -113,7 +113,8 @@ describe.skipIf(!enabled)('real Nginx short creation Content-Type gate', () => {
     const args = [
       '--silent', '--output', '/dev/null', '--write-out', '%{http_code}',
       '--connect-timeout', '2', '--max-time', '5', '-X', 'POST',
-      '-H', 'Host: app.example.test', '--data-binary', '{}',
+      '-H', 'Host: app.example.test', '-H', 'Origin: https://app.example.test',
+      '--data-binary', '{}',
     ];
     args.push('-H', contentType === null ? 'Content-Type:' : `Content-Type: ${contentType}`);
     args.push(`http://127.0.0.1:${gatewayPort}/short-api/short${query}`);

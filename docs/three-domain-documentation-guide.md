@@ -56,7 +56,7 @@
 
 #### 1. 端口列表
 
-**当前**：六个端口
+**当前**：七个端口
 
 **更新为**：七个端口
 ```
@@ -148,10 +148,10 @@ LOCAL_SHORT_PORT=18083      # 短链服务 Gateway（Nginx）⭐ 新增
 - [x] README.md 更新
 - [x] docs/deployment-docker.md 更新
 - [x] docs/implementation-status-three-domain.md 创建
-- [ ] docs/architecture.md 更新
-- [ ] docs/deployment-local.md 更新
-- [ ] docs/configuration.md 更新
-- [ ] docs/security.md 更新
+- [x] docs/architecture.md 更新
+- [x] docs/deployment-local.md 更新
+- [x] docs/configuration.md 更新
+- [x] docs/security.md 更新
 
 ---
 

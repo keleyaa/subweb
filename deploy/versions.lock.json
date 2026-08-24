@@ -12,10 +12,10 @@
       },
       "image": {
         "reference": "docker.io/nginxinc/nginx-unprivileged:1.30.4-alpine",
-        "digest": "sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49",
+        "digest": "sha256:93722936b82ec8a1178d48448e619226680d2de3706a1640800e186cd5fa7fd3",
         "platforms": {
-          "linux/amd64": "sha256:bc69cfff69f75aef06daeda8dea70de95fa9ad97a03fe134cd4e5e6789d51124",
-          "linux/arm64": "sha256:044acf9fd345f73fe66d818e043fd601982f0ab5ae14213c5bdaccd5ffaa065d"
+          "linux/amd64": "sha256:0ae19f15f7aac55c1c6d3019009d7d5a83ad1ee2af90ad9f04a89aaab0baf85b",
+          "linux/arm64": "sha256:881a8cf72ae0cad709c7f5fd7b209f1a2c1986aa2edaf148dfd0b229ed33e489"
         }
       },
       "container": {

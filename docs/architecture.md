@@ -37,6 +37,8 @@
 
 **APP 兼容入口**：三域名部署后，`https://APP_DOMAIN/short-api/*` 和 `https://APP_DOMAIN/<short-code>` 仍然可用，用于兼容已分享的旧短链。新短链返回 `https://SHORT_DOMAIN/<short-code>`。迁移完成后可移除 APP 域名下的短链路由。
 
+兼容入口的创建 POST 同样要求精确的 `Origin: https://APP_DOMAIN`；它不返回跨域授权头，也不会透传客户端 `Authorization` 或 `Proxy-Authorization`。
+
 ### Legacy 双域名模式
 
 向后兼容的部署方式，短链服务在 `APP_DOMAIN` 下：

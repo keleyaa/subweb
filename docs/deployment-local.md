@@ -149,6 +149,6 @@ tail -n 200 .runtime/local/logs/subconverter.log
 ```
 
 - 缺依赖：按脚本一次性列出的名单安装，不要只补第一个。
-- 端口冲突：用 `lsof -nP -iTCP:<port> -sTCP:LISTEN` 找到所有者，或设置六个不重复的自定义端口。
+- 端口冲突：用 `lsof -nP -iTCP:<port> -sTCP:LISTEN` 找到所有者，或设置七个不重复的自定义端口。
 - stale PID：先运行 `status.sh` 确认，再用 `stop.sh` 清理项目自己的记录；不要手动终止不属于本项目的进程。
 - 健康失败：查看对应日志和 `.runtime/local/config/local.env` 中的非秘密端口；秘密文件不要输出或提交。

@@ -17,8 +17,8 @@ location = /short-api/short {
   if ($request_method = OPTIONS) {
     return 204;
   }
-  limit_except POST {
-    deny all;
+  if ($request_method != POST) {
+    return 405;
   }
   if ($short_content_type_allowed = 0) {
     return 415;

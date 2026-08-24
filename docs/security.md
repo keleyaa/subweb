@@ -47,6 +47,8 @@ gateway 根据 Host 分离应用与 API，并在 `/short-api/` 代理中注入 M
 3. **何时移除**：确认没有旧短链在使用后（观察 Gateway 日志中 `APP_DOMAIN` 短链访问量）
 4. **移除方式**：修改 `nginx/snippets/app-routes.conf.template`，移除短链路由，重新渲染和部署 Gateway 配置
 
+兼容入口的创建 POST 仍要求精确的 `Origin: https://APP_DOMAIN`，从而阻止跨站 simple request 写入；该入口不返回跨域授权头。
+
 ## 敏感数据
 
 - 订阅 URL 可能包含访问凭据。SubConverter 会接收它，创建短链时 MyUrls/Redis 也会保存包含它的长链接。

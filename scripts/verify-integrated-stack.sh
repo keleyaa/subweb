@@ -187,10 +187,12 @@ write_environment() {
     printf 'APP_DOMAIN=app.test\n'
     printf 'API_DOMAIN=api.app.test\n'
     if [ -n "$short_domain" ]; then
+      printf 'DOMAIN_MODE=three-domain\n'
       printf 'SHORT_DOMAIN=%s\n' "$short_domain"
       printf 'API_URL=https://api.app.test\n'
       printf 'SHORT_URL=https://%s/short-api\n' "$short_domain"
     else
+      printf 'DOMAIN_MODE=legacy\n'
       printf 'API_URL=https://api.app.test\n'
       printf 'SHORT_URL=https://app.test/short-api\n'
     fi
@@ -290,6 +292,7 @@ verify_business_contracts() {
   form_body="longUrl=$(url_encode "$long_url")&shortKey=$short_key"
   # shellcheck disable=SC2086
   http_request $curl_tls_args -H 'Host: app.test' \
+    -H 'Origin: https://app.test' \
     -H 'Content-Type: application/x-www-form-urlencoded' \
     -H 'Authorization: Bearer client-forged-value' \
     --data "$form_body" "$app_base/short-api/short" \
@@ -477,7 +480,9 @@ else
     || fail 'three-domain 四服务未在时限内健康'
 
   # 验证三个 Host 都可访问
-  curl_tls_args='--noproxy * --silent --show-error --insecure --max-time 10'
+  # http_request already supplies the quoted --noproxy '*' option; keeping the
+  # direct-TLS flags here avoids unquoted glob expansion into repository paths.
+  curl_tls_args='--silent --show-error --insecure --max-time 10'
   app_base=https://127.0.0.1
   api_base=https://127.0.0.1
   short_base=https://127.0.0.1
@@ -525,12 +530,26 @@ NODE
 
   # 测试 CORS 预检请求
   # shellcheck disable=SC2086
-  cors_status=$(curl $curl_tls_args -X OPTIONS -H 'Host: short.test' \
+  cors_status=$(curl --noproxy '*' $curl_tls_args -X OPTIONS -H 'Host: short.test' \
     -H 'Origin: https://app.test' \
     -H 'Access-Control-Request-Method: POST' \
     -H 'Access-Control-Request-Headers: Content-Type' \
     -o /dev/null -w '%{http_code}' "$short_base/short-api/short")
   [ "$cors_status" = 204 ] || fail "Three-domain CORS 预检失败，状态码: $cors_status"
+
+  blocked_cors_status=$(curl --noproxy '*' $curl_tls_args -X OPTIONS -H 'Host: short.test' \
+    -H 'Origin: https://evil.test' \
+    -H 'Access-Control-Request-Method: POST' \
+    -H 'Access-Control-Request-Headers: Content-Type' \
+    -o /dev/null -w '%{http_code}' "$short_base/short-api/short")
+  [ "$blocked_cors_status" = 403 ] || fail "Three-domain 恶意 Origin 预检未拒绝，状态码: $blocked_cors_status"
+
+  blocked_post_status=$(curl --noproxy '*' $curl_tls_args -X POST -H 'Host: short.test' \
+    -H 'Origin: https://evil.test' \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    --data 'longUrl=https%3A%2F%2Fevil.test%2Fblocked&shortKey=blocked-origin' \
+    -o /dev/null -w '%{http_code}' "$short_base/short-api/short")
+  [ "$blocked_post_status" = 403 ] || fail "Three-domain 恶意 Origin POST 未拒绝，状态码: $blocked_post_status"
 
   # 验证 APP 兼容入口仍然可用
   compat_short_key="c$(random_hex 8)"
@@ -538,6 +557,7 @@ NODE
   compat_form_body="longUrl=$(url_encode "$compat_long_url")&shortKey=$compat_short_key"
   # shellcheck disable=SC2086
   http_request $curl_tls_args -H 'Host: app.test' \
+    -H 'Origin: https://app.test' \
     -H 'Content-Type: application/x-www-form-urlencoded' \
     --data "$compat_form_body" "$app_base/short-api/short" \
     > "$temporary_directory/compat-short.json" || fail 'Three-domain APP 兼容入口创建失败'

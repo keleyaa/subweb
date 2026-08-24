@@ -8,7 +8,7 @@
 | MyUrls | [`keleyaa/MyUrls`](https://github.com/keleyaa/MyUrls)，原始上游 [`CareyWang/MyUrls`](https://github.com/CareyWang/MyUrls) | `ghcr.io/keleyaa/myurls:latest` | `v1.13.0`, commit `7dc3db6a6347fe9db6e79cec053fece19553fe84`, image digest `sha256:b98836c038e070c8f889f391d63bd9535aee93ce91753f4bb30353f3395d0915` | 不在本仓库修改；独立仓库维护 | 以该仓库许可证为准 |
 | SubConverter-Extended | [`Aethersailor/SubConverter-Extended`](https://github.com/Aethersailor/SubConverter-Extended) | `ghcr.io/aethersailor/subconverter-extended:latest` | `v1.2.0`, commit `4db6a63f078f27da2cfb6cc90d47eb2dbd80c1cd`, image digest `sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f` | 否，只配置官方镜像 | 以官方仓库许可证为准 |
 | Redis | [`redis/redis`](https://github.com/redis/redis) | `docker.io/library/redis:8-alpine` | `8.10.0`, image digest `sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241` | 否 | 以 Redis 对应版本许可证为准 |
-| Nginx unprivileged | [`nginx/nginx`](https://github.com/nginx/nginx) 与官方 unprivileged image | `nginxinc/nginx-unprivileged:alpine` | `1.30.4`, image digest `sha256:44e36330f74d4f3a1d4e222acca9e23b401fb87811a7597024502bb759c4dd49` | 只添加模板和启动配置 | 以 Nginx/镜像仓库许可证为准 |
+| Nginx unprivileged | [`nginx/nginx`](https://github.com/nginx/nginx) 与官方 unprivileged image | `nginxinc/nginx-unprivileged:1.30.4-alpine@sha256:93722936b82ec8a1178d48448e619226680d2de3706a1640800e186cd5fa7fd3` | `1.30.4`, image digest `sha256:93722936b82ec8a1178d48448e619226680d2de3706a1640800e186cd5fa7fd3` | 只添加模板和启动配置 | 以 Nginx/镜像仓库许可证为准 |
 
 MyUrls `v1.13.0` 已发布并推进 `ghcr.io/keleyaa/myurls:latest`；Subweb 的可重复集成验证使用上述
 `v1.13.0` digest，生产部署默认继续跟随 `latest`。需要可重复发布或回滚时，部署者可以在不提交的

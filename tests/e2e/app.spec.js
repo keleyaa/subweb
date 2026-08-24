@@ -20,11 +20,22 @@ test('converts, copies, and creates a short link with gateway-approved form enco
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
     origin: 'http://127.0.0.1:4173',
   });
-  await page.route('https://ml1.one/short', async (route) => {
+  await page.route('**/conf/config.js', async (route) => {
+    await route.fulfill({
+      contentType: 'application/javascript',
+      body: `window.config = ${JSON.stringify({
+        apiUrl: 'https://api.ml1.one',
+        shortUrl: 'https://short.example.test/short-api',
+        menuItem: [],
+        remoteConfigOptions: [],
+      })};`,
+    });
+  });
+  await page.route('https://short.example.test/short-api/short', async (route) => {
     shortRequestContentType = route.request().headers()['content-type'] ?? '';
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ Code: 1, ShortUrl: 'https://ml1.one/e2e-result' }),
+      body: JSON.stringify({ Code: 1, ShortUrl: 'https://short.example.test/e2e-result' }),
     });
   });
 
@@ -43,7 +54,7 @@ test('converts, copies, and creates a short link with gateway-approved form enco
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expectedUrl);
 
   await page.getByRole('button', { name: '生成并复制短链' }).click();
-  await expect(page.getByLabel('短链')).toHaveValue('https://ml1.one/e2e-result');
+  await expect(page.getByLabel('短链')).toHaveValue('https://short.example.test/e2e-result');
   await expect(page.getByRole('button', { name: '复制短链' })).toBeVisible();
   expect(shortRequestContentType).toMatch(/^application\/x-www-form-urlencoded(?:;|$)/i);
   expect(browserErrors).toEqual([]);

@@ -45,6 +45,22 @@ replace_config_value() {
   replace_file_value "$config_file" "$1" "$2"
 }
 
+replace_file_replacement() {
+  target_file=$1
+  old_value=$2
+  replacement=$3
+  sed_escaped=$(printf '%s' "$replacement" | sed 's/[\\&|]/\\&/g')
+  temp_file="${target_file}.$$"
+
+  if sed "s|${old_value}|${sed_escaped}|g" "$target_file" > "$temp_file"; then
+    mv "$temp_file" "$target_file" \
+      || fail "无法写入运行时文件: ${target_file}"
+  else
+    rm -f "$temp_file"
+    fail "无法写入运行时文件: ${target_file}"
+  fi
+}
+
 if [ ! -f "$config_file" ]; then
   [ -f "$config_template" ] \
     || fail "运行时配置模板不存在: ${config_template}"
@@ -67,19 +83,8 @@ fi
 if [ "${SHORT_URL+x}" = x ]; then
   if [ -n "$SHORT_URL" ]; then
     printf '当前短链接地址为: %s\n' "$SHORT_URL"
-    python3 <<'PYTHON_SCRIPT'
-import sys, os, re
-url = os.environ["SHORT_URL"]
-# JavaScript 字符串转义：每个 \ 需要变成 \\（源码中是四个反斜杠才能产生一个 \）
-# 先转义反斜杠，再转义单引号
-url = url.replace("\\", "\\\\\\\\").replace("'", "\\'")
-config_file = os.environ["CONFIG_FILE"]
-with open(config_file, "r") as f:
-    content = f.read()
-content = re.sub(r"shortUrl: ''", f"shortUrl: '{url}'", content)
-with open(config_file, "w") as f:
-    f.write(content)
-PYTHON_SCRIPT
+    escaped_short_url=$(escape_config_value "$SHORT_URL")
+    replace_file_replacement "$config_file" "shortUrl: ''" "shortUrl: '$escaped_short_url'"
   else
     printf '%s\n' '当前已关闭短链接功能'
   fi

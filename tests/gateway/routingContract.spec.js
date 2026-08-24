@@ -36,8 +36,10 @@ describe('gateway routing contract', () => {
     const block = routes.slice(start, end);
 
     expect(block).toContain('limit_except POST');
+    expect(block).toContain('if ($short_origin_allowed = 0)');
     expect(block).toContain('client_max_body_size @@MYURLS_MAX_BODY_BYTES@@;');
     expect(block).toContain('proxy_set_header Authorization "";');
+    expect(block).toContain('proxy_set_header Proxy-Authorization "";');
     expect(block).toContain('proxy_set_header Authorization "Bearer @@MYURLS_API_TOKEN@@";');
     expect(block.indexOf('Authorization ""')).toBeLessThan(block.indexOf('Authorization "Bearer'));
     expect(block).toContain('if ($short_content_type_allowed = 0)');
@@ -55,6 +57,21 @@ describe('gateway routing contract', () => {
     expect(map).toMatch(/application\/json[^\n]+1;/i);
     expect(map).toMatch(/application\/x-www-form-urlencoded[^\n]+1;/i);
     expect(map).not.toContain('text/plain');
+  });
+
+  it('terminates allowed SHORT preflight requests before the POST-only proxy path', async () => {
+    const routes = await readFile(rootFile('nginx/snippets/short-routes.conf.template'), 'utf8');
+    const start = routes.indexOf('location = /short-api/short');
+    const end = routes.indexOf('\n}', start) + 2;
+    const block = routes.slice(start, end);
+
+    expect(block).toContain('if ($request_method = OPTIONS)');
+    expect(block).toContain('return 204;');
+    expect(block).toContain('if ($request_method != POST)');
+    expect(block).toContain('return 405;');
+    expect(block.indexOf('return 204')).toBeLessThan(block.indexOf('return 405'));
+    expect(block).not.toContain('limit_except POST');
+    expect(block).not.toContain('try_files');
   });
 
   it('preserves the original API path and query while forwarding only validated public headers', async () => {

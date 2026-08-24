@@ -31,6 +31,9 @@ location ^~ /conf/ {
 location = /short-api/short {
   add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
   limit_req zone=subweb_short burst=5 nodelay;
+  if ($short_origin_allowed = 0) {
+    return 403;
+  }
   limit_except POST {
     deny all;
   }
@@ -39,6 +42,7 @@ location = /short-api/short {
   }
   client_max_body_size @@MYURLS_MAX_BODY_BYTES@@;
   proxy_set_header Authorization "";
+  proxy_set_header Proxy-Authorization "";
   proxy_set_header Authorization "Bearer @@MYURLS_API_TOKEN@@";
 @@APP_PROXY_HEADERS@@
   set $myurls_upstream "@@MYURLS_UPSTREAM@@";

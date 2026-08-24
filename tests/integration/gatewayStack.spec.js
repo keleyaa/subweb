@@ -203,6 +203,8 @@ describe('integrated Docker gateway stack', () => {
     expect(source).not.toContain('server.listen(port');
     expect(source).toContain('make_test_certificate');
     expect(source).toContain('chmod 0644 "$output_directory/fullchain.pem" "$output_directory/privkey.pem"');
+    expect(source).toContain("printf 'DOMAIN_MODE=three-domain\\n'");
+    expect(source).toContain("printf 'DOMAIN_MODE=legacy\\n'");
   });
 
   it.skipIf(!dockerIntegrationEnabled)(

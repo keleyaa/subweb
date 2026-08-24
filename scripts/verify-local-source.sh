@@ -56,6 +56,7 @@ short_key="l$(openssl rand -hex 8)"
 long_url="https://example.com/local-verification/$(openssl rand -hex 8)"
 form_body="longUrl=$(url_encode "$long_url")&shortKey=$short_key"
 curl --noproxy '*' --fail --silent \
+  -H "Origin: http://127.0.0.1:$app_port" \
   -H 'Content-Type: application/x-www-form-urlencoded' \
   --data "$form_body" "http://127.0.0.1:$app_port/short-api/short" \
   > "$verification_root/short.json" || fail '短链创建哨兵失败'

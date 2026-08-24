@@ -47,11 +47,6 @@ http {
     "@@PUBLIC_SCHEME@@://@@APP_DOMAIN@@" "@@PUBLIC_SCHEME@@://@@APP_DOMAIN@@";
   }
 
-  map $http_content_type $short_content_type_allowed {
-    default 0;
-    "application/x-www-form-urlencoded" 1;
-  }
-
   resolver @@NGINX_RESOLVER@@ ipv6=off valid=30s;
 
   server {
