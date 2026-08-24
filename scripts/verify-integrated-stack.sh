@@ -1,12 +1,12 @@
 #!/bin/sh
 set -eu
 
+[ "$#" -eq 0 ] || { printf '%s\n' '用法: verify-integrated-stack.sh' >&2; exit 2; }
 command -v docker >/dev/null 2>&1 || { printf '%s\n' '缺少 Docker' >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || { printf '%s\n' '缺少 curl' >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { printf '%s\n' '缺少 Node.js' >&2; exit 1; }
 command -v openssl >/dev/null 2>&1 || { printf '%s\n' '缺少 openssl' >&2; exit 1; }
 docker compose version >/dev/null 2>&1 || { printf '%s\n' '缺少 Docker Compose v2' >&2; exit 1; }
-[ "$#" -eq 0 ] || { printf '%s\n' '用法: verify-integrated-stack.sh' >&2; exit 2; }
 
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repository_root=$(CDPATH= cd -- "$script_directory/.." && pwd)

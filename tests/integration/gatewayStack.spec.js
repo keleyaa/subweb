@@ -185,6 +185,12 @@ describe('integrated Docker gateway stack', () => {
     expect(source).toContain("printf 'MYURLS_IMAGE=%s\\n' \"$myurls_test_image\"");
   });
 
+  it('rejects arguments before checking optional runtime tools', async () => {
+    const source = await readFile(verifier, 'utf8');
+    expect(source.indexOf('[ "$#" -eq 0 ]')).toBeGreaterThanOrEqual(0);
+    expect(source.indexOf('[ "$#" -eq 0 ]')).toBeLessThan(source.indexOf('command -v node'));
+  });
+
   it('keeps integration cleanup and runtime checks scoped to the generated stack', async () => {
     const source = await readFile(verifier, 'utf8');
 
