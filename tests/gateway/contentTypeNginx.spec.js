@@ -66,7 +66,7 @@ describe.skipIf(!enabled)('real Nginx short creation Content-Type gate', () => {
       '-e', `EXPECTED_AUTHORIZATION=Bearer ${token}`,
       'node:alpine',
       'node', '-e',
-      "let count=0,expectedAuthorizationRequests=0,authorizationHeaderCount=0;const expected=process.env.EXPECTED_AUTHORIZATION;require('http').createServer((req,res)=>{req.resume();req.on('end',()=>{if(req.url==='/metrics'){res.setHeader('content-type','application/json');res.end(JSON.stringify({count,expectedAuthorizationRequests,authorizationHeaderCount}));return}if(req.url==='/count'){res.end(String(count));return}if(req.url.startsWith('/short')){count++;const values=req.headersDistinct.authorization||[];authorizationHeaderCount+=values.length;if(values.length===1&&values[0]===expected)expectedAuthorizationRequests++;res.statusCode=201;res.end('created');return}res.statusCode=404;res.end('not found')})}).listen(8080,'0.0.0.0')",
+      "let count=0,expectedAuthorizationRequests=0,authorizationHeaderCount=0;const expected=process.env.EXPECTED_AUTHORIZATION;require('http').createServer((req,res)=>{req.resume();req.on('end',()=>{if(req.url==='/metrics'){res.setHeader('content-type','application/json');res.end(JSON.stringify({count,expectedAuthorizationRequests,authorizationHeaderCount}));return}if(req.url==='/count'){res.end(String(count));return}if(req.url==='/'||req.url==='/app.js'||req.url==='/styles.css'||req.url.startsWith('/fonts/')){res.statusCode=200;res.end(req.url==='/app.js'?'console.log(\"MyUrls\")':'MyUrls');return}if(req.url==='/short'||req.url==='/short-api/short'){count++;const values=req.headersDistinct.authorization||[];authorizationHeaderCount+=values.length;if(values.length===1&&values[0]===expected)expectedAuthorizationRequests++;res.statusCode=201;res.end('created');return}res.statusCode=404;res.end('not found')})}).listen(8080,'0.0.0.0')",
     );
     await docker(
       'run', '--rm', '-d', '--name', gateway, '--network', network,
@@ -75,8 +75,10 @@ describe.skipIf(!enabled)('real Nginx short creation Content-Type gate', () => {
       '-v', `${root}scripts/render-gateway-config.sh:/render-gateway-config.sh:ro`,
       '--entrypoint', 'sh',
       '-e', 'GATEWAY_MODE=behind-proxy',
+      '-e', 'DOMAIN_MODE=three-domain',
       '-e', 'APP_DOMAIN=app.example.test',
       '-e', 'API_DOMAIN=api.example.test',
+      '-e', 'SHORT_DOMAIN=short.example.test',
       '-e', 'PUBLIC_SCHEME=https',
       '-e', 'GATEWAY_PORT=8080',
       '-e', 'SUBCONVERTER_UPSTREAM=http://subconverter:25500',
@@ -121,6 +123,28 @@ describe.skipIf(!enabled)('real Nginx short creation Content-Type gate', () => {
     return (await run('curl', args)).stdout;
   };
 
+  const shortFrontendRequest = async (path) => (await run('curl', [
+    '--silent', '--output', '/dev/null', '--write-out', '%{http_code}',
+    '--connect-timeout', '2', '--max-time', '5',
+    '-H', 'Host: short.example.test',
+    `http://127.0.0.1:${gatewayPort}${path}`,
+  ])).stdout;
+
+  const shortCreateRequest = async (origin, contentType = null) => {
+    const args = [
+      '--silent', '--output', '/dev/null', '--write-out', '%{http_code}',
+      '--connect-timeout', '2', '--max-time', '5', '-X', 'POST',
+      '-H', 'Host: short.example.test', `-H`, `Origin: ${origin}`,
+    ];
+    if (contentType === 'multipart') {
+      args.push('-F', 'longUrl=https://example.com/short-ui-sentinel');
+    } else {
+      args.push('-H', `Content-Type: ${contentType}`, '--data-binary', '{}');
+    }
+    args.push(`http://127.0.0.1:${gatewayPort}/short`);
+    return (await run('curl', args)).stdout;
+  };
+
   it('forwards only allowed media types and keeps rejected bodies and secrets out of logs', async () => {
     expect(await request('application/json; charset=utf-8')).toBe('201');
     expect(await request('Application/X-Www-Form-Urlencoded; charset="utf-8"')).toBe('201');
@@ -128,15 +152,22 @@ describe.skipIf(!enabled)('real Nginx short creation Content-Type gate', () => {
     expect(await request(null)).toBe('415');
     expect(await request('application/jsonp')).toBe('415');
 
+    for (const path of ['/', '/app.js', '/styles.css', '/fonts/manrope-latin-wght-normal.woff2']) {
+      expect(await shortFrontendRequest(path)).toBe('200');
+    }
+    expect(await shortCreateRequest('https://short.example.test', 'multipart')).toBe('201');
+    expect(await shortCreateRequest('https://app.example.test', 'multipart')).toBe('403');
+    expect(await shortCreateRequest('https://short.example.test', 'application/json')).toBe('415');
+
     const metricsResult = await docker(
       'exec', upstream, 'node', '-e',
       "require('http').get('http://127.0.0.1:8080/metrics',r=>r.pipe(process.stdout))",
     );
     const metrics = JSON.parse(metricsResult.stdout);
     expect(metrics).toEqual({
-      count: 2,
-      expectedAuthorizationRequests: 2,
-      authorizationHeaderCount: 2,
+      count: 3,
+      expectedAuthorizationRequests: 3,
+      authorizationHeaderCount: 3,
     });
 
     const [gatewayLogs, upstreamLogs] = await Promise.all([

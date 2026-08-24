@@ -50,12 +50,13 @@ git pull --ff-only origin main
 
 ## 域名和模式选择
 
-部署前准备两个不同域名：
+部署前准备两个或三个不同域名：
 
-- `APP_DOMAIN`：网页、短链创建和短码跳转，例如 `sub.example.com`。
+- `APP_DOMAIN`：Subweb 网页，以及迁移期短链创建和短码跳转兼容入口，例如 `sub.example.com`。
 - `API_DOMAIN`：订阅转换接口，例如 `api.example.com`。
+- `SHORT_DOMAIN`：MyUrls 前端、同源短链创建和短码跳转，例如 `ml1.one`（三域名模式）。
 
-两个域名都指向同一台服务器。已有宝塔、1Panel、Nginx、OpenResty 或 Cloudflare Tunnel 时选择 `behind-proxy`；80/443 完全空闲且已经有一张覆盖两个域名的证书时才选择 `direct-tls`。
+这些域名都指向同一台服务器。已有宝塔、1Panel、Nginx、OpenResty 或 Cloudflare Tunnel 时选择 `behind-proxy`；80/443 完全空闲且已经有一张覆盖所有启用域名的证书时才选择 `direct-tls`。
 
 ## 预构建镜像快速部署
 
@@ -149,14 +150,15 @@ MyUrls 也默认跟随 `ghcr.io/keleyaa/myurls:latest`。该标签只会在 MyUr
 
 ```sh
 ./scripts/configure.sh --mode behind-proxy \
-  --app-domain sub.ml1.one --api-domain api.ml1.one
+  --app-domain sub.ml1.one --api-domain api.ml1.one --short-domain ml1.one
 ./scripts/validate-compose.sh
 docker compose up -d --build --wait
 docker compose ps
 curl -fsS -H 'Host: sub.ml1.one' http://127.0.0.1:18080/healthz
+curl -fsS -H 'Host: ml1.one' http://127.0.0.1:18080/healthz
 ```
 
-Compose 固定绑定 `127.0.0.1:${SUBWEB_PORT:-18080}`。通用 Nginx 配置为两个站点指向同一 upstream：
+Compose 固定绑定 `127.0.0.1:${SUBWEB_PORT:-18080}`。三域名模式需要创建三个站点，全部指向同一 Gateway upstream（Legacy 双域名模式省略最后一个站点）：
 
 ```nginx
 server {
@@ -179,15 +181,32 @@ server {
     proxy_set_header X-Forwarded-Proto https;
   }
 }
+server {
+  listen 443 ssl;
+  server_name ml1.one;
+  location / {
+    proxy_pass http://127.0.0.1:18080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+  }
+}
 ```
 
-宝塔或 1Panel 中创建两个 HTTPS 网站，域名分别填写应用域名和 API 域名，反向代理目标都填 `http://127.0.0.1:18080`，保留 Host 头并启用 WebSocket 兼容即可。证书、强制 HTTPS 和 Cloudflare 模式由外层入口维护。项目不要求 Caddy。
+宝塔或 1Panel 中创建三个 HTTPS 网站，域名分别填写应用、API 和短链域名，反向代理目标都填 `http://127.0.0.1:18080`，保留 Host 头并启用 WebSocket 兼容即可。短链域名的 `/`、`/app.js`、`/styles.css` 和 `/fonts/` 会由 Gateway 反代到内部 MyUrls 前端，`/short` 是其同源创建接口，`/:shortKey` 是跳转入口；不需要也不应该为 MyUrls 单独发布宿主机端口。证书、强制 HTTPS 和 Cloudflare 模式由外层入口维护。项目不要求 Caddy。
 
 ## 网关直接 TLS：direct-tls
 
-此模式需要 80/443 未被占用，以及一张 SAN 覆盖两个域名的现成证书。项目不会申请或续期证书：
+此模式需要 80/443 未被占用，以及一张 SAN 覆盖所有启用域名的现成证书。项目不会申请或续期证书：
 
 ```sh
+# 三域名模式
+./scripts/configure.sh --mode direct-tls \
+  --app-domain example.com --api-domain api.example.com --short-domain ml1.one \
+  --tls-cert /absolute/path/to/fullchain.pem \
+  --tls-key /absolute/path/to/privkey.pem
+
+# Legacy 双域名模式
 ./scripts/configure.sh --mode direct-tls \
   --app-domain example.com --api-domain api.example.com \
   --tls-cert /absolute/path/to/fullchain.pem \

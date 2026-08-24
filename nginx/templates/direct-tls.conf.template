@@ -47,6 +47,11 @@ http {
     "@@PUBLIC_SCHEME@@://@@APP_DOMAIN@@" "@@PUBLIC_SCHEME@@://@@APP_DOMAIN@@";
   }
 
+  map $http_origin $myurls_ui_origin_allowed {
+    default 0;
+    "@@PUBLIC_SCHEME@@://@@SHORT_DOMAIN@@" 1;
+  }
+
   resolver @@NGINX_RESOLVER@@ ipv6=off valid=30s;
 
   server {

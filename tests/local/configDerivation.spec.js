@@ -91,6 +91,8 @@ describe('local source configuration derivation', () => {
     const nginx = await readFile(join(runRoot, 'nginx.conf'), 'utf8');
     expect(nginx).toContain('listen 127.0.0.1:19080;');
     expect(nginx).toContain('listen 127.0.0.1:19081;');
+    expect(nginx).toContain('map $http_origin $myurls_ui_origin_allowed');
+    expect(nginx).toContain('"http://127.0.0.1:19083" 1;');
     expect(nginx).toContain('http://127.0.0.1:15173');
     expect(nginx).toContain('http://127.0.0.1:18092');
     expect(nginx).toContain('http://127.0.0.1:15500');

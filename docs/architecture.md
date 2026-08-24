@@ -25,15 +25,19 @@
 | `https://APP_DOMAIN/<short-code>` | 兼容入口（迁移期） | MyUrls 跳转 |
 | `https://API_DOMAIN/sub` | 保留路径和查询 | SubConverter |
 | `https://API_DOMAIN/healthz` | 网关健康检查 | 网关 |
+| `https://SHORT_DOMAIN/`、`/app.js`、`/styles.css`、`/fonts/*` | MyUrls 前端及本地资源 | MyUrls |
+| `POST https://SHORT_DOMAIN/short` | MyUrls 前端同源创建（multipart） | MyUrls `/short` |
 | `https://SHORT_DOMAIN/short-api/short` | 短链创建（CORS） | MyUrls `/short` |
 | `https://SHORT_DOMAIN/<short-code>` | 短链跳转 | MyUrls 跳转 |
 | `https://SHORT_DOMAIN/healthz` | 网关健康检查 | 网关 |
 
 **CORS 策略**：`SHORT_DOMAIN` 的 `/short-api/short` 端点允许来自 `APP_DOMAIN` 的跨域请求：
 - Origin 验证：只接受 `https://APP_DOMAIN`
-- Content-Type 验证：只接受 `application/x-www-form-urlencoded`
+- Content-Type 验证：只接受 `application/x-www-form-urlencoded` 或 JSON
 - 支持 OPTIONS 预检请求
 - 限流：20 请求/分钟/IP
+
+`SHORT_DOMAIN/` 的 MyUrls 前端使用同源 `POST /short`，只接受精确的 `Origin: https://SHORT_DOMAIN` 和带 boundary 的 `multipart/form-data`；该路径不需要 CORS 响应头。两条创建路径都会由 Gateway 清空客户端鉴权头并注入服务端 MyUrls Token。
 
 **APP 兼容入口**：三域名部署后，`https://APP_DOMAIN/short-api/*` 和 `https://APP_DOMAIN/<short-code>` 仍然可用，用于兼容已分享的旧短链。新短链返回 `https://SHORT_DOMAIN/<short-code>`。迁移完成后可移除 APP 域名下的短链路由。
 
@@ -62,7 +66,7 @@
 ## 数据流与信任边界
 
 1. 浏览器把订阅 URL 和用户选项组成转换链接。打开转换链接时，SubConverter 及其访问的远程规则会看到订阅地址。
-2. 创建短链时，浏览器把完整转换链接发到同源 `/short-api/short`。网关注入 Token 后交给 MyUrls，MyUrls 把映射写入 Redis。
+2. 创建短链时，Subweb 主前端把完整转换链接发到 `SHORT_DOMAIN/short-api/short`，MyUrls 前端把表单发到同源 `SHORT_DOMAIN/short`；网关注入 Token 后交给 MyUrls，MyUrls 把映射写入 Redis。
 3. 访问短码时，MyUrls 从 Redis 取出长链接并返回跳转。Base64 只是一种编码，不是加密。
 4. Redis 密码、MyUrls Token、平台 Redis URL 和 TLS 私钥都不能写入前端配置、日志、文档示例或 Git。
 

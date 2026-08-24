@@ -497,6 +497,32 @@ else
     "$api_base/sub?target=clash&url=https://example.com/sub.txt" \
     > "$temporary_directory/three-api.out" || fail 'Three-domain API Host 无法访问'
 
+  # 验证短链域名提供 MyUrls 前端和其同源创建入口
+  # shellcheck disable=SC2086
+  short_ui_body=$(http_request $curl_tls_args -H 'Host: short.test' "$short_base/") \
+    || fail 'Three-domain SHORT Host 首页无法访问'
+  printf '%s' "$short_ui_body" | grep -q 'MyUrls' \
+    || fail 'Three-domain SHORT Host 未返回 MyUrls 前端'
+  short_ui_asset_status=$(curl --noproxy '*' $curl_tls_args -H 'Host: short.test' \
+    -o /dev/null -w '%{http_code}' "$short_base/app.js")
+  [ "$short_ui_asset_status" = 200 ] \
+    || fail "Three-domain SHORT 前端资源无法访问，状态码: $short_ui_asset_status"
+
+  three_ui_long_url="https://three-domain-ui.example.com/test?v=$(random_hex 8)"
+  # shellcheck disable=SC2086
+  http_request $curl_tls_args -H 'Host: short.test' \
+    -H 'Origin: https://short.test' \
+    -F "longUrl=$three_ui_long_url" \
+    "$short_base/short" > "$temporary_directory/three-ui-short.json" \
+    || fail 'Three-domain SHORT 前端创建失败'
+  THREE_UI_SHORT_JSON=$temporary_directory/three-ui-short.json node <<'NODE' \
+    || fail 'Three-domain SHORT 前端创建响应不符合契约'
+const fs = require('node:fs');
+const payload = JSON.parse(fs.readFileSync(process.env.THREE_UI_SHORT_JSON, 'utf8'));
+if (payload.Code !== 1 || typeof payload.ShortUrl !== 'string') process.exit(1);
+if (!payload.ShortUrl.startsWith('https://short.test/')) process.exit(1);
+NODE
+
   # 测试短链创建（使用 short.test Host）
   three_short_key="t$(random_hex 8)"
   three_long_url="https://three-domain.example.com/test?v=$(random_hex 8)"

@@ -19,8 +19,8 @@ Subconverter Web turns one browser workflow into one deployable boundary：订�
 </p>
 
 - **转换**：通过 `API_DOMAIN/sub` 调用 SubConverter-Extended。
-- **短链**：浏览器请求同源 `APP_DOMAIN/short-api/short`，Gateway 注入服务端 Token 后调用 MyUrls。
-- **跳转**：访问 `APP_DOMAIN/:shortKey`，由 MyUrls 从 Redis 读取完整映射并返回 redirect。
+- **短链**：三域名模式下，`SHORT_DOMAIN/` 提供 MyUrls 前端，浏览器同源请求 `SHORT_DOMAIN/short`；Subweb 主前端仍通过 `SHORT_DOMAIN/short-api/short` 创建，Gateway 注入服务端 Token 后调用 MyUrls。
+- **跳转**：访问 `SHORT_DOMAIN/:shortKey`（以及迁移期的 `APP_DOMAIN/:shortKey`），由 MyUrls 从 Redis 读取完整映射并返回 redirect。
 - **持久化**：Redis 是唯一业务数据卷；Gateway 和前端不保存业务数据。
 
 ## 边界如何工作
@@ -29,8 +29,9 @@ Subconverter Web turns one browser workflow into one deployable boundary：订�
   <img src="./docs/assets/readme/subweb-architecture.svg" width="100%" alt="Browser reaches APP_DOMAIN and API_DOMAIN through one gateway, then private SubConverter, MyUrls, and Redis services">
 </p>
 
-- `APP_DOMAIN`：静态前端、短链创建代理、短码跳转。
+- `APP_DOMAIN`：Subweb 静态前端，以及迁移期的短链创建/跳转兼容入口。
 - `API_DOMAIN`：`/sub` 转换路由和 SubConverter 健康检查。
+- `SHORT_DOMAIN`：MyUrls 前端、同源短链创建、短码跳转和健康检查。
 - **Gateway**：按 Host 路由，并在服务端注入 MyUrls Bearer Token；内部服务不发布宿主机端口。
 - **SubConverter-Extended**：转换引擎。
 - **MyUrls**：短链 `create / redirect` API。
@@ -40,7 +41,7 @@ Subconverter Web turns one browser workflow into one deployable boundary：订�
 
 ### Docker Compose（推荐）
 
-需要两个你控制的域名：一个给应用，一个给 API。已有 Nginx、OpenResty、宝塔、1Panel 或 Cloudflare Tunnel 时，使用 `behind-proxy`；例如 `sub.ml1.one` 与 `api.ml1.one` 仅作展示，部署时请替换为你控制的域名。外层代理负责公网 TLS，Compose 只把 Gateway 绑定到 loopback。
+需要两个或三个你控制的域名：应用、API，以及可选的短链域名。已有 Nginx、OpenResty、宝塔、1Panel 或 Cloudflare Tunnel 时，使用 `behind-proxy`；例如 `sub.ml1.one`、`api.ml1.one` 与 `ml1.one` 仅作展示，部署时请替换为你控制的域名。外层代理负责公网 TLS，Compose 只把 Gateway 绑定到 loopback。
 
 ```sh
 mkdir -p "$HOME/apps" && cd "$HOME/apps"

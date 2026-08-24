@@ -74,6 +74,38 @@ describe('gateway routing contract', () => {
     expect(block).not.toContain('try_files');
   });
 
+  it('serves the MyUrls frontend and local assets from the SHORT gateway', async () => {
+    const routes = await readFile(rootFile('nginx/snippets/short-routes.conf.template'), 'utf8');
+
+    for (const route of [
+      'location = / {',
+      'location = /app.js {',
+      'location = /styles.css {',
+      'location = /favicon.ico {',
+      'location ^~ /fonts/ {',
+      'location = /short {',
+    ]) {
+      expect(routes).toContain(route);
+    }
+
+    expect(routes.indexOf('location = / {\n')).toBeLessThan(routes.indexOf('location ~ "^/[A-Za-z0-9_-]{1,64}$"'));
+    expect(routes).toContain('proxy_pass $myurls_upstream$request_uri;');
+    expect(routes).toContain('proxy_pass $myurls_upstream/short$is_args$args;');
+    expect(routes).toContain('if ($myurls_ui_origin_allowed = 0)');
+    expect(routes).toContain('if ($myurls_ui_content_type_allowed = 0)');
+    expect(routes).toContain('proxy_set_header Authorization "Bearer @@MYURLS_API_TOKEN@@";');
+    expect(routes).toContain('proxy_set_header Proxy-Authorization "";');
+    expect(routes).toContain('location / {\n  return 404;\n}');
+  });
+
+  it('keeps the UI multipart Content-Type gate separate from the legacy short API gate', async () => {
+    const map = await readFile(rootFile('nginx/snippets/content-type-map.conf'), 'utf8');
+    const template = await readFile(rootFile('nginx/templates/http.conf.template'), 'utf8');
+    expect(map).toContain('map $http_content_type $myurls_ui_content_type_allowed');
+    expect(map).toMatch(/multipart\/form-data/);
+    expect(template).toContain('map $http_origin $myurls_ui_origin_allowed');
+  });
+
   it('preserves the original API path and query while forwarding only validated public headers', async () => {
     const routes = await readFile(rootFile('nginx/snippets/api-routes.conf.template'), 'utf8');
     const proxyHeaders = await readFile(rootFile('nginx/snippets/proxy-headers.conf.template'), 'utf8');

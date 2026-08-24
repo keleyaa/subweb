@@ -37,6 +37,11 @@ http {
     "http://127.0.0.1:@@APP_PORT@@" "http://127.0.0.1:@@APP_PORT@@";
   }
 
+  map $http_origin $myurls_ui_origin_allowed {
+    default 0;
+    "http://127.0.0.1:@@SHORT_PORT@@" 1;
+  }
+
   server {
     listen 127.0.0.1:@@APP_PORT@@;
     server_name 127.0.0.1;

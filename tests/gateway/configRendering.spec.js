@@ -69,13 +69,17 @@ async function render(environment = {}, fakeOptions = {}) {
 
 describe('gateway configuration rendering', () => {
   it('renders behind-proxy with separate public hosts and without transport security', async () => {
-    const result = await render({ GATEWAY_MODE: 'behind-proxy', GATEWAY_PORT: '8080' });
+    const result = await render({ GATEWAY_MODE: 'behind-proxy', DOMAIN_MODE: 'three-domain', GATEWAY_PORT: '8080' });
 
     expect(result).toMatchObject({ code: 0 });
     expect(result.config).toMatch(/listen 8080 default_server;/);
     expect(result.config).toMatch(/listen 8080;/);
     expect(result.config).toContain('server_name app.example.test;');
     expect(result.config).toContain('server_name api.example.test;');
+    expect(result.config).toContain('server_name short.example.test;');
+    expect(result.config).toContain('location = /short {');
+    expect(result.config).toContain('proxy_pass $myurls_upstream/short$is_args$args;');
+    expect(result.config).toContain('"https://short.example.test" 1;');
     expect(result.config).toContain('resolver 10.20.30.40 ipv6=off valid=30s;');
     expect(result.config).not.toContain('resolver 127.0.0.11');
     expect(result.config).not.toContain('Strict-Transport-Security');
