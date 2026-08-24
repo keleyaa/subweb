@@ -23,7 +23,7 @@ secrets_file=$runtime_root/secrets.env
 read_state_value() {
   state_key=$1
   case "$state_key" in
-    RUN_ROOT|LOCAL_VITE_PORT|LOCAL_SUBCONVERTER_PORT|LOCAL_MYURLS_PORT|LOCAL_REDIS_PORT|LOCAL_APP_PORT|LOCAL_API_PORT) ;;
+    RUN_ROOT|LOCAL_VITE_PORT|LOCAL_SUBCONVERTER_PORT|LOCAL_MYURLS_PORT|LOCAL_REDIS_PORT|LOCAL_APP_PORT|LOCAL_API_PORT|LOCAL_SHORT_PORT) ;;
     *) return 1 ;;
   esac
   [ -f "$state_file" ] && [ ! -L "$state_file" ] || return 1
@@ -109,9 +109,17 @@ if process_owned_and_running nginx; then
     printf 'nginx-api=unhealthy\n'
     required_unhealthy=1
   fi
+  short_port=$(read_state_value LOCAL_SHORT_PORT 2>/dev/null || true)
+  if [ -n "$short_port" ] && http_healthy "http://127.0.0.1:$short_port/healthz"; then
+    printf 'nginx-short=healthy\n'
+  else
+    printf 'nginx-short=unhealthy\n'
+    required_unhealthy=1
+  fi
 else
   nginx_ownership_status=$?
   [ "$nginx_ownership_status" -eq 1 ] && printf 'nginx-api=stopped\n' || printf 'nginx-api=stale\n'
+  [ "$nginx_ownership_status" -eq 1 ] && printf 'nginx-short=stopped\n' || printf 'nginx-short=stale\n'
   required_unhealthy=1
 fi
 

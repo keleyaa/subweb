@@ -31,6 +31,7 @@ LOCAL_MYURLS_PORT=18082
 LOCAL_REDIS_PORT=16379
 LOCAL_APP_PORT=18080
 LOCAL_API_PORT=18081
+LOCAL_SHORT_PORT=18083
 `, { mode: 0o600 });
   const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', runRoot], { stdio: 'ignore' });
   children.push(child);
@@ -63,7 +64,7 @@ esac
 };
 
 describe('local source status', () => {
-  it('requires all five owned processes and six health probes', async () => {
+  it('requires all five owned processes and seven health probes', async () => {
     const { runtime, runRoot, bin } = await fixture();
     const result = spawnSync('sh', [statusScript], {
       cwd: root,
@@ -78,7 +79,7 @@ describe('local source status', () => {
     });
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
-    for (const service of ['redis', 'myurls', 'subconverter', 'vite', 'nginx', 'nginx-api']) {
+    for (const service of ['redis', 'myurls', 'subconverter', 'vite', 'nginx', 'nginx-api', 'nginx-short']) {
       expect(result.stdout).toContain(`${service}=healthy`);
     }
     expect(result.stdout).not.toContain('a'.repeat(64));

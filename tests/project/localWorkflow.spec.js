@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const workflowPath = new URL('../../.github/workflows/local-source.yml', import.meta.url);
 const verifierPath = new URL('../../scripts/verify-local-source.sh', import.meta.url);
+const startScriptPath = new URL('../../scripts/local/start.sh', import.meta.url);
 
 describe('local source workflow contract', () => {
   it('covers both supported operating systems and always stops owned services', async () => {
@@ -32,5 +33,11 @@ describe('local source workflow contract', () => {
     expect(verifier).toContain('端口未释放');
     expect(verifier).toContain('SHORT 功能哨兵');
     expect(verifier).toContain('LOCAL_SHORT_PORT');
+  });
+
+  it('initializes every default gateway port before using it', async () => {
+    const startScript = await readFile(startScriptPath, 'utf8');
+    expect(startScript).toContain(': "${LOCAL_API_PORT:=$(load_optional_port LOCAL_API_PORT 18081)}"');
+    expect(startScript).toContain(': "${LOCAL_SHORT_PORT:=$(load_optional_port LOCAL_SHORT_PORT 18083)}"');
   });
 });
