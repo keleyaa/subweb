@@ -19,6 +19,12 @@ const removedArtifacts = [
   'src/store/modules/menu.js',
   'src/store/modules/style.js',
   'src/store/modules/styles/main.js',
+  'plan.html',
+  'docs/superpowers/plans/2026-08-24-myurls-frontend-gateway.md',
+  'docs/superpowers/plans/2026-08-24-single-http-deployment.md',
+  'docs/superpowers/specs/2026-08-24-myurls-frontend-gateway-design.md',
+  'docs/superpowers/specs/2026-08-24-single-http-deployment-design.md',
+  'docs/three-domain-documentation-guide.md',
 ].map(rootFile);
 
 describe('project cleanup and independent-maintenance boundary', () => {

@@ -8,7 +8,7 @@
 | `API_DOMAIN` | `api.ml1.one` | 是 | 同上；必须与应用域名不同 |
 | `SHORT_DOMAIN` | 无 | 是 | 同上；必须与 APP/API 不同 |
 | `API_URL` | 从 `API_DOMAIN` 派生为 HTTPS URL | 是 | 写入浏览器 `apiUrl` |
-| `SHORT_URL` | 从 `SHORT_DOMAIN` 或 `APP_DOMAIN` 派生 | 是 | 写入浏览器 `shortUrl` |
+| `SHORT_URL` | 从 `SHORT_DOMAIN` 派生为 HTTPS URL | 是 | 写入浏览器 `shortUrl` |
 | `SUBWEB_IMAGE` | Compose 默认 `subweb:local` | 是 | `docker-deploy.sh` 写入已发布 Gateway 镜像；源码构建可不设置 |
 
 这些默认域名属于维护者展示部署。其他用户必须用自己的域名执行：

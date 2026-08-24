@@ -19,7 +19,7 @@ Subconverter Web turns one browser workflow into one deployable boundary：订�
 </p>
 
 - **转换**：通过 `API_DOMAIN/sub` 调用 SubConverter-Extended。
-- **短链**：三域名模式下，`SHORT_DOMAIN/` 提供 MyUrls 前端，浏览器同源请求 `SHORT_DOMAIN/short`；Subweb 主前端仍通过 `SHORT_DOMAIN/short-api/short` 创建，Gateway 注入服务端 Token 后调用 MyUrls。
+- **短链**：默认 Docker 部署中，`SHORT_DOMAIN/` 提供 MyUrls 前端，浏览器同源请求 `SHORT_DOMAIN/short`；Subweb 主前端仍通过 `SHORT_DOMAIN/short-api/short` 创建，Gateway 注入服务端 Token 后调用 MyUrls。
 - **跳转**：访问 `SHORT_DOMAIN/:shortKey`（以及迁移期的 `APP_DOMAIN/:shortKey`），由 MyUrls 从 Redis 读取完整映射并返回 redirect。
 - **持久化**：Redis 是唯一业务数据卷；Gateway 和前端不保存业务数据。
 

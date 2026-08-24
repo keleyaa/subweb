@@ -18,7 +18,7 @@ APP/API/SHORT 三域名、单一 HTTP Gateway、外部 TLS 边界、Gateway 路�
 
 ### ✅ 阶段 1：配置传播
 
-- `SHORT_DOMAIN` 参数、Legacy 回退、三域名唯一性校验和 `SHORT_URL=https://SHORT_DOMAIN/short-api` 派生已完成。
+- `SHORT_DOMAIN` 强制参数、三域名唯一性校验和 `SHORT_URL=https://SHORT_DOMAIN/short-api` 派生已完成；APP 域名仍保留旧短链兼容入口。
 - Compose 同时向 Gateway 和 MyUrls 传播短链域名，并保留既有秘密和镜像覆盖。
 
 ### ✅ 阶段 2：Gateway 三 Host

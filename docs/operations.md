@@ -99,7 +99,7 @@ chmod 700 .runtime/redis-backups
 
 维护者展示部署使用 `sub.ml1.one`、`api.ml1.one` 和 `s.ml1.one`。其他部署者更换域名时，应同时更新三个 DNS 记录、`.env`、外层代理和证书中的 SAN。
 
-更换域名：更新两个 DNS 记录，重新运行 `configure.sh`，更新外层代理或 SAN 证书，执行 `validate-compose.sh`。源码构建执行 `docker compose up -d --build --wait`；镜像部署执行 `docker compose up -d --no-build --pull always --wait`，再验证网页、API、短链创建与旧短码。
+更换域名：更新三个 DNS 记录，重新运行 `configure.sh`，更新外层代理或 SAN 证书，执行 `validate-compose.sh`。源码构建执行 `docker compose up -d --build --wait`；镜像部署执行 `docker compose up -d --no-build --pull always --wait`，再验证网页、API、短链创建与旧短码。
 
 ## 公开发现性与搜索收录
 
