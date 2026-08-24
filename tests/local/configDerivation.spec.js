@@ -93,6 +93,8 @@ describe('local source configuration derivation', () => {
     expect(nginx).toContain('listen 127.0.0.1:19081;');
     expect(nginx).toContain('map $http_origin $myurls_ui_origin_allowed');
     expect(nginx).toContain('"http://127.0.0.1:19083" 1;');
+    expect(nginx).toContain('map $http_origin $myurls_ui_allowed_origin');
+    expect(nginx).toContain('"http://127.0.0.1:19083" "http://127.0.0.1:19083";');
     expect(nginx).toContain('http://127.0.0.1:15173');
     expect(nginx).toContain('http://127.0.0.1:18092');
     expect(nginx).toContain('http://127.0.0.1:15500');
