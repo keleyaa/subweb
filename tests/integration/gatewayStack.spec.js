@@ -196,6 +196,16 @@ describe('integrated Docker gateway stack', () => {
     expect(source).not.toContain('TLS 证书');
   });
 
+  it('keeps a clean privacy scan successful under set -e', async () => {
+    const source = await readFile(verifier, 'utf8');
+    const start = source.indexOf('scan_logs() {');
+    const end = source.indexOf('\n}\n\nmyurls_api_token=', start);
+    const scan = source.slice(start, end);
+
+    expect(scan).toContain('if grep -Fq "$sentinel_value" "$service_log"; then');
+    expect(scan).toContain('if grep -Fq "$myurls_api_token" "$service_log"; then');
+  });
+
   it.skipIf(!dockerIntegrationEnabled)(
     'verifies APP, API, authorization replacement, short links, persistence, and private ports',
     () => {

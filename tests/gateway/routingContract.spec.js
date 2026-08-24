@@ -98,12 +98,29 @@ describe('gateway routing contract', () => {
     expect(routes).toContain('location / {\n  return 404;\n}');
   });
 
+  it('terminates allowed SHORT UI preflight requests before the multipart POST gate', async () => {
+    const routes = await readFile(rootFile('nginx/snippets/short-routes.conf.template'), 'utf8');
+    const start = routes.indexOf('location = /short {');
+    const end = routes.indexOf('\n}', start) + 2;
+    const block = routes.slice(start, end);
+
+    expect(block).toContain('add_header Access-Control-Allow-Origin $myurls_ui_allowed_origin always;');
+    expect(block).toContain('add_header Access-Control-Allow-Methods "POST, OPTIONS" always;');
+    expect(block).toContain('add_header Access-Control-Allow-Headers "Content-Type" always;');
+    expect(block).toContain('if ($request_method = OPTIONS)');
+    expect(block).toContain('return 204;');
+    expect(block).toContain('if ($request_method != POST)');
+    expect(block).toContain('return 405;');
+    expect(block.indexOf('return 204')).toBeLessThan(block.indexOf('return 405'));
+  });
+
   it('keeps the UI multipart Content-Type gate separate from the legacy short API gate', async () => {
     const map = await readFile(rootFile('nginx/snippets/content-type-map.conf'), 'utf8');
     const template = await readFile(rootFile('nginx/templates/http.conf.template'), 'utf8');
     expect(map).toContain('map $http_content_type $myurls_ui_content_type_allowed');
     expect(map).toMatch(/multipart\/form-data/);
     expect(template).toContain('map $http_origin $myurls_ui_origin_allowed');
+    expect(template).toContain('map $http_origin $myurls_ui_allowed_origin');
   });
 
   it('preserves the original API path and query while forwarding only validated public headers', async () => {

@@ -179,8 +179,12 @@ NODE
 scan_logs() {
   for log_service in gateway myurls subconverter redis; do
     compose logs --no-color --tail 500 "$log_service" > "$service_log" 2>&1 || fail '无法读取容器日志'
-    grep -Fq "$sentinel_value" "$service_log" && fail "服务日志泄漏订阅哨兵: $log_service"
-    grep -Fq "$myurls_api_token" "$service_log" && fail "服务日志泄漏内部 Token: $log_service"
+    if grep -Fq "$sentinel_value" "$service_log"; then
+      fail "服务日志泄漏订阅哨兵: $log_service"
+    fi
+    if grep -Fq "$myurls_api_token" "$service_log"; then
+      fail "服务日志泄漏内部 Token: $log_service"
+    fi
   done
 }
 

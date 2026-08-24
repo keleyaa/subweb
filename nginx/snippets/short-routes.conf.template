@@ -101,9 +101,16 @@ location ^~ /fonts/ {
 
 location = /short {
   add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+  add_header Access-Control-Allow-Origin $myurls_ui_allowed_origin always;
+  add_header Access-Control-Allow-Methods "POST, OPTIONS" always;
+  add_header Access-Control-Allow-Headers "Content-Type" always;
+  add_header Vary Origin always;
   limit_req zone=subweb_short burst=5 nodelay;
   if ($myurls_ui_origin_allowed = 0) {
     return 403;
+  }
+  if ($request_method = OPTIONS) {
+    return 204;
   }
   if ($request_method != POST) {
     return 405;
