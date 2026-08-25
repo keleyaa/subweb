@@ -22,8 +22,8 @@ Compose 默认使用各上游当前发布策略；需要可重复验证或回滚
 
 | 命令 | 退出码 | 结果 |
 | --- | ---: | --- |
-| `npm test -- --run tests/integration/gatewayStack.spec.js tests/integration/privacySentinel.spec.js` | 0 | 14 项通过，2 项 Docker 用例按设计明确跳过 |
-| `RUN_DOCKER_INTEGRATION=1 npm test -- --run tests/integration/gatewayStack.spec.js tests/integration/privacySentinel.spec.js` | 0 | 16 项全部通过 |
+| `npm test -- --run tests/integration/gatewayStack.spec.js tests/integration/privacySentinel.spec.js` | 0 | 8 项通过，2 项 Docker 用例按设计明确跳过 |
+| `RUN_DOCKER_INTEGRATION=1 npm test -- --run tests/integration/gatewayStack.spec.js tests/integration/privacySentinel.spec.js` | 0 | 10 项全部通过 |
 | `./scripts/verify-integrated-stack.sh` | 0 | 四服务健康，三 Host、MyUrls 前端、短链、持久性和隐私契约通过 |
 
 集成验证覆盖以下契约：
@@ -43,8 +43,8 @@ Compose 默认使用各上游当前发布策略；需要可重复验证或回滚
 
 Redis 离线备份校验将服务日志写入独立文件，`DBSIZE` 输出不会被启动日志污染。恢复流程只在权限为 `0700` 的运维目录内创建短生命周期的只读暂存快照，使容器内 Redis 用户可读取宿主机 `0600` 备份；暂存文件在成功、失败或退出时删除，不以 root 身份运行 Redis。
 
-测试证书仅由 `scripts/test-support/create-test-certificate.sh` 写入权限为 `0700` 的独立系统临时目录；Linux 容器验证期间只放宽文件读取位、不开放目录遍历，并由退出陷阱删除。端口冲突测试使用唯一命名且带 `--rm` 的临时容器；Compose 验证使用随机 project name，退出时只执行该 project 的 `down --volumes --remove-orphans`，不会清理其他项目的容器、网络或卷。
+端口冲突测试使用唯一命名且带 `--rm` 的临时容器；Compose 验证使用随机 project name，退出时只执行该 project 的 `down --volumes --remove-orphans`，不会清理其他项目的容器、网络或卷。
 
 ## 证据边界
 
-本文件不保存测试证书、私钥、MyUrls Token、Redis 密码、随机哨兵、原始订阅 URL 或完整服务日志。容器级测试必须显式设置 `RUN_DOCKER_INTEGRATION=1`；未设置时显示为跳过，不视为容器验证通过。
+本文件不保存私钥、MyUrls Token、Redis 密码、随机哨兵、原始订阅 URL 或完整服务日志。容器级测试必须显式设置 `RUN_DOCKER_INTEGRATION=1`；未设置时显示为跳过，不视为容器验证通过。
