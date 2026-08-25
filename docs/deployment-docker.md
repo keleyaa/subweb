@@ -62,6 +62,18 @@ server {
 }
 ```
 
+默认 Gateway 不信任 `X-Forwarded-For`，因此所有经由同一外层反代的请求会共享其内部限流桶。多用户部署时，将反代到达 Gateway 的实际来源地址配置为精确 IPv4 CIDR，例如：
+
+```sh
+./scripts/docker-deploy.sh \
+  --app-domain sub.example.com \
+  --api-domain api.example.com \
+  --short-domain short.example.com \
+  --trusted-proxy-cidr 172.18.0.1/32
+```
+
+该 CIDR 只应包含你控制的反代来源，不能使用 `0.0.0.0/0`。Docker 网络布局不同，示例地址不是通用默认值；先确认外层反代连接 Gateway 时在容器内呈现的来源地址。
+
 如果面板要求三个站点，则为每个域名重复同一条反代规则。短链域名的 `/`、`/app.js`、`/styles.css`、`/fonts/` 和 `/short` 会由 Gateway 转发到内部 MyUrls；不需要给 MyUrls 单独配置端口。
 
 ## 配置与升级

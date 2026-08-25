@@ -24,6 +24,31 @@ validate_domain() {
   done
 }
 
+validate_ipv4() {
+  address=${1-}
+
+  printf '%s\n' "$address" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || return 1
+  old_ifs=$IFS
+  IFS=.
+  set -- $address
+  IFS=$old_ifs
+  [ "$#" -eq 4 ] || return 1
+
+  for octet do
+    [ -n "$octet" ] && [ "$octet" -ge 0 ] 2>/dev/null && [ "$octet" -le 255 ] \
+      || return 1
+  done
+}
+
+validate_ipv4_cidr() {
+  cidr=${1-}
+
+  printf '%s\n' "$cidr" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[12][0-9]|3[0-2])$' \
+    || return 1
+  [ "$cidr" != '0.0.0.0/0' ] || return 1
+  validate_ipv4 "${cidr%/*}"
+}
+
 validate_container_image() {
   image=${1-}
   [ -n "$image" ] || return 1
@@ -72,6 +97,15 @@ load_existing_secret() {
   [ "$secret_status" -eq 0 ] || return 2
   printf '%s\n' "$secret_lines" | LC_ALL=C grep -Eq '^[0-9a-f]{64}$' || return 2
   printf '%s\n' "$secret_lines"
+}
+
+load_existing_optional_value() {
+  value_file=${1-}
+  value_key=${2-}
+  [ -f "$value_file" ] || return 1
+  [ -n "$value_key" ] || return 2
+
+  awk -v key="$value_key" 'index($0, key "=") == 1 { count += 1; value = substr($0, length(key) + 2) } END { if (count == 1) print value; else if (count > 1) exit 2; else exit 1 }' "$value_file"
 }
 
 generate_hex_secret() {

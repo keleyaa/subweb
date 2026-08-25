@@ -13,6 +13,8 @@ http {
 
  @@CONTENT_TYPE_MAP@@
 
+@@TRUSTED_PROXY_CONFIG@@
+
   client_body_temp_path /tmp/nginx/client_temp;
   proxy_temp_path /tmp/nginx/proxy_temp;
   fastcgi_temp_path /tmp/nginx/fastcgi_temp;

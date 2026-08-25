@@ -6,6 +6,8 @@
 
 gateway 根据 Host 分离应用、API 和短链，并在两个短链创建代理中注入 MyUrls Token。浏览器、`/conf/config.js` 和响应正文都不应包含该 Token、Redis 密码或私网连接串。外层代理必须保留 Host，不应删除项目返回的 CSP、`X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy` 和 `Permissions-Policy`。HSTS 只有在整个域名确定长期使用 HTTPS 后才应由最外层 TLS 入口启用。
 
+Gateway 默认不信任 `X-Forwarded-For`。只有设置精确的 `TRUSTED_PROXY_CIDR` 后，来自该 CIDR 的请求才会通过 Nginx `real_ip` 还原客户端地址，用于 Gateway 限流和传给内部服务的客户端地址。将宽泛网络或不受控来源加入该设置会允许伪造客户端地址，破坏限流与审计边界。
+
 ## CORS 安全策略
 
 三域名部署时，Subweb 前端在 `APP_DOMAIN`，短链 API 在 `SHORT_DOMAIN`，需要 CORS（跨域资源共享）支持；`SHORT_DOMAIN/` 另外提供 MyUrls 的同源前端：

@@ -32,6 +32,7 @@ x-gateway-common: &gateway-common
     APP_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
     API_DOMAIN: "${API_DOMAIN:?Set API_DOMAIN with scripts/configure.sh}"
     SHORT_DOMAIN: "${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
+    TRUSTED_PROXY_CIDR: "${TRUSTED_PROXY_CIDR:-}"
     SUBCONVERTER_UPSTREAM: http://subconverter:25500
     MYURLS_UPSTREAM: http://myurls:8080
     MYURLS_API_TOKEN: "${MYURLS_API_TOKEN:?Set MYURLS_API_TOKEN with scripts/configure.sh}"

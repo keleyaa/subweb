@@ -77,6 +77,7 @@ describe.skipIf(!enabled)('real Nginx short creation Content-Type gate', () => {
       '-e', 'APP_DOMAIN=app.example.test',
       '-e', 'API_DOMAIN=api.example.test',
       '-e', 'SHORT_DOMAIN=short.example.test',
+      '-e', 'TRUSTED_PROXY_CIDR=127.0.0.1/32',
       '-e', 'SUBCONVERTER_UPSTREAM=http://subconverter:25500',
       '-e', `MYURLS_UPSTREAM=http://${upstream}:8080`,
       '-e', `MYURLS_API_TOKEN=${token}`,

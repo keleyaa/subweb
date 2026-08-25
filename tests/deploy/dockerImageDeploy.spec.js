@@ -70,10 +70,11 @@ describe('Docker image quick deployment', () => {
     const root = await makeFixture();
     const image = 'docker.io/keleyaa/subweb:sha-2bf1a9f';
 
-    const result = runDeploy(root, ['--image', image]);
+    const result = runDeploy(root, ['--image', image, '--trusted-proxy-cidr', '172.18.0.1/32']);
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(await readFile(join(root, '.env'), 'utf8')).toContain(`SUBWEB_IMAGE=${image}\n`);
+    expect(await readFile(join(root, '.env'), 'utf8')).toContain('TRUSTED_PROXY_CIDR=172.18.0.1/32\n');
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toBe([
       'compose version',
       'compose config --quiet',

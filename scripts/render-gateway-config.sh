@@ -89,10 +89,11 @@ require_value SUBCONVERTER_UPSTREAM "${SUBCONVERTER_UPSTREAM+x}"
 require_value MYURLS_UPSTREAM "${MYURLS_UPSTREAM+x}"
 require_value MYURLS_API_TOKEN "${MYURLS_API_TOKEN+x}"
 require_value MYURLS_MAX_BODY_BYTES "${MYURLS_MAX_BODY_BYTES+x}"
+TRUSTED_PROXY_CIDR=${TRUSTED_PROXY_CIDR:-}
 
 for external_value in "$APP_DOMAIN" "$API_DOMAIN" "$SHORT_DOMAIN" \
   "$SUBCONVERTER_UPSTREAM" "$MYURLS_UPSTREAM" "$MYURLS_API_TOKEN" \
-  "$MYURLS_MAX_BODY_BYTES"; do
+  "$MYURLS_MAX_BODY_BYTES" "$TRUSTED_PROXY_CIDR"; do
   reject_control_characters "$external_value" \
     || fail '网关环境变量不能包含换行或回车'
 done
@@ -128,6 +129,14 @@ validate_ipv4() {
   done
 }
 
+validate_ipv4_cidr() {
+  value=$1
+  printf '%s\n' "$value" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[12][0-9]|3[0-2])$' \
+    || return 1
+  [ "$value" != '0.0.0.0/0' ] || return 1
+  validate_ipv4 "${value%/*}"
+}
+
 http_listen=8080
 public_scheme=https
 
@@ -151,6 +160,8 @@ printf '%s\n' "$MYURLS_MAX_BODY_BYTES" | grep -Eq '^[0-9]+$' \
   || fail 'MYURLS_MAX_BODY_BYTES 必须为十进制字节数'
 [ "$MYURLS_MAX_BODY_BYTES" -ge 1 ] 2>/dev/null && [ "$MYURLS_MAX_BODY_BYTES" -le 16777216 ] \
   || fail 'MYURLS_MAX_BODY_BYTES 必须在 1 到 16777216 之间'
+[ -z "$TRUSTED_PROXY_CIDR" ] || validate_ipv4_cidr "$TRUSTED_PROXY_CIDR" \
+  || fail 'TRUSTED_PROXY_CIDR 必须是单个 IPv4 CIDR，例如 172.18.0.1/32'
 
 [ -r "$resolv_conf" ] || fail 'DNS resolver 配置文件不存在或不可读'
 nginx_resolver=$(awk '$1 == "nameserver" { print $2; exit }' "$resolv_conf")
@@ -185,9 +196,20 @@ api_expanded="$temp_dir/api.conf"
 short_expanded="$temp_dir/short.conf"
 assembled="$temp_dir/assembled.conf"
 rendered_config="$temp_dir/nginx.conf"
+trusted_proxy="$temp_dir/trusted-proxy.conf"
+
+if [ -n "$TRUSTED_PROXY_CIDR" ]; then
+  {
+    printf '%s\n' '  real_ip_header X-Forwarded-For;'
+    printf '%s\n' '  real_ip_recursive on;'
+    printf '  set_real_ip_from %s;\n' "$TRUSTED_PROXY_CIDR"
+  } > "$trusted_proxy"
+else
+  : > "$trusted_proxy"
+fi
 
 cleanup() {
-  rm -f "$rendered_config" "$app_expanded" "$api_expanded" "$short_expanded" "$short_server" "$assembled"
+  rm -f "$rendered_config" "$app_expanded" "$api_expanded" "$short_expanded" "$short_server" "$assembled" "$trusted_proxy"
   rm -f "$app_expanded.security" "$api_expanded.security" "$short_expanded.security"
   rmdir "$temp_dir" 2>/dev/null || true
 }
@@ -243,13 +265,14 @@ short_server="$temp_dir/short-server.conf"
   printf '%s\n' '  }'
 } > "$short_server"
 
-awk -v security="$security" -v content_type_map="$content_type_map" -v app="$app_expanded.security" -v api="$api_expanded.security" -v short_server="$short_server" '
+awk -v security="$security" -v content_type_map="$content_type_map" -v trusted_proxy="$trusted_proxy" -v app="$app_expanded.security" -v api="$api_expanded.security" -v short_server="$short_server" '
   function emit(file, line) {
     while ((getline line < file) > 0) print line
     close(file)
   }
   index($0, "@@SECURITY_HEADERS@@") { emit(security); next }
   index($0, "@@CONTENT_TYPE_MAP@@") { emit(content_type_map); next }
+  index($0, "@@TRUSTED_PROXY_CONFIG@@") { emit(trusted_proxy); next }
   index($0, "@@APP_ROUTES@@") { emit(app); next }
   index($0, "@@API_ROUTES@@") { emit(api); next }
   index($0, "@@SHORT_SERVER@@") { emit(short_server); next }

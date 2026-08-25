@@ -9,6 +9,7 @@
 | `SHORT_DOMAIN` | 无 | 是 | 同上；必须与 APP/API 不同 |
 | `API_URL` | 从 `API_DOMAIN` 派生为 HTTPS URL | 是 | 写入浏览器 `apiUrl` |
 | `SHORT_URL` | 从 `SHORT_DOMAIN` 派生为 HTTPS URL | 是 | 写入浏览器 `shortUrl` |
+| `TRUSTED_PROXY_CIDR` | 空（关闭） | 是 | 仅信任该 IPv4 CIDR 的 `X-Forwarded-For`，用于 Gateway 限流和上游客户端地址 |
 | `SUBWEB_IMAGE` | Compose 默认 `subweb:local` | 是 | `docker-deploy.sh` 写入已发布 Gateway 镜像；源码构建可不设置 |
 
 这些默认域名属于维护者展示部署。其他用户必须用自己的域名执行：
@@ -21,6 +22,8 @@
 ```
 
 三个域名始终启用，短链返回 `https://SHORT_DOMAIN/:key`。HTTPS 和证书由外层反向代理负责；项目内部只有回环 HTTP Gateway。
+
+默认情况下 Gateway 以实际 TCP 对端做限流，不信任请求头中的客户端地址。若外层反代使所有请求都来自同一个来源，配置一个精确的 `TRUSTED_PROXY_CIDR` 才会启用 `real_ip` 并使用该反代提供的 `X-Forwarded-For`。这个值必须是反代到达 Gateway 时的来源 IPv4 CIDR，例如 Docker bridge 网关的 `/32`；不要填写公网网段或 `0.0.0.0/0`。可通过 `configure.sh --trusted-proxy-cidr 172.18.0.1/32` 或 `docker-deploy.sh` 的同名参数写入，后续重新配置会保留已验证的值。
 
 更换域名时重新运行同一命令。默认保留现有秘密；增加 `--rotate-secrets` 才会同时轮换 MyUrls Token 和 Redis 密码，轮换前必须按[运维手册](operations.md)安排停写和备份。
 

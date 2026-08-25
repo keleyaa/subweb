@@ -57,6 +57,15 @@ const validatePorts = (source) => {
   return ports;
 };
 
+const validateTrustedProxyCidr = (value) => {
+  if (value === undefined || value === '') return '';
+  const match = /^((?:\d{1,3}\.){3}\d{1,3})\/(\d|[12]\d|3[0-2])$/.exec(value);
+  if (value === '0.0.0.0/0' || !match || match[1].split('.').some((octet) => Number(octet) > 255)) {
+    fail('TRUSTED_PROXY_CIDR must be one IPv4 CIDR');
+  }
+  return value;
+};
+
 const replaceOnce = (source, search, replacement, name) => {
   const first = source.indexOf(search);
   if (first < 0 || source.indexOf(search, first + search.length) >= 0) fail(`${name} marker is missing or duplicated`);
@@ -114,6 +123,7 @@ const main = async () => {
   const ports = validatePorts(args['--ports-json']);
   const myurlsToken = validateSecret(process.env.MYURLS_API_TOKEN, 'MYURLS_API_TOKEN');
   const redisPassword = validateSecret(process.env.REDIS_PASSWORD, 'REDIS_PASSWORD');
+  const trustedProxyCidr = validateTrustedProxyCidr(process.env.TRUSTED_PROXY_CIDR);
 
   let publicConfig = await readFile(join(projectRoot, 'public/conf/config.js'), 'utf8');
   publicConfig = replaceOnce(publicConfig, "apiUrl: 'https://api.ml1.one'", `apiUrl: 'http://127.0.0.1:${ports.api}'`, 'apiUrl');
@@ -202,6 +212,9 @@ ${indent(localShortRoutes, 4)}
     '@@NGINX_ERROR_LOG@@': quoteNginx(join(projectRoot, '.runtime/local/logs/nginx-error.log')),
     '@@NGINX_MIME_TYPES@@': quoteNginx(mimeTypes),
     '@@CONTENT_TYPE_MAP@@': indent(contentTypeMap.trimEnd(), 2),
+    '@@TRUSTED_PROXY_CONFIG@@': trustedProxyCidr
+      ? `  real_ip_header X-Forwarded-For;\n  real_ip_recursive on;\n  set_real_ip_from ${trustedProxyCidr};`
+      : '',
     '@@NGINX_CLIENT_TEMP@@': quoteNginx(join(runRoot, 'nginx/client_temp')),
     '@@NGINX_PROXY_TEMP@@': quoteNginx(join(runRoot, 'nginx/proxy_temp')),
     '@@NGINX_ACCESS_LOG@@': quoteNginx(join(projectRoot, '.runtime/local/logs/nginx-access.log')),

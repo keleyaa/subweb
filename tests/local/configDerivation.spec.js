@@ -61,6 +61,7 @@ describe('local source configuration derivation', () => {
           ...process.env,
           MYURLS_API_TOKEN: 'a'.repeat(64),
           REDIS_PASSWORD: 'b'.repeat(64),
+          TRUSTED_PROXY_CIDR: '127.0.0.1/32',
         },
       },
     );
@@ -100,6 +101,8 @@ describe('local source configuration derivation', () => {
     expect(nginx).toContain('http://127.0.0.1:15500');
     expect(nginx).toContain('a'.repeat(64));
     expect(nginx).toContain('map $uri $privacy_route');
+    expect(nginx).toContain('real_ip_header X-Forwarded-For;');
+    expect(nginx).toContain('set_real_ip_from 127.0.0.1/32;');
     expect(nginx).toContain('"~^/[A-Za-z0-9_-]{1,64}$" "/:shortKey";');
     expect(nginx).toContain('$time_iso8601 $request_method $privacy_route $status');
     expect(nginx).not.toMatch(/log_format[^\n]*\$request_uri/);
@@ -121,6 +124,29 @@ describe('local source configuration derivation', () => {
           ...process.env,
           MYURLS_API_TOKEN: `unsafe\n${'a'.repeat(64)}`,
           REDIS_PASSWORD: 'b'.repeat(64),
+        },
+      },
+    );
+
+    expect(result.status).not.toBe(0);
+    await expect(readFile(join(runRoot, 'nginx.conf'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('rejects an unsafe trusted proxy CIDR before writing configuration', async () => {
+    const { runRoot, source, mimeTypes } = await fixture();
+    const result = spawnSync(
+      process.execPath,
+      [renderer, '--project-root', root, '--run-root', runRoot, '--subconverter-source', source, '--nginx-mime-types', mimeTypes, '--ports-json', JSON.stringify({
+        vite: 15173, subconverter: 15500, myurls: 18092, redis: 16389, app: 19080, api: 19081, short: 19083,
+      })],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          MYURLS_API_TOKEN: 'a'.repeat(64),
+          REDIS_PASSWORD: 'b'.repeat(64),
+          TRUSTED_PROXY_CIDR: '0.0.0.0/0',
         },
       },
     );

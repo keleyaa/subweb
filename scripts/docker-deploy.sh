@@ -12,6 +12,8 @@ fail() {
 app_domain=
 api_domain=
 short_domain=
+trusted_proxy_cidr=
+trusted_proxy_cidr_seen=0
 image=docker.io/keleyaa/subweb:latest
 image_seen=0
 
@@ -32,6 +34,13 @@ while [ "$#" -gt 0 ]; do
       short_domain=$2
       shift 2
       ;;
+    --trusted-proxy-cidr)
+      [ "$trusted_proxy_cidr_seen" -eq 0 ] || fail '--trusted-proxy-cidr may be provided only once.'
+      [ "$#" -ge 2 ] || fail '--trusted-proxy-cidr requires a value.'
+      trusted_proxy_cidr=$2
+      trusted_proxy_cidr_seen=1
+      shift 2
+      ;;
     --image)
       [ "$image_seen" -eq 0 ] || fail '--image may be provided only once.'
       [ "$#" -ge 2 ] || fail '--image requires a value.'
@@ -48,11 +57,20 @@ docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
 
 cd "$PROJECT_DIRECTORY"
 
-"$SCRIPT_DIRECTORY/configure.sh" \
-  --app-domain "$app_domain" \
-  --api-domain "$api_domain" \
-  --short-domain "$short_domain" \
-  --subweb-image "$image"
+if [ "$trusted_proxy_cidr_seen" -eq 1 ]; then
+  "$SCRIPT_DIRECTORY/configure.sh" \
+    --app-domain "$app_domain" \
+    --api-domain "$api_domain" \
+    --short-domain "$short_domain" \
+    --trusted-proxy-cidr "$trusted_proxy_cidr" \
+    --subweb-image "$image"
+else
+  "$SCRIPT_DIRECTORY/configure.sh" \
+    --app-domain "$app_domain" \
+    --api-domain "$api_domain" \
+    --short-domain "$short_domain" \
+    --subweb-image "$image"
+fi
 
 "$SCRIPT_DIRECTORY/validate-compose.sh"
 docker compose pull

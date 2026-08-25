@@ -69,6 +69,7 @@ describe('gateway configuration rendering', () => {
     expect(result.config).toContain('location = /short {');
     expect(result.config).toContain('proxy_pass $myurls_upstream/short$is_args$args;');
     expect(result.config).toContain('resolver 10.20.30.40 ipv6=off valid=30s;');
+    expect(result.config).not.toContain('real_ip_header');
     expect(result.config).not.toContain('8443');
     expect(result.config).not.toContain('ssl_certificate');
     expect((await readdir(result.directory)).filter((name) => name.startsWith('.gateway-render.'))).toEqual([]);
@@ -83,10 +84,22 @@ describe('gateway configuration rendering', () => {
     ['MYURLS_UPSTREAM', 'https://user:pass@myurls:8080'],
     ['MYURLS_API_TOKEN', 'short'],
     ['MYURLS_MAX_BODY_BYTES', '0'],
+    ['TRUSTED_PROXY_CIDR', '172.18.0.1; return 200'],
+    ['TRUSTED_PROXY_CIDR', '999.18.0.1/32'],
+    ['TRUSTED_PROXY_CIDR', '0.0.0.0/0'],
   ])('rejects invalid or injectable %s values', async (name, value) => {
     const result = await render({ [name]: value });
     expect(result.code).not.toBe(0);
     expect(result.stderr).not.toContain(validEnvironment().MYURLS_API_TOKEN);
+  });
+
+  it('uses forwarded client addresses only for an explicit trusted proxy CIDR', async () => {
+    const result = await render({ TRUSTED_PROXY_CIDR: '172.18.0.1/32' });
+
+    expect(result.code).toBe(0);
+    expect(result.config).toContain('real_ip_header X-Forwarded-For;');
+    expect(result.config).toContain('real_ip_recursive on;');
+    expect(result.config).toContain('set_real_ip_from 172.18.0.1/32;');
   });
 
   it('does not replace a working configuration when nginx validation fails', async () => {

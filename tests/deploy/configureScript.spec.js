@@ -63,6 +63,7 @@ describe('single HTTP deployment configuration', () => {
       API_URL: 'https://api.example.com', SHORT_URL: 'https://short.example.com/short-api',
     });
     for (const removed of ['COMPOSE_PROFILES', 'DOMAIN_MODE', 'PUBLIC_SCHEME', 'GATEWAY_MODE', 'TLS_CERT_PATH', 'TLS_KEY_PATH']) expect(env[removed]).toBeUndefined();
+    expect(env.TRUSTED_PROXY_CIDR).toBeUndefined();
     expect(env.MYURLS_API_TOKEN).toMatch(/^[0-9a-f]{64}$/);
     expect(env.REDIS_PASSWORD).toMatch(/^[0-9a-f]{64}$/);
     expect((await stat(envPath)).mode & 0o777).toBe(0o600);
@@ -72,7 +73,7 @@ describe('single HTTP deployment configuration', () => {
   it('preserves image overrides, valid secrets, and explicit image selection', async () => {
     const cwd = await makeDirectory();
     const image = 'docker.io/keleyaa/subweb:sha-2bf1a9f';
-    expect(runConfigure(cwd, [...baseArgs, '--subweb-image', image]).status).toBe(0);
+    expect(runConfigure(cwd, [...baseArgs, '--subweb-image', image, '--trusted-proxy-cidr', '172.18.0.1/32']).status).toBe(0);
     const original = parseEnv(await readFile(join(cwd, '.env'), 'utf8'));
     expect(original.SUBWEB_IMAGE).toBe(image);
     expect(runConfigure(cwd, [...baseArgs].map((value) => value.replace('example.com', 'new.example.com'))).status).toBe(0);
@@ -80,6 +81,7 @@ describe('single HTTP deployment configuration', () => {
     expect(preserved.SUBWEB_IMAGE).toBe(image);
     expect(preserved.MYURLS_API_TOKEN).toBe(original.MYURLS_API_TOKEN);
     expect(preserved.REDIS_PASSWORD).toBe(original.REDIS_PASSWORD);
+    expect(preserved.TRUSTED_PROXY_CIDR).toBe('172.18.0.1/32');
   });
 
   it('preserves valid existing image overrides and rejects duplicates', async () => {
