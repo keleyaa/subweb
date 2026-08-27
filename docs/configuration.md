@@ -34,6 +34,7 @@
 | `TURNSTILE_SECRET_KEY` | Cloudflare secret key |
 | `TURNSTILE_HOSTNAME` | 不再写入 `.env`；生产 Compose 分别使用 `APP_DOMAIN` 和 `SHORT_DOMAIN`，匹配各自 MyUrls 实例 |
 | `MYURLS_TRUST_PROXY_CIDR` | 仅 Gateway 在内部网络中的精确 CIDR |
+| `MYURLS_LOG_LEVEL` | MyUrls 日志级别，默认 `warn`；排查问题时可临时设为 `info` |
 
 生产缺少 Turnstile 凭据、Redis 密码或 IP 哈希秘密时 Compose 失败关闭。不要把这些值写入
 `public/`、日志、截图、Issue 或命令行输出。
