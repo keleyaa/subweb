@@ -12,7 +12,9 @@ describe('Docker runtime contract', () => {
     expect(dockerfile).toMatch(/^FROM node:24-alpine@sha256:[0-9a-f]{64} AS build/m);
     expect(finalStage).toMatch(/^FROM nginxinc\/nginx-unprivileged:1\.30\.4-alpine@sha256:[0-9a-f]{64}/m);
     expect(finalStage).toContain('org.opencontainers.image.source="https://github.com/keleyaa/subweb"');
-    expect(finalStage).toContain('RUN apk add --no-cache tzdata');
+    expect(finalStage).toContain('RUN apk update');
+    expect(finalStage).toContain('apk upgrade libcrypto3 libssl3');
+    expect(finalStage).toContain('apk add --no-cache tzdata');
     expect(finalStage).toContain('tzdata');
     expect(finalStage).toContain('ENV TZ=Asia/Shanghai');
     expect(finalStage).toContain('EXPOSE 8080');
@@ -139,6 +141,8 @@ describe('Docker runtime contract', () => {
     expect(workflow).toContain('rm -f .env');
     expect(workflow).not.toMatch(/upload-artifact[\s\S]{0,500}(?:\.env|fullchain\.pem|privkey\.pem|compose\.log|services\.log)/);
     expect(workflow).toContain('aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25');
+    expect(workflow).toContain('trivyignores: .trivyignore.redis');
+    expect(workflow).toContain('trivyignores: .trivyignore.subconverter');
     expect(workflow).toContain('needs: quality');
     expect(workflow).toContain('packages: write');
     expect(workflow).not.toContain('id-token: write');

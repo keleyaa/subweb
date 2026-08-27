@@ -14,7 +14,9 @@ LABEL org.opencontainers.image.title="Subweb" \
   org.opencontainers.image.licenses="GPL-3.0-only"
 
 USER root
-RUN apk add --no-cache tzdata \
+RUN apk update \
+  && apk upgrade libcrypto3 libssl3 \
+  && apk add --no-cache tzdata \
   && rm -f /etc/nginx/conf.d/default.conf
 
 ENV TZ=Asia/Shanghai

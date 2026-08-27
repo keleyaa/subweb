@@ -4,8 +4,8 @@
 | --- | --- | --- | --- |
 | Subweb | [stilleshan/subweb](https://github.com/stilleshan/subweb) | 本仓库保留来源说明 | 独立维护 |
 | MyUrls v2 | [keleyaa/MyUrls](https://github.com/keleyaa/MyUrls)，原始 [CareyWang/MyUrls](https://github.com/CareyWang/MyUrls) | stable tag `v2.0.1`；commit `9494ae325159c072a8727d1b5c188fced40fd2c5`；manifest `sha256:82cb79bb62113c763e9aab33f2d307223d2302d2c76d1679307d75919b28b847` | 不在本仓库修改 |
-| SubConverter | [Aethersailor/SubConverter-Extended](https://github.com/Aethersailor/SubConverter-Extended) | `v1.2.0` 与锁定 digest | 不在本仓库修改 |
-| Redis | [redis/redis](https://github.com/redis/redis) | `8.10.0` 与锁定 digest | 数据层 |
+| SubConverter | [Aethersailor/SubConverter-Extended](https://github.com/Aethersailor/SubConverter-Extended) | `v1.8.6` 与锁定 digest | 不在本仓库修改 |
+| Redis | [redis/redis](https://github.com/redis/redis) | `8.10.1` 与锁定 digest | 数据层 |
 
 精确 commit、OCI reference、manifest 和 amd64/arm64 digest 以
 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 为准。MyUrls v2 当前镜像来自

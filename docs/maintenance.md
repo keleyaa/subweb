@@ -44,9 +44,14 @@ npm run verify:integration
 git diff --check
 ```
 
+`npm run verify:release` 还会聚合镜像安全扫描，检查最终镜像、Redis、SubConverter 和 MyUrls
+的高危与严重漏洞。扫描默认不接受例外；当前仅对 Redis 和 SubConverter 分别使用
+`.trivyignore.redis`、`.trivyignore.subconverter` 中记录的 OpenSSL 例外。升级对应镜像时必须
+重新审查并删除或更新对应文件。
+
 本地开发验证使用 `npm run verify:local`；完整 v2 栈使用 `npm run verify:integration` 和 `npm run verify:operations`。
 
-`npm run verify:release` 聚合安装、审计、质量、浏览器、锁、Compose、文档、容器、Redis 运维、单一 HTTP 集成和证据门禁。执行前先用 `./scripts/configure.sh` 生成临时 `.env`；它会重装依赖并运行较长时间，仅在准备发布的干净工作树执行。
+`npm run verify:release` 聚合安装、审计、质量、浏览器、锁、Compose、文档、容器、镜像安全、Redis 运维、单一 HTTP 集成和证据门禁。执行前先用 `./scripts/configure.sh` 生成临时 `.env`；它会重装依赖并运行较长时间，仅在准备发布的干净工作树执行。
 
 ## 容器镜像发行
 

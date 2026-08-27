@@ -102,14 +102,14 @@ jobs:
           vuln-type: os,library
           severity: CRITICAL,HIGH
 
-      # Redis follows its stable 8 line; the other external services follow
-      # latest. Scan each image the compose stack actually pulls so a vulnerable
+      # Scan each image the compose stack actually pulls so a vulnerable
       # upstream release fails the gate instead of reaching production silently.
       # Kept as three steps because trivy rejects comma-separated image-ref lists.
       - name: Scan external runtime images (Redis)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ${{ env.REDIS_IMAGE }}
+          trivyignores: .trivyignore.redis
           format: table
           exit-code: "1"
           ignore-unfixed: true
@@ -120,6 +120,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ${{ env.SUBCONVERTER_IMAGE }}
+          trivyignores: .trivyignore.subconverter
           format: table
           exit-code: "1"
           ignore-unfixed: true

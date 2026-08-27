@@ -34,3 +34,8 @@ SubConverter 的 `verbose` 与调试日志必须保持关闭；验证脚本使�
 token、Redis 密码和 IP 哈希秘密不会出现在服务日志。
 
 所有服务统一使用 `Asia/Shanghai` 时区。
+
+镜像发布门禁扫描最终镜像、Redis、SubConverter 和 MyUrls 的高危与严重漏洞。当前 Redis 和
+SubConverter 的 OpenSSL 运行时依赖各有一条经过范围限定的 `CVE-2026-14456` 例外，分别记录在
+`.trivyignore.redis` 和 `.trivyignore.subconverter`；这些例外不适用于其他镜像，且每次升级对应
+镜像都必须重新审查。

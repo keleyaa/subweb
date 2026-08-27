@@ -1,18 +1,18 @@
 # SubConverter-Extended 容器契约基线
 
 本目录记录 Subweb 集成实际使用并已验证的容器契约与安全配置。生产 Compose 跟随
-`ghcr.io/aethersailor/subconverter-extended:v1.2.0` 及其 manifest digest，集成测试使用同一锁定工件；
+`ghcr.io/aethersailor/subconverter-extended:v1.8.6` 及其 manifest digest，集成测试使用同一锁定工件；
 [`../versions.lock.json`](../versions.lock.json) 保留已验证基线作为回滚参考与
 `verify:locks` 校验的机器可读依据。需要冻结版本时在 `.env` 设置
 `SUBCONVERTER_IMAGE`（可指向锁文件中的 digest）。
 
 ## 已验证基线（集成测试使用）
 
-- 正式版本：`v1.2.0`
-- 源码提交：`4db6a63f078f27da2cfb6cc90d47eb2dbd80c1cd`
-- 镜像：`ghcr.io/aethersailor/subconverter-extended:v1.2.0`
+- 正式版本：`v1.8.6`
+- 源码提交：`27d081bd8bb455d1581cd1f2afa8905921829b4f`
+- 镜像：`ghcr.io/aethersailor/subconverter-extended:v1.8.6`
 - 多架构 digest：
-  `sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f`
+  `sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475`
 - 容器 HTTP 端口：`25500/tcp`
 
 该 digest 已确认同时包含 `linux/amd64` 和 `linux/arm64`，对应子 digest 记录在锁文件中。
@@ -59,7 +59,7 @@ SUBCONVERTER_ALLOW_PUBLIC_UPLOAD=false
 
 - `GET /healthz` 返回 HTTP 200，可作为容器健康探测；
 - `GET /version` 返回 HTTP 200 和非空版本响应；
-- 使用 `target=clash`，并把上游 `v1.2.0` 的公开
+- 使用 `target=clash`，并把上游 `v1.8.6` 的公开
   `tests/fixtures/sample-subscription.txt` 作为 `url` 时，`GET /sub` 返回 HTTP 200；
 - 转换结果是非空 Clash YAML，包含基础端口配置、`proxy-providers` 和代理组。
 

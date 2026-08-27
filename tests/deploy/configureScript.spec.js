@@ -95,8 +95,8 @@ describe('single HTTP deployment configuration', () => {
     const cwd = await makeDirectory();
     await writeFile(join(cwd, '.env'), [
       'MYURLS_IMAGE=ghcr.io/keleyaa/myurls@sha256:' + 'a'.repeat(64),
-      'REDIS_IMAGE=docker.io/library/redis:8.10.0-alpine',
-      'SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.2.0',
+      'REDIS_IMAGE=docker.io/library/redis:8.10.1',
+      'SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.8.6',
       'SUBWEB_IMAGE=docker.io/keleyaa/subweb:sha-2bf1a9f',
       `IP_HASH_SECRET=${'a'.repeat(64)}`, `REDIS_PASSWORD=${'b'.repeat(64)}`,
       'TURNSTILE_SITE_KEY=test-site-key', 'TURNSTILE_SECRET_KEY=test-secret-key', '',

@@ -1,0 +1,4 @@
+# CVE-2026-14456 affects the OpenSSL QUIC server path. SubConverter uses
+# OpenSSL as a runtime dependency but does not expose an OpenSSL QUIC server.
+# Recheck this exception whenever the locked SubConverter image changes.
+CVE-2026-14456

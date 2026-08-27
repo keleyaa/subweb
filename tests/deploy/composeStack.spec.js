@@ -61,10 +61,10 @@ describe('integrated Compose stack', () => {
   it('uses stable images, durable Redis, and the maintained service policies', async () => {
     const config = await renderCompose();
     expect(config.services.gateway.image).toBe('docker.io/keleyaa/subweb:sha-2bf1a9f');
-    expect(config.services.redis.image).toBe('docker.io/library/redis:8.10.0@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241');
+    expect(config.services.redis.image).toBe('docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5');
     expect(config.services['myurls-app'].image).toBe('ghcr.io/keleyaa/myurls:v2.0.1@sha256:82cb79bb62113c763e9aab33f2d307223d2302d2c76d1679307d75919b28b847');
     expect(config.services['myurls-short'].image).toBe(config.services['myurls-app'].image);
-    expect(config.services.subconverter.image).toBe('ghcr.io/aethersailor/subconverter-extended:v1.2.0@sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f');
+    expect(config.services.subconverter.image).toBe('ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475');
     expect(config.volumes['redis-data']).toBeTruthy();
     expect(config.services.redis.volumes).toContainEqual(expect.objectContaining({ source: 'redis-data', target: '/data', type: 'volume' }));
     expect(config.services['myurls-app'].environment).toMatchObject({

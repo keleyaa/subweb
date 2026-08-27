@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-27T03:29:50Z",
+  "verifiedAt": "2026-08-27T05:58:25Z",
   "services": {
     "gatewayBase": {
       "source": {
@@ -46,16 +46,16 @@
       "source": {
         "url": "https://github.com/redis/redis",
         "repository": "redis/redis",
-        "tag": "8.10.0",
-        "commit": "5279a8d44818a5ca51e9abb91a9b8ce481d3c88b",
+        "tag": "8.10.1",
+        "commit": "3399357e7c17b668289386b8a15a3037bc4527b1",
         "prerelease": false
       },
       "image": {
-        "reference": "docker.io/library/redis:8.10.0-alpine",
-        "digest": "sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241",
+        "reference": "docker.io/library/redis:8.10.1",
+        "digest": "sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5",
         "platforms": {
-          "linux/amd64": "sha256:a6a88248ad5b0c724b7f2b380b7d21f46097db158b2b077ef85bcb97f90aee3a",
-          "linux/arm64": "sha256:0f8941c253cc39d98439a608dcb4f0a840b54421cc5109a68c72b2d2d223cea5"
+          "linux/amd64": "sha256:76961cd2a0f40ef6fdd334b6b1b3a76a2bad1848d89f3030ca30a7521d4a9493",
+          "linux/arm64": "sha256:1c92fd971cb4614d1581c7f0482108fe2d571c3debe88a655a15de97c151c8bc"
         }
       },
       "container": {
@@ -66,16 +66,16 @@
       "source": {
         "url": "https://github.com/Aethersailor/SubConverter-Extended",
         "repository": "Aethersailor/SubConverter-Extended",
-        "tag": "v1.2.0",
-        "commit": "1f82e6e022c4463a952aab34cd77249b3f2b197d",
+        "tag": "v1.8.6",
+        "commit": "27d081bd8bb455d1581cd1f2afa8905921829b4f",
         "prerelease": false
       },
       "image": {
-        "reference": "ghcr.io/aethersailor/subconverter-extended:v1.2.0",
-        "digest": "sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f",
+        "reference": "ghcr.io/aethersailor/subconverter-extended:v1.8.6",
+        "digest": "sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475",
         "platforms": {
-          "linux/amd64": "sha256:a4cf5108985d56272093f535e5d935df71cf3e7d97ead02e07bb2c298ddb958f",
-          "linux/arm64": "sha256:92e844093f85a2aa4db73c291f9668f0f3ad76af5598b7f824bc87e49ce41d98"
+          "linux/amd64": "sha256:51f00f4e634e616cb7debac91dada37395fb28b29e166dd921673cfd283140ff",
+          "linux/arm64": "sha256:660f9a92aed68acf51da39d039c5b5a4931c0c7eecd863e1a0a62c9d76c9e9e4"
         }
       },
       "container": {

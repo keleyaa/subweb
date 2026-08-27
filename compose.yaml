@@ -91,7 +91,7 @@ x-gateway-common: &gateway-common
 services:
   redis:
     <<: *runtime-security
-    image: "${REDIS_IMAGE:-docker.io/library/redis:8.10.0@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241}"
+    image: "${REDIS_IMAGE:-docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5}"
     user: "999:1000"
     environment:
       <<: *runtime-environment
@@ -193,7 +193,7 @@ services:
     # The pinned upstream process still requires root, while a runtime volume
     # makes /base writable without making the root filesystem writable.
     <<: *runtime-security
-    image: "${SUBCONVERTER_IMAGE:-ghcr.io/aethersailor/subconverter-extended:v1.2.0@sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f}"
+    image: "${SUBCONVERTER_IMAGE:-ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475}"
     environment:
       <<: *runtime-environment
       MANAGED_CONFIG_PREFIX: "${API_URL:?Set API_URL with scripts/configure.sh}"

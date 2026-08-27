@@ -1,0 +1,4 @@
+# CVE-2026-14456 affects the OpenSSL QUIC server path. Redis uses OpenSSL for
+# its TLS runtime but does not expose an OpenSSL QUIC server.
+# Recheck this exception whenever the locked Redis image changes.
+CVE-2026-14456
