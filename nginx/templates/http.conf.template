@@ -37,25 +37,6 @@ http {
     "@@PUBLIC_SCHEME@@://@@APP_DOMAIN@@" 1;
   }
 
-  map $http_origin $short_allowed_origin {
-    default "";
-    "@@PUBLIC_SCHEME@@://@@APP_DOMAIN@@" "@@PUBLIC_SCHEME@@://@@APP_DOMAIN@@";
-  }
-
-  map $http_origin $short_allowed_origin_unused {
-    default "";
-  }
-
-  map $http_origin $myurls_ui_origin_allowed {
-    default 0;
-    "@@PUBLIC_SCHEME@@://@@SHORT_DOMAIN@@" 1;
-  }
-
-  map $http_origin $myurls_ui_allowed_origin {
-    default "";
-    "@@PUBLIC_SCHEME@@://@@SHORT_DOMAIN@@" "@@PUBLIC_SCHEME@@://@@SHORT_DOMAIN@@";
-  }
-
   resolver @@NGINX_RESOLVER@@ ipv6=off valid=30s;
 
   server {

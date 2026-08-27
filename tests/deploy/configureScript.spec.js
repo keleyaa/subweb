@@ -15,7 +15,10 @@ const makeDirectory = async () => {
   return directory;
 };
 const runConfigure = (cwd, args) => spawnSync('sh', [configurePath, ...args], { cwd, encoding: 'utf8' });
-const baseArgs = ['--app-domain', 'example.com', '--api-domain', 'api.example.com', '--short-domain', 'short.example.com'];
+const baseArgs = [
+  '--app-domain', 'example.com', '--api-domain', 'api.example.com', '--short-domain', 'short.example.com',
+  '--turnstile-site-key', 'test-site-key', '--turnstile-secret-key', 'test-secret-key',
+];
 const parseEnv = (contents) => Object.fromEntries(contents.trim().split('\n').filter(Boolean).map((line) => {
   const separator = line.indexOf('=');
   return [line.slice(0, separator), line.slice(separator + 1)];
@@ -29,7 +32,8 @@ describe('single HTTP deployment configuration', () => {
   it('documents placeholders and ignores generated local state', async () => {
     const envExample = await readFile(envExamplePath, 'utf8');
     const gitignore = await readFile(gitignorePath, 'utf8');
-    expect(envExample).toContain('MYURLS_API_TOKEN=REPLACE_WITH_64_CHARACTER_HEX');
+    expect(envExample).toContain('IP_HASH_SECRET=REPLACE_WITH_64_CHARACTER_HEX');
+    expect(envExample).toContain('TURNSTILE_SITE_KEY=REPLACE_WITH_TURNSTILE_SITE_KEY');
     expect(envExample).toContain('REDIS_PASSWORD=REPLACE_WITH_64_CHARACTER_HEX');
     for (const ignoredPath of ['.runtime/', 'runtime-config/', '*.pem', '*.key', 'redis-data/']) expect(gitignore.split('\n')).toContain(ignoredPath);
   });
@@ -60,14 +64,17 @@ describe('single HTTP deployment configuration', () => {
     expect(result.status).toBe(0);
     expect(env).toMatchObject({
       APP_DOMAIN: 'example.com', API_DOMAIN: 'api.example.com', SHORT_DOMAIN: 'short.example.com',
-      API_URL: 'https://api.example.com', SHORT_URL: 'https://short.example.com/short-api',
+      API_URL: 'https://api.example.com',
+      TURNSTILE_SITE_KEY: 'test-site-key', TURNSTILE_SECRET_KEY: 'test-secret-key',
     });
+    expect(env.TURNSTILE_HOSTNAME).toBeUndefined();
     for (const removed of ['COMPOSE_PROFILES', 'DOMAIN_MODE', 'PUBLIC_SCHEME', 'GATEWAY_MODE', 'TLS_CERT_PATH', 'TLS_KEY_PATH']) expect(env[removed]).toBeUndefined();
     expect(env.TRUSTED_PROXY_CIDR).toBeUndefined();
-    expect(env.MYURLS_API_TOKEN).toMatch(/^[0-9a-f]{64}$/);
+    expect(env.IP_HASH_SECRET).toMatch(/^[0-9a-f]{64}$/);
     expect(env.REDIS_PASSWORD).toMatch(/^[0-9a-f]{64}$/);
     expect((await stat(envPath)).mode & 0o777).toBe(0o600);
-    expect(`${result.stdout}${result.stderr}`).not.toContain(env.MYURLS_API_TOKEN);
+    expect(`${result.stdout}${result.stderr}`).not.toContain(env.IP_HASH_SECRET);
+    expect(`${result.stdout}${result.stderr}`).not.toContain(env.TURNSTILE_SECRET_KEY);
   });
 
   it('preserves image overrides, valid secrets, and explicit image selection', async () => {
@@ -79,7 +86,7 @@ describe('single HTTP deployment configuration', () => {
     expect(runConfigure(cwd, [...baseArgs].map((value) => value.replace('example.com', 'new.example.com'))).status).toBe(0);
     const preserved = parseEnv(await readFile(join(cwd, '.env'), 'utf8'));
     expect(preserved.SUBWEB_IMAGE).toBe(image);
-    expect(preserved.MYURLS_API_TOKEN).toBe(original.MYURLS_API_TOKEN);
+    expect(preserved.IP_HASH_SECRET).toBe(original.IP_HASH_SECRET);
     expect(preserved.REDIS_PASSWORD).toBe(original.REDIS_PASSWORD);
     expect(preserved.TRUSTED_PROXY_CIDR).toBe('172.18.0.1/32');
   });
@@ -91,7 +98,8 @@ describe('single HTTP deployment configuration', () => {
       'REDIS_IMAGE=docker.io/library/redis:8.10.0-alpine',
       'SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.2.0',
       'SUBWEB_IMAGE=docker.io/keleyaa/subweb:sha-2bf1a9f',
-      `MYURLS_API_TOKEN=${'a'.repeat(64)}`, `REDIS_PASSWORD=${'b'.repeat(64)}`, '',
+      `IP_HASH_SECRET=${'a'.repeat(64)}`, `REDIS_PASSWORD=${'b'.repeat(64)}`,
+      'TURNSTILE_SITE_KEY=test-site-key', 'TURNSTILE_SECRET_KEY=test-secret-key', '',
     ].join('\n'), { mode: 0o600 });
     expect(runConfigure(cwd, baseArgs).status).toBe(0);
     const contents = await readFile(join(cwd, '.env'), 'utf8');
@@ -104,7 +112,7 @@ describe('single HTTP deployment configuration', () => {
   it('does not source an existing environment file or accept malformed secrets', async () => {
     const cwd = await makeDirectory();
     const marker = join(cwd, 'sourced-marker');
-    const original = `MYURLS_API_TOKEN=$(touch ${marker})\nREDIS_PASSWORD=${'a'.repeat(64)}\n`;
+    const original = `IP_HASH_SECRET=$(touch ${marker})\nREDIS_PASSWORD=${'a'.repeat(64)}\n`;
     await writeFile(join(cwd, '.env'), original, { mode: 0o600 });
     expect(runConfigure(cwd, baseArgs).status).not.toBe(0);
     await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
@@ -117,7 +125,7 @@ describe('single HTTP deployment configuration', () => {
     const original = parseEnv(await readFile(join(cwd, '.env'), 'utf8'));
     expect(runConfigure(cwd, [...baseArgs, '--rotate-secrets']).status).toBe(0);
     const rotated = parseEnv(await readFile(join(cwd, '.env'), 'utf8'));
-    expect(rotated.MYURLS_API_TOKEN).not.toBe(original.MYURLS_API_TOKEN);
+    expect(rotated.IP_HASH_SECRET).not.toBe(original.IP_HASH_SECRET);
     expect(rotated.REDIS_PASSWORD).not.toBe(original.REDIS_PASSWORD);
   });
 });

@@ -51,7 +51,7 @@ describe('Docker runtime contract', () => {
     expect(compose).toContain('cap_drop:');
     expect(compose).toContain('- ALL');
     expect(compose).toContain(
-      'image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:latest}"',
+      'image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.1@sha256:82cb79bb62113c763e9aab33f2d307223d2302d2c76d1679307d75919b28b847}"',
     );
   });
 
@@ -67,16 +67,17 @@ describe('Docker runtime contract', () => {
     expect(verifier).toContain('--tmpfs /usr/share/nginx/html/conf:uid=101,gid=101,mode=0700');
     expect(verifier).toContain("-e SHORT_DOMAIN='short.example.com'");
     expect(verifier).toContain("-e SUBCONVERTER_UPSTREAM='http://subconverter:25500'");
-    expect(verifier).toContain("-e MYURLS_UPSTREAM='http://myurls:8080'");
-    expect(verifier).toContain("randomBytes(32)");
-    expect(verifier).toContain('-e MYURLS_API_TOKEN="$verification_token"');
+    expect(verifier).toContain("-e MYURLS_APP_UPSTREAM='http://myurls-app-edge:3000'");
+    expect(verifier).toContain("-e MYURLS_SHORT_UPSTREAM='http://myurls-short-edge:3000'");
+    expect(verifier).not.toContain('MYURLS_API_TOKEN');
     expect(verifier).toContain("ReadonlyRootfs");
     expect(verifier).toContain("CapDrop");
     expect(verifier).toContain("SecurityOpt");
-    expect(verifier).toContain('grep -Fq "$verification_token"');
+    expect(verifier).toContain("grep -Eq 'TOKEN|SECRET|PASSWORD'");
     expect(verifier.match(/--header='Host: app\.example\.com'/g)).toHaveLength(2);
     expect(example).toContain('API_URL=https://api.ml1.one');
-    expect(example).toContain('SHORT_URL=https://s.ml1.one/short-api');
+    expect(example).not.toContain('SHORT_URL=');
+    expect(example).toContain('IP_HASH_SECRET=REPLACE_WITH_64_CHARACTER_HEX');
     expect(example).toContain('SUBWEB_PORT=18080');
   });
 
@@ -108,7 +109,7 @@ describe('Docker runtime contract', () => {
     for (const command of [
       'npm ci',
       'npm run verify:locks',
-      './scripts/configure.sh --app-domain app.test --api-domain api.app.test --short-domain short.app.test',
+      './scripts/configure.sh --app-domain app.test --api-domain api.app.test --short-domain short.app.test --turnstile-site-key test-site-key --turnstile-secret-key test-secret-key',
       'npm run verify:compose',
       'npm run verify',
       'npm run verify:container',

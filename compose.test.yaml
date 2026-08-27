@@ -1,0 +1,24 @@
+services:
+  myurls-app:
+    environment:
+      NODE_ENV: test
+      TURNSTILE_ENABLED: "true"
+      TURNSTILE_MODE: test
+      TURNSTILE_SITE_KEY: test-site-key
+      TURNSTILE_SECRET_KEY: test-secret-key
+      TURNSTILE_HOSTNAME: app.test
+      # The integration flow exercises one SHORT-domain request before the
+      # APP-domain challenge/retry sequence against the shared Redis quota.
+      CREATE_DIRECT_LIMIT_10M: "2"
+      TEST_FORCE_CHALLENGE: "false"
+
+  myurls-short:
+    environment:
+      NODE_ENV: test
+      TURNSTILE_ENABLED: "true"
+      TURNSTILE_MODE: test
+      TURNSTILE_SITE_KEY: test-site-key
+      TURNSTILE_SECRET_KEY: test-secret-key
+      TURNSTILE_HOSTNAME: short.test
+      CREATE_DIRECT_LIMIT_10M: "2"
+      TEST_FORCE_CHALLENGE: "false"

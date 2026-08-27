@@ -127,9 +127,9 @@
         <div v-if="hasCurrentShortUrl" class="form-field result-field">
           <label for="short-url-result">短链</label>
           <input id="short-url-result" :value="result.shortUrl" readonly />
+          <small v-if="result.shortUrlExpiresAt">有效期至 {{ shortUrlExpiryLabel }}</small>
         </div>
         <button
-          v-if="hasShortUrlService"
           type="button"
           class="secondary-action-button result-action-button"
           :disabled="isGeneratingShortUrl || isShortCopying"
@@ -138,17 +138,28 @@
         >
           {{ shortActionLabel }}
         </button>
+        <TurnstileChallenge
+          v-if="shortChallenge"
+          :key="shortChallengeKey"
+          :site-key="shortChallenge.siteKey"
+          :message="shortStatusMessage"
+          @token="retryShortLink"
+          @error="handleChallengeError"
+        />
+        <p v-else-if="shortStatusMessage" class="short-link-feedback" role="status" aria-live="polite">
+          {{ shortStatusMessage }}
+        </p>
       </fieldset>
     </Transition>
   </form>
 </template>
 
 <script>
-import { showLoading, hideLoading } from '@/components/loading';
-import showNotification from '@/components/notification';
+import TurnstileChallenge from '@/components/turnstile/TurnstileChallenge.vue';
 import { copyText } from '@/features/clipboard/copy';
 import { TARGET_OPTIONS, createDefaultMoreConfig } from '@/features/conversion/options';
-import { request } from '@/network';
+import { createShortLinkClient } from '@/features/short-link/client';
+import { createShortLinkWorkflow } from '@/features/short-link/workflow';
 import {
   COPY_STATUS,
   createEmptyResultState,
@@ -157,23 +168,21 @@ import {
   getSubscriptionActionLabel,
 } from './actionState.js';
 import {
-  createShortUrlRequestConfig,
   createConversionInputKey,
   hasCurrentConversionResult,
   hasCurrentShortUrlResult,
   matchesConversionInput,
   prepareConversion,
-  regexCheck,
 } from './index.js';
 
 export default {
   name: 'SubTable',
+  components: { TurnstileChallenge },
   data() {
     return {
       placeholder: '多订阅链接或节点请确保每行一条\n支持手动使用"|"分割多链接或节点',
       targetOptions: TARGET_OPTIONS.map((option) => ({ ...option })),
       apiUrl: window.config.apiUrl,
-      shortUrl: window.config.shortUrl,
       remoteConfigOptions: window.config.remoteConfigOptions,
       moreConfig: createDefaultMoreConfig(),
       isShowServiceSettings: false,
@@ -181,6 +190,13 @@ export default {
       isShowManualApiUrl: false,
       isShowRemoteConfig: false,
       isGeneratingShortUrl: false,
+      shortChallenge: null,
+      shortChallengeKey: 0,
+      shortStatusMessage: '',
+      shortLinkWorkflow: createShortLinkWorkflow({
+        client: createShortLinkClient(),
+        copy: copyText,
+      }),
       result: createEmptyResultState(),
       urls: '',
       api: window.config.apiUrl,
@@ -189,9 +205,6 @@ export default {
     };
   },
   computed: {
-    hasShortUrlService() {
-      return regexCheck(this.shortUrl);
-    },
     conversionInput() {
       return {
         urls: this.urls,
@@ -233,6 +246,24 @@ export default {
         getCopyFeedback({ resource: '订阅链接', copyStatus: this.result.subscriptionCopyStatus })
       );
     },
+    shortUrlExpiryLabel() {
+      if (!this.result.shortUrlExpiresAt) return '';
+      return new Intl.DateTimeFormat('zh-CN', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(new Date(this.result.shortUrlExpiresAt));
+    },
+  },
+  watch: {
+    conversionInput: {
+      deep: true,
+      handler() {
+        if (this.shortChallenge) {
+          this.shortChallenge = null;
+          this.shortStatusMessage = '';
+        }
+      },
+    },
   },
   methods: {
     showServiceSettings() {
@@ -266,7 +297,6 @@ export default {
       try {
         await copyText(url);
         this.result[statusField] = COPY_STATUS.COPIED;
-        showNotification(resource === 'short' ? '短链复制成功' : '订阅链接复制成功', '成功');
         return true;
       } catch {
         this.result[statusField] = COPY_STATUS.MANUAL;
@@ -314,6 +344,8 @@ export default {
       }
       this.api = prepared.api;
       this.result = createEmptyResultState();
+      this.shortChallenge = null;
+      this.shortStatusMessage = '';
       this.result.subUrl = prepared.subUrl;
       this.result.conversionKey = createConversionInputKey(this.conversionInput);
       return true;
@@ -322,45 +354,48 @@ export default {
       if (!this.getConverter()) return;
       await this.copyResult(this.result.subUrl, 'subscription');
     },
-    async getShortUrl() {
+    async getShortUrl(challengeToken) {
       if (!this.hasCurrentSubscriptionResult && !this.getConverter()) return;
-      if (!regexCheck(this.shortUrl)) {
-        this.$showDialog('error', '失败', '短链服务配置无效，请检查运行时配置');
-        return;
-      }
       const requestConversionKey = this.result.conversionKey;
       const requestSubUrl = this.result.subUrl;
-      let data;
-      try {
-        data = new URLSearchParams();
-        data.append('longUrl', btoa(requestSubUrl));
-      } catch {
-        this.$showDialog('error', '失败', '短链生成失败，请稍后重试');
-        return;
-      }
       this.isGeneratingShortUrl = true;
       this.result.shortCopyStatus = COPY_STATUS.IDLE;
-      showLoading();
+      this.shortStatusMessage = '';
       try {
-        const res = await request(createShortUrlRequestConfig(this.shortUrl, data));
-        if (!matchesConversionInput(requestConversionKey, this.conversionInput)) {
+        const outcome = await this.shortLinkWorkflow.execute({
+          url: requestSubUrl,
+          conversionKey: requestConversionKey,
+          challengeToken,
+          isCurrent: (conversionKey) => matchesConversionInput(conversionKey, this.conversionInput),
+        });
+        if (outcome.kind === 'stale') return;
+        if (outcome.kind === 'challenge') {
+          this.shortChallenge = outcome.challenge;
+          this.shortStatusMessage = outcome.message;
+          this.shortChallengeKey += 1;
           return;
         }
-        if (!res.data || res.data.Code !== 1 || !res.data.ShortUrl) {
-          this.$showDialog('error', '失败', '短链生成失败，请稍后重试');
+        if (outcome.kind === 'error') {
+          this.shortChallenge = null;
+          this.shortStatusMessage = outcome.message;
           return;
         }
-        this.result.shortUrl = res.data.ShortUrl;
+
+        this.shortChallenge = null;
+        this.result.shortUrl = outcome.result.shortUrl;
+        this.result.shortUrlExpiresAt = outcome.result.expiresAt;
         this.result.shortUrlConversionKey = requestConversionKey;
-        await this.copyResult(this.result.shortUrl, 'short');
-      } catch {
-        if (matchesConversionInput(requestConversionKey, this.conversionInput)) {
-          this.$showDialog('error', '失败', '短链生成失败，请稍后重试');
-        }
+        this.result.shortCopyStatus = outcome.copied ? COPY_STATUS.COPIED : COPY_STATUS.MANUAL;
       } finally {
         this.isGeneratingShortUrl = false;
-        hideLoading();
       }
+    },
+    retryShortLink(token) {
+      void this.getShortUrl(token);
+    },
+    handleChallengeError() {
+      this.shortStatusMessage = '验证服务暂时不可用，请稍后重试。';
+      this.shortChallenge = null;
     },
   },
 };

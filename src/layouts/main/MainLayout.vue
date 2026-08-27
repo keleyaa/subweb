@@ -1,7 +1,7 @@
 <template>
   <div class="main-layout" dir="ltr">
     <NavBar />
-    <div class="main-layout__content"><router-view /></div>
+    <div class="main-layout__content"><HomeView /></div>
     <FooterBar />
   </div>
 </template>
@@ -9,9 +9,10 @@
 <script>
 import FooterBar from './footer/FooterBar.vue';
 import NavBar from './navbar/NavBar.vue';
+import HomeView from '@/views/home/HomeView.vue';
 
 export default {
-  components: { FooterBar, NavBar },
+  components: { FooterBar, HomeView, NavBar },
   name: 'MainLayout',
 };
 </script>

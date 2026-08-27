@@ -36,6 +36,10 @@ trusted_proxy_cidr_seen=0
 rotate_secrets=0
 subweb_image=
 subweb_image_seen=0
+turnstile_site_key=
+turnstile_site_key_seen=0
+turnstile_secret_key=
+turnstile_secret_key_seen=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -79,6 +83,20 @@ while [ "$#" -gt 0 ]; do
       subweb_image_seen=1
       shift 2
       ;;
+    --turnstile-site-key)
+      [ "$turnstile_site_key_seen" -eq 0 ] || fail '--turnstile-site-key may be provided only once.'
+      [ "$#" -ge 2 ] || fail '--turnstile-site-key requires a value.'
+      turnstile_site_key=$2
+      turnstile_site_key_seen=1
+      shift 2
+      ;;
+    --turnstile-secret-key)
+      [ "$turnstile_secret_key_seen" -eq 0 ] || fail '--turnstile-secret-key may be provided only once.'
+      [ "$#" -ge 2 ] || fail '--turnstile-secret-key requires a value.'
+      turnstile_secret_key=$2
+      turnstile_secret_key_seen=1
+      shift 2
+      ;;
     *) fail "Unknown argument: $1" ;;
   esac
 done
@@ -102,6 +120,13 @@ normalized_api=$(printf '%s' "$api_domain" | tr '[:upper:]' '[:lower:]')
 normalized_short=$(printf '%s' "$short_domain" | tr '[:upper:]' '[:lower:]')
 [ "$normalized_short" != "$normalized_app" ] || fail 'SHORT and APP domains must be different.'
 [ "$normalized_short" != "$normalized_api" ] || fail 'SHORT and API domains must be different.'
+
+validate_turnstile_key() {
+  key_value=$1
+  [ "${#key_value}" -ge 10 ] && [ "${#key_value}" -le 256 ] \
+    || return 1
+  printf '%s\n' "$key_value" | LC_ALL=C grep -Eq '^[A-Za-z0-9._-]+$'
+}
 
 env_file=$PWD/.env
 if [ "$trusted_proxy_cidr_seen" -eq 0 ] && [ -f "$env_file" ]; then
@@ -149,12 +174,39 @@ if [ -n "$trusted_proxy_cidr" ]; then
 "
 fi
 
+if [ "$turnstile_site_key_seen" -eq 0 ] && [ -f "$env_file" ]; then
+  if existing_value=$(load_existing_optional_value "$env_file" TURNSTILE_SITE_KEY); then
+    turnstile_site_key=$existing_value
+  else
+    existing_value_status=$?
+    [ "$existing_value_status" -eq 1 ] || fail 'Existing TURNSTILE_SITE_KEY is duplicated or invalid.'
+  fi
+fi
+if [ "$turnstile_secret_key_seen" -eq 0 ] && [ -f "$env_file" ]; then
+  if existing_value=$(load_existing_optional_value "$env_file" TURNSTILE_SECRET_KEY); then
+    turnstile_secret_key=$existing_value
+  else
+    existing_value_status=$?
+    [ "$existing_value_status" -eq 1 ] || fail 'Existing TURNSTILE_SECRET_KEY is duplicated or invalid.'
+  fi
+fi
+validate_turnstile_key "$turnstile_site_key" \
+  || fail 'TURNSTILE_SITE_KEY is required; pass --turnstile-site-key with the Cloudflare site key.'
+validate_turnstile_key "$turnstile_secret_key" \
+  || fail 'TURNSTILE_SECRET_KEY is required; pass --turnstile-secret-key with the Cloudflare secret key.'
+
 if [ "$rotate_secrets" -eq 0 ] && [ -f "$env_file" ]; then
-  myurls_api_token=$(load_existing_secret "$env_file" MYURLS_API_TOKEN) || fail 'Existing MYURLS_API_TOKEN is missing, duplicated, or invalid.'
   redis_password=$(load_existing_secret "$env_file" REDIS_PASSWORD) || fail 'Existing REDIS_PASSWORD is missing, duplicated, or invalid.'
+  if ip_hash_secret=$(load_existing_secret "$env_file" IP_HASH_SECRET); then
+    :
+  else
+    ip_hash_status=$?
+    [ "$ip_hash_status" -eq 1 ] || fail 'Existing IP_HASH_SECRET is duplicated or invalid.'
+    ip_hash_secret=$(generate_hex_secret) || fail 'Unable to generate IP_HASH_SECRET.'
+  fi
 else
-  myurls_api_token=$(generate_hex_secret) || fail 'Unable to generate MYURLS_API_TOKEN.'
   redis_password=$(generate_hex_secret) || fail 'Unable to generate REDIS_PASSWORD.'
+  ip_hash_secret=$(generate_hex_secret) || fail 'Unable to generate IP_HASH_SECRET.'
 fi
 
 write_env_atomically "$env_file" <<EOF
@@ -162,8 +214,9 @@ APP_DOMAIN=$app_domain
 API_DOMAIN=$api_domain
 API_URL=https://$api_domain
 SHORT_DOMAIN=$short_domain
-SHORT_URL=https://$short_domain/short-api
-${trusted_proxy_setting}${image_settings}MYURLS_API_TOKEN=$myurls_api_token
+${trusted_proxy_setting}${image_settings}TURNSTILE_SITE_KEY=$turnstile_site_key
+TURNSTILE_SECRET_KEY=$turnstile_secret_key
+IP_HASH_SECRET=$ip_hash_secret
 REDIS_PASSWORD=$redis_password
 EOF
 

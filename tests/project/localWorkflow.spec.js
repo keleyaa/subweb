@@ -1,43 +1,33 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
-const workflowPath = new URL('../../.github/workflows/local-source.yml', import.meta.url);
-const verifierPath = new URL('../../scripts/verify-local-source.sh', import.meta.url);
-const startScriptPath = new URL('../../scripts/local/start.sh', import.meta.url);
-
-describe('local source workflow contract', () => {
-  it('covers both supported operating systems and always stops owned services', async () => {
-    const workflow = await readFile(workflowPath, 'utf8');
+describe('Compose-first local workflow contract', () => {
+  it('uses one Linux Docker workflow and always tears dependencies down', async () => {
+    const workflow = await readFile(new URL('../../.github/workflows/local-dev.yml', import.meta.url), 'utf8');
     expect(workflow).toContain('persist-credentials: false');
-    expect(workflow).toContain('macos-15');
     expect(workflow).toContain('ubuntu-24.04');
-    expect(workflow).toContain('uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e');
-    expect(workflow).toContain('go-version: 1.26.5');
-    expect(workflow).toContain('./scripts/local/bootstrap.sh && ./scripts/local/bootstrap.sh');
-    expect(workflow).toContain('./scripts/local/start.sh');
-    expect(workflow).toContain('./scripts/local/status.sh');
-    expect(workflow).toContain('./scripts/verify-local-source.sh');
+    expect(workflow).toContain('./scripts/verify-local-dev.sh');
     expect(workflow).toContain('if: always()');
     expect(workflow).toContain('./scripts/local/stop.sh');
-    expect(workflow).not.toMatch(/sudo\s+.*(start|bootstrap|stop)\.sh/);
-    expect(workflow).not.toContain('golang-go');
+    expect(workflow).not.toContain('bootstrap.sh');
   });
 
-  it('keeps the full local lifecycle contract in the real verifier', async () => {
-    const verifier = await readFile(verifierPath, 'utf8');
-    expect(verifier).toContain('订阅转换哨兵');
-    expect(verifier).toContain('/short-api/short');
-    expect(verifier).toContain('重启后旧短链');
-    expect(verifier).toContain('七个默认端口冲突');
-    expect(verifier).toContain('七个自定义端口派生');
-    expect(verifier).toContain('端口未释放');
-    expect(verifier).toContain('SHORT 功能哨兵');
-    expect(verifier).toContain('LOCAL_SHORT_PORT');
+  it('verifies v2 JSON creation and redirect through the Vite proxy', async () => {
+    const verifier = await readFile(new URL('../../scripts/verify-local-dev.sh', import.meta.url), 'utf8');
+    expect(verifier).toContain('/short-api/v1/links');
+    expect(verifier).toContain('Content-Type: application/json');
+    expect(verifier).toContain("status=$(curl");
+    expect(verifier).toContain('Expected a 302 redirect');
   });
 
-  it('initializes every default gateway port before using it', async () => {
-    const startScript = await readFile(startScriptPath, 'utf8');
-    expect(startScript).toContain(': "${LOCAL_API_PORT:=$(load_optional_port LOCAL_API_PORT 18081)}"');
-    expect(startScript).toContain(': "${LOCAL_SHORT_PORT:=$(load_optional_port LOCAL_SHORT_PORT 18083)}"');
+  it('derives three distinct local ports and leaves Redis private', async () => {
+    const [common, override] = await Promise.all([
+      readFile(new URL('../../scripts/local/common.sh', import.meta.url), 'utf8'),
+      readFile(new URL('../../compose.dev.yaml', import.meta.url), 'utf8'),
+    ]);
+    expect(common).toContain('LOCAL_VITE_PORT');
+    expect(common).toContain('LOCAL_MYURLS_PORT');
+    expect(common).toContain('LOCAL_SUBCONVERTER_PORT');
+    expect(override).not.toMatch(/redis:[\s\S]*?ports:/u);
   });
 });

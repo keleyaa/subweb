@@ -1,6 +1,12 @@
 const { expect, test } = require('@playwright/test');
 const { applyBrowserPreferences } = require('./helpers/browserPreferences');
 
+test.beforeEach(async ({ page }) => {
+  await page.route('**/sub?*', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'text/plain', body: 'proxy-providers:\n  demo:\n' });
+  });
+});
+
 function recordBrowserErrors(page) {
   const errors = [];
 
@@ -14,7 +20,7 @@ function recordBrowserErrors(page) {
   return errors;
 }
 
-test('converts, copies, and creates a short link with gateway-approved form encoding', async ({ context, page }) => {
+test('converts, copies, and creates a short link through the same-origin v2 adapter', async ({ context, page }) => {
   const browserErrors = recordBrowserErrors(page);
   let shortRequestContentType = '';
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
@@ -25,17 +31,21 @@ test('converts, copies, and creates a short link with gateway-approved form enco
       contentType: 'application/javascript',
       body: `window.config = ${JSON.stringify({
         apiUrl: 'https://api.ml1.one',
-        shortUrl: 'https://short.example.test/short-api',
         menuItem: [],
         remoteConfigOptions: [],
       })};`,
     });
   });
-  await page.route('https://short.example.test/short-api/short', async (route) => {
+  await page.route('**/short-api/v1/links', async (route) => {
     shortRequestContentType = route.request().headers()['content-type'] ?? '';
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ Code: 1, ShortUrl: 'https://short.example.test/e2e-result' }),
+      status: 201,
+      body: JSON.stringify({
+        code: 'e2e-result',
+        shortUrl: 'https://short.example.test/e2e-result',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      }),
     });
   });
 
@@ -56,7 +66,7 @@ test('converts, copies, and creates a short link with gateway-approved form enco
   await page.getByRole('button', { name: '生成并复制短链' }).click();
   await expect(page.getByLabel('短链')).toHaveValue('https://short.example.test/e2e-result');
   await expect(page.getByRole('button', { name: '复制短链' })).toBeVisible();
-  expect(shortRequestContentType).toMatch(/^application\/x-www-form-urlencoded(?:;|$)/i);
+  expect(shortRequestContentType).toMatch(/^application\/json(?:;|$)/i);
   expect(browserErrors).toEqual([]);
 });
 
@@ -74,6 +84,49 @@ test('persists the explicit theme choice across reloads', async ({ page }) => {
   await page.reload();
   await expect(root).toHaveAttribute('data-theme', expectedTheme);
   expect(browserErrors).toEqual([]);
+});
+
+test('loads Turnstile only after challenge_required and retries the same conversion automatically', async ({ page }) => {
+  let attempts = 0;
+  await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit', async (route) => {
+    await route.fulfill({
+      contentType: 'application/javascript',
+      body: "window.turnstile={render:(_host,options)=>{setTimeout(()=>options.callback('e2e-token'),0);return 1},remove:()=>{}};",
+    });
+  });
+  await page.route('**/short-api/v1/links', async (route) => {
+    attempts += 1;
+    const request = route.request().postDataJSON();
+    if (attempts === 1) {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'challenge_required', requestId: 'req-e2e' },
+          challenge: { provider: 'turnstile', siteKey: 'site-e2e' },
+        }),
+      });
+      return;
+    }
+    expect(request.challengeToken).toBe('e2e-token');
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 'challenge-result',
+        shortUrl: 'https://short.example.test/challenge-result',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await expect(page.locator('script[data-turnstile]')).toHaveCount(0);
+  await page.getByLabel('订阅链接').fill('https://subscription.example.test/challenge');
+  await page.getByRole('button', { name: '转换并复制' }).click();
+  await page.getByRole('button', { name: '生成并复制短链' }).click();
+  await expect(page.getByLabel('短链')).toHaveValue('https://short.example.test/challenge-result');
+  expect(attempts).toBe(2);
 });
 
 test('keeps the complete workflow within a 390px mobile viewport', async ({ page }) => {

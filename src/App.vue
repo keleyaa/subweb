@@ -1,13 +1,21 @@
 <template>
-  <div>
-    <router-view />
-    <dialog-view v-if="$store.state.app.dialog.active"></dialog-view>
-  </div>
+  <MainLayout />
+  <DialogView v-if="dialog.active" />
 </template>
 
 <script>
+import DialogView from '@/components/dialog/DialogView.vue';
+import { dialogState } from '@/components/dialog';
+import MainLayout from '@/layouts/main/MainLayout.vue';
+
 export default {
-  name: 'app',
+  name: 'App',
+  components: { DialogView, MainLayout },
+  computed: {
+    dialog() {
+      return dialogState;
+    },
+  },
 };
 </script>
 

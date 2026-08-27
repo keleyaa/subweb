@@ -2,140 +2,82 @@ import { chmod, copyFile, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/pr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
 
-const root = new URL('../../', import.meta.url);
+const script = new URL('../../start.sh', import.meta.url).pathname;
+const run = (command, args, options) => new Promise((resolve) => {
+  const child = spawn(command, args, options);
+  let stdout = ''; let stderr = '';
+  child.stdout.on('data', (chunk) => { stdout += chunk; });
+  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  child.on('close', (code) => resolve({ code, stdout, stderr }));
+});
 
-function run(command, args, options) {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, options);
-    let stdout = '';
-    let stderr = '';
+async function fixture() {
+  const directory = await mkdtemp(join(tmpdir(), 'subweb-start-'));
+  const bin = join(directory, 'bin');
+  await mkdir(bin);
+  const nginx = join(bin, 'nginx');
+  const renderer = join(bin, 'render-gateway');
+  await writeFile(nginx, '#!/bin/sh\nexit 0\n');
+  await writeFile(renderer, '#!/bin/sh\nexit 0\n');
+  await Promise.all([nginx, renderer].map((file) => chmod(file, 0o755)));
+  const template = join(directory, 'config.template.js');
+  await copyFile(new URL('../../public/conf/config.js', import.meta.url), template);
+  return { directory, bin, nginx, renderer, template, config: join(directory, 'config.js') };
+}
 
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-    });
-    child.on('close', (code) => resolve({ code, stdout, stderr }));
-  });
+async function invoke(value, overrides = {}) {
+  const item = await fixture();
+  const env = {
+    ...process.env,
+    PATH: `${item.bin}:${process.env.PATH}`,
+    CONFIG_TEMPLATE: item.template,
+    CONFIG_FILE: item.config,
+    GATEWAY_RENDERER: item.renderer,
+    GATEWAY_CONFIG_FILE: join(item.directory, 'nginx.conf'),
+    NGINX_BIN: item.nginx,
+    API_URL: value,
+    ...overrides,
+  };
+  return { item, result: await run('sh', [script], { env }) };
 }
 
 describe('container runtime configuration', () => {
-  it('writes valid JavaScript for API_URL and SHORT_URL without escaping structural quotes', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'subweb-start-'));
-    const template = join(directory, 'config.template.js');
-    const config = join(directory, 'config.js');
-    const bin = join(directory, 'bin');
-    const nginx = join(bin, 'nginx');
-    const renderer = join(bin, 'render-gateway');
-    const gatewayConfig = join(directory, 'nginx.conf');
-    await mkdir(bin);
-    await copyFile(new URL('../../public/conf/config.js', import.meta.url), template);
-    await writeFile(nginx, '#!/bin/sh\nexit 0\n');
-    await writeFile(renderer, '#!/bin/sh\nexit 0\n');
-    await Promise.all([nginx, renderer].map((file) => chmod(file, 0o755)));
-
+  it('writes a valid public API URL without exposing a short-service setting', async () => {
     const apiUrl = "https://converter.example.com/a'b\\c?x=1&y=2";
-    const shortUrl = "https://short.example.com/a'b\\c?x=1&y=2";
-    const result = await run('sh', [fileURLToPath(new URL('start.sh', root))], {
-      env: {
-        ...process.env,
-        PATH: `${bin}:${process.env.PATH}`,
-        CONFIG_TEMPLATE: template,
-        CONFIG_FILE: config,
-        GATEWAY_RENDERER: renderer,
-        GATEWAY_CONFIG_FILE: gatewayConfig,
-        NGINX_BIN: nginx,
-        GATEWAY_MODE: 'behind-proxy',
-        API_URL: apiUrl,
-        SHORT_URL: shortUrl,
-      },
-    });
-
-    expect(result).toMatchObject({ code: 0 });
-    const source = await readFile(config, 'utf8');
+    const { item, result } = await invoke(apiUrl);
+    expect(result.code).toBe(0);
+    const source = await readFile(item.config, 'utf8');
     const window = {};
     expect(() => vm.runInNewContext(source, { window })).not.toThrow();
     expect(window.config.apiUrl).toBe(apiUrl);
-    expect(window.config.shortUrl).toBe(shortUrl);
+    expect(window.config).not.toHaveProperty('shortUrl');
   });
 
-  it('disables short links when SHORT_URL is explicitly set to an empty value', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'subweb-start-empty-short-'));
-    const template = join(directory, 'config.template.js');
-    const config = join(directory, 'config.js');
-    const bin = join(directory, 'bin');
-    const nginx = join(bin, 'nginx');
-    const renderer = join(bin, 'render-gateway');
-    const gatewayConfig = join(directory, 'nginx.conf');
-    await mkdir(bin);
-    await copyFile(new URL('../../public/conf/config.js', import.meta.url), template);
-    await writeFile(nginx, '#!/bin/sh\nexit 0\n');
-    await writeFile(renderer, '#!/bin/sh\nexit 0\n');
-    await Promise.all([nginx, renderer].map((file) => chmod(file, 0o755)));
-
-    const result = await run('sh', [fileURLToPath(new URL('start.sh', root))], {
-      env: {
-        ...process.env,
-        PATH: `${bin}:${process.env.PATH}`,
-        CONFIG_TEMPLATE: template,
-        CONFIG_FILE: config,
-        GATEWAY_RENDERER: renderer,
-        GATEWAY_CONFIG_FILE: gatewayConfig,
-        NGINX_BIN: nginx,
-        GATEWAY_MODE: 'behind-proxy',
-        SHORT_URL: '',
-      },
-    });
-
-    expect(result).toMatchObject({ code: 0 });
-    const source = await readFile(config, 'utf8');
-    const window = {};
-    expect(() => vm.runInNewContext(source, { window })).not.toThrow();
-    expect(window.config.shortUrl).toBe('');
+  it('fails closed when API_URL is missing', async () => {
+    const { result } = await invoke(undefined);
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain('缺少必需的 API_URL');
   });
 
-  it('derives crawler-facing canonical URLs from the configured public application domain', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'subweb-start-seo-'));
-    const template = join(directory, 'config.template.js');
-    const config = join(directory, 'config.js');
-    const siteRoot = join(directory, 'site');
-    const bin = join(directory, 'bin');
-    const nginx = join(bin, 'nginx');
-    const renderer = join(bin, 'render-gateway');
-    const gatewayConfig = join(directory, 'nginx.conf');
-    await Promise.all([mkdir(bin), mkdir(siteRoot)]);
-    await copyFile(new URL('../../public/conf/config.js', import.meta.url), template);
-    await writeFile(join(siteRoot, 'index.html'), '<link rel="canonical" href="https://sub.ml1.one/" />');
-    await writeFile(join(siteRoot, 'sitemap.xml'), '<loc>https://sub.ml1.one/</loc>');
-    await writeFile(join(siteRoot, 'robots.txt'), 'Sitemap: https://sub.ml1.one/sitemap.xml\n');
-    await writeFile(nginx, '#!/bin/sh\nexit 0\n');
-    await writeFile(renderer, '#!/bin/sh\nexit 0\n');
-    await Promise.all([nginx, renderer].map((file) => chmod(file, 0o755)));
-
-    const result = await run('sh', [fileURLToPath(new URL('start.sh', root))], {
-      env: {
-        ...process.env,
-        PATH: `${bin}:${process.env.PATH}`,
-        CONFIG_TEMPLATE: template,
-        CONFIG_FILE: config,
-        SITE_ROOT: siteRoot,
-        GATEWAY_RENDERER: renderer,
-        GATEWAY_CONFIG_FILE: gatewayConfig,
-        NGINX_BIN: nginx,
-        GATEWAY_MODE: 'behind-proxy',
-        APP_DOMAIN: 'self-hosted.example',
-      },
-    });
-
-    expect(result).toMatchObject({ code: 0 });
-    await expect(readFile(join(siteRoot, 'index.html'), 'utf8')).resolves.toContain('https://self-hosted.example/');
-    await expect(readFile(join(siteRoot, 'sitemap.xml'), 'utf8')).resolves.toContain('https://self-hosted.example/');
-    await expect(readFile(join(siteRoot, 'robots.txt'), 'utf8')).resolves.toContain('https://self-hosted.example/sitemap.xml');
-    await expect(readFile(join(siteRoot, 'robots.txt'), 'utf8')).resolves.not.toContain('sub.ml1.one');
+  it('derives crawler-facing canonical URLs from APP_DOMAIN', async () => {
+    const item = await fixture();
+    const siteRoot = join(item.directory, 'site');
+    await mkdir(siteRoot);
+    await writeFile(join(siteRoot, 'index.html'), 'https://sub.ml1.one/');
+    await writeFile(join(siteRoot, 'sitemap.xml'), 'https://sub.ml1.one/');
+    await writeFile(join(siteRoot, 'robots.txt'), 'https://sub.ml1.one/sitemap.xml');
+    const env = {
+      ...process.env, PATH: `${item.bin}:${process.env.PATH}`, API_URL: 'https://api.example.test',
+      APP_DOMAIN: 'self-hosted.example', SITE_ROOT: siteRoot, CONFIG_TEMPLATE: item.template,
+      CONFIG_FILE: item.config, GATEWAY_RENDERER: item.renderer,
+      GATEWAY_CONFIG_FILE: join(item.directory, 'nginx.conf'), NGINX_BIN: item.nginx,
+    };
+    expect((await run('sh', [script], { env })).code).toBe(0);
+    for (const file of ['index.html', 'sitemap.xml', 'robots.txt']) {
+      expect(await readFile(join(siteRoot, file), 'utf8')).toContain('https://self-hosted.example');
+    }
   });
 });

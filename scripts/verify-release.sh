@@ -13,6 +13,7 @@ stage audit npm audit --audit-level=moderate
 stage quality npm run verify
 stage browser npm run test:e2e
 stage locks npm run verify:locks
+stage production-readiness node scripts/verify-production-readiness.mjs
 stage compose npm run verify:compose
 stage documentation npm run verify:docs
 stage container ./scripts/verify-container.sh subweb:release-check

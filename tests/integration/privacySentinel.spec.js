@@ -7,13 +7,13 @@ const verifier = new URL('../../scripts/verify-integrated-stack.sh', import.meta
 const dockerIntegrationEnabled = process.env.RUN_DOCKER_INTEGRATION === '1';
 
 describe('integrated stack privacy sentinel', () => {
-  it('scans all four service logs without printing sensitive values', async () => {
+  it('scans every service log without printing sensitive values', async () => {
     const source = await readFile(verifier, 'utf8');
 
-    for (const service of ['gateway', 'myurls', 'subconverter', 'redis']) {
+    for (const service of ['gateway', 'myurls-app', 'myurls-short', 'subconverter', 'redis']) {
       expect(source).toContain(service);
     }
-    expect(source).toContain('?subscription_token=$sentinel_value');
+    expect(source).toContain('challenge-$sentinel_value');
     expect(source).not.toMatch(/printf[^\n]*"\$(?:sentinel_value|secret_value)"/i);
     expect(source).not.toMatch(/set\s+-x/);
   });
@@ -29,7 +29,7 @@ describe('integrated stack privacy sentinel', () => {
       });
 
       expect(result.status, result.stderr).toBe(0);
-      expect(`${result.stdout}\n${result.stderr}`).toContain('单一 HTTP 三域名集成验证=通过');
+      expect(`${result.stdout}\n${result.stderr}`).toContain('MyUrls v2 integrated stack verification passed.');
     },
     12 * 60 * 1000,
   );

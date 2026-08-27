@@ -5,7 +5,6 @@ image=${1:-subweb:verify}
 container="subweb-verify-$$"
 config_output=$(mktemp)
 headers_output=$(mktemp)
-verification_token=$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")
 
 cleanup() {
   docker rm -f "$container" >/dev/null 2>&1 || true
@@ -22,14 +21,13 @@ docker run -d --name "$container" \
   --tmpfs /tmp:uid=101,gid=101,mode=0700 \
   --tmpfs /usr/share/nginx/html/conf:uid=101,gid=101,mode=0700 \
   -e API_URL='https://converter.example.com/api?source=ci&mode=test' \
-  -e SHORT_URL='https://short.example.com/path?source=ci&mode=test' \
   -e APP_DOMAIN='app.example.com' \
   -e API_DOMAIN='api.example.com' \
   -e SHORT_DOMAIN='short.example.com' \
   -e SUBCONVERTER_UPSTREAM='http://subconverter:25500' \
-  -e MYURLS_UPSTREAM='http://myurls:8080' \
-  -e MYURLS_API_TOKEN="$verification_token" \
-  -e MYURLS_MAX_BODY_BYTES='1048576' \
+  -e MYURLS_APP_UPSTREAM='http://myurls-app-edge:3000' \
+  -e MYURLS_SHORT_UPSTREAM='http://myurls-short-edge:3000' \
+  -e MYURLS_MAX_BODY_BYTES='16384' \
   "$image" >/dev/null
 
 attempt=0
@@ -75,9 +73,9 @@ docker exec "$container" wget -q -O /dev/null \
   --header='Host: app.example.com' http://127.0.0.1:8080/healthz
 docker exec "$container" cat /usr/share/nginx/html/conf/config.js > "$config_output"
 node --check --input-type=commonjs < "$config_output"
-node -e "const fs=require('node:fs');const vm=require('node:vm');const window={};vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),{window});if(window.config.apiUrl!=='https://converter.example.com/api?source=ci&mode=test'||window.config.shortUrl!=='https://short.example.com/path?source=ci&mode=test')process.exit(1);" "$config_output"
-if grep -Fq "$verification_token" "$config_output"; then
-  printf '公开运行时配置不能包含内部 API Token\n' >&2
+node -e "const fs=require('node:fs');const vm=require('node:vm');const window={};vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),{window});if(window.config.apiUrl!=='https://converter.example.com/api?source=ci&mode=test'||Object.hasOwn(window.config,'shortUrl'))process.exit(1);" "$config_output"
+if grep -Eq 'TOKEN|SECRET|PASSWORD' "$config_output"; then
+  printf '公开运行时配置不能包含内部秘密\n' >&2
   exit 1
 fi
 

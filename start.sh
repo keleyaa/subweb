@@ -40,10 +40,6 @@ replace_file_value() {
   fi
 }
 
-replace_config_value() {
-  replace_file_value "$config_file" "$1" "$2"
-}
-
 replace_file_replacement() {
   target_file=$1
   old_value=$2
@@ -71,25 +67,11 @@ fi
 [ -f "$config_file" ] \
   || fail "运行时配置不存在: ${config_file}"
 
-if [ -n "${API_URL:-}" ]; then
-  printf '当前 API 地址为: %s\n' "$API_URL"
-  replace_config_value 'https://api.ml1.one' "$API_URL"
-else
-  printf '%s\n' '当前为默认 API 地址: https://api.ml1.one'
-  printf '%s\n' "如需修改请在容器启动时使用 -e API_URL='https://converter.example.com' 传递环境变量"
-fi
-
-if [ "${SHORT_URL+x}" = x ]; then
-  if [ -n "$SHORT_URL" ]; then
-    printf '当前短链接地址为: %s\n' "$SHORT_URL"
-    escaped_short_url=$(escape_config_value "$SHORT_URL")
-    replace_file_replacement "$config_file" "shortUrl: ''" "shortUrl: '$escaped_short_url'"
-  else
-    printf '%s\n' '当前已关闭短链接功能'
-  fi
-else
-  printf '%s\n' '当前短链接功能依赖部署时配置'
-fi
+[ -n "${API_URL:-}" ] || fail '缺少必需的 API_URL，拒绝回退到公共转换端点'
+printf '当前 API 地址为: %s\n' "$API_URL"
+escaped_api_url=$(escape_config_value "$API_URL")
+replace_file_replacement "$config_file" "apiUrl: 'https://api.ml1.one'" "apiUrl: '$escaped_api_url'"
+replace_file_replacement "$config_file" "apiUrl: ''" "apiUrl: '$escaped_api_url'"
 
 if [ -n "${APP_DOMAIN:-}" ] && [ -w "$site_root" ]; then
   public_origin="https://${APP_DOMAIN}"

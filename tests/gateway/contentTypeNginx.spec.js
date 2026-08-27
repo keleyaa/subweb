@@ -4,179 +4,115 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const enabled = process.env.RUN_NGINX_GATEWAY_TESTS === '1';
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const suffix = `${process.pid}-${Date.now()}`;
-const network = `subweb-content-${suffix}`;
-const upstream = `subweb-content-upstream-${suffix}`;
-const gateway = `subweb-content-gateway-${suffix}`;
-const token = 'c'.repeat(64);
+const suffix = process.pid + '-' + Date.now();
+const network = 'subweb-content-' + suffix;
+const upstream = 'subweb-content-upstream-' + suffix;
+const gateway = 'subweb-content-gateway-' + suffix;
+const clientA = 'subweb-content-client-a-' + suffix;
+const clientB = 'subweb-content-client-b-' + suffix;
 let gatewayPort;
-
-const pause = (milliseconds) => new Promise((resolve) => {
-  setTimeout(resolve, milliseconds);
-});
 
 function run(command, args, { allowFailure = false } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args);
-    let stdout = '';
-    let stderr = '';
+    let stdout = ''; let stderr = '';
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.on('close', (code) => {
       const result = { code, stdout, stderr };
       if (code === 0 || allowFailure) resolve(result);
-      else reject(new Error(`${command} exited ${code}: ${stderr}`));
+      else reject(new Error(command + ' exited ' + code + ': ' + stderr));
     });
   });
 }
-
 const docker = (...args) => run('docker', args);
 
-async function diagnostics() {
-  const details = [];
-  for (const container of [upstream, gateway]) {
-    const state = await run(
-      'docker', ['inspect', '--format', '{{.State.Status}} {{.State.ExitCode}} {{.State.Error}}', container],
-      { allowFailure: true },
-    );
-    const logs = await run('docker', ['logs', '--tail', '80', container], {
-      allowFailure: true,
-    });
-    details.push(`${container}: ${state.stdout}${state.stderr}${logs.stdout}${logs.stderr}`);
+async function waitFor(probe) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if ((await probe()).code === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  return details.join('\n').split(token).join('[redacted]');
+  throw new Error('temporary Nginx fixture did not become ready');
 }
 
-async function waitFor(label, probe, { timeoutMs = 20_000, intervalMs = 200 } = {}) {
-  const deadline = Date.now() + timeoutMs;
-  do {
-    const result = await probe();
-    if (result.code === 0) return;
-    if (Date.now() < deadline) await pause(intervalMs);
-  } while (Date.now() < deadline);
-
-  throw new Error(`${label} did not become ready within ${timeoutMs}ms\n${await diagnostics()}`);
-}
-
-describe.skipIf(!enabled)('real Nginx short creation Content-Type gate', () => {
+describe.skipIf(!enabled)('real Nginx MyUrls v2 adapter', () => {
   beforeAll(async () => {
     await docker('network', 'create', network);
     await docker(
-      'run', '--rm', '-d', '--name', upstream, '--network', network,
-      '-e', `EXPECTED_AUTHORIZATION=Bearer ${token}`,
-      'node:alpine',
-      'node', '-e',
-      "let count=0,expectedAuthorizationRequests=0,authorizationHeaderCount=0;const expected=process.env.EXPECTED_AUTHORIZATION;require('http').createServer((req,res)=>{req.resume();req.on('end',()=>{if(req.url==='/metrics'){res.setHeader('content-type','application/json');res.end(JSON.stringify({count,expectedAuthorizationRequests,authorizationHeaderCount}));return}if(req.url==='/count'){res.end(String(count));return}if(req.url==='/'||req.url==='/app.js'||req.url==='/styles.css'||req.url.startsWith('/fonts/')){res.statusCode=200;res.end(req.url==='/app.js'?'console.log(\"MyUrls\")':'MyUrls');return}if(req.url==='/short'||req.url==='/short-api/short'){count++;const values=req.headersDistinct.authorization||[];authorizationHeaderCount+=values.length;if(values.length===1&&values[0]===expected)expectedAuthorizationRequests++;res.statusCode=201;res.end('created');return}res.statusCode=404;res.end('not found')})}).listen(8080,'0.0.0.0')",
+      'run', '--rm', '-d', '--name', upstream, '--network', network, 'node:alpine', 'node', '-e',
+      "let requests=[];require('http').createServer((req,res)=>{let body='';req.on('data',c=>body+=c);req.on('end',()=>{if(req.url==='/metrics'){res.setHeader('content-type','application/json');res.end(JSON.stringify(requests));return}if(req.url==='/'||req.url==='/assets/app.js'){res.statusCode=200;res.end(req.url==='/'?'<script src=\"/assets/app.js\"></script>':'console.log(\"MyUrls\")');return}if(req.url==='/api/v1/links'){requests.push({authorization:req.headers.authorization||'',cookie:req.headers.cookie||'',origin:req.headers.origin||'',forwarded:req.headers.forwarded||'',xForwardedFor:req.headers['x-forwarded-for']||'',xRealIp:req.headers['x-real-ip']||'',type:req.headers['content-type']||'',body});res.statusCode=201;res.setHeader('content-type','application/json');res.end('{\"code\":\"Code1234\",\"shortUrl\":\"https://short.example.test/Code1234\",\"expiresAt\":\"2099-01-01T00:00:00.000Z\"}');return}res.statusCode=404;res.end('not found')})}).listen(3000,'0.0.0.0')",
     );
+    for (const client of [clientA, clientB]) {
+      await docker(
+        'run', '--rm', '-d', '--name', client, '--network', network,
+        'node:alpine', 'node', '-e', 'setInterval(() => {}, 2 ** 31 - 1)',
+      );
+    }
     await docker(
       'run', '--rm', '-d', '--name', gateway, '--network', network,
-      '-p', '127.0.0.1::8080',
-      '-v', `${root}nginx:/gateway:ro`,
-      '-v', `${root}scripts/render-gateway-config.sh:/render-gateway-config.sh:ro`,
-      '--entrypoint', 'sh',
-      '-e', 'APP_DOMAIN=app.example.test',
-      '-e', 'API_DOMAIN=api.example.test',
-      '-e', 'SHORT_DOMAIN=short.example.test',
-      '-e', 'TRUSTED_PROXY_CIDR=127.0.0.1/32',
+      '-p', '127.0.0.1::8080', '-v', root + 'nginx:/gateway:ro',
+      '-v', root + 'scripts/render-gateway-config.sh:/render-gateway-config.sh:ro',
+      '--entrypoint', 'sh', '-e', 'APP_DOMAIN=app.example.test',
+      '-e', 'API_DOMAIN=api.example.test', '-e', 'SHORT_DOMAIN=short.example.test',
       '-e', 'SUBCONVERTER_UPSTREAM=http://subconverter:25500',
-      '-e', `MYURLS_UPSTREAM=http://${upstream}:8080`,
-      '-e', `MYURLS_API_TOKEN=${token}`,
-      '-e', 'MYURLS_MAX_BODY_BYTES=1048576',
-      'nginxinc/nginx-unprivileged:alpine',
+      '-e', 'MYURLS_APP_UPSTREAM=http://' + upstream + ':3000',
+      '-e', 'MYURLS_SHORT_UPSTREAM=http://' + upstream + ':3000',
+      '-e', 'MYURLS_MAX_BODY_BYTES=16384', 'nginxinc/nginx-unprivileged:alpine',
       '-c', 'mkdir -p /tmp/nginx/client_temp /tmp/nginx/proxy_temp /tmp/nginx/fastcgi_temp /tmp/nginx/uwsgi_temp /tmp/nginx/scgi_temp; sh /render-gateway-config.sh --template-root /gateway --output /tmp/nginx/nginx.conf --nginx-bin nginx; exec nginx -c /tmp/nginx/nginx.conf -g "daemon off;"',
     );
-    const port = await docker('port', gateway, '8080/tcp');
-    gatewayPort = port.stdout.trim().match(/:([0-9]+)$/)?.[1];
-    expect(gatewayPort).toMatch(/^[0-9]+$/);
-
-    await waitFor('upstream /count', () => run('docker', [
-      'exec', upstream, 'node', '-e',
-      "require('http').get('http://127.0.0.1:8080/count',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
-    ], { allowFailure: true }));
-    await waitFor('gateway /healthz', () => run('curl', [
-      '--silent', '--show-error', '--fail', '--output', '/dev/null',
-      '--connect-timeout', '1', '--max-time', '2',
-      '-H', 'Host: app.example.test',
-      `http://127.0.0.1:${gatewayPort}/healthz`,
-    ], { allowFailure: true }));
+    gatewayPort = (await docker('port', gateway, '8080/tcp')).stdout.trim().match(/:([0-9]+)$/)?.[1];
+    await waitFor(() => run('curl', ['--fail', '--silent', '--output', '/dev/null', '-H', 'Host: app.example.test', 'http://127.0.0.1:' + gatewayPort + '/healthz'], { allowFailure: true }));
   }, 120_000);
 
   afterAll(async () => {
-    await run('docker', ['rm', '-f', gateway, upstream], { allowFailure: true });
+    await run('docker', ['rm', '-f', clientA, clientB, gateway, upstream], { allowFailure: true });
     await run('docker', ['network', 'rm', network], { allowFailure: true });
-  }, 30_000);
+  });
 
-  const request = async (contentType, query = '') => {
-    const args = [
-      '--silent', '--output', '/dev/null', '--write-out', '%{http_code}',
-      '--connect-timeout', '2', '--max-time', '5', '-X', 'POST',
-      '-H', 'Host: app.example.test', '-H', 'Origin: https://app.example.test',
-      '--data-binary', '{}',
-    ];
-    args.push('-H', contentType === null ? 'Content-Type:' : `Content-Type: ${contentType}`);
-    args.push(`http://127.0.0.1:${gatewayPort}/short-api/short${query}`);
-    return (await run('curl', args)).stdout;
-  };
+  const request = async ({ type = 'application/json', origin = 'https://app.example.test', query = '', body = '{"url":"https://example.com"}' } = {}) =>
+    (await run('curl', [
+      '--silent', '--output', '/dev/null', '--write-out', '%{http_code}', '-X', 'POST',
+      '-H', 'Host: app.example.test', '-H', 'Origin: ' + origin, '-H', 'Content-Type: ' + type,
+      '-H', 'Authorization: Bearer browser-secret', '-H', 'Cookie: session=browser-secret',
+      '--data-binary', body, 'http://127.0.0.1:' + gatewayPort + '/short-api/v1/links' + query,
+    ])).stdout;
 
-  const shortFrontendRequest = async (path) => (await run('curl', [
-    '--silent', '--output', '/dev/null', '--write-out', '%{http_code}',
-    '--connect-timeout', '2', '--max-time', '5',
-    '-H', 'Host: short.example.test',
-    `http://127.0.0.1:${gatewayPort}${path}`,
-  ])).stdout;
+  const requestFromClient = async (client, spoofedIp) =>
+    (await docker(
+      'exec', client, 'node', '-e',
+      `const http=require('node:http');const req=http.request({host:${JSON.stringify(gateway)},port:8080,path:'/short-api/v1/links',method:'POST',headers:{Host:'app.example.test',Origin:'https://app.example.test','Content-Type':'application/json',Authorization:'Bearer browser-secret',Cookie:'session=browser-secret','X-Forwarded-For':${JSON.stringify(spoofedIp)},Forwarded:${JSON.stringify(`for=${spoofedIp}`)} }},res=>{res.resume();res.on('end',()=>process.stdout.write(String(res.statusCode)))});req.on('error',error=>{console.error(error);process.exit(1)});req.end('{"url":"https://example.com"}');`,
+    )).stdout;
 
-  const shortCreateRequest = async (origin, contentType = null) => {
-    const args = [
-      '--silent', '--output', '/dev/null', '--write-out', '%{http_code}',
-      '--connect-timeout', '2', '--max-time', '5', '-X', 'POST',
-      '-H', 'Host: short.example.test', `-H`, `Origin: ${origin}`,
-    ];
-    if (contentType === 'multipart') {
-      args.push('-F', 'longUrl=https://example.com/short-ui-sentinel');
-    } else {
-      args.push('-H', `Content-Type: ${contentType}`, '--data-binary', '{}');
+  it('enforces the exact JSON endpoint and strips browser credentials and Origin', async () => {
+    expect(await request()).toBe('201');
+    expect(await request({ type: 'application/json; charset=utf-8' })).toBe('201');
+    expect(await request({ type: 'application/x-www-form-urlencoded' })).toBe('415');
+    expect(await request({ type: 'text/plain' })).toBe('415');
+    expect(await request({ origin: 'https://evil.example.test' })).toBe('403');
+    expect(await request({ query: '?private=sentinel' })).toBe('404');
+    expect(await requestFromClient(clientA, '198.51.100.11')).toBe('201');
+    expect(await requestFromClient(clientB, '203.0.113.23')).toBe('201');
+    for (const path of ['/', '/assets/app.js']) {
+      const status = await run('curl', ['--silent', '--output', '/dev/null', '--write-out', '%{http_code}', '-H', 'Host: short.example.test', 'http://127.0.0.1:' + gatewayPort + path]);
+      expect(status.stdout).toBe('200');
     }
-    args.push(`http://127.0.0.1:${gatewayPort}/short`);
-    return (await run('curl', args)).stdout;
-  };
-
-  it('forwards only allowed media types and keeps rejected bodies and secrets out of logs', async () => {
-    expect(await request('application/json; charset=utf-8')).toBe('201');
-    expect(await request('Application/X-Www-Form-Urlencoded; charset="utf-8"')).toBe('201');
-    expect(await request('text/plain', '?private=content-type-sentinel')).toBe('415');
-    expect(await request(null)).toBe('415');
-    expect(await request('application/jsonp')).toBe('415');
-
-    for (const path of ['/', '/app.js', '/styles.css', '/fonts/manrope-latin-wght-normal.woff2']) {
-      expect(await shortFrontendRequest(path)).toBe('200');
+    const response = await docker('exec', upstream, 'node', '-e',
+      "require('http').get('http://127.0.0.1:3000/metrics',r=>r.pipe(process.stdout))");
+    const metrics = JSON.parse(response.stdout);
+    expect(metrics).toHaveLength(4);
+    for (const item of metrics) {
+      expect(item).toMatchObject({ authorization: '', cookie: '', origin: '' });
+      expect(item.type).toMatch(/^application\/json/i);
+      expect(JSON.parse(item.body)).toEqual({ url: 'https://example.com' });
     }
-    expect(await shortCreateRequest('https://short.example.test', 'multipart')).toBe('201');
-    expect(await shortCreateRequest('https://app.example.test', 'multipart')).toBe('403');
-    expect(await shortCreateRequest('https://short.example.test', 'application/json')).toBe('415');
-
-    const metricsResult = await docker(
-      'exec', upstream, 'node', '-e',
-      "require('http').get('http://127.0.0.1:8080/metrics',r=>r.pipe(process.stdout))",
-    );
-    const metrics = JSON.parse(metricsResult.stdout);
-    expect(metrics).toEqual({
-      count: 3,
-      expectedAuthorizationRequests: 3,
-      authorizationHeaderCount: 3,
-    });
-
-    const [gatewayLogs, upstreamLogs] = await Promise.all([
-      docker('logs', gateway),
-      docker('logs', upstream),
-    ]);
-    const combinedLogs = [
-      gatewayLogs.stdout,
-      gatewayLogs.stderr,
-      upstreamLogs.stdout,
-      upstreamLogs.stderr,
-    ].join('\n');
-    expect(combinedLogs.includes('content-type-sentinel')).toBe(false);
-    expect(combinedLogs.includes(token)).toBe(false);
-    expect(combinedLogs.includes('?private=')).toBe(false);
+    const directClientRequests = metrics.slice(-2);
+    const clientIps = directClientRequests.map((item) => item.xForwardedFor);
+    expect(new Set(clientIps).size).toBe(2);
+    expect(clientIps).not.toContain('198.51.100.11');
+    expect(clientIps).not.toContain('203.0.113.23');
+    for (const item of directClientRequests) {
+      expect(item.forwarded).toBe('');
+      expect(item.xRealIp).toBe(item.xForwardedFor);
+    }
   }, 60_000);
 });

@@ -12,11 +12,27 @@ describe('Redis operations safety contracts', () => {
     ['backup-redis.sh', []],
     ['verify-redis-backup.sh', []],
     ['restore-redis.sh', ['--backup', '/tmp/missing.rdb']],
+    ['migrate-myurls-v1.sh', []],
     ['preflight-upgrade.sh', []],
   ])('fails closed before Docker work when required arguments are absent: %s', (name, args) => {
     const result = spawnSync('sh', [operation(name), ...args], { encoding: 'utf8' });
     expect(result.status).not.toBe(0);
     expect(`${result.stdout}${result.stderr}`).not.toMatch(/REPLACE_WITH|MYURLS_API_TOKEN|REDIS_PASSWORD=/u);
+  });
+
+  it('inventories and migrates v1 keys without exposing or deleting key data', () => {
+    const inventory = fs.readFileSync(operation('inventory-myurls-v1.sh'), 'utf8');
+    const migration = fs.readFileSync(operation('migrate-myurls-v1.sh'), 'utf8');
+
+    expect(inventory).toContain("redis.call('SCAN'");
+    expect(inventory).toContain('destination_conflicts=');
+    expect(inventory).not.toContain("redis.call('GET'");
+    expect(migration).toContain('--confirm-stop-writes');
+    expect(migration).toContain('--ttl-policy must be preserve or cap-90d');
+    expect(migration).toContain("redis.call('SET', destination, value, 'PX', pttl, 'NX')");
+    expect(migration).not.toMatch(/redis\.call\(['"]DEL/u);
+    expect(migration).toContain('Gateway and MyUrls remain stopped');
+    expect(migration.indexOf('backup-redis.sh')).toBeLessThan(migration.indexOf("redis.call('SET'"));
   });
 
   it('keeps secrets out of host command arguments and requires explicit restore confirmation', () => {
@@ -26,7 +42,8 @@ describe('Redis operations safety contracts', () => {
     expect(backup).toContain('REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning --raw SAVE');
     expect(backup).not.toContain('-a "$REDIS_PASSWORD"');
     expect(backup).not.toMatch(/docker compose exec[^\n]*REDIS_PASSWORD/u);
-    expect(verifier).toContain('REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning DBSIZE');
+    expect(verifier).toContain('inventory-myurls-v1.sh');
+    expect(verifier).toContain('migrate-myurls-v1.sh');
     expect(verifier).toContain('REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning FLUSHDB');
     expect(verifier).not.toContain('-a "$REDIS_PASSWORD"');
     expect(restore).toContain('--confirm-stop-writes');
@@ -57,6 +74,6 @@ describe('Redis operations safety contracts', () => {
 
     expect(verifier).toContain('scripts/verify-version-locks.mjs');
     expect(verifier).toContain('deploy/versions.lock.json');
-    expect(verifier).toContain("printf 'MYURLS_IMAGE=%s\\n' \"$myurls_test_image\"");
+    expect(verifier).toContain('"MYURLS_IMAGE=$myurls_test_image"');
   });
 });

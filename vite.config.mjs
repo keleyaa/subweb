@@ -3,10 +3,30 @@ import { defineConfig } from 'vitest/config';
 import vue from '@vitejs/plugin-vue';
 
 const fromRoot = (path) => fileURLToPath(new URL(path, import.meta.url));
+const localMyUrlsPort = process.env.LOCAL_MYURLS_PORT ?? '18082';
+if (!/^[0-9]{4,5}$/.test(localMyUrlsPort)) {
+  throw new Error('LOCAL_MYURLS_PORT must be a valid local port');
+}
 
 export default defineConfig({
   base: '/',
   plugins: [vue()],
+  server: {
+    proxy: {
+      '/short-api': {
+        target: `http://127.0.0.1:${localMyUrlsPort}`,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/short-api/u, '/api'),
+        configure(proxy) {
+          proxy.on('proxyReq', (request) => {
+            request.removeHeader('authorization');
+            request.removeHeader('cookie');
+            request.removeHeader('origin');
+          });
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': fromRoot('./src'),

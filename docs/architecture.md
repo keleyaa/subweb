@@ -1,77 +1,52 @@
-# 架构说明
+# 架构
 
-## 组件责任
+Subweb 是独立维护的自托管订阅转换发行栈。生产 Compose 启动 Gateway、SubConverter、
+两个分别服务 APP/SHORT hostname 的 MyUrls v2 实例和 Redis；公网反向代理、TLS、DNS 不属于本仓库运行时。
 
-| 组件 | 来源与责任 | 持久数据 |
-| --- | --- | --- |
-| Subweb 网关与前端 | 本仓库维护 UI、路由、鉴权注入、部署和测试 | 无 |
-| SubConverter-Extended | 官方上游提供转换引擎，Compose 跟随 `latest` 并配置公共安全模式；锁文件保留已验证基线 | 可重建运行目录 |
-| MyUrls | `keleyaa/MyUrls` 提供短链 API，Compose 跟随 `latest`；锁文件保留已验证基线 | 无，数据在 Redis |
-| Redis | 保存短码到长链接的映射；Compose 使用稳定主线 `docker.io/library/redis:8-alpine` | `redis-data` 是唯一业务持久卷 |
-| Nginx | 同一入口承载静态页面和 Host/路径路由 | 无 |
+```text
+Browser
+  |-- APP_DOMAIN
+  |     `-- Gateway
+  |           |-- /sub?...                -> SubConverter
+  |           `-- /short-api/v1/links    -> MyUrls v2 (APP instance) -> Redis
+  |
+  |-- API_DOMAIN
+  |     `-- Gateway -> SubConverter
+  |
+  `-- SHORT_DOMAIN
+        `-- Gateway transparent proxy -> MyUrls v2 (SHORT instance) UI/API/redirect
+```
 
-## 请求路径
+## 路由契约
 
-### 三域名入口
+| 公开入口 | 行为 |
+| --- | --- |
+| `APP_DOMAIN/` | Subweb Vue 工作区 |
+| `APP_DOMAIN/short-api/v1/links` | 仅 POST JSON，精确转发到 MyUrls `/api/v1/links` |
+| `APP_DOMAIN/:code` | 兼容已分享短码的 302 跳转 |
+| `API_DOMAIN/*` | 保留原路径和查询参数转发给 SubConverter |
+| `SHORT_DOMAIN/*` | 透明转发 MyUrls 页面、`/assets/*`、API、健康检查和短码 |
 
-`APP_DOMAIN`、`API_DOMAIN` 和 `SHORT_DOMAIN` 必须不同，但指向同一网关。前端、转换后端、短链服务职责独立，支持跨域 CORS。
+APP 适配入口清除浏览器的 Authorization、Cookie 和 Origin，覆盖客户端 IP 转发头，不注入
+旧 Bearer Token。SHORT 域保留 MyUrls 所需的同源 Origin，由 MyUrls 自己执行 API、CSP、
+Turnstile 和响应协议校验。APP 与 SHORT 使用两个独立 MyUrls 进程，分别校验各自 hostname，避免
+Cloudflare token 的 hostname 约束与双域入口冲突；两个进程共用 Redis、IP 哈希密钥和镜像版本。
 
-维护者展示部署使用 `sub.ml1.one`（应用）、`api.ml1.one`（API）和 `s.ml1.one`（短链）；部署其他实例时应替换为自己的域名。
+## 信任边界
 
-| 入口 | 路由 | 目标 |
-| --- | --- | --- |
-| `https://APP_DOMAIN/` | 静态文件与前端 history fallback | Subconverter Web |
-| `https://APP_DOMAIN/short-api/*` | 已存在短码的兼容创建入口 | MyUrls（见下方说明） |
-| `https://APP_DOMAIN/<short-code>` | 已存在短码的兼容跳转入口 | MyUrls 跳转 |
-| `https://API_DOMAIN/sub` | 保留路径和查询 | SubConverter |
-| `https://API_DOMAIN/healthz` | 网关健康检查 | 网关 |
-| `https://SHORT_DOMAIN/`、`/app.js`、`/styles.css`、`/fonts/*` | MyUrls 前端及本地资源 | MyUrls |
-| `POST https://SHORT_DOMAIN/short` | MyUrls 前端同源创建（multipart） | MyUrls `/short` |
-| `https://SHORT_DOMAIN/short-api/short` | 短链创建（CORS） | MyUrls `/short` |
-| `https://SHORT_DOMAIN/<short-code>` | 短链跳转 | MyUrls 跳转 |
-| `https://SHORT_DOMAIN/healthz` | 网关健康检查 | 网关 |
+Gateway 通过仅存在于该网络的 `myurls-app-edge`、`myurls-short-edge` 别名连接 MyUrls，避免
+Docker 默认网络解析绕过可信边界。MyUrls 只信任该网络中固定的 Gateway 地址，默认是
+`172.30.255.2/32`；外部反代的 `TRUSTED_PROXY_CIDR` 是另一层边界，不得设置为
+`0.0.0.0/0`。Redis、MyUrls 和 SubConverter 均不发布宿主机端口。
 
-**CORS 策略**：`SHORT_DOMAIN` 的 `/short-api/short` 端点允许来自 `APP_DOMAIN` 的跨域请求：
-- Origin 验证：只接受 `https://APP_DOMAIN`
-- Content-Type 验证：只接受 `application/x-www-form-urlencoded` 或 JSON
-- 支持 OPTIONS 预检请求
-- 限流：20 请求/分钟/IP
+## 前端边界
 
-`SHORT_DOMAIN/` 的 MyUrls 前端使用同源 `POST /short`，只接受精确的 `Origin: https://SHORT_DOMAIN` 和带 boundary 的 `multipart/form-data`；该路径不需要 CORS 响应头。两条创建路径都会由 Gateway 清空客户端鉴权头并注入服务端 MyUrls Token。
+- 转换 URL 构造保持为纯函数。
+- `ShortLinkClient` 独占 MyUrls v2 HTTP 契约。
+- `ShortLinkWorkflow` 负责 UTF-8 长度预检、挑战、重试、复制和 stale-result。
+- Vue 组件只绑定状态和用户动作。
 
-**APP 兼容入口**：三域名部署后，`https://APP_DOMAIN/short-api/*` 和 `https://APP_DOMAIN/<short-code>` 继续用于兼容已经分享的短链。新短链始终返回 `https://SHORT_DOMAIN/<short-code>`；该兼容入口不需要额外配置，也不构成另一种部署模式。
+本地开发由 Vite 提供页面，并把同源 `/short-api/*` 代理到 Compose 中的 MyUrls v2。
+SubConverter 与 MyUrls 使用 loopback 调试端口，Redis 保持私有。
 
-兼容入口的创建 POST 同样要求精确的 `Origin: https://APP_DOMAIN`；它不返回跨域授权头，也不会透传客户端 `Authorization` 或 `Proxy-Authorization`。
-
-短链 Token 只存在于 `.env`、本机私有运行目录或平台秘密变量中。浏览器看到的 `/conf/config.js` 只包含公开 URL 和预设。APP 域名的兼容入口只服务已有短码；新短链始终返回 SHORT 域名。
-
-所有 Docker 服务显式使用 `Asia/Shanghai`，标准输出由 Compose 统一轮转。Gateway 只把
-单段短码路由记为 `/:shortKey`，不把真实短码写入访问日志；成功健康检查也不进入访问
-日志。SubConverter 通过监督器输出日志：在 Docker 的 `json-file` 或本机日志文件接收文本前，完整 URI 和
-请求来源参数会被移除；受控偏好文件同时阻止旧运行卷重新启用 verbose。MyUrls 的内部日志策略由独立的
-`keleyaa/MyUrls` 镜像版本负责，Subweb 在锁文件中保留已经发布并验证的镜像摘要作为集成测试与回滚基线。
-
-## 数据流与信任边界
-
-1. 浏览器把订阅 URL 和用户选项组成转换链接。打开转换链接时，SubConverter 及其访问的远程规则会看到订阅地址。
-2. 创建短链时，Subweb 主前端把完整转换链接发到 `SHORT_DOMAIN/short-api/short`，MyUrls 前端把表单发到同源 `SHORT_DOMAIN/short`；网关注入 Token 后交给 MyUrls，MyUrls 把映射写入 Redis。
-3. 访问短码时，MyUrls 从 Redis 取出长链接并返回跳转。Base64 只是一种编码，不是加密。
-4. Redis 密码、MyUrls Token、平台 Redis URL 和 TLS 私钥都不能写入前端配置、日志、文档示例或 Git。
-
-## 部署边界
-
-| 方式 | 公网入口 | TLS 责任 | 内部边界 |
-| --- | --- | --- | --- |
-| Docker | 外层代理 | 宝塔、1Panel、Nginx、OpenResty、Cloudflare 等负责 DNS、TLS 和公网 80/443 | Compose 只把网关绑定到 `127.0.0.1` |
-| 本机源码 | 默认 loopback 端口 | 仅开发；公开时由外层代理负责 | 七个本机进程按 PID 所有权管理 |
-
-项目不要求 Caddy，也不会自动申请证书。Redis 卷或平台 Key Value/Redis 是备份、恢复和迁移的核心；其他组件应按 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 重建。
-
-**本机七端口**（三域名模式）：
-- `LOCAL_VITE_PORT=5173`：Vite 开发服务器
-- `LOCAL_SUBCONVERTER_PORT=25500`：SubConverter
-- `LOCAL_MYURLS_PORT=18082`：MyUrls
-- `LOCAL_REDIS_PORT=16379`：Redis
-- `LOCAL_APP_PORT=18080`：前端 Gateway（Nginx）
-- `LOCAL_API_PORT=18081`：转换后端 Gateway（Nginx）
-- `LOCAL_SHORT_PORT=18083`：短链服务 Gateway（Nginx）
+所有服务默认使用 `Asia/Shanghai` 时区。

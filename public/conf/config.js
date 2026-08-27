@@ -1,8 +1,6 @@
 window.config = {
   // 转换后端 API 地址
   apiUrl: 'https://api.ml1.one',
-  // 短链服务地址。留空时，前端不会显示短链功能。
-  shortUrl: '',
   // 可选 GitHub 项目来源；首个安全 HTTPS GitHub URL 会显示在页脚，不作为顶部导航项。
   menuItem: [
     {

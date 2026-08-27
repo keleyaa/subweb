@@ -12,10 +12,10 @@ describe('MainLayout document structure', () => {
     expect(source).not.toMatch(/<body\b/i);
     expect(templateMatch).not.toBeNull();
     expect(templateMatch[1].replace(/\s+/g, ' ').trim()).toBe(
-      '<div class="main-layout" dir="ltr"> <NavBar /> <div class="main-layout__content"><router-view /></div> <FooterBar /> </div>',
+      '<div class="main-layout" dir="ltr"> <NavBar /> <div class="main-layout__content"><HomeView /></div> <FooterBar /> </div>',
     );
     expect(source).toContain("import FooterBar from './footer/FooterBar.vue';");
-    expect(source).toMatch(/components:\s*\{\s*FooterBar,\s*NavBar\s*\}/);
+    expect(source).toMatch(/components:\s*\{\s*FooterBar,\s*HomeView,\s*NavBar\s*\}/);
   });
 
   it('uses flex layout so short routed content keeps the footer at the viewport bottom', async () => {

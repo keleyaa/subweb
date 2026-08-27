@@ -28,9 +28,9 @@ function validEnvironment(overrides = {}) {
     API_DOMAIN: 'api.example.test',
     SHORT_DOMAIN: 'short.example.test',
     SUBCONVERTER_UPSTREAM: 'http://subconverter:25500',
-    MYURLS_UPSTREAM: 'http://myurls:8080',
-    MYURLS_API_TOKEN: 'a'.repeat(64),
-    MYURLS_MAX_BODY_BYTES: '1048576',
+    MYURLS_APP_UPSTREAM: 'http://myurls-app-edge:3000',
+    MYURLS_SHORT_UPSTREAM: 'http://myurls-short-edge:3000',
+    MYURLS_MAX_BODY_BYTES: '16384',
     ...overrides,
   };
 }
@@ -66,8 +66,10 @@ describe('gateway configuration rendering', () => {
     expect(result.config).toContain('server_name app.example.test;');
     expect(result.config).toContain('server_name api.example.test;');
     expect(result.config).toContain('server_name short.example.test;');
-    expect(result.config).toContain('location = /short {');
-    expect(result.config).toContain('proxy_pass $myurls_upstream/short$is_args$args;');
+    expect(result.config).toContain('location = /short-api/v1/links {');
+    expect(result.config).toContain('proxy_pass $myurls_upstream/api/v1/links;');
+    expect(result.config).toContain('proxy_pass $myurls_upstream$request_uri;');
+    expect(result.config).toContain('proxy_set_header Forwarded "";');
     expect(result.config).toContain('resolver 10.20.30.40 ipv6=off valid=30s;');
     expect(result.config).not.toContain('real_ip_header');
     expect(result.config).not.toContain('8443');
@@ -81,8 +83,8 @@ describe('gateway configuration rendering', () => {
     ['API_DOMAIN', 'app.example.test'],
     ['SHORT_DOMAIN', 'app.example.test'],
     ['SUBCONVERTER_UPSTREAM', 'http://subconverter:25500/path'],
-    ['MYURLS_UPSTREAM', 'https://user:pass@myurls:8080'],
-    ['MYURLS_API_TOKEN', 'short'],
+    ['MYURLS_APP_UPSTREAM', 'https://user:pass@myurls:8080'],
+    ['MYURLS_SHORT_UPSTREAM', 'https://user:pass@myurls:8080'],
     ['MYURLS_MAX_BODY_BYTES', '0'],
     ['TRUSTED_PROXY_CIDR', '172.18.0.1; return 200'],
     ['TRUSTED_PROXY_CIDR', '999.18.0.1/32'],
@@ -90,7 +92,7 @@ describe('gateway configuration rendering', () => {
   ])('rejects invalid or injectable %s values', async (name, value) => {
     const result = await render({ [name]: value });
     expect(result.code).not.toBe(0);
-    expect(result.stderr).not.toContain(validEnvironment().MYURLS_API_TOKEN);
+    expect(result.stderr).not.toContain('Authorization');
   });
 
   it('uses forwarded client addresses only for an explicit trusted proxy CIDR', async () => {
@@ -132,11 +134,11 @@ describe('gateway configuration rendering', () => {
     await writeFile(resolvConf, 'nameserver 10.20.30.40\n');
     const args = [renderScript, '--template-root', templateRoot, '--output', fixture.output, '--nginx-bin', fixture.nginx, '--resolv-conf', resolvConf];
     const results = await Promise.all([
-      run('sh', args, { env: validEnvironment({ MYURLS_API_TOKEN: 'a'.repeat(64) }) }),
-      run('sh', args, { env: validEnvironment({ MYURLS_API_TOKEN: 'b'.repeat(64) }) }),
+      run('sh', args, { env: validEnvironment() }),
+      run('sh', args, { env: validEnvironment() }),
     ]);
     expect(results.map(({ code }) => code)).toEqual([0, 0]);
-    expect(await readFile(fixture.output, 'utf8')).toMatch(/Bearer (?:a{64}|b{64})/);
+    expect(await readFile(fixture.output, 'utf8')).toContain('proxy_pass $myurls_upstream/api/v1/links;');
   });
 });
 
@@ -150,7 +152,7 @@ async function setupStartFixture() {
   const gatewayConfig = join(directory, 'nginx.conf');
   const events = join(directory, 'events');
   await mkdir(bin);
-  await writeFile(configTemplate, "window.config = { apiUrl: 'https://api.ml1.one', shortUrl: 'https://ml1.one' };\n");
+  await writeFile(configTemplate, "window.config = { apiUrl: '' };\n");
   await writeFile(renderer, `#!/bin/sh\nprintf 'render\\n' >> '${events}'\nwhile [ "$#" -gt 0 ]; do if [ "$1" = --output ]; then shift; : > "$1"; fi; shift; done\n`);
   await writeFile(nginx, `#!/bin/sh\nprintf 'nginx\\n' >> '${events}'\n`);
   await Promise.all([renderer, nginx].map((file) => chmod(file, 0o755)));
@@ -158,9 +160,11 @@ async function setupStartFixture() {
     ...process.env, CONFIG_TEMPLATE: configTemplate, CONFIG_FILE: configFile,
     GATEWAY_RENDERER: renderer, GATEWAY_CONFIG_FILE: gatewayConfig, NGINX_BIN: nginx,
     APP_DOMAIN: 'app.example.test', API_DOMAIN: 'api.example.test', SHORT_DOMAIN: 'short.example.test',
-    API_URL: 'https://api.example.test', SHORT_URL: 'https://short.example.test/short-api',
-    SUBCONVERTER_UPSTREAM: 'http://subconverter:25500', MYURLS_UPSTREAM: 'http://myurls:8080',
-    MYURLS_API_TOKEN: 'b'.repeat(64), MYURLS_MAX_BODY_BYTES: '1048576',
+    API_URL: 'https://api.example.test',
+    SUBCONVERTER_UPSTREAM: 'http://subconverter:25500',
+    MYURLS_APP_UPSTREAM: 'http://myurls-app-edge:3000',
+    MYURLS_SHORT_UPSTREAM: 'http://myurls-short-edge:3000',
+    MYURLS_MAX_BODY_BYTES: '16384',
   };
   return { directory, events, env };
 }
@@ -171,7 +175,7 @@ describe('gateway startup boundary', () => {
     const result = await run('sh', [startScript], { env: fixture.env });
     expect(result.code).toBe(0);
     expect(await readFile(fixture.events, 'utf8')).toBe('render\nnginx\n');
-    expect(result.stdout).not.toContain(fixture.env.MYURLS_API_TOKEN);
+    expect(result.stdout).not.toContain('Authorization');
   });
 
   it('does not consume an unrelated PORT variable', async () => {

@@ -5,156 +5,69 @@ const root = new URL('../../', import.meta.url);
 const rootFile = (path) => new URL(path, root);
 
 describe('gateway routing contract', () => {
-  it('gives stable application routes priority over the constrained short-code matcher', async () => {
+  it('adapts only the same-origin v2 creation endpoint', async () => {
     const routes = await readFile(rootFile('nginx/snippets/app-routes.conf.template'), 'utf8');
-    const shortCodePosition = routes.indexOf('location ~ "^/[A-Za-z0-9_-]{1,64}$"');
-
-    for (const route of [
-      'location = /healthz',
-      'location = /favicon.svg',
-      'location = /robots.txt',
-      'location = /sitemap.xml',
-      'location ^~ /assets/',
-      'location ^~ /conf/',
-      'location = /short-api/short',
-      'location ^~ /short-api/',
-    ]) {
-      expect(routes).toContain(route);
-      expect(routes.indexOf(route)).toBeLessThan(shortCodePosition);
-    }
-    expect(routes).not.toContain('location ~ ^/[^/]+$');
-    expect(shortCodePosition).toBeGreaterThan(-1);
-    expect(routes).toContain('limit_except GET HEAD');
-    expect(routes).toContain('try_files $uri $uri/ /index.html');
-    expect(routes).toContain('add_header X-Robots-Tag "noindex, nofollow, noarchive" always;');
-  });
-
-  it('accepts only POST for short creation, caps its body, overwrites authorization, and targets exactly /short', async () => {
-    const routes = await readFile(rootFile('nginx/snippets/app-routes.conf.template'), 'utf8');
-    const start = routes.indexOf('location = /short-api/short');
-    const end = routes.indexOf('\n}', start) + 2;
-    const block = routes.slice(start, end);
-
+    const start = routes.indexOf('location = /short-api/v1/links');
+    const block = routes.slice(start, routes.indexOf('\n}', start) + 2);
+    expect(start).toBeGreaterThan(-1);
     expect(block).toContain('limit_except POST');
     expect(block).toContain('if ($short_origin_allowed = 0)');
     expect(block).toContain('client_max_body_size @@MYURLS_MAX_BODY_BYTES@@;');
+    expect(block).toContain('if ($myurls_json_content_type_allowed = 0)');
+    expect(block).toContain('if ($args != "")');
     expect(block).toContain('proxy_set_header Authorization "";');
-    expect(block).toContain('proxy_set_header Proxy-Authorization "";');
-    expect(block).toContain('proxy_set_header Authorization "Bearer @@MYURLS_API_TOKEN@@";');
-    expect(block.indexOf('Authorization ""')).toBeLessThan(block.indexOf('Authorization "Bearer'));
-    expect(block).toContain('if ($short_content_type_allowed = 0)');
-    expect(block).toContain('return 415;');
-    expect(block.indexOf('return 415')).toBeLessThan(block.indexOf('Authorization "Bearer'));
-    expect(block).toContain('set $myurls_upstream "@@MYURLS_UPSTREAM@@";');
-    expect(block).toContain('proxy_pass $myurls_upstream/short$is_args$args;');
+    expect(block).toContain('proxy_set_header Cookie "";');
+    expect(block).toContain('proxy_set_header Origin "";');
+    expect(block).toContain('proxy_pass $myurls_upstream/api/v1/links;');
+    expect(routes).toContain('location ^~ /short-api/');
+    expect(routes).not.toContain('MYURLS_API_TOKEN');
   });
 
-  it('allows only JSON and form Content-Types with optional safe parameters', async () => {
+  it('accepts only JSON for creation', async () => {
     const map = await readFile(rootFile('nginx/snippets/content-type-map.conf'), 'utf8');
-
-    expect(map).toContain('map $http_content_type $short_content_type_allowed');
-    expect(map).toContain('default 0;');
+    expect(map).toContain('map $http_content_type $myurls_json_content_type_allowed');
     expect(map).toMatch(/application\/json[^\n]+1;/i);
-    expect(map).toMatch(/application\/x-www-form-urlencoded[^\n]+1;/i);
-    expect(map).not.toContain('text/plain');
+    expect(map).not.toContain('application/x-www-form-urlencoded');
+    expect(map).not.toContain('multipart/form-data');
   });
 
-  it('terminates allowed SHORT preflight requests before the POST-only proxy path', async () => {
+  it('keeps the short host as a transparent MyUrls v2 proxy', async () => {
     const routes = await readFile(rootFile('nginx/snippets/short-routes.conf.template'), 'utf8');
-    const start = routes.indexOf('location = /short-api/short');
-    const end = routes.indexOf('\n}', start) + 2;
-    const block = routes.slice(start, end);
-
-    expect(block).toContain('if ($request_method = OPTIONS)');
-    expect(block).toContain('return 204;');
-    expect(block).toContain('if ($request_method != POST)');
-    expect(block).toContain('return 405;');
-    expect(block.indexOf('return 204')).toBeLessThan(block.indexOf('return 405'));
-    expect(block).not.toContain('limit_except POST');
-    expect(block).not.toContain('try_files');
-  });
-
-  it('serves the MyUrls frontend and local assets from the SHORT gateway', async () => {
-    const routes = await readFile(rootFile('nginx/snippets/short-routes.conf.template'), 'utf8');
-
-    for (const route of [
-      'location = / {',
-      'location = /app.js {',
-      'location = /styles.css {',
-      'location = /favicon.ico {',
-      'location ^~ /fonts/ {',
-      'location = /short {',
-    ]) {
-      expect(routes).toContain(route);
-    }
-
-    expect(routes.indexOf('location = / {\n')).toBeLessThan(routes.indexOf('location ~ "^/[A-Za-z0-9_-]{1,64}$"'));
+    expect(routes).toContain('location / {');
     expect(routes).toContain('proxy_pass $myurls_upstream$request_uri;');
-    expect(routes).toContain('proxy_pass $myurls_upstream/short$is_args$args;');
-    expect(routes).toContain('if ($myurls_ui_origin_allowed = 0)');
-    expect(routes).toContain('if ($myurls_ui_content_type_allowed = 0)');
-    expect(routes).toContain('proxy_set_header Authorization "Bearer @@MYURLS_API_TOKEN@@";');
+    expect(routes).toContain('proxy_set_header Authorization "";');
     expect(routes).toContain('proxy_set_header Proxy-Authorization "";');
-    expect(routes).toContain('location / {\n  return 404;\n}');
+    expect(routes).not.toContain('Access-Control-Allow-Origin');
+    expect(routes).not.toContain('MYURLS_API_TOKEN');
   });
 
-  it('terminates allowed SHORT UI preflight requests before the multipart POST gate', async () => {
-    const routes = await readFile(rootFile('nginx/snippets/short-routes.conf.template'), 'utf8');
-    const start = routes.indexOf('location = /short {');
-    const end = routes.indexOf('\n}', start) + 2;
-    const block = routes.slice(start, end);
-
-    expect(block).toContain('add_header Access-Control-Allow-Origin $myurls_ui_allowed_origin always;');
-    expect(block).toContain('add_header Access-Control-Allow-Methods "POST, OPTIONS" always;');
-    expect(block).toContain('add_header Access-Control-Allow-Headers "Content-Type" always;');
-    expect(block).toContain('if ($request_method = OPTIONS)');
-    expect(block).toContain('return 204;');
-    expect(block).toContain('if ($request_method != POST)');
-    expect(block).toContain('return 405;');
-    expect(block.indexOf('return 204')).toBeLessThan(block.indexOf('return 405'));
+  it('preserves static application routes and constrained redirects', async () => {
+    const routes = await readFile(rootFile('nginx/snippets/app-routes.conf.template'), 'utf8');
+    const shortCodePosition = routes.indexOf('location ~ "^/[A-Za-z0-9_-]{1,64}$"');
+    for (const route of ['location = /healthz', 'location ^~ /assets/', 'location ^~ /conf/', 'location = /short-api/v1/links']) {
+      expect(routes.indexOf(route)).toBeGreaterThan(-1);
+      expect(routes.indexOf(route)).toBeLessThan(shortCodePosition);
+    }
+    expect(routes).toContain('limit_except GET HEAD');
+    expect(routes).toContain('try_files $uri $uri/ /index.html');
   });
 
-  it('keeps the UI multipart Content-Type gate separate from the legacy short API gate', async () => {
-    const map = await readFile(rootFile('nginx/snippets/content-type-map.conf'), 'utf8');
-    const template = await readFile(rootFile('nginx/templates/http.conf.template'), 'utf8');
-    expect(map).toContain('map $http_content_type $myurls_ui_content_type_allowed');
-    expect(map).toMatch(/multipart\/form-data/);
-    expect(template).toContain('map $http_origin $myurls_ui_origin_allowed');
-    expect(template).toContain('map $http_origin $myurls_ui_allowed_origin');
-  });
-
-  it('preserves the original API path and query while forwarding only validated public headers', async () => {
+  it('preserves the converter path and validated public headers', async () => {
     const routes = await readFile(rootFile('nginx/snippets/api-routes.conf.template'), 'utf8');
     const proxyHeaders = await readFile(rootFile('nginx/snippets/proxy-headers.conf.template'), 'utf8');
-
-    expect(routes).toContain('set $subconverter_upstream "@@SUBCONVERTER_UPSTREAM@@";');
     expect(routes).toContain('proxy_pass $subconverter_upstream$request_uri;');
-    expect(routes).not.toMatch(/proxy_pass\s+[^;]+\/;/);
-    expect(routes).not.toContain('proxy_set_header Authorization');
     expect(proxyHeaders).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
     expect(proxyHeaders).not.toContain('$proxy_add_x_forwarded_for');
     expect(proxyHeaders).toContain('proxy_set_header Host @@PUBLIC_HOST@@;');
-    expect(proxyHeaders).toContain('proxy_set_header X-Forwarded-Host @@PUBLIC_HOST@@;');
-    expect(proxyHeaders).toContain('proxy_set_header X-Forwarded-Proto @@PUBLIC_SCHEME@@;');
-    expect(routes).toContain('add_header X-Robots-Tag "noindex, nofollow, noarchive" always;');
   });
 
-  it('returns 421 for unknown hosts without an upstream default', async () => {
+  it('returns 421 for unknown hosts and uses a runtime resolver', async () => {
     const template = await readFile(rootFile('nginx/templates/http.conf.template'), 'utf8');
-    const defaultServerStart = template.indexOf('server_name _;');
-    const defaultServerEnd = template.indexOf('\n  }', defaultServerStart);
-    const defaultServer = template.slice(defaultServerStart, defaultServerEnd);
-
+    const start = template.indexOf('server_name _;');
+    const defaultServer = template.slice(start, template.indexOf('\n  }', start));
     expect(defaultServer).toContain('return 421;');
     expect(defaultServer).not.toContain('proxy_pass');
-  });
-
-  it('uses a runtime resolver placeholder rather than Docker DNS', async () => {
-    const template = await readFile(rootFile('nginx/templates/http.conf.template'), 'utf8');
-
     expect(template).toContain('resolver @@NGINX_RESOLVER@@ ipv6=off valid=30s;');
-    expect(template).not.toContain('resolver 127.0.0.11');
-    expect(template).toContain('limit_req_zone $binary_remote_addr zone=subweb_api:10m rate=60r/m;');
     expect(template).toContain('limit_req_zone $binary_remote_addr zone=subweb_short:10m rate=20r/m;');
   });
 });

@@ -87,7 +87,7 @@ describe('home workspace layout', () => {
     expect(source).toContain('--surface-glass');
     expect(source).toContain('--surface-control');
     expect(source).toContain('--focus-ring');
-    expect(source).toContain('--el-bg-color');
+    expect(source).not.toContain('--el-bg-color');
     expect(source).not.toContain('radial-gradient');
     expect(source).toMatch(/body::before\s*\{[\s\S]*?linear-gradient/);
     expect((source.match(/linear-gradient/g) ?? []).length).toBeGreaterThanOrEqual(3);

@@ -30,6 +30,8 @@
 </template>
 
 <script>
+import { closeDialog, dialogState } from './index.js';
+
 const TONE_SYMBOLS = {
   error: '×',
   info: 'i',
@@ -41,7 +43,7 @@ export default {
   name: 'DialogView',
   computed: {
     dialog() {
-      return this.$store.state.app.dialog;
+      return dialogState;
     },
     toneSymbol() {
       return TONE_SYMBOLS[this.dialog.tone] || TONE_SYMBOLS.info;
@@ -49,7 +51,7 @@ export default {
   },
   methods: {
     closeDialog() {
-      this.$store.commit('SET_DIALOG_CLOSE');
+      closeDialog();
     },
     confirmDialog() {
       const callback = this.dialog.callbackFunction;

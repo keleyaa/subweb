@@ -6,7 +6,7 @@ Docker：
 
 ```sh
 docker compose ps
-docker compose logs --tail=200 gateway myurls subconverter redis
+docker compose logs --tail=200 gateway myurls-app myurls-short subconverter redis
 docker compose config --services
 ```
 
@@ -19,7 +19,7 @@ tail -n 200 .runtime/local/logs/nginx.log
 
 Docker 服务和 Gateway 镜像统一使用 `Asia/Shanghai`。Gateway 与 MyUrls 访问日志只记录 ISO 8601
 时间、方法、隐私安全的路由模板和状态码；真实短码统一显示为 `/:shortKey`，不记录
-Query、请求体、Authorization、IP 或 User-Agent。Compose 默认跟随 MyUrls 的稳定 `latest`；访问日志由
+Query、请求体、Authorization、IP 或 User-Agent。Compose 默认使用锁定的 MyUrls v2 manifest；访问日志由
 MyUrls 写入 stdout，并由 Docker `json-file` 驱动统一轮转。需要审计特定版本时，应在 `.env` 中显式指定
 已验证镜像，并始终限制 Docker 管理权限。
 
@@ -59,7 +59,7 @@ docker compose up -d --no-build --force-recreate subconverter
 docker compose logs --tail=100 subconverter
 ```
 
-本机源码模式的历史文件是 `.runtime/local/logs/subconverter.log`。停止本机栈后，确认凭据已轮换、无需保留
+Compose-first 本地模式不下载上游源码，也不生成独立日志文件。停止本机栈后，确认凭据已轮换、无需保留
 诊断证据时再清空该单个文件；不要删除 `.runtime/local/redis` 或整个 `.runtime/local/` 目录。任何已上传到
 日志平台、备份系统或工单的旧副本都需要在对应系统中单独清除。
 
@@ -79,6 +79,23 @@ chmod 700 .runtime/redis-backups
 备份通过容器内环境认证，不把 Redis 密码放入宿主机命令参数或输出。校验使用锁文件中的 Redis digest，在无网络、只读容器中运行 `redis-check-rdb`。
 
 脚本确认 Redis healthy，执行同步 `SAVE`，把 RDB 原子移动到权限 `0600` 的目标，并输出路径与 SHA-256。仍应在隔离的临时全栈中验证随机测试短码，且不输出 key/value。
+
+## 历史短链迁移
+
+D1 已批准采用 `cap-90d`：迁移后的 TTL 为旧 key 剩余 TTL 与 90 天的较小值。生产迁移必须在维护窗口执行，
+显式停写并指定已通过校验的 RDB 备份；脚本只复制到 `myurl:link:{code}`，不删除旧 key，也不覆盖已有 v2 key：
+
+```sh
+./scripts/operations/inventory-myurls-v1.sh
+./scripts/operations/migrate-myurls-v1.sh \
+  --ttl-policy cap-90d \
+  --apply \
+  --confirm-stop-writes \
+  --backup "$PWD/.runtime/redis-backups/pre-myurls-v2-migration.rdb"
+```
+
+迁移输出中的 `destination_conflicts`、`write_failures` 必须为 `0`；`missing_expiry` 和
+`invalid_values_skipped` 必须由维护者确认。完成后抽样检查旧短码跳转和新 key TTL，再启动写入口。
 
 
 ## 恢复
@@ -139,12 +156,12 @@ SubConverter 镜像更新后必须重建运行时卷 `subconverter-runtime`（`d
   --confirm-redis-major
 ```
 
-MyUrls 与 SubConverter 属于独立上游：先在各自边界验证，再更新本仓库锁文件的已验证基线。所有运行时镜像默认跟随各自 `latest`；未发布的本地 commit 不能当作远端可拉取镜像。需要冻结某个镜像时使用 `.env` 的 `MYURLS_IMAGE`/`SUBWEB_IMAGE` 覆盖。
+MyUrls 与 SubConverter 属于独立上游：先在各自边界验证，再更新本仓库锁文件的已验证基线。MyUrls 使用 semver + digest；未发布的本地 commit 不能当作远端可拉取镜像。需要冻结某个镜像时使用 `.env` 的 `MYURLS_IMAGE`/`SUBWEB_IMAGE` 覆盖。
 
 ## 常见故障
 
 - 页面健康但转换失败：区分 gateway、SubConverter、远程配置和订阅源，按浏览器 Network 状态码定位。
-- 短链创建失败但跳转正常：检查 `/short-api/short` 路由、Token 两端一致性和 MyUrls 日志，不输出 Token。
+- 短链创建失败但跳转正常：检查 `/short-api/v1/links` 路由、Turnstile 状态和 MyUrls 日志，不输出 token。
 - 重启后短码丢失：确认没有删除/更换 `redis-data` 卷，检查 Compose project name 和恢复记录。
 - 外层代理 502：先从主机用正确 Host 请求 loopback health，再核对 upstream 和防火墙。
 - 磁盘告警：先检查 Docker volume、镜像和日志占用；不要在未确认目标时运行广泛删除命令。

@@ -1,7 +1,7 @@
 # SubConverter-Extended 容器契约基线
 
 本目录记录 Subweb 集成实际使用并已验证的容器契约与安全配置。生产 Compose 跟随
-`ghcr.io/aethersailor/subconverter-extended:latest` 浮动标签，集成测试同样跑 latest；
+`ghcr.io/aethersailor/subconverter-extended:v1.2.0` 及其 manifest digest，集成测试使用同一锁定工件；
 [`../versions.lock.json`](../versions.lock.json) 保留已验证基线作为回滚参考与
 `verify:locks` 校验的机器可读依据。需要冻结版本时在 `.env` 设置
 `SUBCONVERTER_IMAGE`（可指向锁文件中的 digest）。
@@ -43,7 +43,7 @@ SUBCONVERTER_ALLOW_PUBLIC_UPLOAD=false
 `no-new-privileges:true`。
 
 `subconverter-runtime` 只是可重建的镜像运行时副本，不是 Redis 那类业务持久数据，
-部署不得依赖其中保存业务状态。跟随 `latest` 升级镜像后，Docker 不会把新镜像的
+部署不得依赖其中保存业务状态。升级锁定镜像后，Docker 不会把新镜像的
 `/base` 复制进已有卷，因此升级后需先删除旧卷（如 `docker compose down` 后
 `docker volume rm subweb_subconverter-runtime`）让新镜像重新填充 `/base`；确认新版本
 验证通过后再执行，并保留旧卷直到确认无需回滚。

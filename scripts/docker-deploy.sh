@@ -12,6 +12,8 @@ fail() {
 app_domain=
 api_domain=
 short_domain=
+turnstile_site_key=
+turnstile_secret_key=
 trusted_proxy_cidr=
 trusted_proxy_cidr_seen=0
 image=docker.io/keleyaa/subweb:latest
@@ -32,6 +34,16 @@ while [ "$#" -gt 0 ]; do
     --short-domain)
       [ "$#" -ge 2 ] || fail '--short-domain requires a value.'
       short_domain=$2
+      shift 2
+      ;;
+    --turnstile-site-key)
+      [ "$#" -ge 2 ] || fail '--turnstile-site-key requires a value.'
+      turnstile_site_key=$2
+      shift 2
+      ;;
+    --turnstile-secret-key)
+      [ "$#" -ge 2 ] || fail '--turnstile-secret-key requires a value.'
+      turnstile_secret_key=$2
       shift 2
       ;;
     --trusted-proxy-cidr)
@@ -62,6 +74,8 @@ if [ "$trusted_proxy_cidr_seen" -eq 1 ]; then
     --app-domain "$app_domain" \
     --api-domain "$api_domain" \
     --short-domain "$short_domain" \
+    --turnstile-site-key "$turnstile_site_key" \
+    --turnstile-secret-key "$turnstile_secret_key" \
     --trusted-proxy-cidr "$trusted_proxy_cidr" \
     --subweb-image "$image"
 else
@@ -69,6 +83,8 @@ else
     --app-domain "$app_domain" \
     --api-domain "$api_domain" \
     --short-domain "$short_domain" \
+    --turnstile-site-key "$turnstile_site_key" \
+    --turnstile-secret-key "$turnstile_secret_key" \
     --subweb-image "$image"
 fi
 

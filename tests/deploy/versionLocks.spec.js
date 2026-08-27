@@ -55,7 +55,15 @@ describe('integrated service artifact locks', () => {
 
   it('pins every service to traceable non-prerelease source and image artifacts', () => {
     for (const service of Object.values(lock.services)) {
-      expect(service.source.tag).toEqual(expect.any(String));
+      if (service.source.tag === null) {
+        expect(service.source.release).toMatchObject({
+          kind: 'workflow_dispatch',
+          version: expect.any(String),
+          runId: expect.any(Number),
+        });
+      } else {
+        expect(service.source.tag).toEqual(expect.any(String));
+      }
       expect(service.source.commit).toMatch(commitPattern);
       expect(service.source.prerelease).toBe(false);
 

@@ -8,9 +8,35 @@ fail() {
 
 expectedGateway="gateway"
 
-docker compose config --quiet
+validation_env_file=""
+if [ ! -f .env ]; then
+  validation_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-compose-validation.XXXXXX")
+  chmod 600 "$validation_env_file"
+  trap 'rm -f "$validation_env_file"' EXIT HUP INT TERM
+  {
+    printf '%s\n' \
+      'APP_DOMAIN=app.validation.test' \
+      'API_DOMAIN=api.validation.test' \
+      'API_URL=https://api.validation.test' \
+      'SHORT_DOMAIN=short.validation.test' \
+      'REDIS_PASSWORD=compose-validation-redis-password' \
+      'IP_HASH_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
+      'TURNSTILE_SITE_KEY=compose-validation-site-key' \
+      'TURNSTILE_SECRET_KEY=compose-validation-secret-key'
+  } > "$validation_env_file"
+fi
 
-compose_json=$(docker compose config --format json)
+compose_config() {
+  if [ -n "$validation_env_file" ]; then
+    docker compose --env-file "$validation_env_file" "$@"
+  else
+    docker compose "$@"
+  fi
+}
+
+compose_config config --quiet
+
+compose_json=$(compose_config config --format json)
 printf '%s\n' "$compose_json" | node -e '
 let input = "";
 const expectedGateway = process.argv[1];
@@ -45,7 +71,7 @@ process.stdin.on("end", () => {
     console.error(`Compose validation error: only ${expectedGateway} may publish ports.`);
     process.exitCode = 1;
   }
-  for (const name of ["redis", "myurls", "subconverter"]) {
+  for (const name of ["redis", "myurls-app", "myurls-short", "subconverter"]) {
     if (!services[name]) {
       console.error(`Compose validation error: required internal service ${name} is missing.`);
       process.exitCode = 1;

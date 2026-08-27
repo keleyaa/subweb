@@ -66,10 +66,12 @@ describe('application mount markup', () => {
     expect(appSource).not.toMatch(/\bid=["']app["']/);
   });
 
-  it('keeps the routed view and conditional dialog at the application root', async () => {
+  it('keeps the workspace shell and conditional dialog at the application root', async () => {
     const appSource = await readFile(appUrl, 'utf8');
 
-    expect(appSource).toContain('<router-view />');
-    expect(appSource).toContain('<dialog-view v-if="$store.state.app.dialog.active"></dialog-view>');
+    expect(appSource).toContain('<MainLayout />');
+    expect(appSource).toContain('<DialogView v-if="dialog.active" />');
+    expect(appSource).not.toContain('router-view');
+    expect(appSource).not.toContain('$store');
   });
 });

@@ -31,7 +31,7 @@ case "$*" in
   'compose version') exit 0 ;;
   'compose config --quiet') exit 0 ;;
   'compose config --format json')
-    printf '%s\\n' '{"services":{"gateway":{"ports":[{"published":"18080"}]},"redis":{},"myurls":{},"subconverter":{}}}'
+    printf '%s\\n' '{"services":{"gateway":{"ports":[{"published":"18080"}]},"redis":{},"myurls-app":{},"myurls-short":{},"subconverter":{}}}'
     ;;
   'compose pull') exit "\${DOCKER_PULL_STATUS:-0}" ;;
   'compose up -d --no-build --pull always --wait') exit 0 ;;
@@ -48,6 +48,8 @@ const runDeploy = (root, extraArgs = [], env = {}) =>
     '--app-domain', 'example.com',
     '--api-domain', 'api.example.com',
     '--short-domain', 'short.example.com',
+    '--turnstile-site-key', 'test-site-key',
+    '--turnstile-secret-key', 'test-secret-key',
     ...extraArgs,
   ], {
     cwd: root,

@@ -86,13 +86,13 @@ require_value APP_DOMAIN "${APP_DOMAIN+x}"
 require_value API_DOMAIN "${API_DOMAIN+x}"
 require_value SHORT_DOMAIN "${SHORT_DOMAIN+x}"
 require_value SUBCONVERTER_UPSTREAM "${SUBCONVERTER_UPSTREAM+x}"
-require_value MYURLS_UPSTREAM "${MYURLS_UPSTREAM+x}"
-require_value MYURLS_API_TOKEN "${MYURLS_API_TOKEN+x}"
+require_value MYURLS_APP_UPSTREAM "${MYURLS_APP_UPSTREAM+x}"
+require_value MYURLS_SHORT_UPSTREAM "${MYURLS_SHORT_UPSTREAM+x}"
 require_value MYURLS_MAX_BODY_BYTES "${MYURLS_MAX_BODY_BYTES+x}"
 TRUSTED_PROXY_CIDR=${TRUSTED_PROXY_CIDR:-}
 
 for external_value in "$APP_DOMAIN" "$API_DOMAIN" "$SHORT_DOMAIN" \
-  "$SUBCONVERTER_UPSTREAM" "$MYURLS_UPSTREAM" "$MYURLS_API_TOKEN" \
+  "$SUBCONVERTER_UPSTREAM" "$MYURLS_APP_UPSTREAM" "$MYURLS_SHORT_UPSTREAM" \
   "$MYURLS_MAX_BODY_BYTES" "$TRUSTED_PROXY_CIDR"; do
   reject_control_characters "$external_value" \
     || fail '网关环境变量不能包含换行或回车'
@@ -151,15 +151,12 @@ normalized_short=$(printf '%s' "$SHORT_DOMAIN" | tr '[:upper:]' '[:lower:]')
 [ "$normalized_api" != "$normalized_short" ] || fail 'API_DOMAIN 和 SHORT_DOMAIN 不能相同'
 
 validate_upstream "$SUBCONVERTER_UPSTREAM" || fail 'SUBCONVERTER_UPSTREAM 必须是无路径的 http:// 私网主机和端口'
-validate_upstream "$MYURLS_UPSTREAM" || fail 'MYURLS_UPSTREAM 必须是无路径的 http:// 私网主机和端口'
-[ "${#MYURLS_API_TOKEN}" -ge 32 ] && [ "${#MYURLS_API_TOKEN}" -le 256 ] \
-  || fail 'MYURLS_API_TOKEN 格式无效'
-printf '%s\n' "$MYURLS_API_TOKEN" | grep -Eq '^[A-Za-z0-9._~-]+$' \
-  || fail 'MYURLS_API_TOKEN 格式无效'
+validate_upstream "$MYURLS_APP_UPSTREAM" || fail 'MYURLS_APP_UPSTREAM 必须是无路径的 http:// 私网主机和端口'
+validate_upstream "$MYURLS_SHORT_UPSTREAM" || fail 'MYURLS_SHORT_UPSTREAM 必须是无路径的 http:// 私网主机和端口'
 printf '%s\n' "$MYURLS_MAX_BODY_BYTES" | grep -Eq '^[0-9]+$' \
   || fail 'MYURLS_MAX_BODY_BYTES 必须为十进制字节数'
-[ "$MYURLS_MAX_BODY_BYTES" -ge 1 ] 2>/dev/null && [ "$MYURLS_MAX_BODY_BYTES" -le 16777216 ] \
-  || fail 'MYURLS_MAX_BODY_BYTES 必须在 1 到 16777216 之间'
+[ "$MYURLS_MAX_BODY_BYTES" -ge 1 ] 2>/dev/null && [ "$MYURLS_MAX_BODY_BYTES" -le 16384 ] \
+  || fail 'MYURLS_MAX_BODY_BYTES 必须在 1 到 16384 之间'
 [ -z "$TRUSTED_PROXY_CIDR" ] || validate_ipv4_cidr "$TRUSTED_PROXY_CIDR" \
   || fail 'TRUSTED_PROXY_CIDR 必须是单个 IPv4 CIDR，例如 172.18.0.1/32'
 
@@ -192,6 +189,7 @@ umask 077
 temp_dir=$(mktemp -d "$output_dir/.gateway-render.XXXXXX") \
   || fail '无法创建私有网关渲染目录'
 app_expanded="$temp_dir/app.conf"
+app_proxy_expanded="$temp_dir/app-proxy.conf"
 api_expanded="$temp_dir/api.conf"
 short_expanded="$temp_dir/short.conf"
 assembled="$temp_dir/assembled.conf"
@@ -209,7 +207,7 @@ else
 fi
 
 cleanup() {
-  rm -f "$rendered_config" "$app_expanded" "$api_expanded" "$short_expanded" "$short_server" "$assembled" "$trusted_proxy"
+  rm -f "$rendered_config" "$app_expanded" "$app_proxy_expanded" "$api_expanded" "$short_expanded" "$short_server" "$assembled" "$trusted_proxy"
   rm -f "$app_expanded.security" "$api_expanded.security" "$short_expanded.security"
   rmdir "$temp_dir" 2>/dev/null || true
 }
@@ -231,7 +229,8 @@ expand_proxy_marker() {
   ' "$source_file" | sed "s|@@PUBLIC_HOST@@|$public_host_marker|g" > "$destination"
 }
 
-expand_proxy_marker "$app" '@@APP_PROXY_HEADERS@@' '@@APP_DOMAIN@@' "$app_expanded"
+expand_proxy_marker "$app" '@@APP_PROXY_HEADERS@@' '@@APP_DOMAIN@@' "$app_proxy_expanded"
+expand_proxy_marker "$app_proxy_expanded" '@@MYURLS_PROXY_HEADERS@@' '@@SHORT_DOMAIN@@' "$app_expanded"
 expand_proxy_marker "$api" '@@API_PROXY_HEADERS@@' '@@API_DOMAIN@@' "$api_expanded"
 expand_proxy_marker "$short_routes" '@@SHORT_PROXY_HEADERS@@' '@@SHORT_DOMAIN@@' "$short_expanded"
 
@@ -260,7 +259,6 @@ expand_security_marker "$short_expanded" "$short_expanded.security"
 short_server="$temp_dir/short-server.conf"
 {
   printf '%s\n' '  server {' '    listen 8080;' "    server_name $SHORT_DOMAIN;"
-  cat "$security"
   cat "$short_expanded.security"
   printf '%s\n' '  }'
 } > "$short_server"
@@ -286,8 +284,8 @@ sed \
   -e "s|@@SHORT_DOMAIN@@|$SHORT_DOMAIN|g" \
   -e "s|@@PUBLIC_SCHEME@@|$public_scheme|g" \
   -e "s|@@SUBCONVERTER_UPSTREAM@@|$SUBCONVERTER_UPSTREAM|g" \
-  -e "s|@@MYURLS_UPSTREAM@@|$MYURLS_UPSTREAM|g" \
-  -e "s|@@MYURLS_API_TOKEN@@|$MYURLS_API_TOKEN|g" \
+  -e "s|@@MYURLS_APP_UPSTREAM@@|$MYURLS_APP_UPSTREAM|g" \
+  -e "s|@@MYURLS_SHORT_UPSTREAM@@|$MYURLS_SHORT_UPSTREAM|g" \
   -e "s|@@MYURLS_MAX_BODY_BYTES@@|$MYURLS_MAX_BODY_BYTES|g" \
   -e "s|@@NGINX_RESOLVER@@|$nginx_resolver|g" \
   "$assembled" > "$rendered_config"

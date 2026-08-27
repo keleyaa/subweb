@@ -13,11 +13,13 @@
     "npm": ">=11.0.0"
   },
   "scripts": {
+    "dev": "./scripts/local/start.sh",
+    "dev:status": "./scripts/local/status.sh",
+    "dev:stop": "./scripts/local/stop.sh",
     "serve": "vite",
     "preview": "vite preview",
     "build": "vite build",
     "lint": "eslint src tests scripts vite.config.mjs eslint.config.js playwright.config.js",
-    "lint:p1-04a": "eslint src/views/home/index.js src/network/index.js",
     "test": "vitest run --maxWorkers=1",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -25,6 +27,7 @@
     "verify:container": "./scripts/verify-container.sh subweb:ci",
     "verify:integration": "./scripts/verify-integrated-stack.sh",
     "verify:operations": "./scripts/verify-redis-operations.sh",
+    "verify:local": "./scripts/verify-local-dev.sh",
     "verify:locks": "node scripts/verify-version-locks.mjs",
     "verify:docs": "node scripts/verify-docs.mjs",
     "verify:evidence": "node scripts/verify-evidence.mjs",
@@ -32,11 +35,7 @@
     "verify": "npm test && npm run lint && npm run build"
   },
   "dependencies": {
-    "axios": "1.19.0",
-    "element-plus": "2.14.3",
-    "vue": "3.5.40",
-    "vue-router": "4.6.4",
-    "vuex": "4.1.0"
+    "vue": "3.5.40"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -121,7 +121,7 @@ describe('documentation contract', () => {
       expect(document).toContain('git clone https://github.com/keleyaa/subweb.git');
       expect(document).toContain('cd subweb');
     }
-    for (const command of ['bootstrap.sh', 'start.sh', 'status.sh', 'stop.sh']) expect(local).toContain(command);
+    for (const command of ['npm run dev', 'npm run dev:status', 'npm run dev:stop', 'npm run verify:local']) expect(local).toContain(command);
     for (const command of [
       'docker-deploy.sh',
       'configure.sh',
@@ -136,7 +136,7 @@ describe('documentation contract', () => {
     }
     expect(docker).toContain('不要直接执行 `cat .env`');
     expect(docker).toContain('无需手动填写');
-    expect(local).toContain('http://127.0.0.1:18080/');
+    expect(local).toContain('http://127.0.0.1:5173/');
     expect(local).toContain('不要在其他项目目录执行');
     for (const ignored of ['.env', '.runtime/', 'dist/', 'test-results/']) expect(maintenance).toContain(ignored);
   });

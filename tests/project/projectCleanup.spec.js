@@ -68,11 +68,10 @@ describe('project cleanup and independent-maintenance boundary', () => {
   });
 
   it('keeps only active frontend tooling and records the public maintenance docs', async () => {
-    const [packageSource, viteConfig, appSource, routerSource, homeViewSource] = await Promise.all([
+    const [packageSource, viteConfig, appSource, homeViewSource] = await Promise.all([
       readFile(rootFile('package.json'), 'utf8'),
       readFile(rootFile('vite.config.mjs'), 'utf8'),
       readFile(rootFile('src/App.vue'), 'utf8'),
-      readFile(rootFile('src/router/index.js'), 'utf8'),
       readFile(rootFile('src/views/home/HomeView.vue'), 'utf8'),
     ]);
     const packageJson = JSON.parse(packageSource);
@@ -97,8 +96,11 @@ describe('project cleanup and independent-maintenance boundary', () => {
     expect(viteConfig).not.toContain('ElementPlusResolver');
     expect(appSource).not.toContain('assets/vendor');
     expect(appSource).not.toContain('element-plus/theme-chalk/index.css');
-    expect(routerSource).toContain("name: 'workspace'");
-    expect(routerSource).not.toContain("name: 'LayoutView'");
+    await expect(access(rootFile('src/router/index.js'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(access(rootFile('src/store/index.js'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(packageJson.dependencies).not.toHaveProperty('vue-router');
+    expect(packageJson.dependencies).not.toHaveProperty('vuex');
+    expect(packageJson.dependencies).not.toHaveProperty('axios');
     expect(homeViewSource).toContain("name: 'HomeView'");
     expect(homeViewSource).not.toContain('SubconverterView');
 

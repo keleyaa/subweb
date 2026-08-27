@@ -48,7 +48,7 @@ jobs:
         run: npm run verify:docs && npm run verify:evidence
 
       - name: Create temporary Compose configuration
-        run: ./scripts/configure.sh --app-domain app.test --api-domain api.app.test --short-domain short.app.test
+        run: ./scripts/configure.sh --app-domain app.test --api-domain api.app.test --short-domain short.app.test --turnstile-site-key test-site-key --turnstile-secret-key test-secret-key
 
       - name: Validate Compose
         run: npm run verify:compose
@@ -59,29 +59,23 @@ jobs:
       - name: Verify container runtime
         run: npm run verify:container
 
-      # Resolve runtime defaults once so integration tests and vulnerability
-      # scans inspect the same artifacts while Redis stays on its stable 8 line.
-      # MyUrls and SubConverter-Extended continue following latest.
+      # Export the exact locked artifacts so integration and vulnerability
+      # scans inspect the same images as production defaults.
       - name: Resolve external runtime images
         shell: bash
         run: |
-          resolve_image() {
-            local variable="$1"
-            local reference="$2"
-            local repository="${reference%:*}"
-            local repo_digest digest
-            docker pull "$reference" >/dev/null
-            repo_digest="$(docker image inspect "$reference" --format '{{index .RepoDigests 0}}')"
-            digest="${repo_digest##*@}"
-            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
-              echo "Unable to resolve a digest for ${reference}" >&2
-              exit 1
-            }
-            echo "${variable}=${repository}@${digest}" >> "$GITHUB_ENV"
+          node <<'NODE' >> "$GITHUB_ENV"
+          const fs = require('node:fs');
+          const lock = JSON.parse(fs.readFileSync('deploy/versions.lock.json', 'utf8'));
+          for (const [variable, service] of [
+            ['REDIS_IMAGE', 'redis'],
+            ['SUBCONVERTER_IMAGE', 'subconverter'],
+            ['MYURLS_IMAGE', 'myurls'],
+          ]) {
+            const image = lock.services[service].image;
+            console.log(`${variable}=${image.reference}@${image.digest}`);
           }
-          resolve_image REDIS_IMAGE docker.io/library/redis:8-alpine
-          resolve_image SUBCONVERTER_IMAGE ghcr.io/aethersailor/subconverter-extended:latest
-          resolve_image MYURLS_IMAGE ghcr.io/keleyaa/myurls:latest
+          NODE
 
       - name: Verify integrated HTTP stack
         run: npm run verify:integration

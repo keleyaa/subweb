@@ -132,19 +132,19 @@ describe('SubTable modern linear layout', () => {
     expect(source).toContain(':disabled="isGeneratingShortUrl || isShortCopying"');
     expect(source).not.toContain('shareSubscription');
     expect(source).not.toContain('import { shareUrl }');
-    expect(source).toContain('hasShortUrlService()');
+    expect(source).toContain('createShortLinkWorkflow({');
+    expect(source).toContain('<TurnstileChallenge');
   });
 
   it('guards short-link responses with the input captured when the request began', () => {
     const source = readFileSync(componentPath, 'utf8');
-    const shortUrlMethod = source.slice(source.indexOf('async getShortUrl()'), source.indexOf('\n    },\n  },\n};'));
+    const shortUrlMethod = source.slice(source.indexOf('async getShortUrl(challengeToken)'), source.indexOf('retryShortLink(token)'));
 
     expect(shortUrlMethod).toContain('const requestConversionKey = this.result.conversionKey;');
-    expect(shortUrlMethod).toContain('new URLSearchParams()');
-    expect(shortUrlMethod).not.toContain('new FormData()');
-    expect(shortUrlMethod).toMatch(
-      /if \(!matchesConversionInput\(requestConversionKey, this\.conversionInput\)\) \{\s*return;\s*\}[\s\S]*?this\.result\.shortUrl = res\.data\.ShortUrl;[\s\S]*?this\.result\.shortUrlConversionKey = requestConversionKey;/
-    );
+    expect(shortUrlMethod).toContain('isCurrent: (conversionKey) => matchesConversionInput');
+    expect(shortUrlMethod).toContain("if (outcome.kind === 'stale') return;");
+    expect(shortUrlMethod).toContain('this.result.shortUrl = outcome.result.shortUrl;');
+    expect(shortUrlMethod).toContain('this.result.shortUrlConversionKey = requestConversionKey;');
   });
 
   it('does not report generated links as copied before a copy operation succeeds', () => {

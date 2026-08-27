@@ -19,6 +19,29 @@ x-runtime-security: &runtime-security
   stop_grace_period: 10s
   logging: *runtime-logging
 
+x-myurls-common: &myurls-common
+  <<: *runtime-security
+  user: "node"
+  depends_on:
+    redis:
+      condition: service_healthy
+      restart: true
+  tmpfs:
+    - /tmp:uid=1000,gid=1000,mode=0700,noexec,nosuid,size=16m
+  stop_grace_period: 20s
+  healthcheck:
+    test:
+      - CMD
+      - node
+      - -e
+      - >-
+        fetch('http://127.0.0.1:3000/health/live').then((response) =>
+        process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 10s
+
 x-gateway-common: &gateway-common
   <<: *runtime-security
   build:
@@ -28,17 +51,21 @@ x-gateway-common: &gateway-common
   environment: &gateway-environment
     <<: *runtime-environment
     API_URL: "${API_URL:?Set API_URL with scripts/configure.sh}"
-    SHORT_URL: "${SHORT_URL:?Set SHORT_URL with scripts/configure.sh}"
     APP_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
     API_DOMAIN: "${API_DOMAIN:?Set API_DOMAIN with scripts/configure.sh}"
     SHORT_DOMAIN: "${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
     TRUSTED_PROXY_CIDR: "${TRUSTED_PROXY_CIDR:-}"
     SUBCONVERTER_UPSTREAM: http://subconverter:25500
-    MYURLS_UPSTREAM: http://myurls:8080
-    MYURLS_API_TOKEN: "${MYURLS_API_TOKEN:?Set MYURLS_API_TOKEN with scripts/configure.sh}"
-    MYURLS_MAX_BODY_BYTES: "1048576"
+    # These aliases exist only on myurls-edge, so Gateway cannot accidentally
+    # reach MyUrls through the default network and lose the trusted source IP.
+    MYURLS_APP_UPSTREAM: http://myurls-app-edge:3000
+    MYURLS_SHORT_UPSTREAM: http://myurls-short-edge:3000
+    MYURLS_MAX_BODY_BYTES: "16384"
   depends_on:
-    myurls:
+    myurls-app:
+      condition: service_healthy
+      restart: true
+    myurls-short:
       condition: service_healthy
       restart: true
     subconverter:
@@ -47,6 +74,10 @@ x-gateway-common: &gateway-common
   tmpfs:
     - /tmp:uid=101,gid=101,mode=0700
     - /usr/share/nginx/html/conf:uid=101,gid=101,mode=0700
+  networks:
+    default: {}
+    myurls-edge:
+      ipv4_address: "${MYURLS_GATEWAY_IP:-172.30.255.2}"
   healthcheck:
     test:
       - CMD-SHELL
@@ -60,7 +91,7 @@ x-gateway-common: &gateway-common
 services:
   redis:
     <<: *runtime-security
-    image: "${REDIS_IMAGE:-docker.io/library/redis:8-alpine}"
+    image: "${REDIS_IMAGE:-docker.io/library/redis:8.10.0@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241}"
     user: "999:1000"
     environment:
       <<: *runtime-environment
@@ -90,44 +121,79 @@ services:
       retries: 5
       start_period: 10s
 
-  myurls:
-    <<: *runtime-security
-    # Follows MyUrls stable releases by default (documented supply-chain
-    # exception, see docs/security.md); pin MYURLS_IMAGE to an immutable
-    # tag/digest for reproducible production rollbacks.
-    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:latest}"
-    user: "65532:65532"
+  myurls-app:
+    <<: *myurls-common
+    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.1@sha256:82cb79bb62113c763e9aab33f2d307223d2302d2c76d1679307d75919b28b847}"
     environment:
       <<: *runtime-environment
-      MYURLS_PORT: "8080"
-      MYURLS_DOMAIN: "${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
-      MYURLS_PROTO: https
-      MYURLS_REDIS_CONN: redis:6379
-      MYURLS_REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
-      MYURLS_API_TOKEN: "${MYURLS_API_TOKEN:?Set MYURLS_API_TOKEN with scripts/configure.sh}"
-      MYURLS_RATE_LIMIT_RPS: "5"
-      MYURLS_RATE_LIMIT_BURST: "10"
-      MYURLS_MAX_BODY_BYTES: "1048576"
-    depends_on:
-      redis:
-        condition: service_healthy
-        restart: true
-    stop_grace_period: 20s
-    healthcheck:
-      test:
-        - CMD
-        - /app/myurls
-        - -healthcheck
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      NODE_ENV: production
+      APP_PORT: "3000"
+      # Both instances return the dedicated short-link origin in created links.
+      PUBLIC_BASE_URL: "https://${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
+      REDIS_URL: redis://redis:6379/0
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
+      IP_HASH_SECRET: "${IP_HASH_SECRET:?Set IP_HASH_SECRET with scripts/configure.sh}"
+      TRUST_PROXY_CIDRS: "${MYURLS_TRUST_PROXY_CIDR:-172.30.255.2/32}"
+      TURNSTILE_ENABLED: "true"
+      TURNSTILE_MODE: cloudflare
+      TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY:?Set TURNSTILE_SITE_KEY with scripts/configure.sh}"
+      TURNSTILE_SECRET_KEY: "${TURNSTILE_SECRET_KEY:?Set TURNSTILE_SECRET_KEY with scripts/configure.sh}"
+      CREATE_DIRECT_LIMIT_10M: "5"
+      CREATE_HARD_LIMIT_10M: "20"
+      CREATE_HARD_LIMIT_1D: "100"
+      RISK_CHALLENGE_SCORE: "3"
+      RISK_BLOCK_SCORE: "8"
+      REDIS_TIMEOUT_MS: "750"
+      TURNSTILE_TIMEOUT_MS: "2500"
+      REQUEST_TIMEOUT_MS: "10000"
+      SHUTDOWN_TIMEOUT_MS: "10000"
+      TURNSTILE_HOSTNAME: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
+    networks:
+      default: {}
+      myurls-edge:
+        ipv4_address: "${MYURLS_APP_IP:-172.30.255.3}"
+        aliases:
+          - myurls-app-edge
+
+  myurls-short:
+    <<: *myurls-common
+    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.1@sha256:82cb79bb62113c763e9aab33f2d307223d2302d2c76d1679307d75919b28b847}"
+    environment:
+      <<: *runtime-environment
+      NODE_ENV: production
+      APP_PORT: "3000"
+      # Both instances return the dedicated short-link origin in created links.
+      PUBLIC_BASE_URL: "https://${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
+      REDIS_URL: redis://redis:6379/0
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
+      IP_HASH_SECRET: "${IP_HASH_SECRET:?Set IP_HASH_SECRET with scripts/configure.sh}"
+      TRUST_PROXY_CIDRS: "${MYURLS_TRUST_PROXY_CIDR:-172.30.255.2/32}"
+      TURNSTILE_ENABLED: "true"
+      TURNSTILE_MODE: cloudflare
+      TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY:?Set TURNSTILE_SITE_KEY with scripts/configure.sh}"
+      TURNSTILE_SECRET_KEY: "${TURNSTILE_SECRET_KEY:?Set TURNSTILE_SECRET_KEY with scripts/configure.sh}"
+      CREATE_DIRECT_LIMIT_10M: "5"
+      CREATE_HARD_LIMIT_10M: "20"
+      CREATE_HARD_LIMIT_1D: "100"
+      RISK_CHALLENGE_SCORE: "3"
+      RISK_BLOCK_SCORE: "8"
+      REDIS_TIMEOUT_MS: "750"
+      TURNSTILE_TIMEOUT_MS: "2500"
+      REQUEST_TIMEOUT_MS: "10000"
+      SHUTDOWN_TIMEOUT_MS: "10000"
+      TURNSTILE_HOSTNAME: "${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
+    networks:
+      default: {}
+      myurls-edge:
+        ipv4_address: "${MYURLS_SHORT_IP:-172.30.255.4}"
+        aliases:
+          - myurls-short-edge
 
   subconverter:
     # The pinned upstream process still requires root, while a runtime volume
     # makes /base writable without making the root filesystem writable.
     <<: *runtime-security
-    image: "${SUBCONVERTER_IMAGE:-ghcr.io/aethersailor/subconverter-extended:latest}"
+    image: "${SUBCONVERTER_IMAGE:-ghcr.io/aethersailor/subconverter-extended:v1.2.0@sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f}"
     environment:
       <<: *runtime-environment
       MANAGED_CONFIG_PREFIX: "${API_URL:?Set API_URL with scripts/configure.sh}"
@@ -187,3 +253,10 @@ services:
 volumes:
   redis-data:
   subconverter-runtime:
+
+networks:
+  myurls-edge:
+    internal: true
+    ipam:
+      config:
+        - subnet: "${MYURLS_NETWORK_SUBNET:-172.30.255.0/29}"

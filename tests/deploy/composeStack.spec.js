@@ -18,9 +18,10 @@ const renderCompose = async () => {
   const envPath = join(fixtureDirectory, 'stack.env');
   await writeFile(envPath, [
     'APP_DOMAIN=app.example.com', 'API_DOMAIN=api.example.com', 'API_URL=https://api.example.com',
-    'SHORT_DOMAIN=short.example.com', 'SHORT_URL=https://short.example.com/short-api',
+    'SHORT_DOMAIN=short.example.com',
     'SUBWEB_IMAGE=docker.io/keleyaa/subweb:sha-2bf1a9f', 'SUBWEB_PORT=19080',
-    `MYURLS_API_TOKEN=${testSecret}`, `REDIS_PASSWORD=${testSecret}`, '',
+    `IP_HASH_SECRET=${testSecret}`, `REDIS_PASSWORD=${testSecret}`,
+    'TURNSTILE_SITE_KEY=test-site-key', 'TURNSTILE_SECRET_KEY=test-secret-key', '',
   ].join('\n'));
   const result = spawnSync('docker', ['compose', '-f', composePath, '--env-file', envPath, 'config', '--format', 'json'], { cwd: new URL('../..', import.meta.url).pathname, encoding: 'utf8' });
   expect(result.status, result.stderr).toBe(0);
@@ -34,10 +35,10 @@ const expectHealthBounds = (service) => {
 };
 
 describe('integrated Compose stack', () => {
-  it('renders one gateway and three private services', async () => {
+  it('renders one gateway and four private services', async () => {
     const config = await renderCompose();
-    expect(Object.keys(config.services).sort()).toEqual(['gateway', 'myurls', 'redis', 'subconverter'].sort());
-    for (const name of ['redis', 'myurls', 'subconverter']) {
+    expect(Object.keys(config.services).sort()).toEqual(['gateway', 'myurls-app', 'myurls-short', 'redis', 'subconverter'].sort());
+    for (const name of ['redis', 'myurls-app', 'myurls-short', 'subconverter']) {
       expect(config.services[name].ports).toBeUndefined();
       expect(config.services[name].expose).toBeUndefined();
       expectHealthBounds(config.services[name]);
@@ -60,19 +61,35 @@ describe('integrated Compose stack', () => {
   it('uses stable images, durable Redis, and the maintained service policies', async () => {
     const config = await renderCompose();
     expect(config.services.gateway.image).toBe('docker.io/keleyaa/subweb:sha-2bf1a9f');
-    expect(config.services.redis.image).toBe('docker.io/library/redis:8-alpine');
-    expect(config.services.myurls.image).toBe('ghcr.io/keleyaa/myurls:latest');
-    expect(config.services.subconverter.image).toBe('ghcr.io/aethersailor/subconverter-extended:latest');
+    expect(config.services.redis.image).toBe('docker.io/library/redis:8.10.0@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241');
+    expect(config.services['myurls-app'].image).toBe('ghcr.io/keleyaa/myurls:v2.0.1@sha256:82cb79bb62113c763e9aab33f2d307223d2302d2c76d1679307d75919b28b847');
+    expect(config.services['myurls-short'].image).toBe(config.services['myurls-app'].image);
+    expect(config.services.subconverter.image).toBe('ghcr.io/aethersailor/subconverter-extended:v1.2.0@sha256:75c110016526ab2cf56d3d832aac912001f1497a594a4eefb9d79cd33125167f');
     expect(config.volumes['redis-data']).toBeTruthy();
     expect(config.services.redis.volumes).toContainEqual(expect.objectContaining({ source: 'redis-data', target: '/data', type: 'volume' }));
-    expect(config.services.myurls.environment).toMatchObject({
-      MYURLS_PORT: '8080', MYURLS_DOMAIN: 'short.example.com', MYURLS_PROTO: 'https',
-      MYURLS_REDIS_CONN: 'redis:6379', MYURLS_REDIS_PASSWORD: testSecret,
-      MYURLS_API_TOKEN: testSecret, MYURLS_MAX_BODY_BYTES: '1048576',
+    expect(config.services['myurls-app'].environment).toMatchObject({
+      APP_PORT: '3000', PUBLIC_BASE_URL: 'https://short.example.com',
+      REDIS_URL: 'redis://redis:6379/0', REDIS_PASSWORD: testSecret,
+      IP_HASH_SECRET: testSecret, TRUST_PROXY_CIDRS: '172.30.255.2/32',
+      TURNSTILE_ENABLED: 'true', TURNSTILE_SITE_KEY: 'test-site-key',
+      TURNSTILE_SECRET_KEY: 'test-secret-key', TURNSTILE_HOSTNAME: 'app.example.com',
+    });
+    expect(config.services['myurls-short'].environment).toMatchObject({
+      PUBLIC_BASE_URL: 'https://short.example.com',
+      REDIS_URL: 'redis://redis:6379/0', REDIS_PASSWORD: testSecret,
+      IP_HASH_SECRET: testSecret, TRUST_PROXY_CIDRS: '172.30.255.2/32',
+      TURNSTILE_SITE_KEY: 'test-site-key', TURNSTILE_SECRET_KEY: 'test-secret-key',
+      TURNSTILE_HOSTNAME: 'short.example.com',
     });
     expect(config.services.subconverter.environment).toMatchObject({
       MANAGED_CONFIG_PREFIX: 'https://api.example.com', SUBCONVERTER_SECURITY_PROFILE: 'public', SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: 'false',
     });
+    expect(config.services['myurls-app'].networks['myurls-edge'].ipv4_address).toBe('172.30.255.3');
+    expect(config.services['myurls-short'].networks['myurls-edge'].ipv4_address).toBe('172.30.255.4');
+    expect(config.services['myurls-app'].networks['myurls-edge'].aliases).toEqual(['myurls-app-edge']);
+    expect(config.services['myurls-short'].networks['myurls-edge'].aliases).toEqual(['myurls-short-edge']);
+    expect(config.services.gateway.networks['myurls-edge'].ipv4_address).toBe('172.30.255.2');
+    expect(config.networks['myurls-edge'].internal).toBe(true);
   });
 
   it('configures authenticated durable Redis without exposing its password in commands', async () => {

@@ -12,7 +12,7 @@ describe('focused navigation', () => {
   it('renders the fixed Subconverter Web brand without reading the runtime site name', async () => {
     const source = await readFile(appBrandUrl, 'utf8');
 
-    expect(source).toContain('<router-link to="/" class="app-brand-link" aria-label="Subconverter Web，返回首页">');
+    expect(source).toContain('<a href="/" class="app-brand-link" aria-label="Subconverter Web，返回首页">');
     expect(source).toContain('<span class="app-brand-text">Subconverter Web</span>');
     expect(source).toContain('<span class="app-brand-dot" aria-hidden="true">.</span>');
     expect(source).not.toContain('siteName');

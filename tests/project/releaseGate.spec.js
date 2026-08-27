@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { verifyEvidence } from '../../scripts/verify-evidence.mjs';
 
@@ -18,6 +19,7 @@ describe('release evidence and command gate', () => {
       'stage quality npm run verify',
       'stage browser npm run test:e2e',
       'stage locks npm run verify:locks',
+      'stage production-readiness node scripts/verify-production-readiness.mjs',
       'stage compose npm run verify:compose',
       'stage documentation npm run verify:docs',
       'stage container ./scripts/verify-container.sh subweb:release-check',
@@ -32,6 +34,13 @@ describe('release evidence and command gate', () => {
       previous = current;
     }
     expect(source).toMatch(/^set -eu$/mu);
+  });
+
+  it('accepts production readiness when the locked MyUrls artifact has a stable source tag', () => {
+    const script = path.join(root, 'scripts/verify-production-readiness.mjs');
+    const result = spawnSync(process.execPath, [script], { encoding: 'utf8' });
+    expect(result.status).toBe(0);
+    expect(`${result.stdout}${result.stderr}`).toContain('tag gate passed');
   });
 
   it('publishes one multi-platform release to Docker Hub and GHCR', () => {

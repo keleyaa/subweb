@@ -9,7 +9,7 @@
 - MyUrls 必须在独立 `/Users/li/Desktop/GitHub/MyUrls` 仓库维护，不把其源码、`.git` 或构建产物复制进 Subweb。
 - SubConverter-Extended 使用官方上游锁定产物，不在本仓库做隐式补丁。
 
-来源变化必须同步更新[第三方来源](third-party-sources.md)、锁文件、README 和相关测试；MyUrls 的 `latest` 发行策略也必须同步更新其工作流和部署说明。
+来源变化必须同步更新[第三方来源](third-party-sources.md)、锁文件、README 和相关测试；MyUrls 的 semver + digest 发行策略也必须同步更新其工作流和部署说明。
 
 ## 必须提交与禁止提交
 
@@ -44,7 +44,7 @@ npm run verify:integration
 git diff --check
 ```
 
-本机源码验证还需 `./scripts/verify-local-source.sh`，前提是当前主机已手动安装全部原生依赖。
+本地开发验证使用 `npm run verify:local`；完整 v2 栈使用 `npm run verify:integration` 和 `npm run verify:operations`。
 
 `npm run verify:release` 聚合安装、审计、质量、浏览器、锁、Compose、文档、容器、Redis 运维、单一 HTTP 集成和证据门禁。执行前先用 `./scripts/configure.sh` 生成临时 `.env`；它会重装依赖并运行较长时间，仅在准备发布的干净工作树执行。
 
@@ -52,7 +52,7 @@ git diff --check
 
 主分支的 `docker build release` 工作流以单次 Buildx 构建同时发布 `docker.io/keleyaa/subweb` 与 `ghcr.io/keleyaa/subweb`。`release` 作业只增加 GHCR 所需的 `packages: write`；Docker Hub 使用仓库 Secrets，GHCR 使用 Actions 自动提供的 `GITHUB_TOKEN`，不要为此创建长期 PAT。
 
-两个注册表必须得到相同的 `latest`、日期加提交短 SHA、`sha-*` 标签和 manifest digest。回滚清单同时记录两个 digest 引用。首次创建 GHCR Package 后，维护者需要在 GitHub Package 设置中把可见性设为 Public，并确认未登录环境能够拉取；这是一次性的远端仓库设置，不能仅靠本地测试证明。
+两个注册表必须得到相同的日期加提交短 SHA、`sha-*` 标签和 manifest digest；`latest` 只作为发布平台兼容别名，不作为生产部署输入。回滚清单同时记录两个 digest 引用。首次创建 GHCR Package 后，维护者需要在 GitHub Package 设置中把可见性设为 Public，并确认未登录环境能够拉取；这是一次性的远端仓库设置，不能仅靠本地测试证明。
 
 每次推送后检查 Actions 中 Docker Hub 和 GHCR 的 manifest 推送日志，再分别执行：
 
@@ -65,7 +65,7 @@ docker buildx imagetools inspect ghcr.io/keleyaa/subweb:sha-<提交短 SHA>
 
 ## 锁定更新
 
-外部服务升级先核验正式 tag、commit、manifest digest、amd64/arm64 digest 和许可证，再更新 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 的已验证基线。运行锁校验、对应服务测试和单一 HTTP Docker 集成验证。所有运行时镜像默认跟随各自的 `latest`；升级后注意 subconverter 运行时卷需删除重建（见 [SubConverter README](../deploy/subconverter/README.md)），且不能把本地未发布 commit 写成远端可拉取镜像。
+外部服务升级先核验正式 tag、commit、manifest digest、amd64/arm64 digest 和许可证，再更新 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 的已验证基线。运行锁校验、对应服务测试和单一 HTTP Docker 集成验证。MyUrls 生产镜像固定为 semver + manifest digest；升级后注意 subconverter 运行时卷需删除重建（见 [SubConverter README](../deploy/subconverter/README.md)），且不能把本地未发布 commit 写成远端可拉取镜像。
 
 ## 提交与推送
 

@@ -208,17 +208,6 @@ const prepareConversion = function (input) {
   };
 };
 
-const createShortUrlRequestConfig = function (shortUrl, data) {
-  return {
-    method: 'post',
-    url: createServiceEndpoint(shortUrl, 'short'),
-    data,
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-  };
-};
-
 /**
  * Strict HTTP(S) URL guard retained under its historical public name.
  *
@@ -230,7 +219,6 @@ const regexCheck = function (url) {
 };
 
 export {
-  createShortUrlRequestConfig,
   createConversionInputKey,
   getSubLink,
   hasCurrentConversionResult,

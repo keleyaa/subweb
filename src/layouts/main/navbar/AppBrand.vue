@@ -1,10 +1,10 @@
 <template>
-  <router-link to="/" class="app-brand-link" aria-label="Subconverter Web，返回首页">
+  <a href="/" class="app-brand-link" aria-label="Subconverter Web，返回首页">
     <h1>
       <span class="app-brand-text">Subconverter Web</span>
       <span class="app-brand-dot" aria-hidden="true">.</span>
     </h1>
-  </router-link>
+  </a>
 </template>
 
 <style scoped>

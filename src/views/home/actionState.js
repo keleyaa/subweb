@@ -26,6 +26,7 @@ export function createEmptyResultState() {
   return {
     subUrl: '',
     shortUrl: '',
+    shortUrlExpiresAt: '',
     conversionKey: '',
     shortUrlConversionKey: '',
     subscriptionCopyStatus: COPY_STATUS.IDLE,

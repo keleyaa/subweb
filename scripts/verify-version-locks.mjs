@@ -42,6 +42,13 @@ const isValidSourceTag = (tag) =>
   tagPattern.test(tag) &&
   tag.toLowerCase() !== 'latest';
 
+const isValidWorkflowRelease = (release) =>
+  isRecord(release) &&
+  release.kind === 'workflow_dispatch' &&
+  isValidSourceTag(release.version) &&
+  Number.isSafeInteger(release.runId) &&
+  release.runId > 0;
+
 const containsWhitespaceOrControl = (value) =>
   [...value].some((character) => {
     const codePoint = character.codePointAt(0);
@@ -143,7 +150,7 @@ export function validateVersionLocks(lock) {
       if (typeof source.repository !== 'string' || source.repository === '') {
         errors.push(`${prefix}.source.repository must be non-empty`);
       }
-      if (!isValidSourceTag(source.tag)) {
+      if (!isValidSourceTag(source.tag) && !(source.tag === null && isValidWorkflowRelease(source.release))) {
         errors.push(`${prefix}.source.tag must be a valid non-latest source tag`);
       }
       if (!commitPattern.test(source.commit ?? '')) {

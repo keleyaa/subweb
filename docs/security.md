@@ -1,86 +1,36 @@
 # 安全边界
 
-## 暴露面
+## 请求边界
 
-生产环境只公开 gateway。Docker 固定绑定 loopback HTTP，公网 TLS 和 80/443 由外层反向代理负责；Redis、MyUrls 和 SubConverter 不映射宿主机端口。
+- APP 的 `/short-api/v1/links` 只接受 POST、JSON、空查询参数和精确 APP Origin。
+- Gateway 清除 Authorization、Proxy-Authorization、Cookie 和 Origin 后再转发。
+- SHORT 域透明代理 MyUrls，由 MyUrls 自己校验同源请求、JSON schema、URL 和 Turnstile。
+- API 域只代理 SubConverter，关闭上传能力并保持 `print_debug_info = false`。
 
-gateway 根据 Host 分离应用、API 和短链，并在两个短链创建代理中注入 MyUrls Token。浏览器、`/conf/config.js` 和响应正文都不应包含该 Token、Redis 密码或私网连接串。外层代理必须保留 Host，不应删除项目返回的 CSP、`X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy` 和 `Permissions-Policy`。HSTS 只有在整个域名确定长期使用 HTTPS 后才应由最外层 TLS 入口启用。
+MyUrls 拒绝 loopback、私网和不安全 URL，降低 SSRF 与开放重定向风险。短码和订阅链接都属于
+持有即可访问的数据，不应进入日志、分析系统或公开工单。
 
-Gateway 默认不信任 `X-Forwarded-For`。只有设置精确的 `TRUSTED_PROXY_CIDR` 后，来自该 CIDR 的请求才会通过 Nginx `real_ip` 还原客户端地址，用于 Gateway 限流和传给内部服务的客户端地址。将宽泛网络或不受控来源加入该设置会允许伪造客户端地址，破坏限流与审计边界。
+## 客户端 IP
 
-## CORS 安全策略
+Gateway 到 MyUrls 使用独立内部网络，MyUrls 默认只信任固定 Gateway 地址。Gateway 覆盖而
+不是追加 `X-Forwarded-For` 和 `Forwarded`。外部 `TRUSTED_PROXY_CIDR` 必须是实际
+反代来源，禁止 `0.0.0.0/0`。
 
-三域名部署时，Subweb 前端在 `APP_DOMAIN`，短链 API 在 `SHORT_DOMAIN`，需要 CORS（跨域资源共享）支持；`SHORT_DOMAIN/` 另外提供 MyUrls 的同源前端：
+## 秘密
 
-1. **Origin 验证**：
-   - Gateway 只允许来自 `https://APP_DOMAIN` 的 `/short-api/short` 创建请求
-   - MyUrls 前端的 `/short` 只允许来自 `https://SHORT_DOMAIN` 的同源请求
-   - 其他 Origin 的请求返回 403 Forbidden
-   - 使用 Nginx `map` 指令动态验证 `$http_origin`
+`REDIS_PASSWORD`、`IP_HASH_SECRET` 和 Turnstile secret key 只存在于权限为 0600 的
+`.env` 和容器环境。浏览器运行时配置不包含秘密。不要输出完整环境、Turnstile token、
+长 URL、短码或 Redis key/value。
 
-2. **预检请求（Preflight）**：
-   - 支持 OPTIONS 方法，返回 204 No Content
-   - 响应头包含：
-     - `Access-Control-Allow-Origin: https://APP_DOMAIN`
-     - `Access-Control-Allow-Methods: POST, OPTIONS`
-     - `Access-Control-Allow-Headers: Content-Type`
-     - `Vary: Origin`
+## 生产策略
 
-3. **Content-Type 验证**：
-   - `/short-api/short` 只接受 `application/x-www-form-urlencoded` 或 JSON
-   - `/short` 只接受带 boundary 的 `multipart/form-data`
-   - 其他 Content-Type 返回 415 Unsupported Media Type
+- MyUrls 生产镜像必须使用 semver + manifest digest，禁止 `latest`。
+- `MYURLS_IMAGE` 仅用于经过确认的固定版本回滚。
+- MyUrls、Redis、SubConverter 不发布宿主机端口。
+- Gateway、MyUrls 和 Redis 使用只读根文件系统、最小 capabilities 与日志轮转。
+- 所有服务时区统一为 `Asia/Shanghai`。
 
-4. **限流保护**：
-   - 短链创建：20 请求/分钟/IP（zone=subweb_short，burst=5）
-   - 适用于所有 Origin，包括 `APP_DOMAIN`
+SubConverter 的 `verbose` 与调试日志必须保持关闭；验证脚本使用哨兵确认订阅值、挑战
+token、Redis 密码和 IP 哈希秘密不会出现在服务日志。
 
-**安全考虑**：
-- CORS 是浏览器保护机制，不是服务端访问控制
-- 即使通过 CORS 验证，Gateway 仍然验证并注入 Authorization 头
-- MyUrls Token 从不暴露给前端
-- 拒绝的 CORS 请求仍会消耗服务端资源，因此需要限流保护
-- 外层代理不应移除或修改 CORS 响应头
-
-## APP 短码兼容入口
-
-三域名部署后，`https://APP_DOMAIN/short-api/short` 和 `https://APP_DOMAIN/:key` 仍然可用：
-
-1. **用途**：兼容已经分享的短链，不改变默认三域名部署方式
-2. **新链路**：新短链始终返回 `SHORT_DOMAIN` URL
-3. **部署要求**：不需要单独的端口、证书或配置项，三个域名仍全部反代到同一个 Gateway 回环端口
-
-兼容入口的创建 POST 仍要求精确的 `Origin: https://APP_DOMAIN`，从而阻止跨站 simple request 写入；该入口不返回跨域授权头。
-
-## 敏感数据
-
-- 订阅 URL 可能包含访问凭据。SubConverter 会接收它，创建短链时 MyUrls/Redis 也会保存包含它的长链接。
-- Base64 不是加密。短码是“持有即可访问”的凭据；一旦泄漏，持有者通常可以访问跳转目标。
-- `.env`、`.runtime/`、证书私钥、平台变量、Redis 备份和测试哨兵不得提交或粘贴到公开日志。
-- 网关和后端日志应只记录时间、方法、路由模板、状态和耗时等必要信息，禁止记录完整 query、请求体、Authorization、Redis URL、真实短码、客户端 IP 或 User-Agent。
-- Subweb 不信任 SubConverter 上游的参数白名单脱敏。Docker 与本机源码模式都在 SubConverter 标准输出进入日志前移除完整 URI、`url`/`link` 等请求来源参数和 Authorization 值；即使订阅服务使用非标准 Token 参数名，日志也不应保留可访问的订阅地址。
-- 短链创建接口由 MyUrls 固定启用 `5 RPS/10 burst` 限流；SubConverter 转换接口由网关按来源地址固定启用 `60 RPS/10 burst` 限流，避免公开服务被无限刷请求。已有外层反向代理时，网关看到的来源地址可能是代理地址，应在外层继续配置按真实客户端限流。
-- 生产环境固定使用 `Asia/Shanghai`。运行时从上游默认配置重新生成受控的 SubConverter 偏好文件，强制 `log_level = "warn"`、`print_debug_info = false`，不会复用命名卷中可能开启 verbose 的旧配置。
-- 历史日志不可能由新版本自动追溯脱敏。若旧日志出现真实订阅 URL，先在订阅提供方轮换凭据，再按部署文档删除旧 SubConverter 容器或本机日志；已被导出到备份或第三方日志平台的副本也必须单独处理。
-
-## 主动攻击与滥用边界
-
-- SubConverter 会按用户提交的订阅 URL 和远程配置地址发起外部请求。这是转换功能本身的必要行为，也意味着公开实例存在 SSRF、恶意远程配置、超大响应和外部请求耗尽风险。网关限流不是网络隔离；生产主机应通过防火墙或专用出口限制容器只能访问业务所需的外部网络，不要把内部管理网段暴露给该出口。
-- 短链是设计上的开放重定向服务。任何获得短码的人都可以跳转到保存的目标，且公开创建接口可能被用于钓鱼链接或流量滥用。启用应用层 Token、保留 MyUrls 和网关限流、监控 429/5xx，并在外层代理增加 WAF/域名策略；不要把短链当成访问控制或恶意 URL 检测。
-- 用户可以手动输入后端 API 地址。浏览器会直接向该地址发送订阅内容，因此生产地址只接受 HTTPS；HTTP 仅允许本机 `127.0.0.1` 或 `localhost` 开发服务。使用者仍必须确认地址可信，不要把不受信任的公共 API 作为默认服务。
-
-## 供应链
-
-Gateway、MyUrls 和 SubConverter-Extended 在 Compose 中默认跟随各自 `latest` 浮动标签；Redis 默认使用稳定主线 `docker.io/library/redis:8-alpine`，避免跨主版本漂移。[`deploy/versions.lock.json`](../deploy/versions.lock.json) 保留已验证基线（tag、commit、manifest digest 和平台 digest）——MyUrls 集成测试直接消费其 digest，其余服务作为回滚参考。更新镜像时验证上游发布、许可证、架构摘要、容器健康、集成测试和漏洞扫描，并运行 `npm run verify:integration` 确认无回归；CI 的 trivy 步骤会扫描实际运行时镜像，有 CRITICAL/HIGH 漏洞时发布门禁失败。
-
-跟随 `latest` 意味着供应链不可完全复现，也无法依赖镜像 tag 精确回滚；`redis:8-alpine` 仍会随 Redis 8 补丁版本变化。对公开生产服务，需要受控回滚时应在 `.env` 中通过 `SUBWEB_IMAGE`/`MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE` 指定已验证 digest；SBOM、provenance 和源码 SHA 对应关系可作为定位回滚点的补充。发布流程仍应保留这些产物。SubConverter 镜像更新后必须重建 `subconverter-runtime` 卷（见[部署文档](deployment-docker.md)）。
-
-远程配置由第三方维护，可能继续引用其他规则集。选择预设等于授权转换后端读取这些来源；部署者应定期审查[远程配置来源](remote-config-sources.md)。
-
-## 秘密生命周期
-
-`configure.sh` 首次生成独立 64 位十六进制 MyUrls Token 与 Redis 密码，再次执行默认复用。只有计划停写、备份并同步重建所有消费者时才使用 `--rotate-secrets`。疑似泄漏时：关闭短链创建入口、保存必要的脱敏证据、轮换 Token；若 Redis 凭据泄漏，同时更换密码并检查数据访问范围。远程平台凭据泄漏还需要在平台侧撤销，删除本地文件不能撤销远程秘密。
-
-## 发布前检查
-
-至少验证：内部端口未公开、Host 路由严格、短链创建无 Token 泄漏、日志无订阅哨兵、镜像摘要与锁文件一致、前端产物无秘密/私网路径、Redis 数据有可恢复备份。发现异常时先停止写入，不要用删除卷或强制重建掩盖问题。
+所有服务统一使用 `Asia/Shanghai` 时区。

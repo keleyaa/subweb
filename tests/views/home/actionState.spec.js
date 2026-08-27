@@ -37,6 +37,7 @@ describe('conversion action labels', () => {
     expect(createEmptyResultState()).toEqual({
       subUrl: '',
       shortUrl: '',
+      shortUrlExpiresAt: '',
       conversionKey: '',
       shortUrlConversionKey: '',
       subscriptionCopyStatus: COPY_STATUS.IDLE,

@@ -1,3 +1,5 @@
+import { reactive } from 'vue';
+
 const DIALOG_TONES = Object.freeze({
   default: 'info',
   success: 'success',
@@ -10,6 +12,8 @@ const DIALOG_TONES = Object.freeze({
 });
 
 const isConfirmation = (status) => typeof status === 'string' && status.startsWith('confirm');
+
+export const dialogState = reactive({ active: false });
 
 export const createDialogPayload = function (
   status,
@@ -36,12 +40,11 @@ export const createDialogPayload = function (
 
 const showDialog = function (...args) {
   const payload = createDialogPayload(...args);
-
-  this.$store.commit('SET_DIALOG_ACTIVE', payload);
+  Object.assign(dialogState, payload);
 };
 
 const closeDialog = function () {
-  this.$store.commit('SET_DIALOG_CLOSE');
+  dialogState.active = false;
 };
 
 export { showDialog, closeDialog };

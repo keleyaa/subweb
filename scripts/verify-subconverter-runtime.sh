@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# 检测 "新二进制 + 旧配置" 漂移：SubConverter 镜像跟随 latest 升级后，
+# 检测 "新二进制 + 旧配置" 漂移：SubConverter 镜像更新后，
 # Docker 不会把新镜像的 /base 复制进已有命名卷，运行容器会继续沿用旧卷中的
 # pref.example.toml（模板、profiles、snippets），健康检查不会告警。
 # 本脚本对比镜像自带与运行卷中的 pref.example.toml SHA-256，不一致时以非零退出。

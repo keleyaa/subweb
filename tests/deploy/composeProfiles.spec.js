@@ -9,7 +9,10 @@ const temporaryDirectories = [];
 const validCompose = {
   services: {
     gateway: { ports: [{ target: 8080, published: '18080', host_ip: '127.0.0.1' }] },
-    redis: { image: 'redis' }, myurls: { image: 'myurls' }, subconverter: { image: 'subconverter' },
+    redis: { image: 'redis' },
+    'myurls-app': { image: 'myurls' },
+    'myurls-short': { image: 'myurls' },
+    subconverter: { image: 'subconverter' },
   },
 };
 
@@ -22,8 +25,8 @@ const createFixture = async (composeJson) => {
   await writeFile(dockerPath, `#!/bin/sh
 printf '%s\\n' "$*" >> "$DOCKER_CALL_LOG"
 case "$*" in
-  'compose config --quiet') exit 0 ;;
-  'compose config --format json') cat "$COMPOSE_JSON_FIXTURE" ;;
+  'compose config --quiet' | 'compose --env-file '*" config --quiet") exit 0 ;;
+  'compose config --format json' | 'compose --env-file '*" config --format json") cat "$COMPOSE_JSON_FIXTURE" ;;
   *) exit 91 ;;
 esac
 `);
@@ -36,19 +39,19 @@ esac
 afterEach(async () => { await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true }))); });
 
 describe('single gateway Compose validation', () => {
-  it('validates the fixed gateway without reading profiles', async () => {
+  it('validates the fixed gateway with generated non-secret placeholders when .env is absent', async () => {
     const fixture = await createFixture(validCompose);
     const result = await import('node:child_process').then(({ spawnSync }) => spawnSync('sh', [validatorPath], { cwd: fixture.directory, encoding: 'utf8', env: fixture.env }));
     expect(result.status).toBe(0);
-    expect(await readFile(fixture.env.DOCKER_CALL_LOG, 'utf8')).toBe('compose config --quiet\ncompose config --format json\n');
+    expect(await readFile(fixture.env.DOCKER_CALL_LOG, 'utf8')).toMatch(/^compose --env-file .+ config --quiet\ncompose --env-file .+ config --format json\n$/u);
   });
 
   it.each([
     ['two published gateways', { ...validCompose, services: { ...validCompose.services, debug: { ports: [{ target: 9000, published: '9000' }] } } }],
     ['published internal service', { ...validCompose, services: { ...validCompose.services, redis: { ports: [{ target: 6379, published: '6379' }] } } }],
     ['unapproved published service', { ...validCompose, services: { ...validCompose.services, debug: { ports: [{ target: 9000, published: '9000' }] }, gateway: {} } }],
-    ['missing internal service', { services: { gateway: validCompose.services.gateway, redis: {}, myurls: {} } }],
-    ['missing gateway', { services: { redis: {}, myurls: {}, subconverter: {} } }],
+    ['missing internal service', { services: { gateway: validCompose.services.gateway, redis: {}, 'myurls-app': {} } }],
+    ['missing gateway', { services: { redis: {}, 'myurls-app': {}, 'myurls-short': {}, subconverter: {} } }],
   ])('rejects rendered Compose JSON with %s', async (_name, composeJson) => {
     const fixture = await createFixture(composeJson);
     const result = await import('node:child_process').then(({ spawnSync }) => spawnSync('sh', [validatorPath], { cwd: fixture.directory, encoding: 'utf8', env: fixture.env }));
