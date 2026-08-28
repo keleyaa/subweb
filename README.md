@@ -91,7 +91,7 @@ npm run dev:stop
 - 订阅 URL、请求 query、真实短码、Token、Redis URL 或日志样本；
 - 历史诊断日志的未脱敏副本。
 
-浏览器配置只包含公开 URL 与预设；MyUrls Token 和 Redis 密码留在服务端。公开部署前先阅读[安全边界](docs/security.md)。
+浏览器配置只包含公开 URL 与预设；`TURNSTILE_SECRET_KEY`、Redis 密码和 IP 哈希密钥留在服务端。公开部署前先阅读[安全边界](docs/security.md)。
 
 ## Fork 与来源说明
 
