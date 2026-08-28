@@ -73,7 +73,7 @@ describe('integrated Compose stack', () => {
       IP_HASH_SECRET: testSecret, TRUST_PROXY_CIDRS: '172.30.255.2/32',
       TURNSTILE_ENABLED: 'true', TURNSTILE_SITE_KEY: 'test-site-key',
       TURNSTILE_SECRET_KEY: 'test-secret-key', TURNSTILE_HOSTNAME: 'app.example.com',
-      LOG_LEVEL: 'warn',
+      LOG_LEVEL: 'info',
       RESOLVE_LIMIT_10S: '600',
     });
     expect(config.services['myurls-short'].environment).toMatchObject({
@@ -82,7 +82,7 @@ describe('integrated Compose stack', () => {
       IP_HASH_SECRET: testSecret, TRUST_PROXY_CIDRS: '172.30.255.2/32',
       TURNSTILE_SITE_KEY: 'test-site-key', TURNSTILE_SECRET_KEY: 'test-secret-key',
       TURNSTILE_HOSTNAME: 'short.example.com',
-      LOG_LEVEL: 'warn',
+      LOG_LEVEL: 'info',
       RESOLVE_LIMIT_10S: '600',
     });
     expect(config.services.subconverter.environment).toMatchObject({

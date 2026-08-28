@@ -127,7 +127,7 @@ services:
     environment:
       <<: *runtime-environment
       NODE_ENV: production
-      LOG_LEVEL: "${MYURLS_LOG_LEVEL:-warn}"
+      LOG_LEVEL: "${MYURLS_LOG_LEVEL:-info}"
       APP_PORT: "3000"
       # Both instances return the dedicated short-link origin in created links.
       PUBLIC_BASE_URL: "https://${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
@@ -163,7 +163,7 @@ services:
     environment:
       <<: *runtime-environment
       NODE_ENV: production
-      LOG_LEVEL: "${MYURLS_LOG_LEVEL:-warn}"
+      LOG_LEVEL: "${MYURLS_LOG_LEVEL:-info}"
       APP_PORT: "3000"
       # Both instances return the dedicated short-link origin in created links.
       PUBLIC_BASE_URL: "https://${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"

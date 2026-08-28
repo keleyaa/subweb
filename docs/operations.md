@@ -19,9 +19,8 @@ tail -n 200 .runtime/local/logs/nginx.log
 
 Docker 服务和 Gateway 镜像统一使用 `Asia/Shanghai`。Gateway 与 MyUrls 访问日志只记录 ISO 8601
 时间、方法、隐私安全的路由模板和状态码；真实短码统一显示为 `/:shortKey`，不记录
-Query、请求体、Authorization、IP 或 User-Agent。Compose 默认使用锁定的 MyUrls v2 manifest，并以 `warn`
-级别运行 MyUrls，避免健康检查和普通成功请求淹没故障信号；需要短时排查正常请求时可在 `.env` 设置
-`MYURLS_LOG_LEVEL=info` 后重建两个 MyUrls 容器。访问日志由
+Query、请求体、Authorization、IP 或 User-Agent。Compose 默认以 `info` 级别运行 MyUrls，保留正常请求记录；日志量较大时可在 `.env` 设置
+`MYURLS_LOG_LEVEL=warn` 后重建两个 MyUrls 容器。访问日志由
 MyUrls 写入 stdout，并由 Docker `json-file` 驱动统一轮转。需要审计特定版本时，应在 `.env` 中显式指定
 已验证镜像，并始终限制 Docker 管理权限。
 

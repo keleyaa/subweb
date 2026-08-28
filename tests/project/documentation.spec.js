@@ -174,12 +174,12 @@ describe('documentation contract', () => {
     expect(security).toContain('MYURLS_IMAGE');
   });
 
-  it('keeps the bilingual product story and local visual proof explicit', () => {
+  it('keeps the product story and local visual proof explicit', () => {
     const readme = read('README.md');
 
     for (const text of [
       'Self-hosted subscription delivery',
-      '自托管订阅转换发行栈',
+      '自托管的订阅转换与短链服务',
       'docs/assets/readme/subweb-hero.svg',
       'docs/assets/readme/subweb-architecture.svg',
       'docs/assets/subconverter-web.png',
