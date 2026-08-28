@@ -1,11 +1,11 @@
 # 本地开发
 
 本地开发采用 Vite + Docker Compose：Vite 运行 Subweb，Compose 只运行两个 MyUrls v2 实例、
-SubConverter 和私有 Redis。不再下载或编译 MyUrls/ SubConverter 源码。
+SubConverter 和私有 Redis。不再下载或编译 MyUrls、SubConverter 的源码。
 
 ## 前提
 
-- Node.js 24 与 npm 11
+- Node.js 24 和 npm 11
 - Docker Desktop 和 Docker Compose v2
 - OpenSSL、curl
 
@@ -42,10 +42,10 @@ LOCAL_SUBCONVERTER_PORT=25501 \
 npm run dev
 ```
 
-端口必须互不相同。生成的私有环境位于 `.runtime/local/compose.env`，权限为 0600，
+端口必须互不相同。生成的私有环境位于 `.runtime/local/compose.env`，权限为 `0600`，
 不应提交或直接输出。
 
 ## 验证边界
 
-`npm run verify:local` 验证页面、v2 JSON 创建和 302 跳转。完整 Nginx、挑战和 Redis
+`npm run verify:local` 验证页面、v2 JSON 创建和 302 跳转。完整的 Nginx、挑战和 Redis
 恢复门禁由 `npm run verify:integration` 与 `npm run verify:operations` 覆盖。

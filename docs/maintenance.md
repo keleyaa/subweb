@@ -2,18 +2,18 @@
 
 ## 仓库边界
 
-常规部署从以下命令开始：`git clone https://github.com/keleyaa/subweb.git`，随后 `cd subweb`。
+常规部署从以下命令开始：`git clone https://github.com/keleyaa/subweb.git`，然后执行 `cd subweb`。
 
 - `origin` 只能指向当前维护仓库 [`keleyaa/subweb`](https://github.com/keleyaa/subweb)。
 - `upstream` 仅用于读取 Fork 起点 [`stilleshan/subweb`](https://github.com/stilleshan/subweb)，不得推送。
 - MyUrls 必须在独立 `/Users/li/Desktop/GitHub/MyUrls` 仓库维护，不把其源码、`.git` 或构建产物复制进 Subweb。
 - SubConverter-Extended 使用官方上游锁定产物，不在本仓库做隐式补丁。
 
-来源变化必须同步更新[第三方来源](third-party-sources.md)、锁文件、README 和相关测试；MyUrls 的 semver + digest 发行策略也必须同步更新其工作流和部署说明。
+来源变化必须同步更新 [第三方来源](third-party-sources.md)、锁文件、README 和相关测试；MyUrls 的 semver + digest 发行策略也必须同步更新其工作流和部署说明。
 
 ## 必须提交与禁止提交
 
-文档和测试是项目可运行、可维护的一部分，属于必须提交的文件；`docs/` 与 `tests/` 不能因为“不参与运行时”而整体排除。应提交源码、配置模板、锁文件、部署脚本、工作流、测试和当前文档。
+文档和测试是项目可运行、可维护的一部分，属于必须提交的文件；`docs/` 与 `tests/` 不能因为「不参与运行时」而整体排除。应提交源码、配置模板、锁文件、部署脚本、工作流、测试和当前文档。
 
 以下是本地或生成数据，不提交：
 
@@ -44,14 +44,9 @@ npm run verify:integration
 git diff --check
 ```
 
-`npm run verify:release` 还会聚合镜像安全扫描，检查最终镜像、Redis、SubConverter 和 MyUrls
-的高危与严重漏洞。扫描默认不接受例外；当前仅对 Redis 和 SubConverter 分别使用
-`.trivyignore.redis`、`.trivyignore.subconverter` 中记录的 OpenSSL 例外。升级对应镜像时必须
-重新审查并删除或更新对应文件。
+`npm run verify:release` 会聚合安装、审计、质量、浏览器、锁、Compose、文档、容器、镜像安全、Redis 运维、单一 HTTP 集成和证据门禁，并检查最终镜像、Redis、SubConverter 和 MyUrls 的高危与严重漏洞。扫描默认不接受例外；当前仅对 Redis 和 SubConverter 分别使用 `.trivyignore.redis`、`.trivyignore.subconverter` 中记录的 OpenSSL 例外。升级对应镜像时，必须重新审查并删除或更新对应文件。
 
-本地开发验证使用 `npm run verify:local`；完整 v2 栈使用 `npm run verify:integration` 和 `npm run verify:operations`。
-
-`npm run verify:release` 聚合安装、审计、质量、浏览器、锁、Compose、文档、容器、镜像安全、Redis 运维、单一 HTTP 集成和证据门禁。执行前先用 `./scripts/configure.sh` 生成临时 `.env`；它会重装依赖并运行较长时间，仅在准备发布的干净工作树执行。
+本地开发验证使用 `npm run verify:local`；完整 v2 栈使用 `npm run verify:integration` 和 `npm run verify:operations`。执行 `npm run verify:release` 前，先用 `./scripts/configure.sh` 生成临时 `.env`；该命令会重装依赖并运行较长时间，仅应在准备发布的干净工作树中执行。
 
 ## 容器镜像发行
 
