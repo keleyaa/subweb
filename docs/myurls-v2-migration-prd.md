@@ -1,7 +1,7 @@
 # Subweb 与 MyUrls v2 集成重整 PRD
 
 状态：Implementation complete; production cutover blocked by D2
-基线日期：2026-08-27
+基线日期：2026-08-28
 适用仓库：Subweb `faa2434`、MyUrls `9494ae3`
 
 ## 1. 背景与结论
@@ -11,9 +11,9 @@ MyUrls v1 的运行参数、HTTP 接口、静态资源路径、Redis 键结构�
 不是普通依赖升级，而是一次需要数据决策和回滚能力的跨项目契约迁移。
 
 本次实施已核实 MyUrls v2 的 GHCR multi-platform manifest，并将 Subweb 生产 Compose 固定到
-`v2.0.1@sha256:82cb79bb62113c763e9aab33f2d307223d2302d2c76d1679307d75919b28b847`。
-该版本由上游稳定 Git tag `v2.0.1` 发布，tag 指向源码 commit
-`9494ae325159c072a8727d1b5c188fced40fd2c5`，并已核验 amd64/arm64 manifest digest。
+`v2.0.2@sha256:b76423a5b5f346c27c40cbecb3954409f645f85df462d49577bb14d738d6127b`。
+该版本由上游稳定 Git tag `v2.0.2` 发布，tag 指向源码 commit
+`c86c5d6d7d85eb1c02bfdef73dff489e8a547395`，并已核验 amd64/arm64 manifest digest。
 
 ## 2. 目标
 
@@ -202,7 +202,7 @@ Browser
 - D1：已确定采用保留历史短链的离线复制方案和 `cap-90d`；迁移 TTL 为 `min(旧剩余 TTL, 90 天)`，不删除旧 key。
 - D2：已完成架构落地；APP 与 SHORT 使用独立 MyUrls 实例并分别校验各自 hostname。生产仍需提供真实 Turnstile 凭据。
 - D3：已完成，Gateway 到 MyUrls 使用 `172.30.255.2/32` 独立内部网络信任边界。
-- D4：已完成，上游 `v2.0.1` stable tag 指向锁定源码 commit，GHCR multi-platform manifest 与平台 digest 已固定。
+- D4：已完成，上游 `v2.0.2` stable tag 指向锁定源码 commit，GHCR multi-platform manifest 与平台 digest 已固定。
 - D5：已完成，旧源码构建、Go 本地流程和 v1 前端契约已移除，使用 Compose-first HTTP 联调。
 
 生产切流的剩余前置条件是：提供真实 D2 凭据，随后重跑 `verify:integration`、`verify:operations` 和浏览器门禁。

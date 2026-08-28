@@ -62,7 +62,7 @@ describe('integrated Compose stack', () => {
     const config = await renderCompose();
     expect(config.services.gateway.image).toBe('docker.io/keleyaa/subweb:sha-2bf1a9f');
     expect(config.services.redis.image).toBe('docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5');
-    expect(config.services['myurls-app'].image).toBe('ghcr.io/keleyaa/myurls:v2.0.1@sha256:82cb79bb62113c763e9aab33f2d307223d2302d2c76d1679307d75919b28b847');
+    expect(config.services['myurls-app'].image).toBe('ghcr.io/keleyaa/myurls:v2.0.2@sha256:b76423a5b5f346c27c40cbecb3954409f645f85df462d49577bb14d738d6127b');
     expect(config.services['myurls-short'].image).toBe(config.services['myurls-app'].image);
     expect(config.services.subconverter.image).toBe('ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475');
     expect(config.volumes['redis-data']).toBeTruthy();
@@ -74,6 +74,7 @@ describe('integrated Compose stack', () => {
       TURNSTILE_ENABLED: 'true', TURNSTILE_SITE_KEY: 'test-site-key',
       TURNSTILE_SECRET_KEY: 'test-secret-key', TURNSTILE_HOSTNAME: 'app.example.com',
       LOG_LEVEL: 'warn',
+      RESOLVE_LIMIT_10S: '600',
     });
     expect(config.services['myurls-short'].environment).toMatchObject({
       PUBLIC_BASE_URL: 'https://short.example.com',
@@ -82,6 +83,7 @@ describe('integrated Compose stack', () => {
       TURNSTILE_SITE_KEY: 'test-site-key', TURNSTILE_SECRET_KEY: 'test-secret-key',
       TURNSTILE_HOSTNAME: 'short.example.com',
       LOG_LEVEL: 'warn',
+      RESOLVE_LIMIT_10S: '600',
     });
     expect(config.services.subconverter.environment).toMatchObject({
       MANAGED_CONFIG_PREFIX: 'https://api.example.com', SUBCONVERTER_SECURITY_PROFILE: 'public', SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: 'false',

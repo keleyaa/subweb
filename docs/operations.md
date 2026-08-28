@@ -27,7 +27,7 @@ MyUrls 写入 stdout，并由 Docker `json-file` 驱动统一轮转。需要审�
 
 所有容器的 `json-file` 标准输出日志限制为单文件 10 MB、最多 3 个文件。SubConverter 的输出先经过
 项目内置过滤器：完整 URI、编码后的 `url`/`link` 请求来源和 Authorization 会变为 `[redacted]`；成功的 `/healthz`
-不写 Gateway 访问日志；MyUrls 新版同样抑制成功记录，但失败健康检查保留。
+不写 Gateway 访问日志；Subweb 通过 MyUrls 的 `LOG_LEVEL=warn` 抑制成功记录，但失败健康检查保留。
 健康检查本身必须保留，因为 Compose 启动依赖和 `--wait` 使用其状态。
 
 日志分享前仍应检查并删除 query、订阅 URL、Token、Redis URL 和真实短码。生产环境不要
@@ -128,7 +128,7 @@ D1 已批准采用 `cap-90d`：迁移后的 TTL 为旧 key 剩余 TTL 与 90 天
 
 API、转换请求、短链创建、短码跳转和带 query 的页面均不应被索引。网关为 API 与短链路由返回 `X-Robots-Tag: noindex, nofollow, noarchive`，而 `robots.txt` 只是爬虫提示，不能替代访问控制，也不会消除已泄漏的 URL。
 
-网关转换接口默认限制为每个来源地址每分钟 60 次，短链创建接口限制为每分钟 20 次；MyUrls 内部再限制为每秒 5 次、突发 10 次。出现 429 时先检查外层代理是否把所有用户汇聚成同一个来源地址；确认反代到 Gateway 的实际来源 IPv4 后，用精确 `TRUSTED_PROXY_CIDR` 启用可信的 `X-Forwarded-For`，不要直接关闭内部限流或信任任意来源。
+网关转换接口默认限制为每个来源地址每分钟 60 次，短链创建接口限制为每分钟 20 次；MyUrls 创建接口另有 10 分钟免挑战 5 次、硬上限 20 次及 UTC 日上限 100 次，短链解析默认按 IP 每 10 秒 600 次。出现 429 时先检查外层代理是否把所有用户汇聚成同一个来源地址；确认反代到 Gateway 的实际来源 IPv4 后，用精确 `TRUSTED_PROXY_CIDR` 启用可信的 `X-Forwarded-For`，不要直接关闭内部限流或信任任意来源。
 
 公开文档应只保留可验证的能力、部署方式、安全边界、版本和来源说明。不得把订阅 URL、短链、Token、用户配置、日志样本或请求 query 写入 Schema、sitemap、页面示例、截图或公开工单。
 
