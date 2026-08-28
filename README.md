@@ -37,7 +37,7 @@
 
 ## 部署
 
-Docker Compose 部署需要三个由你控制的域名：应用、API 和短链，例如 `sub.example.com`、`api.example.com`、`short.example.com`。外层 Nginx、OpenResty、宝塔、1Panel 或 Cloudflare Tunnel 应将这三个域名反代到 `http://127.0.0.1:18080`，并处理公网 TLS。
+Docker Compose 部署需要三个由你控制的域名：应用、API 和短链，例如 `sub.example.com`、`api.example.com`、`short.example.com`；也可以参考 `sub.ml1.one`、`api.ml1.one`、`s.ml1.one`。外层 Nginx、OpenResty、宝塔、1Panel 或 Cloudflare Tunnel 应将这三个域名反代到 `http://127.0.0.1:18080`，并处理公网 TLS。
 
 ```sh
 mkdir -p "$HOME/apps" && cd "$HOME/apps"
@@ -90,14 +90,14 @@ MyUrls 默认以 `info` 级别输出正常请求记录；需要降低日志量�
 
 浏览器配置只包含公开 URL 与预设；`TURNSTILE_SECRET_KEY`、Redis 密码和 IP 哈希秘密只留在服务端。公开部署前请阅读[安全边界](docs/security.md)。
 
-## 文档与来源
+## Fork 与来源说明
 
 - [架构说明](docs/architecture.md) · [运行时配置](docs/configuration.md) · [部署索引](docs/deployment.md)
 - [Docker 部署](docs/deployment-docker.md) · [本机源码运行](docs/deployment-local.md) · [运维手册](docs/operations.md)
 - [安全边界](docs/security.md) · [第三方来源与变更边界](docs/third-party-sources.md)
 - [界面设计规范](docs/interface-design.md) · [远程配置来源](docs/remote-config-sources.md) · [维护与发布](docs/maintenance.md)
 
-本仓库 [`keleyaa/subweb`](https://github.com/keleyaa/subweb) 源自 [`stilleshan/subweb`](https://github.com/stilleshan/subweb)，现独立维护。短链服务使用维护者 fork 的 [`keleyaa/MyUrls`](https://github.com/keleyaa/MyUrls)，上游为 [`CareyWang/MyUrls`](https://github.com/CareyWang/MyUrls)；转换服务使用 [`Aethersailor/SubConverter-Extended`](https://github.com/Aethersailor/SubConverter-Extended)。集成基线、许可证和变更边界见[第三方来源](docs/third-party-sources.md)。
+本仓库 [`keleyaa/subweb`](https://github.com/keleyaa/subweb) 源自 [`stilleshan/subweb`](https://github.com/stilleshan/subweb)，现独立维护。短链服务使用维护者 fork 的 [`keleyaa/MyUrls`](https://github.com/keleyaa/MyUrls)，上游为 [`CareyWang/MyUrls`](https://github.com/CareyWang/MyUrls)；转换服务使用 [`Aethersailor/SubConverter-Extended`](https://github.com/Aethersailor/SubConverter-Extended)。界面以 Apple 平台的材质、层级和可访问性原则为方法参考。集成基线、许可证和变更边界见[第三方来源](docs/third-party-sources.md)。
 
 ## License
 
