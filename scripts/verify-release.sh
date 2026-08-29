@@ -1,6 +1,31 @@
 #!/bin/sh
 set -eu
 
+use_ephemeral_compose_env=0
+if [ ! -f .env ]; then
+  APP_DOMAIN=app.release-validation.test
+  API_DOMAIN=api.release-validation.test
+  API_URL=https://api.release-validation.test
+  SHORT_DOMAIN=short.release-validation.test
+  TURNSTILE_SITE_KEY=release-validation-site-key
+  TURNSTILE_SECRET_KEY=release-validation-secret-key
+  IP_HASH_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  REDIS_PASSWORD=release-validation-redis-password
+  use_ephemeral_compose_env=1
+  printf '%s\n' 'release verification environment=ephemeral'
+fi
+
+build_request_policy() {
+  if [ "$use_ephemeral_compose_env" -eq 1 ]; then
+    env APP_DOMAIN="$APP_DOMAIN" API_DOMAIN="$API_DOMAIN" API_URL="$API_URL" SHORT_DOMAIN="$SHORT_DOMAIN" \
+      TURNSTILE_SITE_KEY="$TURNSTILE_SITE_KEY" TURNSTILE_SECRET_KEY="$TURNSTILE_SECRET_KEY" \
+      IP_HASH_SECRET="$IP_HASH_SECRET" REDIS_PASSWORD="$REDIS_PASSWORD" \
+      docker compose build request-policy
+  else
+    docker compose build request-policy
+  fi
+}
+
 stage() {
   name=$1
   shift
@@ -17,7 +42,7 @@ stage production-readiness node scripts/verify-production-readiness.mjs
 stage compose npm run verify:compose
 stage documentation npm run verify:docs
 stage container ./scripts/verify-container.sh subweb:release-check
-stage request-policy-container docker compose build request-policy
+stage request-policy-container build_request_policy
 locked_images=$(node - <<'NODE'
 const fs = require('node:fs');
 const lock = JSON.parse(fs.readFileSync('deploy/versions.lock.json', 'utf8'));

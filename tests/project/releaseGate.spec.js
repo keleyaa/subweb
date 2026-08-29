@@ -39,6 +39,28 @@ describe('release evidence and command gate', () => {
     expect(source).toMatch(/^set -eu$/mu);
   });
 
+  it('scopes an ephemeral Compose environment to the policy-image build when local deployment config is absent', () => {
+    const source = fs.readFileSync(path.join(root, 'scripts/verify-release.sh'), 'utf8');
+
+    expect(source).toContain('if [ ! -f .env ]; then');
+    for (const assignment of [
+      'APP_DOMAIN=app.release-validation.test',
+      'API_DOMAIN=api.release-validation.test',
+      'API_URL=https://api.release-validation.test',
+      'SHORT_DOMAIN=short.release-validation.test',
+      'TURNSTILE_SITE_KEY=release-validation-site-key',
+      'TURNSTILE_SECRET_KEY=release-validation-secret-key',
+      'IP_HASH_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      'REDIS_PASSWORD=release-validation-redis-password',
+    ]) {
+      expect(source).toContain(assignment);
+    }
+    expect(source).toContain('build_request_policy() {');
+    expect(source).toContain('env APP_DOMAIN="$APP_DOMAIN"');
+    expect(source).toContain('stage request-policy-container build_request_policy');
+    expect(source).not.toContain('export APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN');
+  });
+
   it('accepts production readiness when the locked MyUrls artifact has a stable source tag', () => {
     const script = path.join(root, 'scripts/verify-production-readiness.mjs');
     const result = spawnSync(process.execPath, [script], { encoding: 'utf8' });
