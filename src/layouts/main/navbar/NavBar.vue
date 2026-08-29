@@ -1,58 +1,38 @@
 <template>
-  <header class="minimal-navbar">
-    <nav class="minimal-navbar__inner" aria-label="主导航">
+  <header class="site-header">
+    <nav class="site-header__inner" aria-label="主导航">
       <AppBrand />
-      <ThemeToggle />
     </nav>
   </header>
 </template>
 
 <script>
 import AppBrand from './AppBrand.vue';
-import ThemeToggle from './ThemeToggle.vue';
 
 export default {
   name: 'NavBar',
-  components: {
-    AppBrand,
-    ThemeToggle,
-  },
+  components: { AppBrand },
 };
 </script>
 
 <style scoped>
-.minimal-navbar {
+.site-header {
   width: 100%;
-  padding: 56px 20px 0;
+  padding: 30px 30px 0;
 }
 
-.minimal-navbar__inner {
-  position: relative;
+.site-header__inner {
   display: flex;
-  max-width: 52rem;
-  min-height: 84px;
-  margin: 0 auto;
+  width: 100%;
   align-items: center;
-  justify-content: center;
+  max-width: 860px;
+  margin: 0 auto;
+  justify-content: flex-start;
 }
 
-.minimal-navbar__inner :deep(.theme-toggle) {
-  position: absolute;
-  right: 0;
-}
-
-@media (max-width: 575.98px) {
-  .minimal-navbar {
-    padding: 40px 16px 0;
-  }
-
-  .minimal-navbar__inner {
-    min-height: 64px;
-  }
-
-  .minimal-navbar__inner :deep(.theme-toggle) {
-    top: -32px;
-    right: -4px;
+@media (max-width: 640px) {
+  .site-header {
+    padding: 18px 18px 0;
   }
 }
 </style>

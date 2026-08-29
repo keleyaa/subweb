@@ -12,7 +12,7 @@ describe('SubTable modern linear layout', () => {
     expect(source).toContain('<form class="sub-table sub-table--modern" @submit.prevent="handleSubscriptionAction">');
     expect(source).toContain('class="subscription-input"');
     expect(source).toContain('class="base-config-grid"');
-    expect(source).toMatch(/class="[^"]*\badvanced-disclosure\b[^"]*"/);
+    expect(source).toMatch(/class="[^"]*\bsettings-status-row\b[^"]*"/);
     expect(source).toContain('class="primary-action-row"');
     expect(source).toContain('class="results-section"');
     expect(source).toContain('aria-live="polite"');
@@ -45,19 +45,22 @@ describe('SubTable modern linear layout', () => {
     }
   });
 
-  it('connects the advanced disclosure and reveal transitions accessibly', () => {
+  it('connects mutually exclusive status rows and reveal transitions accessibly', () => {
     const source = readFileSync(componentPath, 'utf8');
 
-    expect(source).toMatch(
-      /<button[\s\S]*?id="more-config-toggle"[\s\S]*?:aria-expanded="isShowMoreConfig"[\s\S]*?aria-controls="advanced-config"[\s\S]*?@click="showMoreConfig"/
-    );
+    expect(source).toContain('id="more-config-toggle"');
+    expect(source).toContain(':aria-expanded="isShowMoreConfig"');
+    expect(source).toContain('id="subscription-backend-toggle"');
+    expect(source).toContain(':aria-expanded="isShowServiceSettings"');
+    expect(source).toContain('aria-controls="subscription-backend-panel"');
+    expect(source).toContain('aria-controls="advanced-config-panel"');
     expect(source).toContain('<Transition name="field-reveal">');
-    expect(source).toContain('<Transition name="advanced-reveal">');
-    expect(source).toContain('id="advanced-config"');
-    expect(source).toMatch(
-      /id="service-settings-toggle"[\s\S]*?:aria-expanded="isShowServiceSettings"[\s\S]*?aria-controls="service-settings"/
-    );
-    expect(source).toContain('id="service-settings"');
+    expect(source).toContain('<Transition name="advanced-reveal" @after-leave="openPendingSettingsPanel">');
+    expect(source).toContain('id="subscription-backend-panel"');
+    expect(source).toContain('id="advanced-config-panel"');
+    expect(source).toContain('pendingSettingsPanel');
+    expect(source).toContain('toggleSettingsPanel(panel)');
+    expect(source).toContain('settings-status-row');
   });
 
   it('preserves every field label and identifier contract', () => {
@@ -107,8 +110,8 @@ describe('SubTable modern linear layout', () => {
       expect(field).toContain(`<span>${text}</span>`);
       expect(field).toContain('type="checkbox"');
     }
-    expect(stylesheet).toMatch(/\.checkbox-field\s*\{[\s\S]*?min-height:\s*40px/);
-    expect(stylesheet).toMatch(/\.checkbox-field\s*\{[\s\S]*?padding:\s*0\s+4px/);
+    expect(stylesheet).toMatch(/\.checkbox-field\s*\{[\s\S]*?min-height:\s*44px/);
+    expect(stylesheet).toMatch(/\.checkbox-field\s*\{[\s\S]*?padding:\s*0 8px/);
     expect(stylesheet).toMatch(/\.checkbox-field\s*\{[\s\S]*?cursor:\s*pointer/);
   });
 
@@ -155,66 +158,50 @@ describe('SubTable modern linear layout', () => {
   });
 });
 
-describe('SubTable modern visual constraints', () => {
-  it('defines the linear grid and one focused glass workspace with solid controls', () => {
+describe('SubTable command surface constraints', () => {
+  it('uses the original command-panel structure without nested cards or gradients', () => {
     const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
 
     expect(source).toMatch(/repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
-    expect(source).toMatch(
-      /\.sub-table--modern\s*\{[^}]*padding:\s*32px\s*;[^}]*border:\s*1px solid var\(--surface-glass-edge\)\s*;[^}]*border-radius:\s*32px\s*;[^}]*background:\s*var\(--surface-glass\)\s*;[^}]*backdrop-filter:\s*blur\(28px\) saturate\(150%\)\s*;/s,
-    );
-    expect(source).toMatch(/textarea,[\s\S]*?background:\s*var\(--surface-control\)/);
-    expect(source).toContain('border-radius: 14px');
+    expect(source).toMatch(/\.sub-table--modern\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;/s);
+    expect(source).toContain("content: '›'");
+    expect(source).toMatch(/\.subscription-input\s*\{[^}]*padding:\s*24px 28px 20px;/s);
     expect(source).toContain('var(--accent)');
-    expect(source).toContain('var(--separator)');
-    expect(source).toContain('44px');
-    expect(source).toContain('@media (max-width: 767.98px)');
+    expect(source).toContain('var(--line)');
+    expect(source).toContain('@media (max-width: 640px)');
     expect(source).toContain('@media (prefers-reduced-motion: reduce)');
-    expect(source).toContain('@media (prefers-reduced-transparency: reduce)');
     expect(source).toContain('@media (prefers-contrast: more)');
-    expect(source).toContain('180ms ease-out');
+    expect(source).not.toContain('linear-gradient');
+    expect(source).not.toContain('radial-gradient');
+    expect(source).not.toContain('backdrop-filter');
   });
 
-  it('uses the glass treatment only for the containing workspace, never a gradient or nested surface', () => {
-    const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
-    const forbiddenMarkers = [['linear', 'gradient'].join('-'), ['radial', 'gradient'].join('-')];
-
-    for (const marker of forbiddenMarkers) {
-      expect(source).not.toContain(marker);
-    }
-    expect(source).toContain('box-shadow: var(--shadow-glass)');
-    expect(source).not.toContain('.configuration-section {\n  padding:');
-    expect(source).not.toContain('.results-section {\n  padding: 24px;');
-  });
-
-  it('owns complete primary and secondary button interaction states', () => {
+  it('gives command controls complete interaction states without all-transition', () => {
     const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
 
-    expect(source).toMatch(/\.primary-action-button\s*\{[\s\S]*?background:\s*var\(--accent\)/);
-    expect(source).toMatch(/\.primary-action-button\s*\{[\s\S]*?width:\s*100%/);
+    expect(source).toMatch(/\.primary-action-button\s*\{[\s\S]*?width:\s*min\(100%,\s*280px\)[\s\S]*?min-height:\s*48px[\s\S]*?justify-content:\s*center[\s\S]*?background:\s*var\(--accent\)/);
     expect(source).toMatch(/\.primary-action-button:hover\s*\{[\s\S]*?background:\s*var\(--accent-hover\)/);
-    expect(source).toMatch(/\.primary-action-button:active\s*\{[\s\S]*?background:\s*var\(--accent-active\)/);
+    expect(source).toMatch(/\.primary-action-button:active\s*\{[\s\S]*?transform:\s*translateY\(1px\)/);
     expect(source).toMatch(/\.primary-action-button:disabled\s*\{/);
-    expect(source).toMatch(/\.secondary-action-button:hover\s*\{[\s\S]*?background:\s*var\(--surface-control-hover\)/);
-    expect(source).toMatch(/\.secondary-action-button:active\s*\{[\s\S]*?background:\s*var\(--surface-control-active\)/);
-    expect(source).toMatch(/\.primary-action-button:focus-visible[\s\S]*?\.secondary-action-button:focus-visible/);
-    expect(source).toMatch(
-      /textarea:focus-visible,[\s\S]*?select:focus-visible,[\s\S]*?input:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--focus-ring\);/
-    );
-    expect(source).toMatch(
-      /\.primary-action-button:focus-visible,[\s\S]*?\.secondary-action-button:focus-visible,[\s\S]*?\.advanced-disclosure:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--focus-ring\);/
-    );
-    expect(source).toMatch(/transition:\s*(?:background-color|border-color|color)[^;]*1(?:6|7|8)0ms ease-out/);
+    expect(source).toMatch(/\.secondary-action-button:hover\s*\{[\s\S]*?color:\s*var\(--accent\)/);
+    expect(source).toMatch(/textarea:focus-visible,[\s\S]*?select:focus-visible,[\s\S]*?input:focus-visible\s*\{[^}]*outline:\s*3px solid color-mix/);
+    expect(source).toContain('.primary-action-button:focus-visible');
+    expect(source).toContain('.secondary-action-button:focus-visible');
+    expect(source).toContain('.settings-status-row:focus-visible');
+    expect(source).toContain('outline: 3px solid var(--focus-ring);');
     expect(source).not.toMatch(/transition:\s*all\b/);
-    expect(source).toContain('scale(0.985)');
-    expect(source).toMatch(
-      /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.field-reveal-enter-from,[\s\S]*?\.advanced-reveal-leave-to\s*\{[^}]*transform:\s*none\s*;/,
-    );
+    expect(source).toContain('translateY(-1px)');
+    expect(source).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(source).toContain('transition-duration: 0.01ms !important;');
+    expect(source).toContain('transform: none;');
   });
 
-  it('uses accessible contrast for successful result status text', () => {
+  it('keeps checkbox labels as complete tactile targets and result states readable', () => {
     const source = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, 'utf8') : '';
 
+    expect(source).toMatch(/\.checkbox-field\s*\{[\s\S]*?min-height:\s*44px/);
+    expect(source).toMatch(/\.checkbox-field\s*\{[\s\S]*?padding:\s*0 8px/);
+    expect(source).toMatch(/\.checkbox-field\s*\{[\s\S]*?cursor:\s*pointer/);
     expect(source).toMatch(/\.results-status--success\s*\{[^}]*color:\s*var\(--success\);/);
   });
 });

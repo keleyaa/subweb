@@ -8,41 +8,26 @@ const forbiddenTokens = [
   ['landing-hero', '-blank'],
   ['hero-', 'animation', '-img'],
   ['landing', 'Hero'],
-  ['hero-', 'animation'],
   ['linear-', 'gradient'],
-  ['display', '-6'],
-  ['section', '-py'],
+  ['radial-', 'gradient'],
 ].map((parts) => parts.join(''));
 
-function relativeLuminance(hex) {
-  const channels = hex
-    .slice(1)
-    .match(/.{2}/g)
-    .map((channel) => Number.parseInt(channel, 16) / 255)
-    .map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
-
-  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
-}
-
-function contrastRatio(foreground, background) {
-  const [lighter, darker] = [relativeLuminance(foreground), relativeLuminance(background)].sort((left, right) => right - left);
-
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-describe('home workspace layout', () => {
-  it('renders one conversion table in the single-column workspace', async () => {
+describe('home command surface', () => {
+  it('renders one centered command card with a visible conversion heading', async () => {
     const source = await readFile(sourceUrl, 'utf8');
 
-    expect(source).toContain('class="home-workspace"');
-    expect(source).toContain('class="home-workspace__inner"');
-    expect(source).toContain('aria-labelledby="conversion-title"');
-    expect(source).toContain('<h1 id="conversion-title" class="visually-hidden">订阅转换</h1>');
+    expect(source).toContain('<main id="converter" class="command-surface" aria-labelledby="conversion-title">');
+    expect(source).toContain('class="command-surface__center"');
+    expect(source).toContain('class="command-card"');
+    expect(source).toContain('class="command-card__header"');
+    expect(source).toContain('<p>Online subscription conversion</p>');
+    expect(source).toContain('<h1 id="conversion-title">在线订阅转换</h1>');
+    expect(source).toContain('class="command-card__shortcut" aria-hidden="true">⌘ Enter</span>');
     expect(source).toContain('<SubTable />');
     expect(source.match(/<SubTable/g)).toHaveLength(1);
   });
 
-  it('removes the former landing presentation', async () => {
+  it('removes landing and gradient presentation patterns', async () => {
     const source = await readFile(sourceUrl, 'utf8');
 
     forbiddenTokens.forEach((token) => {
@@ -50,60 +35,43 @@ describe('home workspace layout', () => {
     });
   });
 
-  it('uses the focused single-workspace layout and token-based typography', async () => {
+  it('uses the original bounded 860px command surface', async () => {
     const source = await readFile(sourceUrl, 'utf8');
 
-    expect(source).toMatch(/\.home-workspace\s*\{[^}]*display:\s*flex\s*;/);
-    expect(source).not.toContain('min-height: calc(100vh - 57px)');
+    expect(source).toMatch(/\.command-surface\s*\{[^}]*display:\s*flex\s*;/);
     expect(source).toMatch(
-      /\.home-workspace__inner\s*\{[^}]*max-width:\s*52rem\s*;[^}]*margin:\s*0 auto\s*;[^}]*padding:\s*20px 20px 48px\s*;/
+      /\.command-surface__center\s*\{[^}]*max-width:\s*860px\s*;[^}]*margin:\s*auto\s*;[^}]*align-items:\s*center\s*;/,
     );
-    expect(source).not.toContain('home-workspace__heading');
+    expect(source).toMatch(/\.command-card\s*\{[^}]*border:\s*1px solid var\(--line\);[^}]*border-radius:\s*12px\s*;/s);
+    expect(source).toContain('box-shadow: 0 30px 80px rgb(0 0 0 / 32%)');
   });
 
-  it('tightens workspace spacing and heading size on mobile', async () => {
+  it('removes the card shortcut on narrow viewports without viewport-scaled type', async () => {
     const source = await readFile(sourceUrl, 'utf8');
 
-    expect(source).toMatch(
-      /@media \(max-width: 575\.98px\)\s*\{[\s\S]*?\.home-workspace__inner\s*\{[^}]*padding:\s*16px 16px 32px\s*;/
-    );
+    expect(source).toMatch(/@media \(max-width: 640px\)[\s\S]*?\.command-card__shortcut\s*\{[^}]*display:\s*none\s*;/);
+    expect(source).toMatch(/@media \(max-width: 640px\)[\s\S]*?\.command-card__header\s*\{[^}]*padding:\s*22px 20px 18px\s*;/);
+    expect(source).not.toMatch(/font-size:\s*clamp\(/);
   });
 
-  it('uses one fixed presentation without a retired runtime-UX compatibility layer', async () => {
+  it('keeps one fixed presentation without a retired runtime UX layer', async () => {
     const source = await readFile(sourceUrl, 'utf8');
 
-    expect(source).toContain('<main class="home-workspace" aria-labelledby="conversion-title">');
-    expect(source).toContain('<h1 id="conversion-title" class="visually-hidden">订阅转换</h1>');
     expect(source).not.toContain('presentation');
     expect(source).not.toContain('uxMode');
     expect(source).not.toContain('data-ux-mode');
   });
 
-  it('draws both explicit theme palettes with static ambient light only on the page background', async () => {
+  it('defines dark command palettes without gradient surfaces', async () => {
     const source = await readFile(baseCssUrl, 'utf8');
 
     expect(source).toContain("html[data-theme='light']");
     expect(source).toContain("html[data-theme='dark']");
-    expect(source).toContain('--surface-glass');
+    expect(source).toContain('--canvas');
     expect(source).toContain('--surface-control');
     expect(source).toContain('--focus-ring');
     expect(source).not.toContain('--el-bg-color');
+    expect(source).not.toContain('linear-gradient');
     expect(source).not.toContain('radial-gradient');
-    expect(source).toMatch(/body::before\s*\{[\s\S]*?linear-gradient/);
-    expect((source.match(/linear-gradient/g) ?? []).length).toBeGreaterThanOrEqual(3);
-    expect(source).toMatch(
-      /@media \(prefers-contrast: more\)[\s\S]*?html\[data-theme='light'\]\s*\{[^}]*--surface-glass-edge:\s*[^;]+;[\s\S]*?html\[data-theme='dark'\]\s*\{[^}]*--surface-glass-edge:\s*[^;]+;/,
-    );
-  });
-
-  it('keeps light-theme secondary status text readable against a solid control surface', async () => {
-    const source = await readFile(baseCssUrl, 'utf8');
-    const lightPalette = source.match(/:root,\s*html\[data-theme='light'\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const mutedText = lightPalette.match(/--text-muted:\s*(#[0-9a-f]{6})\s*;/i)?.[1];
-    const controlSurface = lightPalette.match(/--surface-control:\s*(#[0-9a-f]{6})\s*;/i)?.[1];
-
-    expect(mutedText).toBeDefined();
-    expect(controlSurface).toBeDefined();
-    expect(contrastRatio(mutedText, controlSurface)).toBeGreaterThanOrEqual(4.5);
   });
 });

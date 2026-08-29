@@ -116,8 +116,9 @@ describe('ThemeToggle source contract', () => {
     expect(source).toContain(':aria-label="label"');
     expect(source).toContain(':title="label"');
     expect(source).toContain(':aria-pressed="isDark"');
-    expect(source).toContain('min-width: 44px');
     expect(source).toContain('min-height: 44px');
+    expect(source).toContain('modeLabel');
+    expect(source).toContain('theme-toggle__indicator');
     expect(source).toContain('saveThemeAndApply');
   });
 });

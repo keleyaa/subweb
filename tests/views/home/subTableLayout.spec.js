@@ -11,7 +11,7 @@ describe('SubTable configuration layout', () => {
     const subscriptionUrlsIndex = source.indexOf('id="subscription-urls"');
     const clientIndex = source.indexOf('id="client"');
     const remoteIndex = source.indexOf('id="remote"');
-    const serviceSettingsIndex = source.indexOf('id="service-settings-toggle"');
+    const subscriptionBackendIndex = source.indexOf('id="subscription-backend-toggle"');
     const apiIndex = source.indexOf('id="api"');
     const moreConfigIndex = source.indexOf('id="more-config-toggle"');
     const moreConfigIncludeIndex = source.indexOf('id="more-config-include"');
@@ -23,8 +23,8 @@ describe('SubTable configuration layout', () => {
     expect(subscriptionUrlsIndex).toBeGreaterThan(-1);
     expect(clientIndex).toBeGreaterThan(subscriptionUrlsIndex);
     expect(remoteIndex).toBeGreaterThan(clientIndex);
-    expect(serviceSettingsIndex).toBeGreaterThan(remoteIndex);
-    expect(apiIndex).toBeGreaterThan(serviceSettingsIndex);
+    expect(subscriptionBackendIndex).toBeGreaterThan(remoteIndex);
+    expect(apiIndex).toBeGreaterThan(subscriptionBackendIndex);
     expect(moreConfigIndex).toBeGreaterThan(apiIndex);
     expect(moreConfigIncludeIndex).toBeGreaterThan(moreConfigIndex);
     expect(moreConfigExcludeIndex).toBeGreaterThan(moreConfigIncludeIndex);
@@ -63,11 +63,26 @@ describe('SubTable configuration layout', () => {
     }
   });
 
-  it('keeps advanced conversion parameters collapsed initially', () => {
+  it('uses collapsed subscription-backend and advanced-parameter status rows initially', () => {
     const source = readFileSync(sourcePath, 'utf8');
 
     expect(source).toMatch(/isShowMoreConfig:\s*false/);
     expect(source).toMatch(/isShowServiceSettings:\s*false/);
+    expect(source).toContain('订阅后端');
+    expect(source).toContain('默认后端');
+    expect(source).toContain('advancedConfigStatus');
+    expect(source).toContain('未设置');
+    expect(source).not.toContain('<span>服务设置</span>');
+  });
+
+  it('keeps advanced parameter edits as a draft until an explicit save or reset action', () => {
+    const source = readFileSync(sourcePath, 'utf8');
+
+    expect(source).toContain('moreConfigDraft');
+    expect(source).toContain('applyMoreConfig');
+    expect(source).toContain('resetMoreConfig');
+    expect(source).toContain('保存高级参数');
+    expect(source).toContain('重置高级参数');
   });
 
   it('names the blank remote-config choice as the backend built-in configuration', () => {

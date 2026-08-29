@@ -70,19 +70,13 @@ test('converts, copies, and creates a short link through the same-origin v2 adap
   expect(browserErrors).toEqual([]);
 });
 
-test('persists the explicit theme choice across reloads', async ({ page }) => {
+test('uses a fixed black command surface without a visible theme switcher', async ({ page }) => {
   const browserErrors = recordBrowserErrors(page);
   await page.goto('/');
 
-  const root = page.locator('html');
-  const initialTheme = await root.getAttribute('data-theme');
-  const toggleName = initialTheme === 'dark' ? '切换到浅色模式' : '切换到深色模式';
-  const expectedTheme = initialTheme === 'dark' ? 'light' : 'dark';
-
-  await page.getByRole('button', { name: toggleName }).click();
-  await expect(root).toHaveAttribute('data-theme', expectedTheme);
-  await page.reload();
-  await expect(root).toHaveAttribute('data-theme', expectedTheme);
+  await expect(page.getByRole('button', { name: /切换到.*模式/ })).toHaveCount(0);
+  const colors = await page.locator('body').evaluate((element) => getComputedStyle(element).backgroundColor);
+  expect(colors).toBe('rgb(17, 18, 18)');
   expect(browserErrors).toEqual([]);
 });
 
@@ -176,33 +170,70 @@ test('hides stale results as soon as a conversion input changes', async ({ conte
   await expect(page.getByRole('button', { name: '生成并复制短链' })).toHaveCount(0);
 });
 
-test('keeps optical alignment, target sizes, and keyboard disclosures accessible', async ({ page }) => {
+test('keeps status rows mutually exclusive, smoothly staged, tactile, and keyboard accessible', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.sub-table--modern')).toBeVisible();
   const geometry = await page.evaluate(() => {
-    const brand = document.querySelector('.app-brand-link').getBoundingClientRect();
-    const surface = document.querySelector('.sub-table--modern').getBoundingClientRect();
     const targets = [...document.querySelectorAll('button, textarea, select')].map((element) => {
       const rect = element.getBoundingClientRect();
       return { width: rect.width, height: rect.height };
     });
     return {
-      centerDelta: Math.abs(brand.x + brand.width / 2 - (surface.x + surface.width / 2)),
       scrollWidth: document.documentElement.scrollWidth,
       innerWidth: window.innerWidth,
       targets,
     };
   });
-  expect(geometry.centerDelta).toBeLessThanOrEqual(1);
   expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.innerWidth);
   expect(geometry.targets.every(({ width, height }) => width >= 44 && height >= 44)).toBe(true);
 
-  const serviceToggle = page.getByRole('button', { name: '服务设置', exact: true });
-  await serviceToggle.focus();
+  const backendToggle = page.getByRole('button', { name: /订阅后端.*默认后端/ });
+  const advancedToggle = page.getByRole('button', { name: /高级参数.*未设置/ });
+  const backendPanel = page.locator('#subscription-backend-panel');
+  const advancedPanel = page.locator('#advanced-config-panel');
+
+  await backendToggle.focus();
   await page.keyboard.press('Enter');
-  await expect(serviceToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(backendToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(backendPanel).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const backendToggleElement = document.querySelector('#subscription-backend-toggle');
+    const backendPanelElement = document.querySelector('#subscription-backend-panel');
+    const advancedToggleElement = document.querySelector('#more-config-toggle');
+    return Boolean(
+      backendToggleElement?.compareDocumentPosition(backendPanelElement) & Node.DOCUMENT_POSITION_FOLLOWING
+      && backendPanelElement?.compareDocumentPosition(advancedToggleElement) & Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  })).toBe(true);
+
+  await advancedToggle.focus();
   await page.keyboard.press('Space');
-  await expect(serviceToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(backendToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(backendPanel).toBeHidden();
+  await expect(advancedPanel).toBeVisible();
+  await expect(advancedToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect.poll(() => page.evaluate(() => {
+    const advancedToggleElement = document.querySelector('#more-config-toggle');
+    const advancedPanelElement = document.querySelector('#advanced-config-panel');
+    return Boolean(advancedToggleElement?.compareDocumentPosition(advancedPanelElement) & Node.DOCUMENT_POSITION_FOLLOWING);
+  })).toBe(true);
+  const transition = await advancedPanel.evaluate((element) => getComputedStyle(element).transitionProperty);
+  expect(transition).toContain('max-height');
+});
+
+test('applies and resets advanced parameter drafts through the status row', async ({ page }) => {
+  await page.goto('/');
+
+  const advancedToggle = page.getByRole('button', { name: /高级参数.*未设置/ });
+  await advancedToggle.click();
+  await page.getByLabel('Include').fill('Hong Kong');
+  await expect(advancedToggle).toHaveAttribute('aria-expanded', 'true');
+  await page.getByRole('button', { name: '保存高级参数' }).click();
+  await expect(page.getByRole('button', { name: /高级参数.*已设置/ })).toHaveAttribute('aria-expanded', 'false');
+
+  await page.getByRole('button', { name: /高级参数.*已设置/ }).click();
+  await page.getByRole('button', { name: '重置高级参数' }).click();
+  await expect(page.getByRole('button', { name: /高级参数.*未设置/ })).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('honors reduced motion, reduced transparency, and increased contrast', async ({ page }) => {
@@ -220,6 +251,7 @@ test('honors reduced motion, reduced transparency, and increased contrast', asyn
     };
   });
   expect(styles.backdropFilter).toBe('none');
-  expect(styles.borderWidth).toBe('1px');
+  expect(Number.parseFloat(styles.borderWidth)).toBeGreaterThanOrEqual(1);
+  await expect(page.getByRole('button', { name: '转换并复制' })).toHaveCSS('justify-content', 'center');
   await restore();
 });

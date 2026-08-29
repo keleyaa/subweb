@@ -1,9 +1,10 @@
 <template>
   <form class="sub-table sub-table--modern" @submit.prevent="handleSubscriptionAction">
+
     <fieldset class="configuration-section">
       <legend class="visually-hidden">订阅输入与配置</legend>
       <div class="subscription-input">
-        <div class="form-field">
+        <div class="form-field command-url-field">
           <label for="subscription-urls">订阅链接</label>
           <textarea id="subscription-urls" v-model.trim="urls" :placeholder="placeholder" rows="3"></textarea>
         </div>
@@ -39,24 +40,25 @@
     </fieldset>
 
     <button
-      id="service-settings-toggle"
+      id="subscription-backend-toggle"
       type="button"
-      class="advanced-disclosure"
+      class="settings-status-row"
       :aria-expanded="isShowServiceSettings"
-      aria-controls="service-settings"
+      aria-controls="subscription-backend-panel"
       @click="showServiceSettings"
     >
-      <span>服务设置</span>
-      <span aria-hidden="true">{{ isShowServiceSettings ? '−' : '+' }}</span>
+      <span class="settings-status-label">订阅后端</span>
+      <span class="settings-status-value">{{ backendStatus }}</span>
+      <span class="settings-status-chevron" aria-hidden="true"></span>
     </button>
 
-    <Transition name="advanced-reveal">
-      <fieldset v-if="isShowServiceSettings" id="service-settings" class="advanced-config">
-        <legend class="visually-hidden">服务设置</legend>
+    <Transition name="advanced-reveal" @after-leave="openPendingSettingsPanel">
+      <fieldset v-if="isShowServiceSettings" id="subscription-backend-panel" class="advanced-config">
+        <legend class="visually-hidden">订阅后端</legend>
         <div class="form-field">
-          <label for="api">后端服务</label>
+          <label for="api">订阅后端</label>
           <select id="api" @change="selectApi">
-            <option :value="apiUrl">{{ apiUrl }}</option>
+            <option :value="apiUrl">默认后端</option>
             <option value="manual">自定义后端 API 地址</option>
           </select>
           <Transition name="field-reveal">
@@ -76,34 +78,41 @@
     <button
       id="more-config-toggle"
       type="button"
-      class="advanced-disclosure"
+      class="settings-status-row"
       :aria-expanded="isShowMoreConfig"
-      aria-controls="advanced-config"
+      aria-controls="advanced-config-panel"
       @click="showMoreConfig"
     >
-      <span>高级参数</span>
-      <span aria-hidden="true">{{ isShowMoreConfig ? '−' : '+' }}</span>
+      <span class="settings-status-label">高级参数</span>
+      <span class="settings-status-value">{{ advancedConfigStatus }}</span>
+      <span class="settings-status-chevron" aria-hidden="true"></span>
     </button>
 
-    <Transition name="advanced-reveal">
-      <fieldset v-if="isShowMoreConfig" id="advanced-config" class="advanced-config">
+    <Transition name="advanced-reveal" @after-leave="openPendingSettingsPanel">
+      <fieldset v-if="isShowMoreConfig" id="advanced-config-panel" class="advanced-config">
         <legend class="visually-hidden">高级参数</legend>
         <div class="advanced-fields-grid">
           <div class="form-field">
             <label for="more-config-include">Include</label>
-            <input id="more-config-include" v-model="moreConfig.include" placeholder="Include: 可选" />
+            <input id="more-config-include" v-model="moreConfigDraft.include" placeholder="Include: 可选" />
           </div>
           <div class="form-field">
             <label for="more-config-exclude">Exclude</label>
-            <input id="more-config-exclude" v-model="moreConfig.exclude" placeholder="Exclude: 可选" />
+            <input id="more-config-exclude" v-model="moreConfigDraft.exclude" placeholder="Exclude: 可选" />
           </div>
         </div>
         <div class="checkbox-group">
-          <label class="checkbox-field"><input id="emoji" v-model="moreConfig.emoji" type="checkbox" /><span>Emoji</span></label>
-          <label class="checkbox-field"><input id="udp" v-model="moreConfig.udp" type="checkbox" /><span>开启 UDP</span></label>
-          <label class="checkbox-field"><input id="sort" v-model="moreConfig.sort" type="checkbox" /><span>排序节点</span></label>
-          <label class="checkbox-field"><input id="scv" v-model="moreConfig.scv" type="checkbox" /><span>关闭证书检查</span></label>
-          <label class="checkbox-field"><input id="nodelist" v-model="moreConfig.list" type="checkbox" /><span>Node List</span></label>
+          <label class="checkbox-field"><input id="emoji" v-model="moreConfigDraft.emoji" type="checkbox" /><span>Emoji</span></label>
+          <label class="checkbox-field"><input id="udp" v-model="moreConfigDraft.udp" type="checkbox" /><span>开启 UDP</span></label>
+          <label class="checkbox-field"><input id="sort" v-model="moreConfigDraft.sort" type="checkbox" /><span>排序节点</span></label>
+          <label class="checkbox-field"><input id="scv" v-model="moreConfigDraft.scv" type="checkbox" /><span>关闭证书检查</span></label>
+          <label class="checkbox-field"><input id="nodelist" v-model="moreConfigDraft.list" type="checkbox" /><span>Node List</span></label>
+        </div>
+        <div class="advanced-config-actions">
+          <button type="button" class="settings-action-button" @click="applyMoreConfig">保存高级参数</button>
+          <button type="button" class="settings-action-button settings-action-button--quiet" @click="resetMoreConfig">
+            重置高级参数
+          </button>
         </div>
       </fieldset>
     </Transition>
@@ -185,8 +194,10 @@ export default {
       apiUrl: window.config.apiUrl,
       remoteConfigOptions: window.config.remoteConfigOptions,
       moreConfig: createDefaultMoreConfig(),
+      moreConfigDraft: createDefaultMoreConfig(),
       isShowServiceSettings: false,
       isShowMoreConfig: false,
+      pendingSettingsPanel: null,
       isShowManualApiUrl: false,
       isShowRemoteConfig: false,
       isGeneratingShortUrl: false,
@@ -211,9 +222,19 @@ export default {
         api: this.api,
         target: this.target,
         remoteConfig: this.remoteConfig,
-        isShowMoreConfig: this.isShowMoreConfig,
+        isShowMoreConfig: this.hasAppliedMoreConfig,
         moreConfig: this.moreConfig,
       };
+    },
+    hasAppliedMoreConfig() {
+      const defaults = createDefaultMoreConfig();
+      return Object.keys(defaults).some((key) => this.moreConfig[key] !== defaults[key]);
+    },
+    backendStatus() {
+      return this.isShowManualApiUrl || this.api !== this.apiUrl ? '自定义后端' : '默认后端';
+    },
+    advancedConfigStatus() {
+      return this.hasAppliedMoreConfig ? '已设置' : '未设置';
     },
     hasCurrentSubscriptionResult() {
       return hasCurrentConversionResult(this.result, this.conversionInput);
@@ -267,10 +288,47 @@ export default {
   },
   methods: {
     showServiceSettings() {
-      this.isShowServiceSettings = !this.isShowServiceSettings;
+      this.toggleSettingsPanel('backend');
     },
     showMoreConfig() {
-      this.isShowMoreConfig = !this.isShowMoreConfig;
+      this.toggleSettingsPanel('advanced');
+    },
+    toggleSettingsPanel(panel) {
+      const isOpen = panel === 'backend' ? this.isShowServiceSettings : this.isShowMoreConfig;
+
+      if (isOpen) {
+        this.pendingSettingsPanel = null;
+        this.closeSettingsPanels();
+        return;
+      }
+
+      if (this.isShowServiceSettings || this.isShowMoreConfig) {
+        this.pendingSettingsPanel = panel;
+        this.closeSettingsPanels();
+        return;
+      }
+
+      this.openSettingsPanel(panel);
+    },
+    closeSettingsPanels() {
+      this.isShowServiceSettings = false;
+      this.isShowMoreConfig = false;
+    },
+    openSettingsPanel(panel) {
+      if (panel === 'backend') {
+        this.isShowServiceSettings = true;
+        return;
+      }
+
+      this.moreConfigDraft = { ...this.moreConfig };
+      this.isShowMoreConfig = true;
+    },
+    openPendingSettingsPanel() {
+      if (!this.pendingSettingsPanel) return;
+
+      const panel = this.pendingSettingsPanel;
+      this.pendingSettingsPanel = null;
+      this.openSettingsPanel(panel);
     },
     selectApi(event) {
       if (event.target.value === 'manual') {
@@ -279,7 +337,21 @@ export default {
       } else {
         this.isShowManualApiUrl = false;
         this.api = event.target.value;
+        this.pendingSettingsPanel = null;
+        this.closeSettingsPanels();
       }
+    },
+    applyMoreConfig() {
+      this.moreConfig = { ...this.moreConfigDraft };
+      this.pendingSettingsPanel = null;
+      this.closeSettingsPanels();
+    },
+    resetMoreConfig() {
+      const defaults = createDefaultMoreConfig();
+      this.moreConfig = { ...defaults };
+      this.moreConfigDraft = { ...defaults };
+      this.pendingSettingsPanel = null;
+      this.closeSettingsPanels();
     },
     selectRemoteConfig(event) {
       if (event.target.value === 'manual') {
@@ -327,7 +399,7 @@ export default {
         remoteConfig: this.remoteConfig,
         isShowManualApiUrl: this.isShowManualApiUrl,
         isShowRemoteConfig: this.isShowRemoteConfig,
-        isShowMoreConfig: this.isShowMoreConfig,
+        isShowMoreConfig: this.hasAppliedMoreConfig,
         moreConfig: this.moreConfig,
       });
       if (!prepared.ok) {
