@@ -56,8 +56,8 @@ describe('project cleanup and independent-maintenance boundary', () => {
     expect(readme).toContain('https://github.com/stilleshan/subweb');
     expect(readme).toContain('keleyaa/MyUrls');
     expect(readme).toContain('Aethersailor/SubConverter-Extended');
-    expect(readme).toContain('Apple 平台的材质、层级和可访问性原则');
-    expect(readme).toContain('api.ml1.one');
+    expect(readme).toContain('固定黑色命令界面');
+    expect(readme).toContain('受控请求策略');
     expect(readme).not.toContain('http://127.0.0.1:25500');
     expect(dockerfile).not.toContain('LABEL maintainer');
     expect(dockerfile).not.toContain('ENV VERSION');

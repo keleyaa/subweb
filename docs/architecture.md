@@ -6,11 +6,13 @@ Subweb 是独立维护的自托管订阅转换发行栈。生产 Compose 启动 
 Browser
   |-- APP_DOMAIN
   |     `-- Gateway
-  |           |-- /sub?...                -> Request Policy Service -> SubConverter
-  |           `-- /short-api/v1/links    -> MyUrls v2 (APP instance) -> Redis
+  |           |-- /                     -> Subweb Vue 工作区
+  |           `-- /short-api/v1/links   -> MyUrls v2 (APP instance) -> Redis
   |
   |-- API_DOMAIN
-  |     `-- Gateway -> SubConverter
+  |     `-- Gateway -> /sub?... -> Request Policy Service -> SubConverter
+  |                                                   ^             |
+  |                                                   `-- HTTPS CONNECT egress proxy -- remote HTTPS host
   |
   `-- SHORT_DOMAIN
         `-- Gateway transparent proxy -> MyUrls v2 (SHORT instance) UI/API/redirect
@@ -23,11 +25,11 @@ Browser
 | `APP_DOMAIN/` | Subweb Vue 工作区 |
 | `APP_DOMAIN/short-api/v1/links` | 仅接受 POST JSON，精确转发到 MyUrls `/api/v1/links` |
 | `APP_DOMAIN/:code` | 兼容已分享短码的 302 跳转 |
-| `API_DOMAIN/*` | 保留原路径和查询参数转发给 SubConverter |
+| `API_DOMAIN/sub?...` | 仅接受转换请求；Gateway 交给 Request Policy Service 执行 URL、DNS、频率和资源校验后，再代理到 SubConverter |
 | `SHORT_DOMAIN/*` | 透明转发 MyUrls 页面、`/assets/*`、API、健康检查和短码 |
 
 APP 适配入口清除浏览器的 Authorization、Cookie 和 Origin，覆盖客户端 IP 转发头，不注入
-旧 Bearer Token。SHORT 域保留 MyUrls 所需的同源 Origin，由 MyUrls 自行执行 API、CSP、
+旧 Bearer Token。API 的 `/sub` 同样经 Gateway 清理客户端凭据后进入 Request Policy Service。SHORT 域保留 MyUrls 所需的同源 Origin，由 MyUrls 自行执行 API、CSP、
 Turnstile 和响应协议校验。APP 与 SHORT 使用两个独立的 MyUrls 进程，分别校验各自的 hostname，避免
 Cloudflare Token 的 hostname 约束与双域入口冲突；两个进程共用 Redis、IP 哈希密钥和镜像版本。
 

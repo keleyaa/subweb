@@ -16,7 +16,7 @@
 | 变量 | 用途 |
 | --- | --- |
 | `APP_DOMAIN` | Subweb 页面和同源短链适配入口 |
-| `API_DOMAIN` | SubConverter 公开域名 |
+| `API_DOMAIN` | 受 Gateway 与 Request Policy 保护的转换入口域名 |
 | `SHORT_DOMAIN` | MyUrls 页面与短码域名 |
 | `API_URL` | 写入浏览器运行时配置的转换后端地址 |
 | `SUBWEB_PORT` | Gateway 的 loopback 端口，默认值为 `18080` |
@@ -64,4 +64,4 @@
 | `LOCAL_SHORT_MYURLS_PORT` | 18083 |
 | `LOCAL_SUBCONVERTER_PORT` | 25500 |
 
-4 个端口必须互不相同，且位于 `1024` 到 `65535` 之间。Redis、Request Policy Service 和 SubConverter 不发布本地端口。
+4 个端口必须互不相同，且位于 `1024` 到 `65535` 之间。Redis 与 Request Policy Service 不发布本地端口；`LOCAL_SUBCONVERTER_PORT` 仅用于可信本机调试，不复现生产 egress 边界。

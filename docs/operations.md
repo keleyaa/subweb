@@ -2,57 +2,47 @@
 
 ## 状态与日志
 
-Docker：
+Docker Compose 运行 `gateway`、`request-policy`、`subconverter`、`myurls-app`、`myurls-short` 和 `redis` 共 6 个服务；只有 Gateway 的 `8080` 端口绑定到宿主机 loopback。
 
 ```sh
 docker compose ps
-docker compose logs --tail=200 gateway myurls-app myurls-short subconverter redis
+docker compose logs --tail=200 gateway request-policy myurls-app myurls-short subconverter redis
 docker compose config --services
 ```
 
-Docker 只运行一个 `gateway` 服务。本机源码运行时使用：
+本机源码运行时使用：
 
 ```sh
 ./scripts/local/status.sh
 tail -n 200 .runtime/local/logs/nginx.log
 ```
 
-Docker 服务和 Gateway 镜像统一使用 `Asia/Shanghai` 时区。Gateway 与 MyUrls 的访问日志只记录 ISO 8601
-时间、方法、隐私安全的路由模板和状态码；真实短码统一显示为 `/:shortKey`，不记录
-Query、请求体、Authorization、IP 或 User-Agent。Compose 默认以 `info` 级别运行 MyUrls，保留正常请求记录。日志量较大时，可在 `.env` 中设置
-`MYURLS_LOG_LEVEL=warn`，然后重建两个 MyUrls 容器。访问日志由
-MyUrls 写入 stdout，再由 Docker `json-file` 驱动统一轮转。需要审计特定版本时，应在 `.env` 中显式指定
-已验证的镜像，并始终限制 Docker 管理权限。
+Docker 服务和 Gateway 镜像统一使用 `Asia/Shanghai` 时区。Gateway、MyUrls 与 Request Policy 的日志只记录 ISO 8601 时间、方法、隐私安全的路由模板、状态码、耗时和错误分类；真实短码统一显示为 `/:shortKey`。日志不记录 Query、请求体、Authorization、原始 IP、User-Agent、订阅 URL、Token、Redis 密码或 IP 哈希秘密。
 
-所有容器的 `json-file` 标准输出日志限制为单文件 10 MB、最多 3 个文件。SubConverter 的输出先经过
-项目内置过滤器：完整 URI、编码后的 `url`/`link` 请求来源和 Authorization 会变为 `[redacted]`。成功的 `/healthz`
-不写入 Gateway 访问日志；Subweb 通过 MyUrls 的 `LOG_LEVEL=warn` 抑制成功记录，但保留失败的健康检查。
-健康检查日志必须保留，因为 Compose 启动依赖和 `--wait` 都使用其状态。
+Compose 默认以 `info` 级别运行 MyUrls，保留正常请求记录。日志量较大时，可在 `.env` 中设置 `MYURLS_LOG_LEVEL=warn`，然后重建两个 MyUrls 容器。访问日志由 MyUrls 写入 stdout，再由 Docker `json-file` 驱动统一轮转。需要审计特定版本时，应在 `.env` 中显式指定已验证的镜像，并始终限制 Docker 管理权限。
 
-日志分享前仍应检查并删除 query、订阅 URL、Token、Redis URL 和真实短码。生产环境不要
-启用 SubConverter verbose 或 `print_debug_info = true`；Compose 每次启动都会强制恢复安全日志配置。
+所有容器的 `json-file` 标准输出日志限制为单文件 `10 MB`、最多 3 个文件。SubConverter 的输出先经过项目内置过滤器：完整 URI、编码后的 `url` / `link` 请求来源和 Authorization 会变为 `[redacted]`。成功的 `/healthz` 不写入 Gateway 访问日志；Subweb 通过 MyUrls 的 `LOG_LEVEL=warn` 抑制成功记录，但保留失败的健康检查。
 
-## SubConverter 出站网络
+日志分享前仍应检查并删除 query、订阅 URL、Token、Redis URL 和真实短码。生产环境不要启用 SubConverter verbose 或 `print_debug_info = true`；Compose 每次启动都会强制恢复安全日志配置。
 
-Compose 将项目受控的 `deploy/subconverter/gai.conf` 以只读方式挂载到 SubConverter。该文件让 glibc/libcurl
-在 DNS 同时返回 IPv4 和 IPv6、但 Docker 主机没有可用 IPv6 出站路由时优先选择 IPv4，避免远程规则集因
-IPv6 黑洞出现可恢复重试或拉取失败。它不改变公开端口、DNS、代理、订阅处理规则或其他容器的网络行为。
+## 受控订阅出站
 
-更新本仓库后，先验证 Compose，再仅重建 SubConverter 即可使配置生效：
+Request Policy Service 同时承担 `/sub` 请求策略与 SubConverter 专用 HTTPS CONNECT egress proxy。它在单一边界内解析远程 HTTPS 主机、拒绝 loopback / 私网 / link-local / 保留地址，并按已验证 IP 建立连接；SubConverter 仅加入内部 `subconverter-egress` 网络，没有默认网络的直接出站路径。
+
+SubConverter 依赖项目受控的 `deploy/subconverter/gai.conf`，在 DNS 同时返回 IPv4 和 IPv6、但 Docker 主机没有可用 IPv6 出站路由时优先使用 IPv4。该配置不改变公开端口、DNS 策略、egress proxy 或其他容器网络行为。
+
+更新本仓库后，先验证 Compose，再重建策略服务与 SubConverter：
 
 ```sh
 ./scripts/validate-compose.sh
-docker compose up -d --no-build --force-recreate --wait subconverter
-docker compose exec -T subconverter cat /etc/gai.conf
-docker compose logs --tail=100 subconverter
+docker compose build request-policy
+docker compose up -d --no-build --force-recreate --wait request-policy subconverter
+docker compose logs --tail=100 request-policy subconverter
 ```
 
-如果主机已经具备稳定的 IPv6 出站能力，该偏好仍可安全保留；它不会禁用 IPv6，也不能修复目标规则源自身不可达、
-DNS 故障或代理配置错误。需要撤销时，移除该 bind mount 后重建 `subconverter`，不要通过关闭 Docker 网络
-或添加不受控的全局代理处理。
+`gai.conf` 不能修复目标规则源自身不可达、DNS 故障或 egress proxy 配置错误。需要排查订阅转换时，先检查 Request Policy 的错误分类、SubConverter 健康与 Gateway 路由；不要通过关闭 Docker 网络或添加不受控全局代理绕过边界。
 
-若升级前的 SubConverter 日志已经包含真实订阅 URL，先轮换订阅凭据，再只重建该服务以移除当前 Docker
-容器日志。不要添加 `-v`，否则会一并删除 `/base` 运行卷：
+若升级前的 SubConverter 日志已经包含真实订阅 URL，先轮换订阅凭据，再只重建该服务以移除当前 Docker 容器日志。不要添加 `-v`，否则会一并删除 `/base` 运行卷：
 
 ```sh
 docker compose rm -sf subconverter
@@ -60,9 +50,7 @@ docker compose up -d --no-build --force-recreate subconverter
 docker compose logs --tail=100 subconverter
 ```
 
-Compose-first 本地模式不下载上游源码，也不生成独立日志文件。停止本机栈后，确认凭据已轮换、无需保留
-诊断证据时再清空该单个文件；不要删除 `.runtime/local/redis` 或整个 `.runtime/local/` 目录。任何已上传到
-日志平台、备份系统或工单的旧副本都需要在对应系统中单独清除。
+Compose-first 本地模式不下载上游源码，也不生成独立日志文件。停止本机栈后，确认凭据已轮换、无需保留诊断证据时再清空该单个文件；不要删除 `.runtime/local/redis` 或整个 `.runtime/local/` 目录。任何已上传到日志平台、备份系统或工单的旧副本都需要在对应系统中单独清除。
 
 ## Redis 备份
 
@@ -117,7 +105,7 @@ D1 已批准采用 `cap-90d`：迁移后的 TTL 取旧 key 剩余 TTL 与 90 天
 
 维护者展示部署使用 `sub.ml1.one`、`api.ml1.one` 和 `s.ml1.one`。其他部署者更换域名时，应同时更新 3 条 DNS 记录、`.env`、外层代理和证书中的 SAN。
 
-更换域名：更新 3 条 DNS 记录，重新运行 `configure.sh`，更新外层代理或 SAN 证书，执行 `validate-compose.sh`。源码构建执行 `docker compose up -d --build --wait`；镜像部署执行 `docker compose up -d --no-build --pull always --wait`，再验证网页、API、短链创建和旧短码。
+更换域名：更新 3 条 DNS 记录，重新运行 `configure.sh`，更新外层代理或 SAN 证书，执行 `validate-compose.sh`。源码构建执行 `docker compose build request-policy` 后再执行 `docker compose up -d --build --wait`；镜像部署由 `docker-deploy.sh` 拉取外部镜像、构建本地 `request-policy`，再执行 `--no-build --pull never` 启动。完成后验证网页、API、短链创建、旧短码和受控订阅转换。
 
 ## 公开发现性与搜索收录
 
@@ -127,7 +115,7 @@ D1 已批准采用 `cap-90d`：迁移后的 TTL 取旧 key 剩余 TTL 与 90 天
 
 API、转换请求、短链创建、短码跳转和带 query 的页面均不应被索引。Gateway 为 API 与短链路由返回 `X-Robots-Tag: noindex, nofollow, noarchive`；`robots.txt` 只是爬虫提示，不能替代访问控制，也不会消除已泄漏的 URL。
 
-Gateway 转换接口默认限制为每个来源地址每分钟 60 次，短链创建接口限制为每分钟 20 次；MyUrls 创建接口另有 10 分钟免挑战 5 次、硬上限 20 次及 UTC 日上限 100 次，短链解析默认按 IP 每 10 秒 600 次。出现 429 时，先检查外层代理是否把所有用户汇聚成同一个来源地址；确认反代到 Gateway 的实际来源 IPv4 后，用精确的 `TRUSTED_PROXY_CIDR` 启用可信的 `X-Forwarded-For`，不要直接关闭内部限流或信任任意来源。
+Gateway 转换接口默认限制为每个来源地址每分钟 `10` 次，并全局最多同时运行 `2` 个转换；短链创建接口限制为每分钟 `20` 次；短链解析默认按 IP 每 `10` 秒 `600` 次。出现 `429` 时，先检查外层代理是否把所有用户汇聚成同一个来源地址；确认反代到 Gateway 的实际来源 IPv4 后，用精确的 `TRUSTED_PROXY_CIDR` 启用可信的 `X-Forwarded-For`，不要直接关闭内部限流或信任任意来源。
 
 公开文档应只保留可验证的能力、部署方式、安全边界、版本和来源说明。不得把订阅 URL、短链、Token、用户配置、日志样本或请求 query 写入 Schema、sitemap、页面示例、截图或公开工单。
 

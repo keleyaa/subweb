@@ -1,7 +1,6 @@
 # 本地开发
 
-本地开发采用 Vite + Docker Compose：Vite 运行 Subweb，Compose 只运行两个 MyUrls v2 实例、
-SubConverter 和私有 Redis。不再下载或编译 MyUrls、SubConverter 的源码。
+本地开发采用 Vite + Docker Compose。Vite 运行 Subweb 页面；Compose 运行 Redis、两个 MyUrls v2 实例和 SubConverter。此模式为了调试直接暴露本机 SubConverter 端口，因此**不复现生产的 Gateway、Request Policy Service 与 HTTPS CONNECT egress 边界**。只使用可信测试订阅；完整匿名请求安全验证请运行 Docker 集成门禁。
 
 ## 前提
 
@@ -16,9 +15,7 @@ npm ci
 npm run dev
 ```
 
-打开 `http://127.0.0.1:5173/`。Vite 将 `/short-api/v1/links` 同源代理到
-`http://127.0.0.1:18082/api/v1/links`，转换请求使用
-`http://127.0.0.1:25500`。不要在其他项目目录执行这些脚本。
+打开 `http://127.0.0.1:5173/`。Vite 将 `/short-api/v1/links` 同源代理到 `http://127.0.0.1:18082/api/v1/links`；转换请求使用 `http://127.0.0.1:25500`。不要在其他项目目录执行这些脚本。
 
 ## 生命周期
 
@@ -28,9 +25,7 @@ npm run dev:stop
 npm run verify:local
 ```
 
-`npm run dev` 退出时停止依赖容器，但保留本地 Redis volume，便于下次联调。显式
-`npm run dev:stop` 同样不删除数据卷。若要销毁本地数据，先确认项目名和 volume，再使用
-Docker Compose 的带 volumes 清理操作。
+`npm run dev` 退出时停止依赖容器，但保留本地 Redis volume，便于下次联调。显式 `npm run dev:stop` 同样不删除数据卷。若要销毁本地数据，先确认项目名和 volume，再使用 Docker Compose 的带 volumes 清理操作。
 
 ## 自定义端口
 
@@ -42,10 +37,18 @@ LOCAL_SUBCONVERTER_PORT=25501 \
 npm run dev
 ```
 
-端口必须互不相同。生成的私有环境位于 `.runtime/local/compose.env`，权限为 `0600`，
-不应提交或直接输出。
+端口必须互不相同。生成的私有环境位于 `.runtime/local/compose.env`，权限为 `0600`，不应提交或直接输出。
 
 ## 验证边界
 
-`npm run verify:local` 验证页面、v2 JSON 创建和 302 跳转。完整的 Nginx、挑战和 Redis
-恢复门禁由 `npm run verify:integration` 与 `npm run verify:operations` 覆盖。
+`npm run verify:local` 验证页面、v2 JSON 创建和 `302` 跳转。它不验证生产 egress proxy、DNS rebinding 防护、Gateway Host 隔离、Turnstile 或 Redis 恢复。
+
+完整的生产边界由以下命令覆盖：
+
+```sh
+npm run verify:integration
+npm run verify:operations
+npm run verify:release
+```
+
+其中 `npm run verify:release` 聚合干净安装、质量、浏览器、镜像安全、Redis 运维和 Docker 集成验证；没有 `.env` 的干净工作树会使用仅限验证进程的临时配置，真实部署仍必须执行 `scripts/configure.sh` 生成 `.env`。

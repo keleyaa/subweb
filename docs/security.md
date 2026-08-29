@@ -5,8 +5,7 @@
 - APP 的 `/short-api/v1/links` 只接受 POST、JSON、空查询参数和精确的 APP Origin。
 - Gateway 清除 Authorization、Proxy-Authorization、Cookie 和 Origin 后再转发请求。
 - SHORT 域透明代理 MyUrls，由 MyUrls 自行校验同源请求、JSON Schema、URL 和 Turnstile。
-- API 域只代理 SubConverter，关闭上传能力并保持 `print_debug_info = false`。
-- APP 域的 `/sub` 先进入 `Request Policy Service`，执行 URL 协议、主机地址、端口、大小、超时、并发和匿名频率限制，再转发到 SubConverter。
+- API 域的 `/sub` 先进入 `Request Policy Service`，执行 URL 协议、主机地址、端口、大小、超时、并发和匿名频率限制，再转发到 SubConverter；上传能力保持关闭，`print_debug_info = false`。
 
 MyUrls 拒绝 loopback、私网和不安全 URL，以降低 SSRF 与开放重定向风险。策略服务对转换请求执行输入级 SSRF 防护，并在 DNS 解析结果上拒绝 loopback、私网、link-local 和保留地址。SubConverter 仅加入内部 `subconverter-egress` 网络，强制通过策略服务的 HTTPS CONNECT egress proxy 访问远程 HTTPS：代理在单一安全边界内解析目标、校验地址并按已验证 IP 建连，避免 DNS rebinding 使二次解析绕过策略。部分转换结果仍会生成由最终客户端继续拉取的 `proxy-providers` URL；这些客户端侧请求不经过本服务。短码和订阅链接都属于持有即可访问的数据，不应进入日志、分析系统或公开工单。
 

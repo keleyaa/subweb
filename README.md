@@ -1,105 +1,121 @@
 # Subconverter Web
 
-**Self-hosted subscription delivery**
-
-这是一个自托管的订阅转换与短链服务。浏览器只连接一个 Gateway。转换请求会先经过内部的 `Request Policy Service`，再由 `SubConverter-Extended` 处理；短链由 MyUrls v2 创建和跳转，Redis 保存短链映射。
+> 面向自托管维护者的在线订阅转换与短链服务。固定黑色命令界面、单一 Gateway、受控订阅访问边界。
 
 <p align="center">
-  <img src="./docs/assets/readme/subweb-hero.svg" width="100%" alt="Subconverter Web 将公共域名经由单个 Gateway 路由到私有的 SubConverter、MyUrls 和 Redis">
+  <img src="./assets/readme/command-interface.png" alt="Subconverter Web 固定黑色命令界面：订阅输入、客户端选择、订阅后端、高级参数与转换并复制操作" width="100%">
 </p>
 
-<p align="center">
-  <img src="./docs/assets/subconverter-web.png" width="100%" alt="Subconverter Web 的订阅转换页面">
-</p>
+## 能力
 
-## 能做什么
+- **订阅转换：** 输入订阅链接或节点，选择客户端与远程配置后生成可复制的转换地址。
+- **状态行设置：** 「订阅后端」在默认后端与自定义 API 地址之间切换；「高级参数」采用保存前草稿与显式重置，两个区域互斥原位展开。
+- **短链：** 通过同源 `/short-api/v1/links` 创建短链；浏览器不接触 MyUrls 内部 Token。
+- **匿名请求保护：** Request Policy Service 对转换输入执行 HTTPS、域名/IP、DNS、端口、大小、超时、并发和频率限制。
+- **受控出站：** SubConverter 仅加入内部 egress 网络，必须经 Request Policy Service 的 HTTPS CONNECT proxy 按已验证 IP 访问公网订阅，避免二次 DNS 解析绕过校验。
+- **PWA 图标：** 提供命令链接 favicon、Apple Touch Icon、`192 px` / `512 px` 图标与 manifest。
 
-- **转换订阅：** 粘贴订阅内容，选择目标格式，复制结果。
-- **创建短链：** 主站通过同源的 `/short-api/v1/links` 创建短链；MyUrls 页面也可在短链域名下使用。
-- **跳转短链：** `SHORT_DOMAIN/:shortKey` 由 MyUrls 查询 Redis 后跳转；`APP_DOMAIN/:shortKey` 兼容已有短码。
-- **保留映射：** Redis 是唯一的业务数据卷，Gateway 和前端不保存业务数据。
+## 快速开始
 
-## 服务边界
+### 环境要求
 
-<p align="center">
-  <img src="./docs/assets/readme/subweb-architecture.svg" width="100%" alt="浏览器经一个 Gateway 分别访问应用、API 和短链域名，再连接私有的 SubConverter、MyUrls 与 Redis">
-</p>
+- Docker Engine 与 Docker Compose v2
+- OpenSSL、curl
+- 3 个不同域名：APP、API、SHORT
 
-| 域名或服务 | 职责 |
-| --- | --- |
-| `APP_DOMAIN` | Subweb 前端、短链创建接口，以及已有短码的兼容跳转 |
-| `API_DOMAIN` | `/sub` 转换路由和 SubConverter 健康检查 |
-| `SHORT_DOMAIN` | MyUrls 页面、短链创建与跳转 |
-| Gateway | 按 Host 路由请求，清理浏览器凭据；内部服务不开放宿主机端口 |
-| Request Policy Service | 校验转换输入，执行地址策略、限流、并发、超时和响应大小限制 |
-| SubConverter-Extended | 订阅转换 |
-| MyUrls | 短链创建与跳转 |
-| Redis | 短链映射持久化 |
-
-## 部署
-
-Docker Compose 部署需要 3 个由你控制的域名，分别用于应用、API 和短链，例如 `sub.example.com`、`api.example.com`、`short.example.com`；也可以参考 `sub.ml1.one`、`api.ml1.one`、`s.ml1.one`。外层 Nginx、OpenResty、宝塔、1Panel 或 Cloudflare Tunnel 应将这 3 个域名反代到 `http://127.0.0.1:18080`，并处理公网 TLS。
+### 本机源码部署
 
 ```sh
-mkdir -p "$HOME/apps" && cd "$HOME/apps"
 git clone https://github.com/keleyaa/subweb.git
 cd subweb
-
-./scripts/docker-deploy.sh \
-  --app-domain sub.example.com \
+./scripts/configure.sh \
+  --app-domain app.example.com \
   --api-domain api.example.com \
   --short-domain short.example.com \
   --turnstile-site-key YOUR_SITE_KEY \
   --turnstile-secret-key YOUR_SECRET_KEY
-
-docker compose ps
+./scripts/validate-compose.sh
+docker compose build request-policy
+docker compose up -d --build --wait
 ```
 
-脚本会生成权限为 `0600` 的 `.env`、Redis 密码和独立的 IP 哈希秘密，然后完成 Compose 校验、拉取外部镜像、构建 `Request Policy Service` 镜像并启动服务。短链形如 `https://short.example.com/abc123`；主站的创建接口返回 `code`、`shortUrl` 和 `expiresAt`。
+外层反向代理将 3 个域名都转发到 `127.0.0.1:18080`，并保留原始 Host。项目自身不管理 HTTPS 证书、`80/443` 端口或公网 DNS。
 
-Gateway 镜像同时发布到 `docker.io/keleyaa/subweb` 与 `ghcr.io/keleyaa/subweb`。MyUrls v2 的镜像版本与 manifest digest 锁定在 `deploy/versions.lock.json`；如需冻结版本或回滚，可在 `.env` 中覆盖镜像。预构建 Gateway 部署仍会从当前源码构建 `Request Policy Service`。完整步骤见 [Docker 部署](docs/deployment-docker.md)。
+更多部署方式见 [部署索引](docs/deployment.md)。
 
-### 本地开发
+### 发布镜像
 
-本机开发时，Vite 与 Docker Compose 依赖均只监听 loopback 地址：
+Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 是等价的 Gateway 发布来源。使用 `scripts/docker-deploy.sh --image` 可选择经过验证的镜像引用；完整步骤见 [Docker 部署](docs/deployment-docker.md)。
+
+## 架构
+
+<p align="center">
+  <img src="./assets/readme/security-architecture.svg" alt="浏览器经 Gateway 访问 Request Policy Service、SubConverter、MyUrls 与 Redis；SubConverter 的公网订阅访问经 HTTPS CONNECT egress proxy 按已验证 IP 建连" width="100%">
+</p>
+
+| 边界 | 职责 |
+| --- | --- |
+| Gateway | 唯一公开容器端口；按 APP / API / SHORT Host 路由，清理凭据与不可信请求头。 |
+| Request Policy Service | `/sub` 输入校验、匿名限流、并发与大小限制、熔断；同时提供 SubConverter 专用 HTTPS CONNECT egress proxy。 |
+| SubConverter | 仅处理转换，加入内部 egress 网络；没有默认网络的直接出站路径。 |
+| MyUrls v2 | APP / SHORT 两个实例处理短链 API、管理页面与跳转。 |
+| Redis | DB `0` 保存短链，DB `1` 保存带 TTL 的匿名限流状态；不保存普通转换 URL 或转换结果。 |
+
+## 界面操作
+
+1. 粘贴订阅链接或节点。
+2. 选择客户端与远程配置。
+3. 按需展开「订阅后端」或「高级参数」；两项不会同时占用页面空间。
+4. 点击「转换并复制」。成功后显示转换结果和短链操作。
+
+页面固定使用黑色命令主题，不提供明暗主题切换。交互目标、键盘焦点、减少动效与增强对比度均有独立验证。
+
+## 安全与隐私
+
+- 只允许通过 Gateway 访问公开路由；Redis、MyUrls、SubConverter 与 Request Policy Service 不发布宿主机端口。
+- 匿名转换默认每个来源 IP 每分钟最多 `10` 次，同时最多运行 `2` 个请求；达到限制时返回 `429` 与 `Retry-After`。
+- 转换 URL 与结果不写入 Redis；用户主动创建短链时，短链目标按 TTL 保存，短链属于持有即可访问的数据。
+- 日志不记录原始 IP、订阅 URL、Query、Token、Redis 密码或完整短码；请勿将这些值放入截图、Issue 或公开工单。
+- `proxy-providers` URL 由最终客户端直接拉取，不经过本服务的 egress proxy；部署者应理解并接受这一客户端侧边界。
+
+详细边界见 [安全](docs/security.md) 与 [配置](docs/configuration.md)。
+
+## 验证与维护
 
 ```sh
-git clone https://github.com/keleyaa/subweb.git
-cd subweb
 npm ci
-npm run dev
+npm run verify:release
+git diff --check
 ```
 
-访问 `http://127.0.0.1:5173/`。常用命令：
+`npm run verify:release` 在没有 `.env` 的干净工作树中使用临时验证配置完成 Compose 构建；真实部署仍必须通过 `scripts/configure.sh` 生成权限为 `0600` 的 `.env`。
 
-```sh
-npm run dev:status
-npm run dev:stop
-```
+发布前、备份恢复、镜像锁定与推送边界见 [维护与发布](docs/maintenance.md)。
 
-## 日志与安全
+## 文档
 
-MyUrls 默认以 `info` 级别输出正常请求记录；需要降低日志量时，在 `.env` 设置 `MYURLS_LOG_LEVEL=warn` 后重建 `myurls-app` 与 `myurls-short`。日志写入容器 stdout，由 Docker `json-file` 轮转。SubConverter 仍固定关闭 verbose 与 `print_debug_info`。
+**使用与配置**
 
-订阅 URL 可能携带凭据。转换请求会先经过 `Request Policy Service` 的输入级安全校验，再由 SubConverter 读取；创建短链时完整转换 URL 会写入 Redis。**短码不是加密**：任何拿到短码的人通常都能完成跳转。
+- [架构](docs/architecture.md)
+- [配置](docs/configuration.md)
+- [远程配置来源](docs/remote-config-sources.md)
+- [界面设计](docs/interface-design.md)
 
-不要提交、截图或发布以下内容：
+**部署与安全**
 
-- `.env`、`.runtime/`、证书、Redis 备份；
-- 订阅 URL、query、真实短码、Token、Redis URL 或未脱敏日志；
-- 历史诊断日志的原始副本。
+- [部署总览](docs/deployment.md)
+- [本地开发](docs/deployment-local.md)
+- [Docker 部署](docs/deployment-docker.md)
+- [安全边界](docs/security.md)
+- [运维](docs/operations.md)
 
-浏览器配置只包含公开 URL 与预设；`TURNSTILE_SECRET_KEY`、Redis 密码和 IP 哈希秘密只留在服务端。公开部署前请阅读 [安全边界](docs/security.md)。
+**来源与维护**
+
+- [第三方来源](docs/third-party-sources.md)
+- [维护与验证](docs/maintenance.md)
 
 ## Fork 与来源说明
 
-- [架构说明](docs/architecture.md) · [运行时配置](docs/configuration.md) · [部署索引](docs/deployment.md)
-- [Docker 部署](docs/deployment-docker.md) · [本机源码运行](docs/deployment-local.md) · [运维手册](docs/operations.md)
-- [安全边界](docs/security.md) · [第三方来源与变更边界](docs/third-party-sources.md)
-- [界面设计规范](docs/interface-design.md) · [远程配置来源](docs/remote-config-sources.md) · [维护与发布](docs/maintenance.md)
+本项目是对 [stilleshan/subweb](https://github.com/stilleshan/subweb) 的独立维护版本，保留订阅转换的前端基础，并以自托管 Gateway、受控请求策略、短链与部署验证作为当前运行边界。MyUrls 来自 [keleyaa/MyUrls](https://github.com/keleyaa/MyUrls) 与 [CareyWang/MyUrls](https://github.com/CareyWang/MyUrls)，转换引擎来自 [Aethersailor/SubConverter-Extended](https://github.com/Aethersailor/SubConverter-Extended)。
 
-本仓库 [`keleyaa/subweb`](https://github.com/keleyaa/subweb) 源自 [`stilleshan/subweb`](https://github.com/stilleshan/subweb)，现独立维护。短链服务使用维护者 fork 的 [`keleyaa/MyUrls`](https://github.com/keleyaa/MyUrls)，上游为 [`CareyWang/MyUrls`](https://github.com/CareyWang/MyUrls)；转换服务使用 [`Aethersailor/SubConverter-Extended`](https://github.com/Aethersailor/SubConverter-Extended)。界面以 Apple 平台的材质、层级和可访问性原则为方法参考。集成基线、许可证和变更边界见 [第三方来源](docs/third-party-sources.md)。
-
-## License
-
-本仓库代码采用 [GPL-3.0](LICENSE)；集成组件和远程配置来源继续遵循各自许可证。
+完整的镜像来源、版本与许可证说明见 [第三方来源](docs/third-party-sources.md)。

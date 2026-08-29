@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Subconverter Web 的受控服务架构</title>
+  <desc id="desc">浏览器通过 Gateway 访问转换与短链。转换请求经过 Request Policy Service，再由隔离的 SubConverter 通过该服务的 HTTPS CONNECT 代理访问已验证的公网订阅地址。MyUrls 使用 Redis 保存短链映射。</desc>
+  <rect width="1200" height="520" rx="24" fill="#0d0f0f"/>
+  <g fill="none" stroke="#343936" stroke-width="2">
+    <path d="M202 262H270"/>
+    <path d="M478 190H548"/>
+    <path d="M726 190H796"/>
+    <path d="M478 334H548"/>
+    <path d="M726 334H796"/>
+    <path d="M940 334H1008"/>
+    <path d="M870 242V286"/>
+    <path d="M940 190H1008"/>
+  </g>
+  <g fill="#d7ff4b">
+    <path d="M262 255l12 7-12 7z"/>
+    <path d="M540 183l12 7-12 7z"/>
+    <path d="M788 183l12 7-12 7z"/>
+    <path d="M540 327l12 7-12 7z"/>
+    <path d="M788 327l12 7-12 7z"/>
+    <path d="M1000 327l12 7-12 7z"/>
+    <path d="M862 278l8 12 8-12z"/>
+    <path d="M1000 183l12 7-12 7z"/>
+  </g>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif">
+    <text x="64" y="68" fill="#d7ff4b" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="700" letter-spacing="3">CONTROLLED SUBSCRIPTION DELIVERY</text>
+    <text x="64" y="112" fill="#f3f4ee" font-size="40" font-weight="700">单一 Gateway，受控转换与短链边界</text>
+    <text x="64" y="145" fill="#9ba09a" font-size="20">公开请求只有一条入口；订阅抓取由已验证 IP 的 HTTPS CONNECT 代理约束。</text>
+
+    <g transform="translate(64 218)">
+      <rect width="138" height="88" rx="12" fill="#151817" stroke="#4b504c" stroke-width="2"/>
+      <circle cx="28" cy="28" r="7" fill="#d7ff4b"/>
+      <text x="28" y="57" fill="#f3f4ee" font-size="22" font-weight="700">Browser</text>
+      <text x="28" y="76" fill="#9ba09a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">3 hosts</text>
+    </g>
+
+    <g transform="translate(270 154)">
+      <rect width="208" height="216" rx="12" fill="#151817" stroke="#d7ff4b" stroke-width="2"/>
+      <text x="28" y="43" fill="#f3f4ee" font-size="24" font-weight="700">Gateway</text>
+      <text x="28" y="71" fill="#9ba09a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">APP / API / SHORT</text>
+      <path d="M28 95H180" stroke="#343936" stroke-width="1"/>
+      <text x="28" y="125" fill="#cbd0c9" font-size="17">Host 路由</text>
+      <text x="28" y="153" fill="#cbd0c9" font-size="17">凭据与 Origin 清理</text>
+      <text x="28" y="181" fill="#cbd0c9" font-size="17">唯一公开端口</text>
+    </g>
+
+    <g transform="translate(548 126)">
+      <rect width="178" height="128" rx="12" fill="#151817" stroke="#4b504c" stroke-width="2"/>
+      <text x="24" y="38" fill="#f3f4ee" font-size="20" font-weight="700">Request Policy</text>
+      <text x="24" y="64" fill="#9ba09a" font-size="16">URL / DNS / 限流</text>
+      <text x="24" y="88" fill="#9ba09a" font-size="16">超时 / 大小 / 并发</text>
+      <text x="24" y="112" fill="#d7ff4b" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">/sub · :25501</text>
+    </g>
+
+    <g transform="translate(796 126)">
+      <rect width="144" height="128" rx="12" fill="#151817" stroke="#4b504c" stroke-width="2"/>
+      <text x="22" y="42" fill="#f3f4ee" font-size="20" font-weight="700">SubConverter</text>
+      <text x="22" y="68" fill="#9ba09a" font-size="16">转换处理</text>
+      <text x="22" y="96" fill="#9ba09a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">internal only</text>
+    </g>
+
+    <g transform="translate(1008 154)">
+      <rect width="128" height="72" rx="12" fill="#151817" stroke="#4b504c" stroke-width="2"/>
+      <text x="20" y="31" fill="#f3f4ee" font-size="18" font-weight="700">公网订阅</text>
+      <text x="20" y="52" fill="#9ba09a" font-size="14">HTTPS only</text>
+    </g>
+
+    <g transform="translate(548 298)">
+      <rect width="178" height="72" rx="12" fill="#151817" stroke="#4b504c" stroke-width="2"/>
+      <text x="24" y="30" fill="#f3f4ee" font-size="20" font-weight="700">MyUrls v2</text>
+      <text x="24" y="52" fill="#9ba09a" font-size="14">APP / SHORT 实例</text>
+    </g>
+
+    <g transform="translate(796 298)">
+      <rect width="144" height="72" rx="12" fill="#151817" stroke="#4b504c" stroke-width="2"/>
+      <text x="22" y="30" fill="#f3f4ee" font-size="20" font-weight="700">Redis</text>
+      <text x="22" y="52" fill="#9ba09a" font-size="14">短链 + TTL 限流</text>
+    </g>
+
+    <g transform="translate(1008 298)">
+      <rect width="128" height="72" rx="12" fill="#151817" stroke="#4b504c" stroke-width="2"/>
+      <text x="20" y="30" fill="#f3f4ee" font-size="18" font-weight="700">短链跳转</text>
+      <text x="20" y="52" fill="#9ba09a" font-size="14">持有即可访问</text>
+    </g>
+
+    <text x="496" y="177" fill="#9ba09a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">/sub</text>
+    <text x="740" y="177" fill="#9ba09a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">validated query</text>
+    <text x="736" y="278" fill="#d7ff4b" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">HTTPS CONNECT :25502</text>
+    <text x="496" y="321" fill="#9ba09a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">short links</text>
+    <text x="948" y="321" fill="#9ba09a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">TTL</text>
+    <text x="948" y="177" fill="#9ba09a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">verified IP</text>
+
+    <rect x="64" y="422" width="1072" height="1" fill="#343936"/>
+    <text x="64" y="464" fill="#9ba09a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">internal only · no published Redis / MyUrls / SubConverter / Request Policy ports</text>
+    <text x="64" y="492" fill="#d7ff4b" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">egress proxy resolves, validates, and connects by the approved IP</text>
+  </g>
+</svg>

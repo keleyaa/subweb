@@ -78,7 +78,7 @@ const imageAttributes = (tag) => {
 };
 
 const hasEmbeddedReadmeImage = (source, asset) => {
-  const expectedSource = `./docs/assets/readme/${asset}`;
+  const expectedSource = `./assets/readme/${asset}`;
   return imageTags(source).some((tag) => {
     const attributes = imageAttributes(tag);
     if (!attributes) return false;
@@ -175,15 +175,14 @@ describe('documentation contract', () => {
     expect(security).toContain('MYURLS_IMAGE');
   });
 
-  it('keeps the product story and local visual proof explicit', () => {
+  it('keeps the current product story and local visual proof explicit', () => {
     const readme = read('README.md');
 
     for (const text of [
-      'Self-hosted subscription delivery',
-      '自托管的订阅转换与短链服务',
-      'docs/assets/readme/subweb-hero.svg',
-      'docs/assets/readme/subweb-architecture.svg',
-      'docs/assets/subconverter-web.png',
+      '面向自托管维护者的在线订阅转换与短链服务',
+      '固定黑色命令界面',
+      'assets/readme/command-interface.png',
+      'assets/readme/security-architecture.svg',
       'docker.io/keleyaa/subweb',
       'ghcr.io/keleyaa/subweb',
     ]) {
@@ -192,26 +191,26 @@ describe('documentation contract', () => {
   });
 
   it('requires local visual proof to be rendered HTML images with descriptive alt text', () => {
-    const asset = 'subweb-hero.svg';
-    const image = `<img alt="Subweb hero architecture" src="./docs/assets/readme/${asset}">`;
+    const asset = 'command-interface.png';
+    const image = `<img alt="Subweb command interface" src="./assets/readme/${asset}">`;
 
     expect(hasEmbeddedReadmeImage(image, asset)).toBe(true);
     expect(hasEmbeddedReadmeImage(`\`\`\`html\n${image}\n\`\`\``, asset)).toBe(false);
     expect(hasEmbeddedReadmeImage(`<!-- ${image} -->`, asset)).toBe(false);
-    expect(hasEmbeddedReadmeImage(`docs/assets/readme/${asset}`, asset)).toBe(false);
-    expect(hasEmbeddedReadmeImage(`<img alt="" src="./docs/assets/readme/${asset}">`, asset)).toBe(false);
+    expect(hasEmbeddedReadmeImage(`assets/readme/${asset}`, asset)).toBe(false);
+    expect(hasEmbeddedReadmeImage(`<img alt="" src="./assets/readme/${asset}">`, asset)).toBe(false);
     expect(
-      hasEmbeddedReadmeImage('<img alt="Wrong path" src="./docs/assets/readme/subweb-heroXsvg">', asset),
+      hasEmbeddedReadmeImage('<img alt="Wrong path" src="./assets/readme/command-interfaceXpng">', asset),
     ).toBe(false);
     expect(
       hasEmbeddedReadmeImage(
-        '<img alt="Subweb hero architecture" src="./docs/assets/readme/subweb-hero.svg" src="./docs/assets/readme/wrong.svg">',
+        '<img alt="Subweb command interface" src="./assets/readme/command-interface.png" src="./assets/readme/wrong.png">',
         asset,
       ),
     ).toBe(false);
     expect(
       hasEmbeddedReadmeImage(
-        '<img alt="" alt="Subweb hero architecture" src="./docs/assets/readme/subweb-hero.svg">',
+        '<img alt="" alt="Subweb command interface" src="./assets/readme/command-interface.png">',
         asset,
       ),
     ).toBe(false);
@@ -240,19 +239,19 @@ describe('documentation contract', () => {
       '&#x200B;',
       '&#x200B',
     ]) {
-      expect(hasEmbeddedReadmeImage(`<img alt="${alt}" src="./docs/assets/readme/subweb-hero.svg">`, asset)).toBe(false);
+      expect(hasEmbeddedReadmeImage(`<img alt="${alt}" src="./assets/readme/${asset}">`, asset)).toBe(false);
     }
     for (const alt of ['&NoBreak;', '&copy;']) {
-      expect(hasEmbeddedReadmeImage(`<img alt="${alt}" src="./docs/assets/readme/subweb-hero.svg">`, asset)).toBe(false);
+      expect(hasEmbeddedReadmeImage(`<img alt="${alt}" src="./assets/readme/${asset}">`, asset)).toBe(false);
     }
-    expect(hasEmbeddedReadmeImage(`<img alt="Subconverter Web &copy;" src="./docs/assets/readme/${asset}">`, asset)).toBe(true);
-    expect(hasEmbeddedReadmeImage(`<img alt="订阅服务架构" src="./docs/assets/readme/${asset}">`, asset)).toBe(true);
+    expect(hasEmbeddedReadmeImage(`<img alt="Subconverter Web &copy;" src="./assets/readme/${asset}">`, asset)).toBe(true);
+    expect(hasEmbeddedReadmeImage(`<img alt="订阅服务架构" src="./assets/readme/${asset}">`, asset)).toBe(true);
   });
 
-  it('embeds the hero and architecture proof as descriptive local HTML images', () => {
+  it('embeds the current interface and security architecture as descriptive local HTML images', () => {
     const readme = read('README.md');
 
-    for (const asset of ['subweb-hero.svg', 'subweb-architecture.svg']) {
+    for (const asset of ['command-interface.png', 'security-architecture.svg']) {
       expect(hasEmbeddedReadmeImage(readme, asset)).toBe(true);
     }
   });

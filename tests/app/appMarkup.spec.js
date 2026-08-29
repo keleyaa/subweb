@@ -13,7 +13,7 @@ describe('application mount markup', () => {
     expect(indexHtml).toContain('<html lang="zh-CN">');
     expect(indexHtml).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />');
     expect(indexHtml).toContain('<title>Subconverter Web</title>');
-    expect(indexHtml).toContain('<meta name="description" content="自托管订阅转换与短链服务，提供统一网关、隐私边界和 Docker 部署。" />');
+    expect(indexHtml).toContain('<meta name="description" content="自托管订阅转换与短链服务，提供受控请求策略、隐私边界和 Docker 部署。" />');
     expect(indexHtml).toContain('<link rel="canonical" href="https://sub.ml1.one/" />');
     expect(indexHtml).toContain('<meta property="og:url" content="https://sub.ml1.one/" />');
     expect(indexHtml).toContain('<script type="application/ld+json">');

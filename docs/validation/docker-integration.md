@@ -1,50 +1,25 @@
-# Docker 一体化集成验证
+# 单一 HTTP Docker 集成验证
 
-本文记录当前固定的 3 个域名和单一 HTTP Gateway 方案的验证范围。本文是验证记录，不是部署指南；生产部署只按
-[`docs/deployment.md`](../deployment.md) 和 [`docs/deployment-docker.md`](../deployment-docker.md) 操作。
+验证脚本启动完整 Compose 栈：`gateway`、`request-policy`、`subconverter`、`myurls-app`、`myurls-short` 与 `redis`。所有公开请求仍只经 Gateway 的单一 HTTP 入口；Request Policy Service 与 HTTPS CONNECT egress proxy 仅在内部网络可达。
 
-## 验证环境
+运行：
 
-| 项目 | 值 |
-| --- | --- |
-| 验证入口 | `scripts/verify-integrated-stack.sh` |
-| 配置方案 | 固定的 3 个域名 + 单一 HTTP Gateway |
-| 公网入口 | 外部反向代理转发到 `127.0.0.1:18080` |
-| 集成开关 | `RUN_DOCKER_INTEGRATION=1` |
+```sh
+npm run verify:integration
+```
 
-## 集成验证镜像
+脚本在项目隔离 Docker network 中执行，并为每次运行选择未占用的私有 `/29` 网段，避免与本机其他 Compose 项目冲突。它不会删除或修改其他项目的容器、网络或卷。
 
-Compose 默认使用各上游当前发布策略；需要可重复验证或回滚时，在不提交的 `.env` 中显式覆盖镜像引用。
-锁定基线和来源说明见 [`deploy/versions.lock.json`](../../deploy/versions.lock.json) 与
-[`docs/third-party-sources.md`](../third-party-sources.md)。
+## 覆盖范围
 
-## 验证结果
+- Gateway、Request Policy、SubConverter、两个 MyUrls v2 实例和 Redis 均达到健康状态；
+- APP、API、SHORT Host 路由与单一 HTTP 行为；
+- `/sub` 经 Request Policy 拒绝私网、非 HTTPS、危险端口与超限输入；
+- SubConverter 只可通过内部 HTTPS CONNECT egress proxy 访问远程 HTTPS，未直接加入默认出站网络；
+- APP 创建短链、SHORT 跳转与 v2 JSON 响应；
+- 所有公开路径只使用 Gateway 的监听端口，MyUrls、Redis、SubConverter、Request Policy 与 egress proxy 不发布宿主机端口；
+- Redis 短暂重启后 MyUrls 与 Request Policy 的恢复；
+- Gateway、Request Policy、MyUrls 与 SubConverter 日志不出现订阅 URL、挑战 Token、Redis 密码、IP 哈希秘密或真实短码；
+- 容器、网络与临时 volume 在退出后由脚本按本次项目名前缀清理。
 
-| 命令 | 退出码 | 结果 |
-| --- | ---: | --- |
-| `npm test -- --run tests/integration/gatewayStack.spec.js tests/integration/privacySentinel.spec.js` | 0 | 8 项通过，2 项 Docker 用例按设计明确跳过 |
-| `RUN_DOCKER_INTEGRATION=1 npm test -- --run tests/integration/gatewayStack.spec.js tests/integration/privacySentinel.spec.js` | 0 | 10 项全部通过 |
-| `./scripts/verify-integrated-stack.sh` | 0 | 四服务健康，三 Host、MyUrls 前端、短链、持久性和隐私契约通过 |
-
-集成验证覆盖以下契约：
-
-1. APP Host 返回 Subweb，API Host 完成真实的最小订阅转换；
-2. Gateway 覆盖客户端伪造的 `Authorization`，浏览器不接触 MyUrls 内部 Token；
-3. 创建的新短链使用 SHORT 域名，短码可跳转到原目标；
-4. 依次重启 Redis 和 MyUrls 后，已创建短码仍可访问；
-5. Redis、MyUrls 和 SubConverter 均未发布宿主机端口，且宿主机 loopback 对 `6379`、`8080`、`25500` 的实际 TCP 连接均被拒绝；
-6. Gateway、MyUrls、SubConverter 和 Redis 日志中均未发现随机隐私哨兵、完整订阅 URL 或内部 Token。
-
-隐私验证使用一次性随机订阅 URL，并将随机值放入上游已知会脱敏的 `token` 查询参数。脚本同时扫描完整 URL 和随机值；终端只输出泄漏计数，不输出哨兵、Token、Redis 密码或完整容器日志。
-
-## TLS 边界
-
-项目不监听 `80/443`，也不读取证书文件。证书覆盖、HTTP 到 HTTPS 跳转、HSTS、WAF 和公网端口冲突属于外层反向代理；项目集成验证只检查回环 HTTP 路由和 Host 隔离。
-
-Redis 离线备份校验将服务日志写入独立文件，`DBSIZE` 输出不会被启动日志污染。恢复流程只在权限为 `0700` 的运维目录内创建短生命周期的只读暂存快照，使容器内 Redis 用户可读取宿主机 `0600` 备份；暂存文件在成功、失败或退出时删除，不以 root 身份运行 Redis。
-
-端口冲突测试使用唯一命名且带 `--rm` 的临时容器；Compose 验证使用随机 project name，退出时只执行该 project 的 `down --volumes --remove-orphans`，不会清理其他项目的容器、网络或卷。
-
-## 证据边界
-
-本文件不保存私钥、MyUrls Token、Redis 密码、随机哨兵、原始订阅 URL 或完整服务日志。容器级测试必须显式设置 `RUN_DOCKER_INTEGRATION=1`；未设置时显示为跳过，不视为容器验证通过。
+MyUrls 创建与解析检查使用 APP / SHORT 域名 Host，转换接口使用 API Host。验证配置的域名只在脚本隔离环境中使用，不能作为生产部署值。
