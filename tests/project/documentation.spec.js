@@ -127,7 +127,8 @@ describe('documentation contract', () => {
       'configure.sh',
       'validate-compose.sh',
       'docker compose up -d --build --wait',
-      'docker compose up -d --no-build --pull always --wait',
+      'docker compose build request-policy',
+      'docker compose up -d --no-build --pull never --wait',
     ]) {
       expect(docker).toContain(command);
     }

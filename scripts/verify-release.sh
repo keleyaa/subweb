@@ -17,6 +17,7 @@ stage production-readiness node scripts/verify-production-readiness.mjs
 stage compose npm run verify:compose
 stage documentation npm run verify:docs
 stage container ./scripts/verify-container.sh subweb:release-check
+stage request-policy-container docker compose build request-policy
 locked_images=$(node - <<'NODE'
 const fs = require('node:fs');
 const lock = JSON.parse(fs.readFileSync('deploy/versions.lock.json', 'utf8'));
@@ -32,6 +33,7 @@ redis_image=$2
 subconverter_image=$3
 myurls_image=$4
 stage image-security ./scripts/verify-image-security.sh "$candidate_image" "$myurls_image"
+stage image-security-request-policy ./scripts/verify-image-security.sh subweb-request-policy:local
 stage image-security-redis ./scripts/verify-image-security.sh --ignorefile .trivyignore.redis "$redis_image"
 stage image-security-subconverter ./scripts/verify-image-security.sh --ignorefile .trivyignore.subconverter "$subconverter_image"
 stage redis-operations ./scripts/verify-redis-operations.sh

@@ -13,6 +13,7 @@ const validCompose = {
     'myurls-app': { image: 'myurls' },
     'myurls-short': { image: 'myurls' },
     subconverter: { image: 'subconverter' },
+    'request-policy': { image: 'request-policy' },
   },
 };
 
@@ -51,7 +52,7 @@ describe('single gateway Compose validation', () => {
     ['published internal service', { ...validCompose, services: { ...validCompose.services, redis: { ports: [{ target: 6379, published: '6379' }] } } }],
     ['unapproved published service', { ...validCompose, services: { ...validCompose.services, debug: { ports: [{ target: 9000, published: '9000' }] }, gateway: {} } }],
     ['missing internal service', { services: { gateway: validCompose.services.gateway, redis: {}, 'myurls-app': {} } }],
-    ['missing gateway', { services: { redis: {}, 'myurls-app': {}, 'myurls-short': {}, subconverter: {} } }],
+     ['missing gateway', { services: { redis: {}, 'myurls-app': {}, 'myurls-short': {}, subconverter: {}, 'request-policy': {} } }],
   ])('rejects rendered Compose JSON with %s', async (_name, composeJson) => {
     const fixture = await createFixture(composeJson);
     const result = await import('node:child_process').then(({ spawnSync }) => spawnSync('sh', [validatorPath], { cwd: fixture.directory, encoding: 'utf8', env: fixture.env }));

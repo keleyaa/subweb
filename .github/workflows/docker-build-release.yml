@@ -59,6 +59,9 @@ jobs:
       - name: Verify container runtime
         run: npm run verify:container
 
+      - name: Build request policy image
+        run: docker compose build request-policy
+
       # Export the exact locked artifacts so integration and vulnerability
       # scans inspect the same images as production defaults.
       - name: Resolve external runtime images
@@ -92,6 +95,15 @@ jobs:
       - name: Audit dependencies
         run: npm audit --audit-level=moderate
 
+      - name: Scan request policy image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: subweb-request-policy:local
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
       - name: Scan final image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:

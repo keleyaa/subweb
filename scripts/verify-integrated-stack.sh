@@ -132,6 +132,9 @@ compose exec -T myurls-app node -e \
 compose exec -T myurls-short node -e \
   "Promise.all(['/health/live','/health/ready'].map(p=>fetch('http://127.0.0.1:3000'+p).then(r=>{if(!r.ok)process.exit(1)}))).catch(()=>process.exit(1))" \
   || fail 'SHORT MyUrls live/readiness checks failed'
+compose exec -T request-policy node -e \
+  "fetch('http://127.0.0.1:25501/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" \
+  || fail 'request policy health check failed'
 
 [ "$(compose exec -T gateway getent ahostsv4 myurls-app-edge | awk 'NR == 1 { print $1 }')" = '172.30.255.3' ] \
   || fail 'Gateway did not resolve the APP MyUrls edge alias to its trusted-network address'
@@ -193,6 +196,9 @@ rate_keys_after=$(count_create_rate_keys)
 [ "$rate_keys_after" -eq $((rate_keys_before + 4)) ] \
   || fail 'Gateway did not preserve distinct client identities for MyUrls rate limits'
 
+[ "$(status_for "$temporary_directory/ssrf.out" -H 'Host: api.app.test' \
+  "http://127.0.0.1:$host_port/sub?target=clash&url=https%3A%2F%2F127.0.0.1%2Fadmin")" = 403 ] \
+  || fail 'private conversion target was not rejected by request policy'
 [ "$(status_for "$temporary_directory/type.out" -H 'Host: app.test' -H 'Origin: https://app.test' \
   -H 'Content-Type: text/plain' --data '{}' "http://127.0.0.1:$host_port/short-api/v1/links")" = 415 ] \
   || fail 'non-JSON request was not rejected'
@@ -201,7 +207,7 @@ rate_keys_after=$(count_create_rate_keys)
 [ "$(post_json "$temporary_directory/unknown.out" app.test https://app.test '{"url":"https://example.com","unknown":true}')" = 400 ] \
   || fail 'unknown JSON field was not rejected'
 
-for service_port in 'redis 6379' 'myurls-app 3000' 'myurls-short 3000' 'subconverter 25500'; do
+for service_port in 'redis 6379' 'myurls-app 3000' 'myurls-short 3000' 'subconverter 25500' 'request-policy 25501'; do
   set -- $service_port
   [ -z "$(docker port "$(compose ps -q "$1")" "$2/tcp" 2>/dev/null || true)" ] || fail 'an internal port was published'
 done
@@ -209,7 +215,7 @@ done
 compose restart redis >> "$command_log" 2>&1 || fail 'Redis restart failed'
 compose up -d --wait --wait-timeout 120 >> "$command_log" 2>&1 || fail 'stack did not recover after Redis restart'
 
-for service in gateway myurls-app myurls-short subconverter redis; do
+for service in gateway myurls-app myurls-short subconverter request-policy redis; do
   compose logs --no-color --tail 500 "$service" > "$service_log" 2>&1 || fail 'service logs were unavailable'
   grep -Fq "$sentinel_value" "$service_log" && fail "service log leaked request data: $service"
   grep -Fq 'test-token' "$service_log" && fail "service log leaked a challenge token: $service"

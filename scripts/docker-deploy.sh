@@ -89,8 +89,9 @@ else
 fi
 
 "$SCRIPT_DIRECTORY/validate-compose.sh"
-docker compose pull
-docker compose up -d --no-build --pull always --wait
+docker compose pull gateway redis myurls-app myurls-short subconverter
+docker compose build request-policy
+docker compose up -d --no-build --pull never --wait
 docker compose ps
 
 printf 'Docker image deployment started for https://%s.\n' "$app_domain"

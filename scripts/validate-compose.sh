@@ -71,7 +71,7 @@ process.stdin.on("end", () => {
     console.error(`Compose validation error: only ${expectedGateway} may publish ports.`);
     process.exitCode = 1;
   }
-  for (const name of ["redis", "myurls-app", "myurls-short", "subconverter"]) {
+  for (const name of ["redis", "myurls-app", "myurls-short", "subconverter", "request-policy"]) {
     if (!services[name]) {
       console.error(`Compose validation error: required internal service ${name} is missing.`);
       process.exitCode = 1;

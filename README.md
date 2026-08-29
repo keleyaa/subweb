@@ -2,7 +2,7 @@
 
 **Self-hosted subscription delivery**
 
-这是一个自托管的订阅转换与短链服务。浏览器只连接一个 Gateway。订阅转换由 `SubConverter-Extended` 完成，短链由 MyUrls v2 创建和跳转，Redis 保存短链映射。
+这是一个自托管的订阅转换与短链服务。浏览器只连接一个 Gateway。转换请求会先经过内部的 `Request Policy Service`，再由 `SubConverter-Extended` 处理；短链由 MyUrls v2 创建和跳转，Redis 保存短链映射。
 
 <p align="center">
   <img src="./docs/assets/readme/subweb-hero.svg" width="100%" alt="Subconverter Web 将公共域名经由单个 Gateway 路由到私有的 SubConverter、MyUrls 和 Redis">
@@ -31,6 +31,7 @@
 | `API_DOMAIN` | `/sub` 转换路由和 SubConverter 健康检查 |
 | `SHORT_DOMAIN` | MyUrls 页面、短链创建与跳转 |
 | Gateway | 按 Host 路由请求，清理浏览器凭据；内部服务不开放宿主机端口 |
+| Request Policy Service | 校验转换输入，执行地址策略、限流、并发、超时和响应大小限制 |
 | SubConverter-Extended | 订阅转换 |
 | MyUrls | 短链创建与跳转 |
 | Redis | 短链映射持久化 |
@@ -54,9 +55,9 @@ cd subweb
 docker compose ps
 ```
 
-脚本会生成权限为 `0600` 的 `.env`、Redis 密码和独立的 IP 哈希秘密，然后完成 Compose 校验、拉取镜像并启动服务。短链形如 `https://short.example.com/abc123`；主站的创建接口返回 `code`、`shortUrl` 和 `expiresAt`。
+脚本会生成权限为 `0600` 的 `.env`、Redis 密码和独立的 IP 哈希秘密，然后完成 Compose 校验、拉取外部镜像、构建 `Request Policy Service` 镜像并启动服务。短链形如 `https://short.example.com/abc123`；主站的创建接口返回 `code`、`shortUrl` 和 `expiresAt`。
 
-Gateway 镜像同时发布到 `docker.io/keleyaa/subweb` 与 `ghcr.io/keleyaa/subweb`。MyUrls v2 的镜像版本与 manifest digest 锁定在 `deploy/versions.lock.json`；如需冻结版本或回滚，可在 `.env` 中覆盖镜像。完整步骤见 [Docker 部署](docs/deployment-docker.md)。
+Gateway 镜像同时发布到 `docker.io/keleyaa/subweb` 与 `ghcr.io/keleyaa/subweb`。MyUrls v2 的镜像版本与 manifest digest 锁定在 `deploy/versions.lock.json`；如需冻结版本或回滚，可在 `.env` 中覆盖镜像。预构建 Gateway 部署仍会从当前源码构建 `Request Policy Service`。完整步骤见 [Docker 部署](docs/deployment-docker.md)。
 
 ### 本地开发
 
@@ -80,7 +81,7 @@ npm run dev:stop
 
 MyUrls 默认以 `info` 级别输出正常请求记录；需要降低日志量时，在 `.env` 设置 `MYURLS_LOG_LEVEL=warn` 后重建 `myurls-app` 与 `myurls-short`。日志写入容器 stdout，由 Docker `json-file` 轮转。SubConverter 仍固定关闭 verbose 与 `print_debug_info`。
 
-订阅 URL 可能携带凭据。转换时 SubConverter 会读取它，创建短链时完整转换 URL 会写入 Redis。**短码不是加密**：任何拿到短码的人通常都能完成跳转。
+订阅 URL 可能携带凭据。转换请求会先经过 `Request Policy Service` 的输入级安全校验，再由 SubConverter 读取；创建短链时完整转换 URL 会写入 Redis。**短码不是加密**：任何拿到短码的人通常都能完成跳转。
 
 不要提交、截图或发布以下内容：
 

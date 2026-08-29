@@ -55,7 +55,7 @@ x-gateway-common: &gateway-common
     API_DOMAIN: "${API_DOMAIN:?Set API_DOMAIN with scripts/configure.sh}"
     SHORT_DOMAIN: "${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
     TRUSTED_PROXY_CIDR: "${TRUSTED_PROXY_CIDR:-}"
-    SUBCONVERTER_UPSTREAM: http://subconverter:25500
+    SUBCONVERTER_UPSTREAM: http://request-policy:25501
     # These aliases exist only on myurls-edge, so Gateway cannot accidentally
     # reach MyUrls through the default network and lose the trusted source IP.
     MYURLS_APP_UPSTREAM: http://myurls-app-edge:3000
@@ -69,6 +69,9 @@ x-gateway-common: &gateway-common
       condition: service_healthy
       restart: true
     subconverter:
+      condition: service_healthy
+      restart: true
+    request-policy:
       condition: service_healthy
       restart: true
   tmpfs:
@@ -248,6 +251,48 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  request-policy:
+    <<: *runtime-security
+    build:
+      context: ./services/request-policy
+    image: "${REQUEST_POLICY_IMAGE:-subweb-request-policy:local}"
+    user: "node"
+    environment:
+      <<: *runtime-environment
+      PORT: "25501"
+      SUBCONVERTER_UPSTREAM: http://subconverter:25500
+      REDIS_URL: redis://redis:6379/1
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
+      IP_HASH_SECRET: "${IP_HASH_SECRET:?Set IP_HASH_SECRET with scripts/configure.sh}"
+      CONVERSION_RATE_LIMIT: "${CONVERSION_RATE_LIMIT:-10}"
+      CONVERSION_RATE_WINDOW_SECONDS: "${CONVERSION_RATE_WINDOW_SECONDS:-60}"
+      CONVERSION_MAX_REQUEST_BYTES: "${CONVERSION_MAX_REQUEST_BYTES:-16384}"
+      CONVERSION_MAX_RESPONSE_BYTES: "${CONVERSION_MAX_RESPONSE_BYTES:-8388608}"
+      CONVERSION_REQUEST_TIMEOUT_MS: "${CONVERSION_REQUEST_TIMEOUT_MS:-10000}"
+      CONVERSION_DNS_TIMEOUT_MS: "${CONVERSION_DNS_TIMEOUT_MS:-2000}"
+      CONVERSION_MAX_CONCURRENCY: "${CONVERSION_MAX_CONCURRENCY:-2}"
+    depends_on:
+      redis:
+        condition: service_healthy
+        restart: true
+      subconverter:
+        condition: service_healthy
+        restart: true
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=0700,noexec,nosuid,size=16m
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:25501/healthz').then((response) =>
+          process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   gateway:
     <<: *gateway-common

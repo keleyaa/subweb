@@ -6,15 +6,13 @@
 - Gateway 清除 Authorization、Proxy-Authorization、Cookie 和 Origin 后再转发请求。
 - SHORT 域透明代理 MyUrls，由 MyUrls 自行校验同源请求、JSON Schema、URL 和 Turnstile。
 - API 域只代理 SubConverter，关闭上传能力并保持 `print_debug_info = false`。
+- APP 域的 `/sub` 先进入 `Request Policy Service`，执行 URL 协议、主机地址、端口、大小、超时、并发和匿名频率限制，再转发到 SubConverter。
 
-MyUrls 拒绝 loopback、私网和不安全 URL，以降低 SSRF 与开放重定向风险。短码和订阅链接都属于
-持有即可访问的数据，不应进入日志、分析系统或公开工单。
+MyUrls 拒绝 loopback、私网和不安全 URL，以降低 SSRF 与开放重定向风险。策略服务对转换请求执行输入级 SSRF 防护，并在 DNS 解析结果上拒绝 loopback、私网、link-local 和保留地址。由于部分转换结果会生成由客户端继续拉取的 `proxy-providers` URL，策略服务不等同于完整的服务端出站代理；这条边界必须在公开服务说明中明确。短码和订阅链接都属于持有即可访问的数据，不应进入日志、分析系统或公开工单。
 
 ## 客户端 IP
 
-Gateway 到 MyUrls 使用独立的内部网络，MyUrls 默认只信任固定的 Gateway 地址。Gateway 覆盖而
-不是追加 `X-Forwarded-For` 和 `Forwarded`。外部 `TRUSTED_PROXY_CIDR` 必须是实际的
-反代来源，禁止使用 `0.0.0.0/0`。
+Gateway 到 MyUrls 使用独立的内部网络，MyUrls 默认只信任固定的 Gateway 地址。Gateway 覆盖而不是追加 `X-Forwarded-For` 和 `Forwarded`。Request Policy Service 只在 Compose 内部网络可访问，并使用 Redis DB `1` 保存带 TTL 的匿名限流计数。外部 `TRUSTED_PROXY_CIDR` 必须是实际的反代来源，禁止使用 `0.0.0.0/0`。
 
 ## 秘密
 
@@ -26,8 +24,8 @@ Gateway 到 MyUrls 使用独立的内部网络，MyUrls 默认只信任固定的
 
 - MyUrls 生产镜像使用 semver 标签和 manifest digest；升级镜像时，必须同步更新版本锁文件并重新完成安全验证。
 - `MYURLS_IMAGE` 仅用于经过确认的版本回滚。
-- MyUrls、Redis、SubConverter 不发布宿主机端口。
-- Gateway、MyUrls 和 Redis 使用只读根文件系统、最小 capabilities 和日志轮转。
+- MyUrls、Redis、SubConverter 和 Request Policy Service 不发布宿主机端口。
+- Gateway、MyUrls、Request Policy Service 和 Redis 使用只读根文件系统、最小 capabilities 和日志轮转。
 - 所有服务统一使用 `Asia/Shanghai` 时区。
 
 SubConverter 的 `verbose` 与调试日志必须保持关闭；验证脚本使用哨兵确认订阅值、挑战

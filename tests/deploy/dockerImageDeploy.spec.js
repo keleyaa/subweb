@@ -31,10 +31,11 @@ case "$*" in
   'compose version') exit 0 ;;
   'compose config --quiet') exit 0 ;;
   'compose config --format json')
-    printf '%s\\n' '{"services":{"gateway":{"ports":[{"published":"18080"}]},"redis":{},"myurls-app":{},"myurls-short":{},"subconverter":{}}}'
+     printf '%s\\n' '{"services":{"gateway":{"ports":[{"published":"18080"}]},"redis":{},"myurls-app":{},"myurls-short":{},"subconverter":{},"request-policy":{}}}'
     ;;
-  'compose pull') exit "\${DOCKER_PULL_STATUS:-0}" ;;
-  'compose up -d --no-build --pull always --wait') exit 0 ;;
+  'compose pull gateway redis myurls-app myurls-short subconverter') exit "\${DOCKER_PULL_STATUS:-0}" ;;
+  'compose build request-policy') exit 0 ;;
+  'compose up -d --no-build --pull never --wait') exit 0 ;;
   'compose ps') exit 0 ;;
   *) exit 64 ;;
 esac
@@ -68,7 +69,7 @@ afterEach(async () => {
 });
 
 describe('Docker image quick deployment', () => {
-  it('persists the selected image, pulls it, and starts without building', async () => {
+  it('persists the selected image, pulls external services, and builds policy locally', async () => {
     const root = await makeFixture();
     const image = 'docker.io/keleyaa/subweb:sha-2bf1a9f';
 
@@ -81,8 +82,9 @@ describe('Docker image quick deployment', () => {
       'compose version',
       'compose config --quiet',
       'compose config --format json',
-      'compose pull',
-      'compose up -d --no-build --pull always --wait',
+       'compose pull gateway redis myurls-app myurls-short subconverter',
+       'compose build request-policy',
+       'compose up -d --no-build --pull never --wait',
       'compose ps',
       '',
     ].join('\n'));
@@ -95,7 +97,7 @@ describe('Docker image quick deployment', () => {
 
     expect(result.status).not.toBe(0);
     const log = await readFile(join(root, 'docker.log'), 'utf8');
-    expect(log).toContain('compose pull');
+     expect(log).toContain('compose pull gateway redis myurls-app myurls-short subconverter');
     expect(log).not.toContain('compose up');
   });
 });

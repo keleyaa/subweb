@@ -35,10 +35,10 @@ const expectHealthBounds = (service) => {
 };
 
 describe('integrated Compose stack', () => {
-  it('renders one gateway and four private services', async () => {
+  it('renders one gateway and five private services', async () => {
     const config = await renderCompose();
-    expect(Object.keys(config.services).sort()).toEqual(['gateway', 'myurls-app', 'myurls-short', 'redis', 'subconverter'].sort());
-    for (const name of ['redis', 'myurls-app', 'myurls-short', 'subconverter']) {
+    expect(Object.keys(config.services).sort()).toEqual(['gateway', 'myurls-app', 'myurls-short', 'redis', 'request-policy', 'subconverter'].sort());
+    for (const name of ['redis', 'myurls-app', 'myurls-short', 'request-policy', 'subconverter']) {
       expect(config.services[name].ports).toBeUndefined();
       expect(config.services[name].expose).toBeUndefined();
       expectHealthBounds(config.services[name]);
@@ -84,6 +84,12 @@ describe('integrated Compose stack', () => {
       TURNSTILE_HOSTNAME: 'short.example.com',
       LOG_LEVEL: 'info',
       RESOLVE_LIMIT_10S: '600',
+    });
+    expect(config.services['request-policy'].environment).toMatchObject({
+      PORT: '25501', SUBCONVERTER_UPSTREAM: 'http://subconverter:25500',
+      REDIS_URL: 'redis://redis:6379/1', REDIS_PASSWORD: testSecret,
+      IP_HASH_SECRET: testSecret, CONVERSION_RATE_LIMIT: '10',
+      CONVERSION_MAX_CONCURRENCY: '2',
     });
     expect(config.services.subconverter.environment).toMatchObject({
       MANAGED_CONFIG_PREFIX: 'https://api.example.com', SUBCONVERTER_SECURITY_PROFILE: 'public', SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: 'false',

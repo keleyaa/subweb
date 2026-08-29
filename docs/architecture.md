@@ -1,13 +1,12 @@
 # 架构
 
-Subweb 是独立维护的自托管订阅转换发行栈。生产 Compose 启动 Gateway、SubConverter、
-两个分别服务 APP/SHORT hostname 的 MyUrls v2 实例和 Redis。公网反向代理、TLS 和 DNS 不属于本仓库的运行时。
+Subweb 是独立维护的自托管订阅转换发行栈。生产 Compose 启动 Gateway、Request Policy Service、SubConverter、两个分别服务 APP/SHORT hostname 的 MyUrls v2 实例和 Redis。公网反向代理、TLS 和 DNS 不属于本仓库的运行时。
 
 ```text
 Browser
   |-- APP_DOMAIN
   |     `-- Gateway
-  |           |-- /sub?...                -> SubConverter
+  |           |-- /sub?...                -> Request Policy Service -> SubConverter
   |           `-- /short-api/v1/links    -> MyUrls v2 (APP instance) -> Redis
   |
   |-- API_DOMAIN
@@ -34,10 +33,9 @@ Cloudflare Token 的 hostname 约束与双域入口冲突；两个进程共用 R
 
 ## 信任边界
 
-Gateway 通过仅存在于该网络的 `myurls-app-edge`、`myurls-short-edge` 别名连接 MyUrls，避免
-Docker 默认网络解析绕过可信边界。MyUrls 只信任该网络中固定的 Gateway 地址，默认是
+Gateway 通过仅存在于该网络的 `myurls-app-edge`、`myurls-short-edge` 别名连接 MyUrls，避免 Docker 默认网络解析绕过可信边界。Gateway 通过默认网络连接 Request Policy Service；策略服务再通过默认网络连接 SubConverter 和 Redis。MyUrls 只信任该网络中固定的 Gateway 地址，默认是
 `172.30.255.2/32`。外部反代的 `TRUSTED_PROXY_CIDR` 是另一层边界，不得设置为
-`0.0.0.0/0`。Redis、MyUrls 和 SubConverter 均不发布宿主机端口。
+`0.0.0.0/0`。Redis、MyUrls、SubConverter 和 Request Policy Service 均不发布宿主机端口。
 
 ## 前端边界
 
