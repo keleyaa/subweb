@@ -17,9 +17,16 @@ describe('request policy configuration', () => {
   it('accepts an internal HTTP upstream without credentials', () => {
     expect(loadConfig()).toMatchObject({
       port: 25501,
+      egressProxyPort: 25502,
+      egressConnectTimeoutMs: 5000,
       upstreamBaseUrl: 'http://subconverter:25500',
       ipHashSecret: secret,
     });
+  });
+
+  it('rejects an invalid egress proxy port', () => {
+    vi.stubEnv('EGRESS_PROXY_PORT', '0');
+    expect(() => loadConfig()).toThrow('EGRESS_PROXY_PORT');
   });
 
   it('rejects non-HTTP upstream protocols', () => {

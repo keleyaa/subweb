@@ -206,6 +206,14 @@ services:
       MANAGED_CONFIG_PREFIX: "${API_URL:?Set API_URL with scripts/configure.sh}"
       SUBCONVERTER_SECURITY_PROFILE: public
       SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: "false"
+      # All remote HTTPS config fetches are forced through request-policy's
+      # internal CONNECT proxy. This container has no external network route.
+      HTTPS_PROXY: http://request-policy:25502
+      https_proxy: http://request-policy:25502
+      NO_PROXY: 127.0.0.1,localhost
+      no_proxy: 127.0.0.1,localhost
+    networks:
+      subconverter-egress: {}
     volumes:
       - subconverter-runtime:/base
       # Prefer IPv4 for SubConverter's glibc/libcurl requests when the Docker
@@ -261,6 +269,8 @@ services:
     environment:
       <<: *runtime-environment
       PORT: "25501"
+      EGRESS_PROXY_PORT: "25502"
+      CONVERSION_EGRESS_CONNECT_TIMEOUT_MS: "${CONVERSION_EGRESS_CONNECT_TIMEOUT_MS:-5000}"
       SUBCONVERTER_UPSTREAM: http://subconverter:25500
       REDIS_URL: redis://redis:6379/1
       REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
@@ -279,6 +289,9 @@ services:
       subconverter:
         condition: service_healthy
         restart: true
+    networks:
+      default: {}
+      subconverter-egress: {}
     tmpfs:
       - /tmp:uid=1000,gid=1000,mode=0700,noexec,nosuid,size=16m
     healthcheck:
@@ -304,6 +317,8 @@ volumes:
   subconverter-runtime:
 
 networks:
+  subconverter-egress:
+    internal: true
   myurls-edge:
     internal: true
     ipam:

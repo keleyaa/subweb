@@ -12,5 +12,5 @@ RUN npm ci --omit=dev \
 COPY src ./src
 
 USER node
-EXPOSE 25501
+EXPOSE 25501 25502
 CMD ["node", "src/index.mjs"]

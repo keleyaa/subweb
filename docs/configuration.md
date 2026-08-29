@@ -42,11 +42,12 @@
 | `CONVERSION_MAX_RESPONSE_BYTES` | 上游响应体大小上限，单位为字节，默认值为 `8388608` |
 | `CONVERSION_REQUEST_TIMEOUT_MS` | 单次转换总超时，单位为毫秒，默认值为 `10000` |
 | `CONVERSION_DNS_TIMEOUT_MS` | DNS 解析超时，单位为毫秒，默认值为 `2000` |
+| `CONVERSION_EGRESS_CONNECT_TIMEOUT_MS` | egress proxy 到已验证 IP 的 TCP 连接超时，单位为毫秒，默认值为 `5000` |
 
 生产环境缺少 Turnstile 凭据、Redis 密码或 IP 哈希秘密时，Compose 会 fail closed。不要把这些值写入
 `public/`、日志、截图、Issue 或命令行输出。`Request Policy Service` 使用 Redis DB `1` 保存带 TTL 的匿名限流状态，不保存订阅 URL 或转换结果。
 
-`Request Policy Service` 会在转换请求进入 `SubConverter-Extended` 前校验公网 HTTPS 地址，并限制 DNS 解析、请求大小、响应大小、并发数和总耗时。Clash 输出中的 provider URL 仍由最终客户端直接拉取，该出站请求不经过本服务。
+`Request Policy Service` 会在转换请求进入 `SubConverter-Extended` 前校验公网 HTTPS 地址，并限制 DNS 解析、请求大小、响应大小、并发数和总耗时。SubConverter 只加入内部 egress 网络，必须通过策略服务的 HTTPS CONNECT proxy 访问远程 HTTPS；代理按已验证 IP 建连，不会在校验后重新按域名解析。Clash 输出中的 provider URL 仍由最终客户端直接拉取，该客户端侧请求不经过本服务。
 
 ## 镜像
 

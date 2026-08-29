@@ -22,6 +22,11 @@ service_log=$temporary_directory/services.log
 host_port=$(node -e 'const n=require("node:net");const s=n.createServer();s.listen(0,"127.0.0.1",()=>{process.stdout.write(String(s.address().port));s.close()})')
 redis_password=$(openssl rand -hex 32)
 ip_hash_secret=$(openssl rand -hex 32)
+test_network_subnet=$("$script_directory/select-test-network.sh")
+test_network_prefix=${test_network_subnet%.*}
+test_gateway_ip=$test_network_prefix.2
+test_app_ip=$test_network_prefix.3
+test_short_ip=$test_network_prefix.4
 sentinel_value=sentinel-$(openssl rand -hex 16)
 
 myurls_test_image=${MYURLS_IMAGE:-}
@@ -111,6 +116,11 @@ request.end(JSON.stringify({ url: process.argv[1] }));
     'SHORT_DOMAIN=short.test' \
     "SUBWEB_PORT=$host_port" \
     "MYURLS_IMAGE=$myurls_test_image" \
+    "MYURLS_NETWORK_SUBNET=$test_network_subnet" \
+    "MYURLS_GATEWAY_IP=$test_gateway_ip" \
+    "MYURLS_APP_IP=$test_app_ip" \
+    "MYURLS_SHORT_IP=$test_short_ip" \
+    "MYURLS_TRUST_PROXY_CIDR=$test_gateway_ip/32" \
     "REDIS_PASSWORD=$redis_password" \
     "IP_HASH_SECRET=$ip_hash_secret" \
     'TURNSTILE_SITE_KEY=test-site-key' \
@@ -135,10 +145,30 @@ compose exec -T myurls-short node -e \
 compose exec -T request-policy node -e \
   "fetch('http://127.0.0.1:25501/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" \
   || fail 'request policy health check failed'
+[ "$(compose exec -T subconverter sh -c 'printf %s "$HTTPS_PROXY"')" = 'http://request-policy:25502' ] \
+  || fail 'SubConverter did not use the controlled egress proxy'
+compose exec -T subconverter getent hosts request-policy >/dev/null \
+  || fail 'SubConverter could not resolve the controlled egress proxy'
+if compose exec -T subconverter getent hosts redis >/dev/null 2>&1; then
+  fail 'SubConverter still joined the default network'
+fi
+compose exec -T request-policy node -e '
+const net = require("node:net");
+const socket = net.connect({ host: "127.0.0.1", port: 25502 }, () => {
+  socket.write("CONNECT 127.0.0.1:443 HTTP/1.1\r\nHost: 127.0.0.1:443\r\n\r\n");
+});
+socket.once("data", (data) => {
+  const response = data.toString("ascii");
+  if (!response.startsWith("HTTP/1.1 403")) process.stderr.write(`Unexpected proxy response: ${response.split("\r\n")[0]}\n`);
+  process.exit(response.startsWith("HTTP/1.1 403") ? 0 : 1);
+});
+socket.once("error", () => process.exit(1));
+setTimeout(() => process.exit(1), 5000);
+' || fail 'controlled egress proxy did not reject a private target'
 
-[ "$(compose exec -T gateway getent ahostsv4 myurls-app-edge | awk 'NR == 1 { print $1 }')" = '172.30.255.3' ] \
+[ "$(compose exec -T gateway getent ahostsv4 myurls-app-edge | awk 'NR == 1 { print $1 }')" = "$test_app_ip" ] \
   || fail 'Gateway did not resolve the APP MyUrls edge alias to its trusted-network address'
-[ "$(compose exec -T gateway getent ahostsv4 myurls-short-edge | awk 'NR == 1 { print $1 }')" = '172.30.255.4' ] \
+[ "$(compose exec -T gateway getent ahostsv4 myurls-short-edge | awk 'NR == 1 { print $1 }')" = "$test_short_ip" ] \
   || fail 'Gateway did not resolve the SHORT MyUrls edge alias to its trusted-network address'
 
 short_html=$(curl --noproxy '*' --fail --silent --show-error -H 'Host: short.test' "http://127.0.0.1:$host_port/") \
@@ -207,7 +237,7 @@ rate_keys_after=$(count_create_rate_keys)
 [ "$(post_json "$temporary_directory/unknown.out" app.test https://app.test '{"url":"https://example.com","unknown":true}')" = 400 ] \
   || fail 'unknown JSON field was not rejected'
 
-for service_port in 'redis 6379' 'myurls-app 3000' 'myurls-short 3000' 'subconverter 25500' 'request-policy 25501'; do
+for service_port in 'redis 6379' 'myurls-app 3000' 'myurls-short 3000' 'subconverter 25500' 'request-policy 25501' 'request-policy 25502'; do
   set -- $service_port
   [ -z "$(docker port "$(compose ps -q "$1")" "$2/tcp" 2>/dev/null || true)" ] || fail 'an internal port was published'
 done

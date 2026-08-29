@@ -1,6 +1,6 @@
 # Docker 部署
 
-Compose 启动 `gateway`、`request-policy`、`subconverter`、两个 MyUrls v2 实例和 `redis`。两个 MyUrls 实例共用 Redis 数据，分别校验 APP 与 SHORT hostname。只有 Gateway 将容器的 `8080` 端口绑定到 loopback 的 `SUBWEB_PORT`。HTTPS、证书和 3 个域名的路由由外部反向代理负责。
+Compose 启动 `gateway`、`request-policy`、`subconverter`、两个 MyUrls v2 实例和 `redis`。两个 MyUrls 实例共用 Redis 数据，分别校验 APP 与 SHORT hostname。SubConverter 只加入内部 egress 网络，并通过 Request Policy Service 的 HTTPS CONNECT proxy 访问远程 HTTPS；它没有默认网络的直接出站路径。只有 Gateway 将容器的 `8080` 端口绑定到 loopback 的 `SUBWEB_PORT`。HTTPS、证书和 3 个域名的路由由外部反向代理负责。
 
 ## 从源码部署
 

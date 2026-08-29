@@ -47,6 +47,18 @@ const getHostnameAddresses = async (hostname, lookup, timeoutMs) => {
   }
 };
 
+export const resolvePublicAddresses = async (hostname, inputOptions = {}) => {
+  const options = {
+    lookup: inputOptions.lookup ?? defaultLookup,
+    dnsTimeoutMs: inputOptions.dnsTimeoutMs ?? DEFAULT_DNS_TIMEOUT_MS,
+  };
+  const addresses = await getHostnameAddresses(hostname, options.lookup, options.dnsTimeoutMs);
+  if (addresses.length === 0 || addresses.some(({ address }) => isBlockedAddress(address))) {
+    reject('private_address', 403);
+  }
+  return addresses.map(({ address }) => address);
+};
+
 const validateRemoteUrl = async (value, options) => {
   if (typeof value !== 'string' || value.length > options.maxUrlLength) {
     reject('url_too_long', 413);
@@ -70,11 +82,7 @@ const validateRemoteUrl = async (value, options) => {
     reject('url_not_allowed', 403);
   }
 
-  const addresses = await getHostnameAddresses(parsed.hostname, options.lookup, options.dnsTimeoutMs);
-  if (addresses.length === 0 || addresses.some(({ address }) => isBlockedAddress(address))) {
-    reject('private_address', 403);
-  }
-
+  await resolvePublicAddresses(parsed.hostname, options);
   return parsed.toString();
 };
 

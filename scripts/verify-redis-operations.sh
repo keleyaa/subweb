@@ -18,6 +18,11 @@ long_url=https://example.com/redis-migration-verification
 host_port=$(node -e 'const n=require("node:net");const s=n.createServer();s.listen(0,"127.0.0.1",()=>{process.stdout.write(String(s.address().port));s.close()})')
 password=$(openssl rand -hex 32)
 ip_hash_secret=$(openssl rand -hex 32)
+test_network_subnet=$("$script_directory/select-test-network.sh")
+test_network_prefix=${test_network_subnet%.*}
+test_gateway_ip=$test_network_prefix.2
+test_app_ip=$test_network_prefix.3
+test_short_ip=$test_network_prefix.4
 
 myurls_test_image=${MYURLS_IMAGE:-}
 if [ -z "$myurls_test_image" ]; then
@@ -46,6 +51,11 @@ trap cleanup EXIT HUP INT TERM
     'SHORT_DOMAIN=short.test' \
     "SUBWEB_PORT=$host_port" \
     "MYURLS_IMAGE=$myurls_test_image" \
+    "MYURLS_NETWORK_SUBNET=$test_network_subnet" \
+    "MYURLS_GATEWAY_IP=$test_gateway_ip" \
+    "MYURLS_APP_IP=$test_app_ip" \
+    "MYURLS_SHORT_IP=$test_short_ip" \
+    "MYURLS_TRUST_PROXY_CIDR=$test_gateway_ip/32" \
     "REDIS_PASSWORD=$password" \
     "IP_HASH_SECRET=$ip_hash_secret" \
     'TURNSTILE_SITE_KEY=test-site-key' \

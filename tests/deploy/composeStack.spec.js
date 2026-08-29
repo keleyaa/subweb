@@ -7,6 +7,19 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const root = new URL('../../', import.meta.url);
 const composePath = new URL('compose.yaml', root).pathname;
 const testSecret = '0123456789abcdef'.repeat(4);
+const composeVariableNames = [
+  'API_DOMAIN', 'API_URL', 'APP_DOMAIN', 'CONVERSION_DNS_TIMEOUT_MS',
+  'CONVERSION_EGRESS_CONNECT_TIMEOUT_MS', 'CONVERSION_MAX_CONCURRENCY', 'CONVERSION_MAX_REQUEST_BYTES',
+  'EGRESS_PROXY_PORT',
+  'CONVERSION_MAX_RESPONSE_BYTES', 'CONVERSION_RATE_LIMIT',
+  'CONVERSION_RATE_WINDOW_SECONDS', 'CONVERSION_REQUEST_TIMEOUT_MS',
+  'IP_HASH_SECRET', 'MYURLS_APP_IP', 'MYURLS_GATEWAY_IP', 'MYURLS_IMAGE',
+  'MYURLS_LOG_LEVEL', 'MYURLS_NETWORK_SUBNET', 'MYURLS_SHORT_IP',
+  'MYURLS_TRUST_PROXY_CIDR', 'REDIS_IMAGE', 'REDIS_PASSWORD',
+  'REQUEST_POLICY_IMAGE', 'SHORT_DOMAIN', 'SUBCONVERTER_IMAGE',
+  'SUBWEB_IMAGE', 'SUBWEB_PORT', 'TRUSTED_PROXY_CIDR',
+  'TURNSTILE_SECRET_KEY', 'TURNSTILE_SITE_KEY',
+];
 let fixtureDirectory;
 
 beforeAll(async () => {
@@ -23,7 +36,13 @@ const renderCompose = async () => {
     `IP_HASH_SECRET=${testSecret}`, `REDIS_PASSWORD=${testSecret}`,
     'TURNSTILE_SITE_KEY=test-site-key', 'TURNSTILE_SECRET_KEY=test-secret-key', '',
   ].join('\n'));
-  const result = spawnSync('docker', ['compose', '-f', composePath, '--env-file', envPath, 'config', '--format', 'json'], { cwd: new URL('../..', import.meta.url).pathname, encoding: 'utf8' });
+  const environment = { ...process.env };
+  for (const name of composeVariableNames) delete environment[name];
+  const result = spawnSync('docker', ['compose', '-f', composePath, '--env-file', envPath, 'config', '--format', 'json'], {
+    cwd: new URL('../..', import.meta.url).pathname,
+    encoding: 'utf8',
+    env: environment,
+  });
   expect(result.status, result.stderr).toBe(0);
   return JSON.parse(result.stdout);
 };
@@ -86,13 +105,16 @@ describe('integrated Compose stack', () => {
       RESOLVE_LIMIT_10S: '600',
     });
     expect(config.services['request-policy'].environment).toMatchObject({
-      PORT: '25501', SUBCONVERTER_UPSTREAM: 'http://subconverter:25500',
+      PORT: '25501', EGRESS_PROXY_PORT: '25502',
+      CONVERSION_EGRESS_CONNECT_TIMEOUT_MS: '5000',
+      SUBCONVERTER_UPSTREAM: 'http://subconverter:25500',
       REDIS_URL: 'redis://redis:6379/1', REDIS_PASSWORD: testSecret,
       IP_HASH_SECRET: testSecret, CONVERSION_RATE_LIMIT: '10',
       CONVERSION_MAX_CONCURRENCY: '2',
     });
     expect(config.services.subconverter.environment).toMatchObject({
       MANAGED_CONFIG_PREFIX: 'https://api.example.com', SUBCONVERTER_SECURITY_PROFILE: 'public', SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: 'false',
+      HTTPS_PROXY: 'http://request-policy:25502', https_proxy: 'http://request-policy:25502',
     });
     expect(config.services['myurls-app'].networks['myurls-edge'].ipv4_address).toBe('172.30.255.3');
     expect(config.services['myurls-short'].networks['myurls-edge'].ipv4_address).toBe('172.30.255.4');
@@ -100,6 +122,9 @@ describe('integrated Compose stack', () => {
     expect(config.services['myurls-short'].networks['myurls-edge'].aliases).toEqual(['myurls-short-edge']);
     expect(config.services.gateway.networks['myurls-edge'].ipv4_address).toBe('172.30.255.2');
     expect(config.networks['myurls-edge'].internal).toBe(true);
+    expect(config.networks['subconverter-egress'].internal).toBe(true);
+    expect(Object.keys(config.services.subconverter.networks)).toEqual(['subconverter-egress']);
+    expect(Object.keys(config.services['request-policy'].networks).sort()).toEqual(['default', 'subconverter-egress']);
   });
 
   it('configures authenticated durable Redis without exposing its password in commands', async () => {

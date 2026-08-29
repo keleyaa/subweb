@@ -34,6 +34,8 @@ const positiveInteger = (name, fallback) => {
 
 export const loadConfig = () => ({
   port: positiveInteger('PORT', 25501),
+  egressProxyPort: positiveInteger('EGRESS_PROXY_PORT', 25502),
+  egressConnectTimeoutMs: positiveInteger('CONVERSION_EGRESS_CONNECT_TIMEOUT_MS', 5000),
   upstreamBaseUrl: upstreamUrl(),
   redisUrl: required('REDIS_URL'),
   redisPassword: required('REDIS_PASSWORD'),

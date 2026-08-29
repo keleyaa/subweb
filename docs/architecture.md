@@ -33,9 +33,7 @@ Cloudflare Token 的 hostname 约束与双域入口冲突；两个进程共用 R
 
 ## 信任边界
 
-Gateway 通过仅存在于该网络的 `myurls-app-edge`、`myurls-short-edge` 别名连接 MyUrls，避免 Docker 默认网络解析绕过可信边界。Gateway 通过默认网络连接 Request Policy Service；策略服务再通过默认网络连接 SubConverter 和 Redis。MyUrls 只信任该网络中固定的 Gateway 地址，默认是
-`172.30.255.2/32`。外部反代的 `TRUSTED_PROXY_CIDR` 是另一层边界，不得设置为
-`0.0.0.0/0`。Redis、MyUrls、SubConverter 和 Request Policy Service 均不发布宿主机端口。
+Gateway 通过仅存在于该网络的 `myurls-app-edge`、`myurls-short-edge` 别名连接 MyUrls，避免 Docker 默认网络解析绕过可信边界。Gateway 通过默认网络连接 Request Policy Service；策略服务通过默认网络连接 Redis，并同时加入内部 `subconverter-egress` 网络。SubConverter 只加入该内部网络，强制使用策略服务的 HTTPS CONNECT egress proxy：代理在单一进程内解析、校验公网地址并按已验证 IP 建连，避免 DNS rebinding 使二次解析绕过策略。MyUrls 只信任该网络中固定的 Gateway 地址，默认是 `172.30.255.2/32`。外部反代的 `TRUSTED_PROXY_CIDR` 是另一层边界，不得设置为 `0.0.0.0/0`。Redis、MyUrls、SubConverter 和 Request Policy Service 均不发布宿主机端口。
 
 ## 前端边界
 
