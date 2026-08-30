@@ -28,7 +28,7 @@ location ^~ /conf/ {
   try_files $uri =404;
 }
 
-location = /short-api/v1/links {
+location = /short-api/links {
   add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
   limit_req zone=subweb_short burst=5 nodelay;
   if ($short_origin_allowed = 0) {
@@ -51,7 +51,7 @@ location = /short-api/v1/links {
   proxy_set_header X-Request-ID $request_id;
 @@MYURLS_PROXY_HEADERS@@
   set $myurls_upstream "@@MYURLS_APP_UPSTREAM@@";
-  proxy_pass $myurls_upstream/api/v1/links;
+  proxy_pass $myurls_upstream/api/links;
 @@SECURITY_HEADERS@@
 }
 

@@ -52,13 +52,13 @@ describe('integrated Docker gateway stack', () => {
     expect(source).toContain('compose logs --no-color --tail 500');
     expect(source).toContain('/health/live');
     expect(source).toContain('/health/ready');
-    expect(source).toContain('compose exec -T myurls-short');
+    expect(source).toContain('compose exec -T myurls-short curl --fail --silent');
     expect(source).toContain('myurls-app-edge');
     expect(source).toContain('myurls-short-edge');
     expect(source).toContain('post_json_from_client');
     expect(source).toContain('Gateway did not preserve distinct client identities');
     expect(source).toContain('SHORT MyUrls creation returned');
-    expect(source).toContain("'{\"url\":\"https://example.com/short-hostname-verification\"}' /api/v1/links");
+    expect(source).toContain("'{\"url\":\"https://example.com/short-hostname-verification\"}' /api/links");
     expect(source).not.toContain('gateway-tls');
     expect(source).not.toContain('TLS 证书');
   });
@@ -72,7 +72,7 @@ describe('integrated Docker gateway stack', () => {
   });
 
   it.skipIf(!dockerIntegrationEnabled)(
-    'verifies APP, MyUrls v2, challenge retry, persistence, and private ports',
+    'verifies APP, Rust MyUrls, challenge retry, persistence, and private ports',
     () => {
       const result = spawnSync('sh', [verifier], {
         cwd: root,
@@ -84,7 +84,7 @@ describe('integrated Docker gateway stack', () => {
       expect(result.status, result.stderr).toBe(0);
       const output = `${result.stdout}\n${result.stderr}`;
       for (const marker of [
-        'MyUrls v2 integrated stack verification passed.',
+        'MyUrls integrated stack verification passed.',
       ]) {
         expect(output).toContain(marker);
       }

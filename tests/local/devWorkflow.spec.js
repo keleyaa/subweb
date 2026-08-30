@@ -6,11 +6,12 @@ const read = (path) => readFile(new URL(path, root), 'utf8');
 
 describe('Compose-first local development workflow', () => {
   it('uses pinned containers plus Vite instead of compiling external source', async () => {
-    const [start, dependencies, override, vite] = await Promise.all([
+    const [start, dependencies, override, vite, verifier] = await Promise.all([
       read('scripts/local/start.sh'),
       read('scripts/local/deps.sh'),
       read('compose.dev.yaml'),
       read('vite.config.mjs'),
+      read('scripts/verify-local-dev.sh'),
     ]);
 
     expect(start).toContain('npm run serve');
@@ -21,6 +22,7 @@ describe('Compose-first local development workflow', () => {
     expect(override).toContain('http://127.0.0.1:${LOCAL_SHORT_MYURLS_PORT:-18083}');
     expect(dependencies).toContain('SHORT MyUrls is not ready.');
     expect(vite).toContain("'/short-api'");
+    expect(verifier).toContain('/short-api/links');
     for (const source of [start, dependencies]) {
       expect(source).not.toMatch(/go build|cmake|MYURLS_SOURCE_DIR|git clone/u);
     }

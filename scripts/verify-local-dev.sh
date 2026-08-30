@@ -33,7 +33,7 @@ done
 response=$(curl --fail-with-body --silent --show-error \
   -H 'Content-Type: application/json' \
   --data '{"url":"https://example.com/local-development-sentinel"}' \
-  "http://127.0.0.1:$local_vite_port/short-api/v1/links")
+  "http://127.0.0.1:$local_vite_port/short-api/links")
 short_url=$(printf '%s' "$response" | node -e '
 let input = "";
 process.stdin.on("data", (chunk) => { input += chunk; });

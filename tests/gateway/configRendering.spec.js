@@ -66,8 +66,8 @@ describe('gateway configuration rendering', () => {
     expect(result.config).toContain('server_name app.example.test;');
     expect(result.config).toContain('server_name api.example.test;');
     expect(result.config).toContain('server_name short.example.test;');
-    expect(result.config).toContain('location = /short-api/v1/links {');
-    expect(result.config).toContain('proxy_pass $myurls_upstream/api/v1/links;');
+    expect(result.config).toContain('location = /short-api/links {');
+    expect(result.config).toContain('proxy_pass $myurls_upstream/api/links;');
     expect(result.config).toContain('proxy_pass $myurls_upstream$request_uri;');
     expect(result.config).toContain('proxy_set_header Forwarded "";');
     expect(result.config).toContain('resolver 10.20.30.40 ipv6=off valid=30s;');
@@ -138,7 +138,7 @@ describe('gateway configuration rendering', () => {
       run('sh', args, { env: validEnvironment() }),
     ]);
     expect(results.map(({ code }) => code)).toEqual([0, 0]);
-    expect(await readFile(fixture.output, 'utf8')).toContain('proxy_pass $myurls_upstream/api/v1/links;');
+    expect(await readFile(fixture.output, 'utf8')).toContain('proxy_pass $myurls_upstream/api/links;');
   });
 });
 

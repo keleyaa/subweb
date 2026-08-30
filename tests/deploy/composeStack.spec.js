@@ -65,6 +65,15 @@ describe('integrated Compose stack', () => {
     expectHealthBounds(config.services.gateway);
     expect(config.services.gateway.ports).toEqual([expect.objectContaining({ host_ip: '127.0.0.1', published: '19080', target: 8080 })]);
     expect(config.services.gateway.environment.SHORT_DOMAIN).toBe('short.example.com');
+    expect(config.services['myurls-app'].healthcheck.test).toEqual([
+      'CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:3000/health/live',
+    ]);
+    expect(config.services['myurls-short'].healthcheck.test).toEqual([
+      'CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:3000/health/live',
+    ]);
+    expect(config.services['request-policy'].healthcheck.test).toEqual([
+      'CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:25501/healthz',
+    ]);
   });
 
   it('has no profiles, TLS mounts, or public host ports', async () => {
@@ -81,8 +90,10 @@ describe('integrated Compose stack', () => {
     const config = await renderCompose();
     expect(config.services.gateway.image).toBe('docker.io/keleyaa/subweb:sha-2bf1a9f');
     expect(config.services.redis.image).toBe('docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5');
-    expect(config.services['myurls-app'].image).toBe('ghcr.io/keleyaa/myurls:v2.0.2@sha256:b76423a5b5f346c27c40cbecb3954409f645f85df462d49577bb14d738d6127b');
+    expect(config.services['myurls-app'].image).toBe('ghcr.io/keleyaa/myurls:v2.0.4@sha256:a6b8d44ef40d37098a7ca6001f782fedc9d1d882a3e4fa8d28420dd5f6b7e64d');
     expect(config.services['myurls-short'].image).toBe(config.services['myurls-app'].image);
+    expect(config.services['myurls-app'].user).toBe('10001:10001');
+    expect(config.services['myurls-short'].user).toBe('10001:10001');
     expect(config.services.subconverter.image).toBe('ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475');
     expect(config.volumes['redis-data']).toBeTruthy();
     expect(config.services.redis.volumes).toContainEqual(expect.objectContaining({ source: 'redis-data', target: '/data', type: 'volume' }));

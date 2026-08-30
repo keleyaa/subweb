@@ -1,4 +1,4 @@
-const CREATE_LINK_ENDPOINT = '/short-api/v1/links';
+const CREATE_LINK_ENDPOINT = '/short-api/links';
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 const ERROR_CODES = new Set([
@@ -26,16 +26,21 @@ function isChallenge(value) {
   );
 }
 
+function errorDetails(value) {
+  return isRecord(value?.error) ? value.error : value;
+}
+
 function isErrorResponse(value) {
+  const error = errorDetails(value);
   return (
     isRecord(value) &&
-    isRecord(value.error) &&
-    ERROR_CODES.has(value.error.code) &&
-    typeof value.error.requestId === 'string' &&
-    value.error.requestId.length > 0 &&
+    isRecord(error) &&
+    ERROR_CODES.has(error.code) &&
+    typeof error.requestId === 'string' &&
+    error.requestId.length > 0 &&
     (value.challenge === undefined || isChallenge(value.challenge)) &&
-    (value.error.retryAfterSeconds === undefined ||
-      (Number.isInteger(value.error.retryAfterSeconds) && value.error.retryAfterSeconds > 0))
+    (error.retryAfterSeconds === undefined ||
+      (Number.isInteger(error.retryAfterSeconds) && error.retryAfterSeconds > 0))
   );
 }
 
@@ -105,7 +110,7 @@ export function createShortLinkClient({
         response = await fetchImpl(endpoint, {
           method: 'POST',
           headers: {
-            accept: 'application/json',
+            accept: 'application/json, application/problem+json',
             'content-type': 'application/json',
           },
           body: JSON.stringify(input),
@@ -122,12 +127,13 @@ export function createShortLinkClient({
       const payload = await readJson(response);
       if (response.status !== 201) {
         if (isErrorResponse(payload)) {
+          const error = errorDetails(payload);
           throw new ShortLinkError({
             status: response.status,
-            code: payload.error.code,
-            requestId: payload.error.requestId,
+            code: error.code,
+            requestId: error.requestId,
             challenge: payload.challenge,
-            retryAfterSeconds: payload.error.retryAfterSeconds,
+            retryAfterSeconds: error.retryAfterSeconds,
           });
         }
         throw dependencyError();

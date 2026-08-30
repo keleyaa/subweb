@@ -2,7 +2,7 @@
 
 ## 请求边界
 
-- APP 的 `/short-api/v1/links` 只接受 POST、JSON、空查询参数和精确的 APP Origin。
+- APP 的 `/short-api/links` 只接受 POST、JSON、空查询参数和精确的 APP Origin。
 - Gateway 清除 Authorization、Proxy-Authorization、Cookie 和 Origin 后再转发请求。
 - SHORT 域透明代理 MyUrls，由 MyUrls 自行校验同源请求、JSON Schema、URL 和 Turnstile。
 - API 域的 `/sub` 先进入 `Request Policy Service`，执行 URL 协议、主机地址、端口、大小、超时、并发和匿名频率限制，再转发到 SubConverter；上传能力保持关闭，`print_debug_info = false`。

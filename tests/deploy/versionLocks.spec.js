@@ -89,8 +89,20 @@ describe('integrated service artifact locks', () => {
     }
   });
 
-  it('uses the approved upstream repositories', () => {
-    expect(lock.services.myurls.source.repository).toBe('keleyaa/MyUrls');
+  it('uses the approved upstream repositories and Rust MyUrls release', () => {
+    expect(lock.services.myurls.source).toMatchObject({
+      repository: 'keleyaa/MyUrls',
+      tag: 'v2.0.4',
+      commit: '291545f1875da6d7449a2061e8eb813b8d2fd23a',
+    });
+    expect(lock.services.myurls.image).toMatchObject({
+      reference: 'ghcr.io/keleyaa/myurls:v2.0.4',
+      digest: 'sha256:a6b8d44ef40d37098a7ca6001f782fedc9d1d882a3e4fa8d28420dd5f6b7e64d',
+      platforms: {
+        'linux/amd64': 'sha256:fbc8c5cf12446da0146b64f15297e6da3adb646083af85db946378de3849097b',
+        'linux/arm64': 'sha256:5dc7c935a78686611db56d18e9a06e16306117fbd1f6fb9492333743040025ec',
+      }
+    });
     expect(lock.services.subconverter.source.repository).toBe(
       'Aethersailor/SubConverter-Extended',
     );

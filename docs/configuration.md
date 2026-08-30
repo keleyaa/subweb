@@ -22,7 +22,7 @@
 | `SUBWEB_PORT` | Gateway 的 loopback 端口，默认值为 `18080` |
 
 浏览器可读取 `/conf/config.js`。该文件只包含 `apiUrl`、菜单和远程配置选项。短链入口固定
-为同源 `/short-api/v1/links`，不再公开短链服务地址。
+为同源 `/short-api/links`，不再公开短链服务地址。
 
 ## 策略服务、秘密与内部配置
 
@@ -51,7 +51,7 @@
 
 ## 镜像
 
-生产默认使用带 manifest digest 的 MyUrls v2 镜像。可用 `MYURLS_IMAGE` 执行显式回滚，
+生产默认使用带 manifest digest 的 MyUrls Rust 镜像。可用 `MYURLS_IMAGE` 执行显式回滚，
 升级时必须同步更新版本锁并重新验证。完整源码、镜像和平台 digest 记录在
 [`deploy/versions.lock.json`](../deploy/versions.lock.json)。
 

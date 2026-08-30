@@ -12,9 +12,9 @@ describe('Compose-first local workflow contract', () => {
     expect(workflow).not.toContain('bootstrap.sh');
   });
 
-  it('verifies v2 JSON creation and redirect through the Vite proxy', async () => {
+  it('verifies Rust MyUrls creation and redirect through the Vite proxy', async () => {
     const verifier = await readFile(new URL('../../scripts/verify-local-dev.sh', import.meta.url), 'utf8');
-    expect(verifier).toContain('/short-api/v1/links');
+    expect(verifier).toContain('/short-api/links');
     expect(verifier).toContain('Content-Type: application/json');
     expect(verifier).toContain("status=$(curl");
     expect(verifier).toContain('Expected a 302 redirect');

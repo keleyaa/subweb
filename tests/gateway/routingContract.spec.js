@@ -5,9 +5,9 @@ const root = new URL('../../', import.meta.url);
 const rootFile = (path) => new URL(path, root);
 
 describe('gateway routing contract', () => {
-  it('adapts only the same-origin v2 creation endpoint', async () => {
+  it('adapts only the same-origin Rust creation endpoint', async () => {
     const routes = await readFile(rootFile('nginx/snippets/app-routes.conf.template'), 'utf8');
-    const start = routes.indexOf('location = /short-api/v1/links');
+    const start = routes.indexOf('location = /short-api/links');
     const block = routes.slice(start, routes.indexOf('\n}', start) + 2);
     expect(start).toBeGreaterThan(-1);
     expect(block).toContain('limit_except POST');
@@ -18,7 +18,7 @@ describe('gateway routing contract', () => {
     expect(block).toContain('proxy_set_header Authorization "";');
     expect(block).toContain('proxy_set_header Cookie "";');
     expect(block).toContain('proxy_set_header Origin "";');
-    expect(block).toContain('proxy_pass $myurls_upstream/api/v1/links;');
+    expect(block).toContain('proxy_pass $myurls_upstream/api/links;');
     expect(routes).toContain('location ^~ /short-api/');
     expect(routes).not.toContain('MYURLS_API_TOKEN');
   });
@@ -31,7 +31,7 @@ describe('gateway routing contract', () => {
     expect(map).not.toContain('multipart/form-data');
   });
 
-  it('keeps the short host as a transparent MyUrls v2 proxy', async () => {
+  it('keeps the short host as a transparent MyUrls proxy', async () => {
     const routes = await readFile(rootFile('nginx/snippets/short-routes.conf.template'), 'utf8');
     expect(routes).toContain('location / {');
     expect(routes).toContain('proxy_pass $myurls_upstream$request_uri;');
@@ -44,7 +44,7 @@ describe('gateway routing contract', () => {
   it('preserves static application routes and constrained redirects', async () => {
     const routes = await readFile(rootFile('nginx/snippets/app-routes.conf.template'), 'utf8');
     const shortCodePosition = routes.indexOf('location ~ "^/[A-Za-z0-9_-]{1,64}$"');
-    for (const route of ['location = /healthz', 'location ^~ /assets/', 'location ^~ /conf/', 'location = /short-api/v1/links']) {
+    for (const route of ['location = /healthz', 'location ^~ /assets/', 'location ^~ /conf/', 'location = /short-api/links']) {
       expect(routes.indexOf(route)).toBeGreaterThan(-1);
       expect(routes.indexOf(route)).toBeLessThan(shortCodePosition);
     }

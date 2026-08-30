@@ -150,7 +150,7 @@ MyUrls 与 SubConverter 属于独立上游：先在各自边界验证，再更�
 ## 常见故障
 
 - 页面健康但转换失败：区分 gateway、SubConverter、远程配置和订阅源，按浏览器 Network 状态码定位。
-- 短链创建失败但跳转正常：检查 `/short-api/v1/links` 路由、Turnstile 状态和 MyUrls 日志，不输出 token。
+- 短链创建失败但跳转正常：检查 `/short-api/links` 路由、Turnstile 状态和 MyUrls 日志，不输出 token。
 - 重启后短码丢失：确认没有删除/更换 `redis-data` 卷，检查 Compose project name 和恢复记录。
 - 外层代理 502：先从主机用正确 Host 请求 loopback health，再核对 upstream 和防火墙。
 - 磁盘告警：先检查 Docker volume、镜像和日志占用；不要在未确认目标时运行广泛删除命令。

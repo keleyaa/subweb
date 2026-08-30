@@ -9,7 +9,7 @@ const success = {
 };
 
 describe('ShortLinkClient HTTP adapter', () => {
-  it('uses the same-origin v2 endpoint and returns a validated 201 response', async () => {
+  it('uses the same-origin Rust endpoint and returns a validated 201 response', async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify(success), {
       status: 201,
       headers: { 'content-type': 'application/json' },
@@ -17,23 +17,27 @@ describe('ShortLinkClient HTTP adapter', () => {
     const client = createShortLinkClient({ fetchImpl });
 
     await expect(client.create({ url: 'https://example.com/sub' })).resolves.toEqual(success);
-    expect(fetchImpl).toHaveBeenCalledWith('/short-api/v1/links', expect.objectContaining({
+    expect(fetchImpl).toHaveBeenCalledWith('/short-api/links', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({ url: 'https://example.com/sub' }),
       credentials: 'same-origin',
       cache: 'no-store',
     }));
     expect(fetchImpl.mock.calls[0][1].headers).toEqual({
-      accept: 'application/json',
+      accept: 'application/json, application/problem+json',
       'content-type': 'application/json',
     });
   });
 
-  it('preserves stable challenge details from an error response', async () => {
+  it('preserves stable challenge details from an RFC 9457 problem response', async () => {
     const fetchImpl = async () => new Response(JSON.stringify({
-      error: { code: 'challenge_required', requestId: 'req_12345678' },
+      type: 'https://short.example.test/problems/challenge_required',
+      title: 'Challenge required',
+      status: 403,
+      code: 'challenge_required',
+      requestId: 'req_12345678',
       challenge: { provider: 'turnstile', siteKey: 'site-key' },
-    }), { status: 403, headers: { 'content-type': 'application/json' } });
+    }), { status: 403, headers: { 'content-type': 'application/problem+json' } });
     const client = createShortLinkClient({ fetchImpl });
 
     await expect(client.create({ url: 'https://example.com' })).rejects.toMatchObject({

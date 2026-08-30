@@ -7,7 +7,7 @@ Browser
   |-- APP_DOMAIN
   |     `-- Gateway
   |           |-- /                     -> Subweb Vue 工作区
-  |           `-- /short-api/v1/links   -> MyUrls v2 (APP instance) -> Redis
+  |           `-- /short-api/links      -> MyUrls Rust (APP instance) -> Redis
   |
   |-- API_DOMAIN
   |     `-- Gateway -> /sub?... -> Request Policy Service -> SubConverter
@@ -15,7 +15,7 @@ Browser
   |                                                   `-- HTTPS CONNECT egress proxy -- remote HTTPS host
   |
   `-- SHORT_DOMAIN
-        `-- Gateway transparent proxy -> MyUrls v2 (SHORT instance) UI/API/redirect
+        `-- Gateway transparent proxy -> MyUrls Rust (SHORT instance) UI/API/redirect
 ```
 
 ## 路由契约
@@ -23,7 +23,7 @@ Browser
 | 公开入口 | 行为 |
 | --- | --- |
 | `APP_DOMAIN/` | Subweb Vue 工作区 |
-| `APP_DOMAIN/short-api/v1/links` | 仅接受 POST JSON，精确转发到 MyUrls `/api/v1/links` |
+| `APP_DOMAIN/short-api/links` | 仅接受 POST JSON，精确转发到 MyUrls `/api/links` |
 | `APP_DOMAIN/:code` | 兼容已分享短码的 302 跳转 |
 | `API_DOMAIN/sub?...` | 仅接受转换请求；Gateway 交给 Request Policy Service 执行 URL、DNS、频率和资源校验后，再代理到 SubConverter |
 | `SHORT_DOMAIN/*` | 透明转发 MyUrls 页面、`/assets/*`、API、健康检查和短码 |
@@ -40,11 +40,11 @@ Gateway 通过仅存在于该网络的 `myurls-app-edge`、`myurls-short-edge` �
 ## 前端边界
 
 - 转换 URL 构造保持为纯函数。
-- `ShortLinkClient` 独占 MyUrls v2 HTTP 契约。
+- `ShortLinkClient` 独占 MyUrls Rust HTTP 契约，并兼容旧版错误响应以支持镜像回滚。
 - `ShortLinkWorkflow` 负责 UTF-8 长度预检、挑战、重试、复制和 stale-result。
 - Vue 组件只绑定状态和用户动作。
 
-本地开发由 Vite 提供页面，并把同源 `/short-api/*` 代理到 Compose 中的 MyUrls v2。
+本地开发由 Vite 提供页面，并把同源 `/short-api/*` 代理到 Compose 中的 MyUrls Rust 服务。
 SubConverter 与 MyUrls 使用 loopback 调试端口，Redis 保持私有。
 
 所有服务默认使用 `Asia/Shanghai` 时区。

@@ -10,7 +10,7 @@
 
 - **订阅转换：** 输入订阅链接或节点，选择客户端与远程配置后生成可复制的转换地址。
 - **状态行设置：** 「订阅后端」在默认后端与自定义 API 地址之间切换；「高级参数」采用保存前草稿与显式重置，两个区域互斥原位展开。
-- **短链：** 通过同源 `/short-api/v1/links` 创建短链；浏览器不接触 MyUrls 内部 Token。
+- **短链：** 通过同源 `/short-api/links` 创建短链；浏览器不接触 MyUrls 内部 Token。
 - **匿名请求保护：** Request Policy Service 对转换输入执行 HTTPS、域名/IP、DNS、端口、大小、超时、并发和频率限制。
 - **受控出站：** SubConverter 仅加入内部 egress 网络，必须经 Request Policy Service 的 HTTPS CONNECT proxy 按已验证 IP 访问公网订阅，避免二次 DNS 解析绕过校验。
 - **PWA 图标：** 提供命令链接 favicon、Apple Touch Icon、`192 px` / `512 px` 图标与 manifest。

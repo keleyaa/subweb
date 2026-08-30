@@ -21,22 +21,21 @@ x-runtime-security: &runtime-security
 
 x-myurls-common: &myurls-common
   <<: *runtime-security
-  user: "node"
+  user: "10001:10001"
   depends_on:
     redis:
       condition: service_healthy
       restart: true
   tmpfs:
-    - /tmp:uid=1000,gid=1000,mode=0700,noexec,nosuid,size=16m
+    - /tmp:uid=10001,gid=10001,mode=0700,noexec,nosuid,size=16m
   stop_grace_period: 20s
   healthcheck:
     test:
       - CMD
-      - node
-      - -e
-      - >-
-        fetch('http://127.0.0.1:3000/health/live').then((response) =>
-        process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))
+      - curl
+      - --fail
+      - --silent
+      - http://127.0.0.1:3000/health/live
     interval: 30s
     timeout: 5s
     retries: 3
@@ -126,7 +125,7 @@ services:
 
   myurls-app:
     <<: *myurls-common
-    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.2@sha256:b76423a5b5f346c27c40cbecb3954409f645f85df462d49577bb14d738d6127b}"
+    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.4@sha256:a6b8d44ef40d37098a7ca6001f782fedc9d1d882a3e4fa8d28420dd5f6b7e64d}"
     environment:
       <<: *runtime-environment
       NODE_ENV: production
@@ -162,7 +161,7 @@ services:
 
   myurls-short:
     <<: *myurls-common
-    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.2@sha256:b76423a5b5f346c27c40cbecb3954409f645f85df462d49577bb14d738d6127b}"
+    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.4@sha256:a6b8d44ef40d37098a7ca6001f782fedc9d1d882a3e4fa8d28420dd5f6b7e64d}"
     environment:
       <<: *runtime-environment
       NODE_ENV: production
@@ -297,11 +296,11 @@ services:
     healthcheck:
       test:
         - CMD
-        - node
-        - -e
-        - >-
-          fetch('http://127.0.0.1:25501/healthz').then((response) =>
-          process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))
+        - wget
+        - -q
+        - -O
+        - /dev/null
+        - http://127.0.0.1:25501/healthz
       interval: 30s
       timeout: 5s
       retries: 3

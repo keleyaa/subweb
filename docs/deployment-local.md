@@ -1,6 +1,6 @@
 # 本地开发
 
-本地开发采用 Vite + Docker Compose。Vite 运行 Subweb 页面；Compose 运行 Redis、两个 MyUrls v2 实例和 SubConverter。此模式为了调试直接暴露本机 SubConverter 端口，因此**不复现生产的 Gateway、Request Policy Service 与 HTTPS CONNECT egress 边界**。只使用可信测试订阅；完整匿名请求安全验证请运行 Docker 集成门禁。
+本地开发采用 Vite + Docker Compose。Vite 运行 Subweb 页面；Compose 运行 Redis、两个 MyUrls Rust 实例和 SubConverter。此模式为了调试直接暴露本机 SubConverter 端口，因此**不复现生产的 Gateway、Request Policy Service 与 HTTPS CONNECT egress 边界**。只使用可信测试订阅；完整匿名请求安全验证请运行 Docker 集成门禁。
 
 ## 前提
 
@@ -15,7 +15,7 @@ npm ci
 npm run dev
 ```
 
-打开 `http://127.0.0.1:5173/`。Vite 将 `/short-api/v1/links` 同源代理到 `http://127.0.0.1:18082/api/v1/links`；转换请求使用 `http://127.0.0.1:25500`。不要在其他项目目录执行这些脚本。
+打开 `http://127.0.0.1:5173/`。Vite 将 `/short-api/links` 同源代理到 `http://127.0.0.1:18082/api/links`；转换请求使用 `http://127.0.0.1:25500`。不要在其他项目目录执行这些脚本。
 
 ## 生命周期
 
@@ -41,7 +41,7 @@ npm run dev
 
 ## 验证边界
 
-`npm run verify:local` 验证页面、v2 JSON 创建和 `302` 跳转。它不验证生产 egress proxy、DNS rebinding 防护、Gateway Host 隔离、Turnstile 或 Redis 恢复。
+`npm run verify:local` 验证页面、MyUrls JSON 创建和 `302` 跳转。它不验证生产 egress proxy、DNS rebinding 防护、Gateway Host 隔离、Turnstile 或 Redis 恢复。
 
 完整的生产边界由以下命令覆盖：
 

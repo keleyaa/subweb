@@ -12,11 +12,11 @@ npm run verify:integration
 
 ## 覆盖范围
 
-- Gateway、Request Policy、SubConverter、两个 MyUrls v2 实例和 Redis 均达到健康状态；
+- Gateway、Request Policy、SubConverter、两个 MyUrls Rust 实例和 Redis 均达到健康状态；
 - APP、API、SHORT Host 路由与单一 HTTP 行为；
 - `/sub` 经 Request Policy 拒绝私网、非 HTTPS、危险端口与超限输入；
 - SubConverter 只可通过内部 HTTPS CONNECT egress proxy 访问远程 HTTPS，未直接加入默认出站网络；
-- APP 创建短链、SHORT 跳转与 v2 JSON 响应；
+- APP 创建短链、SHORT 跳转与 MyUrls JSON 响应；
 - 所有公开路径只使用 Gateway 的监听端口，MyUrls、Redis、SubConverter、Request Policy 与 egress proxy 不发布宿主机端口；
 - Redis 短暂重启后 MyUrls 与 Request Policy 的恢复；
 - Gateway、Request Policy、MyUrls 与 SubConverter 日志不出现订阅 URL、挑战 Token、Redis 密码、IP 哈希秘密或真实短码；

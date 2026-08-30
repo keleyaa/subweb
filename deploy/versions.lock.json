@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-28T00:12:08Z",
+  "verifiedAt": "2026-08-30T08:07:06Z",
   "services": {
     "gatewayBase": {
       "source": {
@@ -26,16 +26,16 @@
       "source": {
         "url": "https://github.com/keleyaa/MyUrls",
         "repository": "keleyaa/MyUrls",
-        "tag": "v2.0.2",
-        "commit": "c86c5d6d7d85eb1c02bfdef73dff489e8a547395",
+        "tag": "v2.0.4",
+        "commit": "291545f1875da6d7449a2061e8eb813b8d2fd23a",
         "prerelease": false
       },
       "image": {
-        "reference": "ghcr.io/keleyaa/myurls:v2.0.2",
-        "digest": "sha256:b76423a5b5f346c27c40cbecb3954409f645f85df462d49577bb14d738d6127b",
+        "reference": "ghcr.io/keleyaa/myurls:v2.0.4",
+        "digest": "sha256:a6b8d44ef40d37098a7ca6001f782fedc9d1d882a3e4fa8d28420dd5f6b7e64d",
         "platforms": {
-          "linux/amd64": "sha256:bda89999550f10de3172aa5e2b22a524ae0028d6810b1481e45653651fc613af",
-          "linux/arm64": "sha256:e75410578989be2899c5d42aad62db0d4292eba044de3e933056b62bbe652fd8"
+          "linux/amd64": "sha256:fbc8c5cf12446da0146b64f15297e6da3adb646083af85db946378de3849097b",
+          "linux/arm64": "sha256:5dc7c935a78686611db56d18e9a06e16306117fbd1f6fb9492333743040025ec"
         }
       },
       "container": {

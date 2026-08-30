@@ -68,7 +68,7 @@ post_json() {
   host=$2
   origin=$3
   body=$4
-  path=${5:-/short-api/v1/links}
+  path=${5:-/short-api/links}
   status_for "$output" -H "Host: $host" -H "Origin: $origin" -H 'Content-Type: application/json' \
     --data "$body" "http://127.0.0.1:$host_port$path"
 }
@@ -89,7 +89,7 @@ const http = require("node:http");
 const request = http.request({
   host: "gateway",
   port: 8080,
-  path: "/short-api/v1/links",
+   path: "/short-api/links",
   method: "POST",
   headers: {
     Host: "app.test",
@@ -136,12 +136,14 @@ app_body=$(curl --noproxy '*' --fail --silent --show-error -H 'Host: app.test' "
   || fail 'APP host is unavailable'
 printf '%s' "$app_body" | grep -q 'Subconverter Web' || fail 'APP host returned unexpected content'
 
-compose exec -T myurls-app node -e \
-  "Promise.all(['/health/live','/health/ready'].map(p=>fetch('http://127.0.0.1:3000'+p).then(r=>{if(!r.ok)process.exit(1)}))).catch(()=>process.exit(1))" \
-  || fail 'MyUrls live/readiness checks failed'
-compose exec -T myurls-short node -e \
-  "Promise.all(['/health/live','/health/ready'].map(p=>fetch('http://127.0.0.1:3000'+p).then(r=>{if(!r.ok)process.exit(1)}))).catch(()=>process.exit(1))" \
-  || fail 'SHORT MyUrls live/readiness checks failed'
+compose exec -T myurls-app curl --fail --silent http://127.0.0.1:3000/health/live >/dev/null \
+  || fail 'MyUrls liveness check failed'
+compose exec -T myurls-app curl --fail --silent http://127.0.0.1:3000/health/ready >/dev/null \
+  || fail 'MyUrls readiness check failed'
+compose exec -T myurls-short curl --fail --silent http://127.0.0.1:3000/health/live >/dev/null \
+  || fail 'SHORT MyUrls liveness check failed'
+compose exec -T myurls-short curl --fail --silent http://127.0.0.1:3000/health/ready >/dev/null \
+  || fail 'SHORT MyUrls readiness check failed'
 compose exec -T request-policy node -e \
   "fetch('http://127.0.0.1:25501/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" \
   || fail 'request policy health check failed'
@@ -179,9 +181,9 @@ asset_path=$(printf '%s' "$short_html" | sed -n 's/.*src="\(\/assets\/[^"]*\.js\
   || fail 'MyUrls hashed asset was not reachable'
 
 short_status=$(post_json "$temporary_directory/short-create.json" short.test https://short.test \
-  '{"url":"https://example.com/short-hostname-verification"}' /api/v1/links)
+  '{"url":"https://example.com/short-hostname-verification"}' /api/links)
 [ "$short_status" = 201 ] || fail "SHORT MyUrls creation returned $short_status"
-node - "$temporary_directory/short-create.json" <<'NODE' || fail 'SHORT v2 success payload is invalid'
+node - "$temporary_directory/short-create.json" <<'NODE' || fail 'SHORT creation response payload is invalid'
 const fs = require('node:fs');
 const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 if (!/^[A-Za-z0-9_-]{1,64}$/.test(value.code) || !value.shortUrl.startsWith('https://short.test/') || Number.isNaN(Date.parse(value.expiresAt))) process.exit(1);
@@ -190,7 +192,7 @@ NODE
 long_url="https://example.com/path?verification=$(openssl rand -hex 8)"
 first_status=$(post_json "$temporary_directory/first.json" app.test https://app.test "{\"url\":\"$long_url\"}")
 [ "$first_status" = 201 ] || fail "APP creation returned $first_status"
-node - "$temporary_directory/first.json" <<'NODE' || fail 'v2 success payload is invalid'
+node - "$temporary_directory/first.json" <<'NODE' || fail 'APP creation response payload is invalid'
 const fs = require('node:fs');
 const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 if (!/^[A-Za-z0-9_-]{1,64}$/.test(value.code) || !value.shortUrl.startsWith('https://short.test/') || Number.isNaN(Date.parse(value.expiresAt))) process.exit(1);
@@ -207,7 +209,7 @@ challenge_status=$(post_json "$temporary_directory/challenge.json" app.test http
 node - "$temporary_directory/challenge.json" <<'NODE' || fail 'challenge payload is invalid'
 const fs = require('node:fs');
 const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-if (value.error?.code !== 'challenge_required' || value.challenge?.provider !== 'turnstile') process.exit(1);
+if (value.code !== 'challenge_required' || value.challenge?.provider !== 'turnstile') process.exit(1);
 NODE
 retry_status=$(post_json "$temporary_directory/retry.json" app.test https://app.test \
   "{\"url\":\"https://example.com/challenge-$sentinel_value\",\"challengeToken\":\"test-token\"}")
@@ -230,7 +232,7 @@ rate_keys_after=$(count_create_rate_keys)
   "http://127.0.0.1:$host_port/sub?target=clash&url=https%3A%2F%2F127.0.0.1%2Fadmin")" = 403 ] \
   || fail 'private conversion target was not rejected by request policy'
 [ "$(status_for "$temporary_directory/type.out" -H 'Host: app.test' -H 'Origin: https://app.test' \
-  -H 'Content-Type: text/plain' --data '{}' "http://127.0.0.1:$host_port/short-api/v1/links")" = 415 ] \
+  -H 'Content-Type: text/plain' --data '{}' "http://127.0.0.1:$host_port/short-api/links")" = 415 ] \
   || fail 'non-JSON request was not rejected'
 [ "$(post_json "$temporary_directory/origin.out" app.test https://evil.test '{"url":"https://example.com"}')" = 403 ] \
   || fail 'foreign Origin was not rejected'
@@ -253,4 +255,4 @@ for service in gateway myurls-app myurls-short subconverter request-policy redis
   grep -Fq "$ip_hash_secret" "$service_log" && fail "service log leaked IP hash secret: $service"
 done
 
-printf '%s\n' 'MyUrls v2 integrated stack verification passed.'
+printf '%s\n' 'MyUrls integrated stack verification passed.'
