@@ -20,7 +20,7 @@ function recordBrowserErrors(page) {
   return errors;
 }
 
-test('converts, copies, and creates a short link through the same-origin v2 adapter', async ({ context, page }) => {
+test('converts, copies, and creates a short link through the same-origin Rust adapter', async ({ context, page }) => {
   const browserErrors = recordBrowserErrors(page);
   let shortRequestContentType = '';
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
@@ -36,7 +36,7 @@ test('converts, copies, and creates a short link through the same-origin v2 adap
       })};`,
     });
   });
-  await page.route('**/short-api/v1/links', async (route) => {
+  await page.route('**/short-api/links', async (route) => {
     shortRequestContentType = route.request().headers()['content-type'] ?? '';
     await route.fulfill({
       contentType: 'application/json',
@@ -88,15 +88,19 @@ test('loads Turnstile only after challenge_required and retries the same convers
       body: "window.turnstile={render:(_host,options)=>{setTimeout(()=>options.callback('e2e-token'),0);return 1},remove:()=>{}};",
     });
   });
-  await page.route('**/short-api/v1/links', async (route) => {
+  await page.route('**/short-api/links', async (route) => {
     attempts += 1;
     const request = route.request().postDataJSON();
     if (attempts === 1) {
       await route.fulfill({
         status: 403,
-        contentType: 'application/json',
+        contentType: 'application/problem+json',
         body: JSON.stringify({
-          error: { code: 'challenge_required', requestId: 'req-e2e' },
+          type: 'https://myurls.invalid/problems/challenge-required',
+          title: 'Challenge required',
+          status: 403,
+          code: 'challenge_required',
+          requestId: 'req-e2e',
           challenge: { provider: 'turnstile', siteKey: 'site-e2e' },
         }),
       });

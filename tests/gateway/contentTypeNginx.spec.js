@@ -35,12 +35,12 @@ async function waitFor(probe) {
   throw new Error('temporary Nginx fixture did not become ready');
 }
 
-describe.skipIf(!enabled)('real Nginx MyUrls v2 adapter', () => {
+describe.skipIf(!enabled)('real Nginx MyUrls Rust adapter', () => {
   beforeAll(async () => {
     await docker('network', 'create', network);
     await docker(
       'run', '--rm', '-d', '--name', upstream, '--network', network, 'node:alpine', 'node', '-e',
-      "let requests=[];require('http').createServer((req,res)=>{let body='';req.on('data',c=>body+=c);req.on('end',()=>{if(req.url==='/metrics'){res.setHeader('content-type','application/json');res.end(JSON.stringify(requests));return}if(req.url==='/'||req.url==='/assets/app.js'){res.statusCode=200;res.end(req.url==='/'?'<script src=\"/assets/app.js\"></script>':'console.log(\"MyUrls\")');return}if(req.url==='/api/v1/links'){requests.push({authorization:req.headers.authorization||'',cookie:req.headers.cookie||'',origin:req.headers.origin||'',forwarded:req.headers.forwarded||'',xForwardedFor:req.headers['x-forwarded-for']||'',xRealIp:req.headers['x-real-ip']||'',type:req.headers['content-type']||'',body});res.statusCode=201;res.setHeader('content-type','application/json');res.end('{\"code\":\"Code1234\",\"shortUrl\":\"https://short.example.test/Code1234\",\"expiresAt\":\"2099-01-01T00:00:00.000Z\"}');return}res.statusCode=404;res.end('not found')})}).listen(3000,'0.0.0.0')",
+      "let requests=[];require('http').createServer((req,res)=>{let body='';req.on('data',c=>body+=c);req.on('end',()=>{if(req.url==='/metrics'){res.setHeader('content-type','application/json');res.end(JSON.stringify(requests));return}if(req.url==='/'||req.url==='/assets/app.js'){res.statusCode=200;res.end(req.url==='/'?'<script src=\"/assets/app.js\"></script>':'console.log(\"MyUrls\")');return}if(req.url==='/api/links'){requests.push({authorization:req.headers.authorization||'',cookie:req.headers.cookie||'',origin:req.headers.origin||'',forwarded:req.headers.forwarded||'',xForwardedFor:req.headers['x-forwarded-for']||'',xRealIp:req.headers['x-real-ip']||'',type:req.headers['content-type']||'',body});res.statusCode=201;res.setHeader('content-type','application/json');res.end('{\"code\":\"Code1234\",\"shortUrl\":\"https://short.example.test/Code1234\",\"expiresAt\":\"2099-01-01T00:00:00.000Z\"}');return}res.statusCode=404;res.end('not found')})}).listen(3000,'0.0.0.0')",
     );
     for (const client of [clientA, clientB]) {
       await docker(
@@ -74,13 +74,13 @@ describe.skipIf(!enabled)('real Nginx MyUrls v2 adapter', () => {
       '--silent', '--output', '/dev/null', '--write-out', '%{http_code}', '-X', 'POST',
       '-H', 'Host: app.example.test', '-H', 'Origin: ' + origin, '-H', 'Content-Type: ' + type,
       '-H', 'Authorization: Bearer browser-secret', '-H', 'Cookie: session=browser-secret',
-      '--data-binary', body, 'http://127.0.0.1:' + gatewayPort + '/short-api/v1/links' + query,
+      '--data-binary', body, 'http://127.0.0.1:' + gatewayPort + '/short-api/links' + query,
     ])).stdout;
 
   const requestFromClient = async (client, spoofedIp) =>
     (await docker(
       'exec', client, 'node', '-e',
-      `const http=require('node:http');const req=http.request({host:${JSON.stringify(gateway)},port:8080,path:'/short-api/v1/links',method:'POST',headers:{Host:'app.example.test',Origin:'https://app.example.test','Content-Type':'application/json',Authorization:'Bearer browser-secret',Cookie:'session=browser-secret','X-Forwarded-For':${JSON.stringify(spoofedIp)},Forwarded:${JSON.stringify(`for=${spoofedIp}`)} }},res=>{res.resume();res.on('end',()=>process.stdout.write(String(res.statusCode)))});req.on('error',error=>{console.error(error);process.exit(1)});req.end('{"url":"https://example.com"}');`,
+      `const http=require('node:http');const req=http.request({host:${JSON.stringify(gateway)},port:8080,path:'/short-api/links',method:'POST',headers:{Host:'app.example.test',Origin:'https://app.example.test','Content-Type':'application/json',Authorization:'Bearer browser-secret',Cookie:'session=browser-secret','X-Forwarded-For':${JSON.stringify(spoofedIp)},Forwarded:${JSON.stringify(`for=${spoofedIp}`)} }},res=>{res.resume();res.on('end',()=>process.stdout.write(String(res.statusCode)))});req.on('error',error=>{console.error(error);process.exit(1)});req.end('{"url":"https://example.com"}');`,
     )).stdout;
 
   it('enforces the exact JSON endpoint and strips browser credentials and Origin', async () => {

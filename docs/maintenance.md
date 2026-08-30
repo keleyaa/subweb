@@ -44,7 +44,7 @@ npm run verify:integration
 git diff --check
 ```
 
-`npm run verify:release` 会聚合安装、审计、质量、浏览器、锁、Compose、文档、容器、镜像安全、Redis 运维、单一 HTTP 集成和证据门禁，并检查最终镜像、Redis、SubConverter 和 MyUrls 的高危与严重漏洞。扫描默认不接受例外；当前仅对 Redis 和 SubConverter 分别使用 `.trivyignore.redis`、`.trivyignore.subconverter` 中记录的 OpenSSL 例外。升级对应镜像时，必须重新审查并删除或更新对应文件。
+`npm run verify:ci` 是 GitHub quality job 与本地发布验证共用的 Docker 门禁：它会在普通质量检查之外启用真实 Nginx 和完整 Docker integration 的 Vitest 用例，因此需要可用的 Docker daemon。`npm run verify:release` 会聚合安装、审计、质量、浏览器、锁、Compose、文档、容器、镜像安全、Redis 运维、单一 HTTP 集成和证据门禁，并检查最终镜像、Redis、SubConverter 和 MyUrls 的高危与严重漏洞。扫描默认不接受例外；当前仅对 Redis 和 SubConverter 分别使用 `.trivyignore.redis`、`.trivyignore.subconverter` 中记录的 OpenSSL 例外。升级对应镜像时，必须重新审查并删除或更新对应文件。
 
 本地开发验证使用 `npm run verify:local`；完整 v2 栈使用 `npm run verify:integration` 和 `npm run verify:operations`。`npm run verify:release` 在没有 `.env` 的干净工作树中为策略镜像构建注入仅限当前进程的临时验证配置，不写入磁盘、不覆盖已有 `.env`。真实部署仍必须通过 `./scripts/configure.sh` 生成权限为 `0600` 的 `.env`。完整门禁会重装依赖并运行较长时间，仅应在准备发布的干净工作树中执行。
 

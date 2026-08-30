@@ -21,11 +21,6 @@ env:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    env:
-      # Activate the real-nginx Content-Type gate and the Docker integration
-      # wrappers that are otherwise skipIf-gated out of every vitest run.
-      RUN_NGINX_GATEWAY_TESTS: "1"
-      RUN_DOCKER_INTEGRATION: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -53,8 +48,8 @@ jobs:
       - name: Validate Compose
         run: npm run verify:compose
 
-      - name: Verify unit tests, lint, and build
-        run: npm run verify
+      - name: Verify Docker-gated tests, lint, and build
+        run: npm run verify:ci
 
       - name: Verify container runtime
         run: npm run verify:container

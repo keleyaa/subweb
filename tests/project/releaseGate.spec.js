@@ -16,7 +16,7 @@ describe('release evidence and command gate', () => {
     const commands = [
       'stage install npm ci',
       'stage audit npm audit --audit-level=moderate',
-      'stage quality npm run verify',
+      'stage quality npm run verify:ci',
       'stage browser npm run test:e2e',
       'stage locks npm run verify:locks',
       'stage production-readiness node scripts/verify-production-readiness.mjs',
@@ -66,6 +66,33 @@ describe('release evidence and command gate', () => {
     const result = spawnSync(process.execPath, [script], { encoding: 'utf8' });
     expect(result.status).toBe(0);
     expect(`${result.stdout}${result.stderr}`).toContain('tag gate passed');
+  });
+
+  it('uses one Docker-gated quality command for CI and local release checks', () => {
+    const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+    const workflow = fs.readFileSync(path.join(root, '.github/workflows/docker-build-release.yml'), 'utf8');
+    const releaseVerifier = fs.readFileSync(path.join(root, 'scripts/verify-release.sh'), 'utf8');
+
+    expect(packageJson.scripts['verify:ci']).toBe('RUN_NGINX_GATEWAY_TESTS=1 RUN_DOCKER_INTEGRATION=1 npm run verify');
+    expect(workflow).toContain('run: npm run verify:ci');
+    expect(releaseVerifier).toContain('stage quality npm run verify:ci');
+    expect(workflow).not.toContain('RUN_NGINX_GATEWAY_TESTS: "1"');
+    expect(workflow).not.toContain('RUN_DOCKER_INTEGRATION: "1"');
+  });
+
+  it('does not offer an interface-incompatible Node MyUrls override', () => {
+    const environmentTemplate = fs.readFileSync(path.join(root, '.env.example'), 'utf8');
+
+    expect(environmentTemplate).toContain('only a Rust MyUrls image compatible with /api/links');
+    expect(environmentTemplate).not.toContain('myurls:v1.13.0');
+  });
+
+  it('keeps browser short-link mocks on the public Rust route', () => {
+    const source = fs.readFileSync(path.join(root, 'tests/e2e/app.spec.js'), 'utf8');
+
+    expect(source).toContain("page.route('**/short-api/links'");
+    expect(source).toContain("contentType: 'application/problem+json'");
+    expect(source).not.toContain('/short-api/v1/links');
   });
 
   it('publishes one multi-platform release to Docker Hub and GHCR', () => {

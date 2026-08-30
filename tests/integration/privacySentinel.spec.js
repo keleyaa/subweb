@@ -29,7 +29,7 @@ describe('integrated stack privacy sentinel', () => {
       });
 
       expect(result.status, result.stderr).toBe(0);
-      expect(`${result.stdout}\n${result.stderr}`).toContain('MyUrls v2 integrated stack verification passed.');
+      expect(`${result.stdout}\n${result.stderr}`).toContain('MyUrls integrated stack verification passed.');
     },
     12 * 60 * 1000,
   );

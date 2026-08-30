@@ -32,7 +32,8 @@
     "verify:docs": "node scripts/verify-docs.mjs",
     "verify:evidence": "node scripts/verify-evidence.mjs",
     "verify:release": "./scripts/verify-release.sh",
-    "verify": "npm test && npm run lint && npm run build"
+    "verify": "npm test && npm run lint && npm run build",
+    "verify:ci": "RUN_NGINX_GATEWAY_TESTS=1 RUN_DOCKER_INTEGRATION=1 npm run verify"
   },
   "dependencies": {
     "vue": "3.5.42"
