@@ -58,6 +58,17 @@ fail() {
 compose() {
   docker compose -p "$project_name" -f "$base_compose" -f "$test_compose" --env-file "$env_file" "$@"
 }
+wait_for_healthy() {
+  container=$1
+  attempts=0
+  while [ "$attempts" -lt 120 ]; do
+    health=$(docker inspect --format '{{.State.Health.Status}}' "$container" 2>/dev/null || true)
+    [ "$health" = healthy ] && return 0
+    sleep 1
+    attempts=$((attempts + 1))
+  done
+  return 1
+}
 status_for() {
   output_file=$1
   shift
@@ -100,7 +111,7 @@ const request = http.request({
   response.resume();
   response.on("end", () => {
     process.stdout.write(String(response.statusCode));
-    process.exit(response.statusCode === 201 ? 0 : 1);
+    process.exit(0);
   });
 });
 request.on("error", () => process.exit(1));
@@ -244,8 +255,18 @@ for service_port in 'redis 6379' 'myurls-app 3000' 'myurls-short 3000' 'subconve
   [ -z "$(docker port "$(compose ps -q "$1")" "$2/tcp" 2>/dev/null || true)" ] || fail 'an internal port was published'
 done
 
-compose restart redis >> "$command_log" 2>&1 || fail 'Redis restart failed'
-compose up -d --wait --wait-timeout 120 >> "$command_log" 2>&1 || fail 'stack did not recover after Redis restart'
+redis_container=$(compose ps -q redis)
+docker restart "$redis_container" >> "$command_log" 2>&1 || fail 'Redis restart failed'
+wait_for_healthy "$redis_container" || fail 'Redis did not become healthy after restart'
+start_client "$client_a_container" || fail 'Redis recovery Docker client did not start'
+redis_recovery_status=$(post_json_from_client "$client_a_container" \
+  "https://example.com/redis-recovery-$sentinel_value") || fail 'Redis recovery request failed'
+if [ "$redis_recovery_status" = 503 ]; then
+  redis_recovery_status=$(post_json_from_client "$client_a_container" \
+    "https://example.com/redis-recovery-retry-$sentinel_value") || fail 'Redis recovery retry failed'
+fi
+docker stop "$client_a_container" >/dev/null || fail 'Redis recovery Docker client did not stop cleanly'
+[ "$redis_recovery_status" = 201 ] || fail "MyUrls did not recover Redis access after restart (status $redis_recovery_status)"
 
 for service in gateway myurls-app myurls-short subconverter request-policy redis; do
   compose logs --no-color --tail 500 "$service" > "$service_log" 2>&1 || fail 'service logs were unavailable'

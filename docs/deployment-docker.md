@@ -1,6 +1,6 @@
 # Docker 部署
 
-Compose 启动 `gateway`、`request-policy`、`subconverter`、两个 MyUrls Rust v2.0.4 实例和 `redis`。两个 MyUrls 实例共用 Redis 数据，分别校验 APP 与 SHORT hostname。SubConverter 只加入内部 egress 网络，并通过 Request Policy Service 的 HTTPS CONNECT proxy 访问远程 HTTPS；它没有默认网络的直接出站路径。只有 Gateway 将容器的 `8080` 端口绑定到 loopback 的 `SUBWEB_PORT`。HTTPS、证书和 3 个域名的路由由外部反向代理负责。
+Compose 启动 `gateway`、`request-policy`、`subconverter`、两个 MyUrls Rust v2.0.5 实例和 `redis`。两个 MyUrls 实例共用 Redis 数据，分别校验 APP 与 SHORT hostname。SubConverter 只加入内部 egress 网络，并通过 Request Policy Service 的 HTTPS CONNECT proxy 访问远程 HTTPS；它没有默认网络的直接出站路径。只有 Gateway 将容器的 `8080` 端口绑定到 loopback 的 `SUBWEB_PORT`。HTTPS、证书和 3 个域名的路由由外部反向代理负责。
 
 ## 从源码部署
 
@@ -37,7 +37,7 @@ grep -E '^(APP_DOMAIN|API_DOMAIN|SHORT_DOMAIN|API_URL|SUBWEB_IMAGE)=' .env
   --image ghcr.io/keleyaa/subweb:sha-REPLACE_WITH_COMMIT
 ```
 
-Docker Hub 的 `docker.io/keleyaa/subweb:sha-...` 与 `ghcr.io/keleyaa/subweb:sha-...` 是等价的发布来源。`--image` 是必填项，只接受 `sha-*` 标签或完整 `@sha256` 摘要，脚本拒绝 `latest` 和无版本引用。脚本会拉取 Gateway、Redis、MyUrls 和 SubConverter 的外部镜像，再从当前仓库构建 `request-policy`，最后执行 `docker compose up -d --no-build --pull never --wait`。MyUrls 默认仍使用 `deploy/versions.lock.json` 中的 v2.0.4 semver + manifest digest。
+Docker Hub 的 `docker.io/keleyaa/subweb:sha-...` 与 `ghcr.io/keleyaa/subweb:sha-...` 是等价的发布来源。`--image` 是必填项，只接受 `sha-*` 标签或完整 `@sha256` 摘要，脚本拒绝 `latest` 和无版本引用。脚本会拉取 Gateway、Redis、MyUrls 和 SubConverter 的外部镜像，再从当前仓库构建 `request-policy`，最后执行 `docker compose up -d --no-build --pull never --wait`。MyUrls 默认使用 `deploy/versions.lock.json` 中的 v2.0.5 semver + manifest digest；该版本包含 Redis 断线恢复、请求总超时和静态资源 immutable 缓存策略。
 
 ## 外部反向代理
 
@@ -56,4 +56,4 @@ docker compose start
 docker compose down
 ```
 
-不要在日志命令中附加 `.env` 内容。从历史 MyUrls v1 升级到当前 Rust v2.0.4 前，先按 [`operations.md`](operations.md) 完成 Redis 盘点、备份和已批准 TTL 策略的迁移。
+不要在日志命令中附加 `.env` 内容。从历史 MyUrls v1 升级到当前 Rust v2.0.5 前，先按 [`operations.md`](operations.md) 完成 Redis 盘点、备份和已批准 TTL 策略的迁移。

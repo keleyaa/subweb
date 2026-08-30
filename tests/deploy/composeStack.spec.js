@@ -90,7 +90,7 @@ describe('integrated Compose stack', () => {
     const config = await renderCompose();
     expect(config.services.gateway.image).toBe('docker.io/keleyaa/subweb:sha-2bf1a9f');
     expect(config.services.redis.image).toBe('docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5');
-    expect(config.services['myurls-app'].image).toBe('ghcr.io/keleyaa/myurls:v2.0.4@sha256:a6b8d44ef40d37098a7ca6001f782fedc9d1d882a3e4fa8d28420dd5f6b7e64d');
+    expect(config.services['myurls-app'].image).toBe('ghcr.io/keleyaa/myurls:v2.0.5@sha256:8020ce81d843a2945b84470eb08c717aa880c61c056d1df15dfd79f8362d50b9');
     expect(config.services['myurls-short'].image).toBe(config.services['myurls-app'].image);
     expect(config.services['myurls-app'].user).toBe('10001:10001');
     expect(config.services['myurls-short'].user).toBe('10001:10001');

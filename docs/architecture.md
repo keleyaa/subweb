@@ -1,6 +1,6 @@
 # 架构
 
-Subweb 是独立维护的自托管订阅转换发行栈。生产 Compose 启动 Gateway、Request Policy Service、SubConverter、两个分别服务 APP/SHORT hostname 的 MyUrls Rust v2.0.4 实例和 Redis。公网反向代理、TLS 和 DNS 不属于本仓库的运行时。
+Subweb 是独立维护的自托管订阅转换发行栈。生产 Compose 启动 Gateway、Request Policy Service、SubConverter、两个分别服务 APP/SHORT hostname 的 MyUrls Rust v2.0.5 实例和 Redis。公网反向代理、TLS 和 DNS 不属于本仓库的运行时。
 
 ```text
 Browser
@@ -31,7 +31,7 @@ Browser
 APP 适配入口清除浏览器的 Authorization、Cookie 和 Origin，覆盖客户端 IP 转发头，不注入
 旧 Bearer Token。API 的 `/sub` 同样经 Gateway 清理客户端凭据后进入 Request Policy Service。SHORT 域保留 MyUrls 所需的同源 Origin，由 MyUrls 自行执行 API、CSP、
 Turnstile 和响应协议校验。APP 与 SHORT 使用两个独立的 MyUrls 进程，分别校验各自的 hostname，避免
-Cloudflare Token 的 hostname 约束与双域入口冲突；两个进程共用 Redis、IP 哈希密钥和镜像版本。
+Cloudflare Token 的 hostname 约束与双域入口冲突；两个进程共用 Redis、IP 哈希密钥和镜像版本。MyUrls v2.0.5 在 Redis 短暂断线后会重新建立连接；`REQUEST_TIMEOUT_MS` 为每个请求提供总超时边界，`/assets/*` 使用 immutable 缓存而 HTML 和动态响应不缓存。
 
 ## 信任边界
 

@@ -270,7 +270,7 @@ describe('documentation contract', () => {
 
     for (const document of [readme, architecture]) {
       expect(document).toContain('MyUrls Rust');
-      expect(document).toContain('v2.0.4');
+      expect(document).toContain('v2.0.5');
     }
     expect(configuration).toContain('不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像');
     expect(integration).toContain('`NODE_ENV=test`');

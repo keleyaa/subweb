@@ -53,7 +53,7 @@ describe('Docker runtime contract', () => {
     expect(compose).toContain('cap_drop:');
     expect(compose).toContain('- ALL');
     expect(compose).toContain(
-      'image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.4@sha256:a6b8d44ef40d37098a7ca6001f782fedc9d1d882a3e4fa8d28420dd5f6b7e64d}"',
+      'image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.5@sha256:8020ce81d843a2945b84470eb08c717aa880c61c056d1df15dfd79f8362d50b9}"',
     );
   });
 

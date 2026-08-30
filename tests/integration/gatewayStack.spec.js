@@ -55,10 +55,14 @@ describe('integrated Docker gateway stack', () => {
     expect(source).toContain('compose exec -T myurls-short curl --fail --silent');
     expect(source).toContain('myurls-app-edge');
     expect(source).toContain('myurls-short-edge');
-    expect(source).toContain('post_json_from_client');
-    expect(source).toContain('Gateway did not preserve distinct client identities');
-    expect(source).toContain('SHORT MyUrls creation returned');
-    expect(source).toContain("'{\"url\":\"https://example.com/short-hostname-verification\"}' /api/links");
+     expect(source).toContain('post_json_from_client');
+     expect(source).toContain('Gateway did not preserve distinct client identities');
+     expect(source).toContain('docker restart "$redis_container"');
+     expect(source).toContain('wait_for_healthy "$redis_container"');
+     expect(source).toContain('post_json_from_client "$client_a_container"');
+     expect(source).toContain('https://example.com/redis-recovery-$sentinel_value');
+     expect(source).toContain('SHORT MyUrls creation returned');
+     expect(source).toContain("'{\"url\":\"https://example.com/short-hostname-verification\"}' /api/links");
     expect(source).not.toContain('gateway-tls');
     expect(source).not.toContain('TLS 证书');
   });

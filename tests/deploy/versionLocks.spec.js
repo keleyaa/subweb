@@ -92,15 +92,15 @@ describe('integrated service artifact locks', () => {
   it('uses the approved upstream repositories and Rust MyUrls release', () => {
     expect(lock.services.myurls.source).toMatchObject({
       repository: 'keleyaa/MyUrls',
-      tag: 'v2.0.4',
-      commit: '291545f1875da6d7449a2061e8eb813b8d2fd23a',
+      tag: 'v2.0.5',
+      commit: '0cf3f7dcb79041f87ff6c1827a0e09c1b4ca7417',
     });
     expect(lock.services.myurls.image).toMatchObject({
-      reference: 'ghcr.io/keleyaa/myurls:v2.0.4',
-      digest: 'sha256:a6b8d44ef40d37098a7ca6001f782fedc9d1d882a3e4fa8d28420dd5f6b7e64d',
+      reference: 'ghcr.io/keleyaa/myurls:v2.0.5',
+      digest: 'sha256:8020ce81d843a2945b84470eb08c717aa880c61c056d1df15dfd79f8362d50b9',
       platforms: {
-        'linux/amd64': 'sha256:fbc8c5cf12446da0146b64f15297e6da3adb646083af85db946378de3849097b',
-        'linux/arm64': 'sha256:5dc7c935a78686611db56d18e9a06e16306117fbd1f6fb9492333743040025ec',
+        'linux/amd64': 'sha256:9350c9aaa350f0fb5459576838a171d813e830a3fb0e3787c4ce91e3c3b3606c',
+        'linux/arm64': 'sha256:06998deaafe2d0385d04f6242d6154ee466213c0361d43280302c10bae90befa',
       }
     });
     expect(lock.services.subconverter.source.repository).toBe(

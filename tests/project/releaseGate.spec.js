@@ -96,6 +96,17 @@ describe('release evidence and command gate', () => {
     expect(source).not.toContain('/short-api/v1/links');
   });
 
+  it('checks a real MyUrls request after Redis restart', () => {
+    const source = fs.readFileSync(path.join(root, 'scripts/verify-integrated-stack.sh'), 'utf8');
+
+    expect(source).toContain('redis_recovery_status=$(post_json');
+    expect(source).toContain('docker restart "$redis_container"');
+    expect(source).toContain('wait_for_healthy "$redis_container"');
+    expect(source).toContain('post_json_from_client "$client_a_container"');
+    expect(source).toContain('redis-recovery-retry-$sentinel_value');
+    expect(source).toContain('MyUrls did not recover Redis access after restart');
+  });
+
   it('publishes one multi-platform release to Docker Hub and GHCR', () => {
     const source = fs.readFileSync(path.join(root, '.github/workflows/docker-build-release.yml'), 'utf8');
 
