@@ -1,6 +1,6 @@
 # 本地开发
 
-本地开发采用 Vite + Docker Compose。Vite 运行 Subweb 页面；Compose 运行 Redis、两个 MyUrls Rust 实例和 SubConverter。此模式为了调试直接暴露本机 SubConverter 端口，因此**不复现生产的 Gateway、Request Policy Service 与 HTTPS CONNECT egress 边界**。只使用可信测试订阅；完整匿名请求安全验证请运行 Docker 集成门禁。
+本地开发采用 Vite + Docker Compose。Vite 运行 Subweb 页面；Compose 运行 Redis、两个 MyUrls Rust v2.0.4 实例和 SubConverter。此模式为了调试直接暴露本机 SubConverter 端口，因此**不复现生产的 Gateway、Request Policy Service 与 HTTPS CONNECT egress 边界**。只使用可信测试订阅；完整匿名请求安全验证请运行 Docker 集成门禁。
 
 ## 前提
 

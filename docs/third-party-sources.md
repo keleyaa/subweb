@@ -12,4 +12,4 @@
 上游 stable tag `v2.0.4`；锁文件同时记录源码 commit 和不可变的 manifest digest。
 
 生产 Compose 不使用外部服务的 `latest`。旧的 v1.13.0 digest 只保留在回滚说明中，不作为新部署
-默认值。MyUrls Rust 的稳定 tag 和 manifest digest 已与源码 commit 对齐。
+默认值。MyUrls Rust v2.0.4 的稳定 tag 和 manifest digest 已与源码 commit 对齐；该发布包含仅限隔离集成环境使用的 Turnstile test adapter，生产模式不会启用它。

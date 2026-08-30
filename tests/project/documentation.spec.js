@@ -256,6 +256,23 @@ describe('documentation contract', () => {
     }
   });
 
+  it('documents the Rust MyUrls release and safe rollback boundary', () => {
+    const readme = read('README.md');
+    const architecture = read('docs/architecture.md');
+    const configuration = read('docs/configuration.md');
+    const integration = read('docs/validation/docker-integration.md');
+    const maintenance = read('docs/maintenance.md');
+
+    for (const document of [readme, architecture]) {
+      expect(document).toContain('MyUrls Rust');
+      expect(document).toContain('v2.0.4');
+    }
+    expect(configuration).toContain('不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像');
+    expect(integration).toContain('`NODE_ENV=test`');
+    expect(integration).toContain('生产 Compose 不会启用这些变量');
+    expect(maintenance).not.toContain('/Users/li/Desktop/GitHub/MyUrls');
+  });
+
   it('keeps the follow-the-latest image policy out of stale pinning language', () => {
     // 自 follow-the-latest 策略（commit 59da405）生效后，这些文档不得再出现
     // 固定镜像/唯一 latest/旧版本卷名等过时表述；docs/validation 下的历史

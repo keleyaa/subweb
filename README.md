@@ -45,7 +45,7 @@ docker compose up -d --build --wait
 
 ### 发布镜像
 
-Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 是等价的 Gateway 发布来源。使用 `scripts/docker-deploy.sh --image` 可选择经过验证的镜像引用；完整步骤见 [Docker 部署](docs/deployment-docker.md)。
+Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 是等价的 Gateway 发布来源。使用 `scripts/docker-deploy.sh --image` 可选择经过验证的镜像引用；MyUrls Rust 使用 [版本锁](deploy/versions.lock.json) 中的 v2.0.4 semver + manifest digest。完整步骤见 [Docker 部署](docs/deployment-docker.md)。
 
 ## 架构
 
@@ -58,7 +58,7 @@ Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 
 | Gateway | 唯一公开容器端口；按 APP / API / SHORT Host 路由，清理凭据与不可信请求头。 |
 | Request Policy Service | `/sub` 输入校验、匿名限流、并发与大小限制、熔断；同时提供 SubConverter 专用 HTTPS CONNECT egress proxy。 |
 | SubConverter | 仅处理转换，加入内部 egress 网络；没有默认网络的直接出站路径。 |
-| MyUrls v2 | APP / SHORT 两个实例处理短链 API、管理页面与跳转。 |
+| MyUrls Rust v2.0.4 | APP / SHORT 两个实例处理短链 API、管理页面与跳转；准确的多平台镜像证据记录在版本锁。 |
 | Redis | DB `0` 保存短链，DB `1` 保存带 TTL 的匿名限流状态；不保存普通转换 URL 或转换结果。 |
 
 ## 界面操作

@@ -51,9 +51,9 @@
 
 ## 镜像
 
-生产默认使用带 manifest digest 的 MyUrls Rust 镜像。可用 `MYURLS_IMAGE` 执行显式回滚，
-升级时必须同步更新版本锁并重新验证。完整源码、镜像和平台 digest 记录在
-[`deploy/versions.lock.json`](../deploy/versions.lock.json)。
+生产默认使用带 manifest digest 的 MyUrls Rust v2.0.4 镜像。`MYURLS_IMAGE` 只可覆盖为与当前 Rust HTTP 契约兼容、已验证的镜像；不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像。旧 Node 的 `/api/v1/links` 与当前 Rust 的 `/api/links` 不兼容，跨契约回滚必须一并回退 Gateway 路由、前端与镜像。升级时必须同步更新版本锁并重新验证。完整源码、镜像和平台 digest 记录在 [`deploy/versions.lock.json`](../deploy/versions.lock.json)。
+
+Rust 镜像编入的 Turnstile test adapter 只供隔离 Docker 集成环境使用；它由 `compose.test.yaml` 显式设置 `NODE_ENV=test` 与 `TURNSTILE_MODE=test` 激活。生产 Compose 不会启用这些变量，Rust 服务也会拒绝生产环境的测试模式。
 
 ## 本地开发
 

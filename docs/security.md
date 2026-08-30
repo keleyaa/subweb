@@ -21,8 +21,8 @@ Gateway 到 MyUrls 使用独立的内部网络，MyUrls 默认只信任固定的
 
 ## 生产策略
 
-- MyUrls 生产镜像使用 semver 标签和 manifest digest；升级镜像时，必须同步更新版本锁文件并重新完成安全验证。
-- `MYURLS_IMAGE` 仅用于经过确认的版本回滚。
+- MyUrls Rust v2.0.4 生产镜像使用 semver 标签和 manifest digest；升级镜像时，必须同步更新版本锁文件并重新完成安全验证。
+- `MYURLS_IMAGE` 仅用于当前 Rust `/api/links` 契约内经过确认的版本回滚。旧 Node `/api/v1/links` 回滚必须同时回退 Subweb 路由与前端，不能只换镜像。
 - MyUrls、Redis、SubConverter 和 Request Policy Service 不发布宿主机端口。
 - Gateway、MyUrls、Request Policy Service 和 Redis 使用只读根文件系统、最小 capabilities 和日志轮转。
 - 所有服务统一使用 `Asia/Shanghai` 时区。

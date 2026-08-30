@@ -6,7 +6,7 @@
 
 - `origin` 只能指向当前维护仓库 [`keleyaa/subweb`](https://github.com/keleyaa/subweb)。
 - `upstream` 仅用于读取 Fork 起点 [`stilleshan/subweb`](https://github.com/stilleshan/subweb)，不得推送。
-- MyUrls 必须在独立 `/Users/li/Desktop/GitHub/MyUrls` 仓库维护，不把其源码、`.git` 或构建产物复制进 Subweb。
+- MyUrls 必须在独立仓库维护，不把其源码、`.git` 或构建产物复制进 Subweb。
 - SubConverter-Extended 使用官方上游锁定产物，不在本仓库做隐式补丁。
 
 来源变化必须同步更新 [第三方来源](third-party-sources.md)、锁文件、README 和相关测试；MyUrls 的 semver + digest 发行策略也必须同步更新其工作流和部署说明。
@@ -65,7 +65,7 @@ docker buildx imagetools inspect ghcr.io/keleyaa/subweb:sha-<提交短 SHA>
 
 ## 锁定更新
 
-外部服务升级先核验正式 tag、commit、manifest digest、amd64/arm64 digest 和许可证，再更新 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 的已验证基线。运行锁校验、对应服务测试和单一 HTTP Docker 集成验证。MyUrls 生产镜像固定为 semver + manifest digest；升级后注意 subconverter 运行时卷需删除重建（见 [SubConverter README](../deploy/subconverter/README.md)），且不能把本地未发布 commit 写成远端可拉取镜像。
+外部服务升级先核验正式 tag、commit、manifest digest、amd64/arm64 digest 和许可证，再更新 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 的已验证基线。运行锁校验、对应服务测试和单一 HTTP Docker 集成验证。MyUrls Rust v2.0.4 使用 semver + manifest digest；只允许在相同 `/api/links` 契约内覆盖 `MYURLS_IMAGE`。升级后注意 subconverter 运行时卷需删除重建（见 [SubConverter README](../deploy/subconverter/README.md)），且不能把本地未发布 commit 写成远端可拉取镜像。
 
 ## 提交与推送
 

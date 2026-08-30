@@ -22,4 +22,4 @@ npm run verify:integration
 - Gateway、Request Policy、MyUrls 与 SubConverter 日志不出现订阅 URL、挑战 Token、Redis 密码、IP 哈希秘密或真实短码；
 - 容器、网络与临时 volume 在退出后由脚本按本次项目名前缀清理。
 
-MyUrls 创建与解析检查使用 APP / SHORT 域名 Host，转换接口使用 API Host。验证配置的域名只在脚本隔离环境中使用，不能作为生产部署值。
+MyUrls 创建与解析检查使用 APP / SHORT 域名 Host，转换接口使用 API Host。集成覆盖使用 Rust 镜像内置的 test adapter，并通过 `compose.test.yaml` 显式设置 `NODE_ENV=test` 与 `TURNSTILE_MODE=test`；生产 Compose 不会启用这些变量，Rust 服务也拒绝生产测试模式。验证配置的域名只在脚本隔离环境中使用，不能作为生产部署值。

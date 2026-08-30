@@ -2,7 +2,7 @@
 
 ## 状态与日志
 
-Docker Compose 运行 `gateway`、`request-policy`、`subconverter`、`myurls-app`、`myurls-short` 和 `redis` 共 6 个服务；只有 Gateway 的 `8080` 端口绑定到宿主机 loopback。
+Docker Compose 运行 `gateway`、`request-policy`、`subconverter`、两个 MyUrls Rust v2.0.4 实例（`myurls-app`、`myurls-short`）和 `redis`，共 6 个服务；只有 Gateway 的 `8080` 端口绑定到宿主机 loopback。
 
 ```sh
 docker compose ps
@@ -21,7 +21,7 @@ Docker 服务和 Gateway 镜像统一使用 `Asia/Shanghai` 时区。Gateway、M
 
 Compose 默认以 `info` 级别运行 MyUrls，保留正常请求记录。日志量较大时，可在 `.env` 中设置 `MYURLS_LOG_LEVEL=warn`，然后重建两个 MyUrls 容器。访问日志由 MyUrls 写入 stdout，再由 Docker `json-file` 驱动统一轮转。需要审计特定版本时，应在 `.env` 中显式指定已验证的镜像，并始终限制 Docker 管理权限。
 
-所有容器的 `json-file` 标准输出日志限制为单文件 `10 MB`、最多 3 个文件。SubConverter 的输出先经过项目内置过滤器：完整 URI、编码后的 `url` / `link` 请求来源和 Authorization 会变为 `[redacted]`。成功的 `/healthz` 不写入 Gateway 访问日志；Subweb 通过 MyUrls 的 `LOG_LEVEL=warn` 抑制成功记录，但保留失败的健康检查。
+所有容器的 `json-file` 标准输出日志限制为单文件 `10 MB`、最多 3 个文件。SubConverter 的输出先经过项目内置过滤器：完整 URI、编码后的 `url` / `link` 请求来源和 Authorization 会变为 `[redacted]`。成功的 `/healthz` 不写入 Gateway 访问日志；当 `MYURLS_LOG_LEVEL=warn` 时，MyUrls 会抑制成功记录，但保留失败的健康检查。
 
 日志分享前仍应检查并删除 query、订阅 URL、Token、Redis URL 和真实短码。生产环境不要启用 SubConverter verbose 或 `print_debug_info = true`；Compose 每次启动都会强制恢复安全日志配置。
 
@@ -131,7 +131,7 @@ npm run verify:locks
 ./scripts/validate-compose.sh
 ```
 
-记录 Git commit、实际解析的各服务镜像 digest（`docker compose images`）和已验证 Redis 备份。升级后检查健康、三个 Host、转换、短链创建、旧短码、日志脱敏和内部端口。失败时切回原 commit，必要时在 `.env` 以 `SUBWEB_IMAGE`/`MYURLS_IMAGE`/`REDIS_IMAGE`/`SUBCONVERTER_IMAGE` 的 digest 覆盖镜像回滚；应用组件可重建，Redis 数据按已演练备份恢复。
+记录 Git commit、实际解析的各服务镜像 digest（`docker compose images`）和已验证 Redis 备份。升级后检查健康、三个 Host、转换、短链创建、旧短码、日志脱敏和内部端口。失败时优先切回原 Subweb commit；`SUBWEB_IMAGE`、`REDIS_IMAGE` 和 `SUBCONVERTER_IMAGE` 可使用已验证 digest 覆盖。`MYURLS_IMAGE` 仅可单独回退到兼容当前 Rust `/api/links` 契约的镜像；回退到旧 Node `/api/v1/links` 时必须同时切回匹配的 Subweb commit。应用组件可重建，Redis 数据按已演练备份恢复。
 
 SubConverter 镜像更新后必须重建运行时卷 `subconverter-runtime`（执行 `docker compose down`，再执行 `docker volume rm subweb_subconverter-runtime`，最后执行 `up -d --wait`）。Docker 只对空卷做 copy-up；跳过此步会静默沿用旧的 `/base` 模板。`redis-data` 是业务数据，禁止以任何方式删除。
 

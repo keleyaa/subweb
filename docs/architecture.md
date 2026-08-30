@@ -1,6 +1,6 @@
 # 架构
 
-Subweb 是独立维护的自托管订阅转换发行栈。生产 Compose 启动 Gateway、Request Policy Service、SubConverter、两个分别服务 APP/SHORT hostname 的 MyUrls v2 实例和 Redis。公网反向代理、TLS 和 DNS 不属于本仓库的运行时。
+Subweb 是独立维护的自托管订阅转换发行栈。生产 Compose 启动 Gateway、Request Policy Service、SubConverter、两个分别服务 APP/SHORT hostname 的 MyUrls Rust v2.0.4 实例和 Redis。公网反向代理、TLS 和 DNS 不属于本仓库的运行时。
 
 ```text
 Browser
@@ -40,11 +40,11 @@ Gateway 通过仅存在于该网络的 `myurls-app-edge`、`myurls-short-edge` �
 ## 前端边界
 
 - 转换 URL 构造保持为纯函数。
-- `ShortLinkClient` 独占 MyUrls Rust HTTP 契约，并兼容旧版错误响应以支持镜像回滚。
+- `ShortLinkClient` 独占 MyUrls Rust HTTP 契约，并兼容旧版错误响应以支持完整 Subweb release 回滚。
 - `ShortLinkWorkflow` 负责 UTF-8 长度预检、挑战、重试、复制和 stale-result。
 - Vue 组件只绑定状态和用户动作。
 
 本地开发由 Vite 提供页面，并把同源 `/short-api/*` 代理到 Compose 中的 MyUrls Rust 服务。
-SubConverter 与 MyUrls 使用 loopback 调试端口，Redis 保持私有。
+SubConverter 与 MyUrls 使用 loopback 调试端口，Redis 保持私有。当前 Rust 端点为 `/api/links`；跨回旧 Node `/api/v1/links` 时，必须一并回退 Gateway 路由、前端与镜像，而不能只替换 MyUrls 镜像。
 
 所有服务默认使用 `Asia/Shanghai` 时区。
