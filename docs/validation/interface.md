@@ -9,7 +9,7 @@
 - 固定黑色命令主题、命令卡中心轴和无横向溢出；
 - 订阅输入、客户端与远程配置、生成与自动复制；
 - 剪贴板拒绝后的手动复制反馈；
-- 短链 multipart 请求与输入变化后的旧结果失效；
+- 同源 `/short-api/links` 短链 POST、Rust `application/problem+json` Turnstile challenge/retry 与输入变化后的旧结果失效；
 - 「订阅后端」和「高级参数」的键盘展开、`aria-expanded`、原位 DOM 位置与互斥收起；
 - 高级参数的草稿、保存、重置与状态摘要；
 - `44 px` 交互目标、键盘焦点、减少动效与增强对比度；

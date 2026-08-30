@@ -90,10 +90,23 @@ describe('Docker image quick deployment', () => {
     ].join('\n'));
   });
 
+  it('requires an immutable Gateway image instead of silently deploying latest', async () => {
+    const root = await makeFixture();
+
+    const missing = runDeploy(root);
+    const mutable = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:latest']);
+
+    expect(missing.status).not.toBe(0);
+    expect(missing.stderr).toContain('--image is required');
+    expect(mutable.status).not.toBe(0);
+    expect(mutable.stderr).toContain('immutable sha-* tag or sha256 digest');
+    await expect(readFile(join(root, 'docker.log'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('does not start containers when pulling an image fails', async () => {
     const root = await makeFixture();
 
-    const result = runDeploy(root, [], { DOCKER_PULL_STATUS: '23' });
+    const result = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f'], { DOCKER_PULL_STATUS: '23' });
 
     expect(result.status).not.toBe(0);
     const log = await readFile(join(root, 'docker.log'), 'utf8');

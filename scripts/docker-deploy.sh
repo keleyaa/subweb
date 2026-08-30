@@ -16,7 +16,7 @@ turnstile_site_key=
 turnstile_secret_key=
 trusted_proxy_cidr=
 trusted_proxy_cidr_seen=0
-image=docker.io/keleyaa/subweb:latest
+image=
 image_seen=0
 
 while [ "$#" -gt 0 ]; do
@@ -63,6 +63,18 @@ while [ "$#" -gt 0 ]; do
     *) fail "Unknown argument: $1" ;;
   esac
 done
+
+[ "$image_seen" -eq 1 ] || fail '--image is required and must use an immutable sha-* tag or sha256 digest.'
+case "$image" in
+  *@sha256:*)
+    printf '%s\n' "$image" | grep -Eq '^[^[:space:]@]+@sha256:[0-9a-f]{64}$' \
+      || fail '--image must use an immutable sha-* tag or sha256 digest.'
+    ;;
+  *)
+    printf '%s\n' "$image" | grep -Eq '^[^[:space:]@]+:sha-[0-9a-f]{7,64}$' \
+      || fail '--image must use an immutable sha-* tag or sha256 digest.'
+    ;;
+esac
 
 command -v docker >/dev/null 2>&1 || fail 'Docker is not installed or not available in PATH.'
 docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'

@@ -21,6 +21,7 @@
 
 - Docker Engine 与 Docker Compose v2
 - OpenSSL、curl
+- Node.js 24 与 npm 11（源码开发、验证和发布门禁）
 - 3 个不同域名：APP、API、SHORT
 
 ### 本机源码部署
@@ -45,7 +46,7 @@ docker compose up -d --build --wait
 
 ### 发布镜像
 
-Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 是等价的 Gateway 发布来源。使用 `scripts/docker-deploy.sh --image` 可选择经过验证的镜像引用；MyUrls Rust 使用 [版本锁](deploy/versions.lock.json) 中的 v2.0.4 semver + manifest digest。完整步骤见 [Docker 部署](docs/deployment-docker.md)。
+Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 是等价的 Gateway 发布来源。`scripts/docker-deploy.sh` 必须显式传入 `--image`，并只接受 `sha-*` 标签或 `@sha256` 摘要，拒绝可变的 `latest`。MyUrls Rust 使用 [版本锁](deploy/versions.lock.json) 中的 v2.0.4 semver + manifest digest。完整步骤见 [Docker 部署](docs/deployment-docker.md)。
 
 ## 架构
 
@@ -84,11 +85,12 @@ Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 
 
 ```sh
 npm ci
+npm run verify:ci
 npm run verify:release
 git diff --check
 ```
 
-`npm run verify:release` 在没有 `.env` 的干净工作树中使用临时验证配置完成 Compose 构建；真实部署仍必须通过 `scripts/configure.sh` 生成权限为 `0600` 的 `.env`。
+`npm run verify:ci` 是 GitHub quality job 与本地发布验证共用的 Docker 门禁。`npm run verify:release` 在没有 `.env` 的干净工作树中使用临时验证配置完成 Compose 构建，并检查 production-readiness；真实部署仍必须通过 `scripts/configure.sh` 生成权限为 `0600` 的 `.env`。
 
 发布前、备份恢复、镜像锁定与推送边界见 [维护与发布](docs/maintenance.md)。
 
@@ -109,8 +111,11 @@ git diff --check
 - [安全边界](docs/security.md)
 - [运维](docs/operations.md)
 
-**来源与维护**
+**验证、来源与维护**
 
+- [单一 HTTP Docker 集成验证](docs/validation/docker-integration.md)
+- [Command Interface 界面验证](docs/validation/interface.md)
+- [SubConverter 容器契约](deploy/subconverter/README.md)
 - [第三方来源](docs/third-party-sources.md)
 - [维护与验证](docs/maintenance.md)
 

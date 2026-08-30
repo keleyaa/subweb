@@ -15,6 +15,9 @@ export const requiredDocuments = [
   'docs/interface-design.md',
   'docs/remote-config-sources.md',
   'docs/maintenance.md',
+  'docs/validation/docker-integration.md',
+  'docs/validation/interface.md',
+  'deploy/subconverter/README.md',
 ];
 
 const markdownLinkPattern = /\[[^\]]*\]\(([^)]+)\)/g;

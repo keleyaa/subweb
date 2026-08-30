@@ -24,13 +24,13 @@ Gateway 到 MyUrls 使用独立的内部网络，MyUrls 默认只信任固定的
 - MyUrls Rust v2.0.4 生产镜像使用 semver 标签和 manifest digest；升级镜像时，必须同步更新版本锁文件并重新完成安全验证。
 - `MYURLS_IMAGE` 仅用于当前 Rust `/api/links` 契约内经过确认的版本回滚。旧 Node `/api/v1/links` 回滚必须同时回退 Subweb 路由与前端，不能只换镜像。
 - MyUrls、Redis、SubConverter 和 Request Policy Service 不发布宿主机端口。
-- Gateway、MyUrls、Request Policy Service 和 Redis 使用只读根文件系统、最小 capabilities 和日志轮转。
+- Gateway、Redis、`myurls-app` 与 SubConverter 使用只读根文件系统、最小 capabilities 和日志轮转。`myurls-short` 与 Request Policy Service 目前未配置同等的只读根文件系统和 capability 收紧；它们只允许在 Compose 内部网络可达，后续硬化前不得误记为同一保证。
 - 所有服务统一使用 `Asia/Shanghai` 时区。
 
 SubConverter 的 `verbose` 与调试日志必须保持关闭；验证脚本使用哨兵确认订阅值、挑战
 token、Redis 密码和 IP 哈希秘密不会出现在服务日志。
 
-镜像发布门禁扫描最终镜像、Redis、SubConverter 和 MyUrls 的高危与严重漏洞。当前 Redis 和
+镜像发布门禁扫描最终 Gateway、Request Policy、Redis、SubConverter 和 MyUrls 的高危与严重漏洞。当前 Redis 和
 SubConverter 的 OpenSSL 运行时依赖各有一条经过范围限定的 `CVE-2026-14456` 例外，分别记录在
 `.trivyignore.redis` 和 `.trivyignore.subconverter` 中。这些例外不适用于其他镜像，且每次升级对应
 镜像时都必须重新审查。

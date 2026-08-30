@@ -20,6 +20,6 @@ npm run verify:integration
 - 所有公开路径只使用 Gateway 的监听端口，MyUrls、Redis、SubConverter、Request Policy 与 egress proxy 不发布宿主机端口；
 - Redis 短暂重启后 MyUrls 与 Request Policy 的恢复；
 - Gateway、Request Policy、MyUrls 与 SubConverter 日志不出现订阅 URL、挑战 Token、Redis 密码、IP 哈希秘密或真实短码；
-- 容器、网络与临时 volume 在退出后由脚本按本次项目名前缀清理。
+- 容器、网络与临时 volume 在脚本正常退出后按本次项目名前缀清理；被外部终止的运行应由维护者按 Compose project label 复核和清理。
 
 MyUrls 创建与解析检查使用 APP / SHORT 域名 Host，转换接口使用 API Host。集成覆盖使用 Rust 镜像内置的 test adapter，并通过 `compose.test.yaml` 显式设置 `NODE_ENV=test` 与 `TURNSTILE_MODE=test`；生产 Compose 不会启用这些变量，Rust 服务也拒绝生产测试模式。验证配置的域名只在脚本隔离环境中使用，不能作为生产部署值。

@@ -75,6 +75,7 @@ describe('release evidence and command gate', () => {
 
     expect(packageJson.scripts['verify:ci']).toBe('RUN_NGINX_GATEWAY_TESTS=1 RUN_DOCKER_INTEGRATION=1 npm run verify');
     expect(workflow).toContain('run: npm run verify:ci');
+    expect(workflow).toContain('run: node scripts/verify-production-readiness.mjs');
     expect(releaseVerifier).toContain('stage quality npm run verify:ci');
     expect(workflow).not.toContain('RUN_NGINX_GATEWAY_TESTS: "1"');
     expect(workflow).not.toContain('RUN_DOCKER_INTEGRATION: "1"');

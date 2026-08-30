@@ -39,6 +39,9 @@ jobs:
       - name: Verify artifact locks
         run: npm run verify:locks
 
+      - name: Verify production release readiness
+        run: node scripts/verify-production-readiness.mjs
+
       - name: Verify documentation and deployment evidence
         run: npm run verify:docs && npm run verify:evidence
 

@@ -3,8 +3,8 @@
 本目录记录 Subweb 集成实际使用并已验证的容器契约与安全配置。生产 Compose 使用
 `ghcr.io/aethersailor/subconverter-extended:v1.8.6` 及其 manifest digest；集成测试使用同一锁定工件。
 [`../versions.lock.json`](../versions.lock.json) 保留已验证基线作为回滚参考与
-`verify:locks` 校验的机器可读依据。需要冻结版本时在 `.env` 设置
-`SUBCONVERTER_IMAGE`（可指向锁文件中的 digest）。
+`verify:locks` 校验的机器可读依据。需要覆盖版本时在 `.env` 设置
+`SUBCONVERTER_IMAGE`（建议指向锁文件中的 digest）。Compose 只能校验 OCI 引用格式；替代镜像的启动、健康端点、网络与日志契约必须由维护者单独验证。
 
 ## 已验证基线（集成测试使用）
 
@@ -44,9 +44,7 @@ SUBCONVERTER_ALLOW_PUBLIC_UPLOAD=false
 
 `subconverter-runtime` 只是可重建的镜像运行时副本，不是 Redis 那类业务持久数据，
 部署不得依赖其中保存业务状态。升级锁定镜像后，Docker 不会把新镜像的
-`/base` 复制进已有卷，因此升级后需先删除旧卷（如 `docker compose down` 后
-`docker volume rm subweb_subconverter-runtime`）让新镜像重新填充 `/base`；确认新版本
-验证通过后再执行，并保留旧卷直到确认无需回滚。
+`/base` 复制进已有卷，因此升级后需先删除旧卷让新镜像重新填充 `/base`。先用 `docker compose config --volumes` 确认当前 Compose project 实际生成的运行时卷名；默认 project 才可能是 `subweb_subconverter-runtime`。确认新版本验证通过后再删除旧卷，并保留旧卷直到确认无需回滚。
 
 集成 Compose 还会将本目录的 `gai.conf` 只读挂载到 `/etc/gai.conf`。当 Docker 主机能解析 IPv6 地址却
 没有可用 IPv6 默认路由时，这会让 SubConverter 使用的 glibc/libcurl 优先选择 IPv4，减少远程规则集下载

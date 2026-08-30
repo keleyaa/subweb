@@ -97,7 +97,7 @@ const hasEmbeddedReadmeImage = (source, asset) => {
 describe('documentation contract', () => {
   it('keeps the documentation graph complete and linkable', () => {
     expect(verifyDocs({ root })).toEqual([]);
-    expect(requiredDocuments).toHaveLength(12);
+    expect(requiredDocuments).toHaveLength(15);
   });
 
   it('documents exactly the approved deployment families and source lineage', () => {
@@ -185,6 +185,11 @@ describe('documentation contract', () => {
       'assets/readme/security-architecture.svg',
       'docker.io/keleyaa/subweb',
       'ghcr.io/keleyaa/subweb',
+      'npm run verify:ci',
+      '拒绝可变的 `latest`',
+      'docs/validation/docker-integration.md',
+      'docs/validation/interface.md',
+      'deploy/subconverter/README.md',
     ]) {
       expect(readme).toContain(text);
     }

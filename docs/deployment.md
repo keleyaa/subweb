@@ -7,7 +7,7 @@ Subweb 只保留一种 Docker 部署方式：3 个域名 + 单一 HTTP Gateway�
 | [Docker](deployment-docker.md) | 生产部署 | 3 个域名都反代到 `http://127.0.0.1:18080`，外层负责 TLS | 默认且唯一的 Docker 方案 |
 | [本机源码](deployment-local.md) | 开发、调试、集成验证 | 默认只监听本机端口 | 保留独立开发工作流 |
 
-Docker 需要 `APP_DOMAIN`、`API_DOMAIN`、`SHORT_DOMAIN` 这 3 个不同域名。3 个域名可以由同一台服务器的 Nginx、OpenResty、宝塔、1Panel、Cloudflare Tunnel 或其他入口接收，然后全部转发到 Gateway 的回环端口。MyUrls、Redis、SubConverter 和 Request Policy Service 不发布宿主机端口。
+Docker 需要 `APP_DOMAIN`、`API_DOMAIN`、`SHORT_DOMAIN` 这 3 个不同域名。使用预构建 Gateway 时，`scripts/docker-deploy.sh` 还必须显式传入 `--image` 的 `sha-*` 标签或 `@sha256` 摘要；它不会接受 `latest`。3 个域名可以由同一台服务器的 Nginx、OpenResty、宝塔、1Panel、Cloudflare Tunnel 或其他入口接收，然后全部转发到 Gateway 的回环端口。MyUrls、Redis、SubConverter 和 Request Policy Service 不发布宿主机端口。
 
 通用准备：
 

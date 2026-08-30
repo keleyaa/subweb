@@ -48,7 +48,8 @@ npm run dev
 ```sh
 npm run verify:integration
 npm run verify:operations
+npm run verify:ci
 npm run verify:release
 ```
 
-其中 `npm run verify:release` 聚合干净安装、质量、浏览器、镜像安全、Redis 运维和 Docker 集成验证；没有 `.env` 的干净工作树会使用仅限验证进程的临时配置，真实部署仍必须执行 `scripts/configure.sh` 生成 `.env`。
+其中 `npm run verify:ci` 是 GitHub quality job 同样使用的 Docker 门禁；`npm run verify:release` 进一步聚合干净安装、production-readiness、质量、浏览器、镜像安全、Redis 运维和 Docker 集成验证。没有 `.env` 的干净工作树会使用仅限验证进程的临时配置，真实部署仍必须执行 `scripts/configure.sh` 生成 `.env`。

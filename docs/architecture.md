@@ -26,7 +26,7 @@ Browser
 | `APP_DOMAIN/short-api/links` | 仅接受 POST JSON，精确转发到 MyUrls `/api/links` |
 | `APP_DOMAIN/:code` | 兼容已分享短码的 302 跳转 |
 | `API_DOMAIN/sub?...` | 仅接受转换请求；Gateway 交给 Request Policy Service 执行 URL、DNS、频率和资源校验后，再代理到 SubConverter |
-| `SHORT_DOMAIN/*` | 透明转发 MyUrls 页面、`/assets/*`、API、健康检查和短码 |
+| `SHORT_DOMAIN/*` | 透明转发 MyUrls 页面、`/assets/*`、API、`/health/live` 健康检查和短码 |
 
 APP 适配入口清除浏览器的 Authorization、Cookie 和 Origin，覆盖客户端 IP 转发头，不注入
 旧 Bearer Token。API 的 `/sub` 同样经 Gateway 清理客户端凭据后进入 Request Policy Service。SHORT 域保留 MyUrls 所需的同源 Origin，由 MyUrls 自行执行 API、CSP、

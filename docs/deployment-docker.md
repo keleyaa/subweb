@@ -37,7 +37,7 @@ grep -E '^(APP_DOMAIN|API_DOMAIN|SHORT_DOMAIN|API_URL|SUBWEB_IMAGE)=' .env
   --image ghcr.io/keleyaa/subweb:sha-REPLACE_WITH_COMMIT
 ```
 
-Docker Hub 的 `docker.io/keleyaa/subweb:sha-...` 与 `ghcr.io/keleyaa/subweb:sha-...` 是等价的发布来源。脚本会拉取 Gateway、Redis、MyUrls 和 SubConverter 的外部镜像，再从当前仓库构建 `request-policy`，最后执行 `docker compose up -d --no-build --pull never --wait`。MyUrls 默认仍使用 `deploy/versions.lock.json` 中的 semver + digest；Gateway、Redis、SubConverter 和 MyUrls 默认都使用锁定 digest。
+Docker Hub 的 `docker.io/keleyaa/subweb:sha-...` 与 `ghcr.io/keleyaa/subweb:sha-...` 是等价的发布来源。`--image` 是必填项，只接受 `sha-*` 标签或完整 `@sha256` 摘要，脚本拒绝 `latest` 和无版本引用。脚本会拉取 Gateway、Redis、MyUrls 和 SubConverter 的外部镜像，再从当前仓库构建 `request-policy`，最后执行 `docker compose up -d --no-build --pull never --wait`。MyUrls 默认仍使用 `deploy/versions.lock.json` 中的 v2.0.4 semver + manifest digest。
 
 ## 外部反向代理
 
