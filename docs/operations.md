@@ -104,13 +104,13 @@ D1 已批准采用 `cap-90d`：迁移后的 TTL 取旧 key 剩余 TTL 与 90 天
 
 ## 域名与证书
 
-维护者展示部署使用 `ml1.one`、`api.ml1.one` 和 `s.ml1.one`。其他部署者更换域名时，应同时更新 3 条 DNS 记录、`.env`、外层代理和证书中的 SAN。
+维护者展示部署使用 `sub.ml1.one`、`api.ml1.one` 和 `ml1.one`。其他部署者更换域名时，应同时更新 3 条 DNS 记录、`.env`、外层代理和证书中的 SAN。
 
 更换域名：更新 3 条 DNS 记录，重新运行 `configure.sh`，更新外层代理或 SAN 证书，执行 `validate-compose.sh`。源码构建执行 `docker compose build request-policy` 后再执行 `docker compose up -d --build --wait`；镜像部署由 `docker-deploy.sh` 拉取外部镜像、构建本地 `request-policy`，再执行 `--no-build --pull never` 启动。完成后验证网页、API、短链创建、旧短码和受控订阅转换。
 
 ## 公开发现性与搜索收录
 
-`APP_DOMAIN` 是唯一应被收录的公开站点。维护者展示部署为 `https://ml1.one/`。在可写的本机源码目录中，启动脚本会将 HTML canonical、Open Graph URL 和 `sitemap.xml` 中的展示域名替换为实际 `APP_DOMAIN`；Docker 镜像默认使用只读根文件系统，启动时不会改写构建产物。其他部署者应在构建镜像前替换 `index.html` 与 `public/sitemap.xml` 中的展示域名，或将其作为 SEO 元数据默认值保留，实际访问域名仍由 `APP_DOMAIN` 配置。
+`APP_DOMAIN` 是唯一应被收录的公开站点。维护者展示部署为 `https://sub.ml1.one/`。在可写的本机源码目录中，启动脚本会将 HTML canonical、Open Graph URL 和 `sitemap.xml` 中的展示域名替换为实际 `APP_DOMAIN`；Docker 镜像默认使用只读根文件系统，启动时不会改写构建产物。其他部署者应在构建镜像前替换 `index.html` 与 `public/sitemap.xml` 中的展示域名，或将其作为 SEO 元数据默认值保留，实际访问域名仍由 `APP_DOMAIN` 配置。
 
 主页提供描述、Open Graph、`SoftwareApplication` JSON-LD、`robots.txt` 和单页 `sitemap.xml`。将自己部署后的 `https://APP_DOMAIN/sitemap.xml` 提交到 Google Search Console 与 Bing Webmaster 即可；不要向搜索平台提交 `API_DOMAIN`。
 
