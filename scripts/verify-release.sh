@@ -36,6 +36,7 @@ stage() {
 stage install npm ci
 stage audit npm audit --audit-level=moderate
 stage quality npm run verify:ci
+stage local npm run verify:local
 stage browser npm run test:e2e
 stage locks npm run verify:locks
 stage production-readiness node scripts/verify-production-readiness.mjs

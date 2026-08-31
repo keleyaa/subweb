@@ -51,6 +51,9 @@ jobs:
       - name: Validate Compose
         run: npm run verify:compose
 
+      - name: Verify Compose-first development flow
+        run: npm run verify:local
+
       - name: Verify Docker-gated tests, lint, and build
         run: npm run verify:ci
 
