@@ -4,8 +4,14 @@ import vue from '@vitejs/plugin-vue';
 
 const fromRoot = (path) => fileURLToPath(new URL(path, import.meta.url));
 const localMyUrlsPort = process.env.LOCAL_MYURLS_PORT ?? '18082';
-if (!/^[0-9]{4,5}$/.test(localMyUrlsPort)) {
-  throw new Error('LOCAL_MYURLS_PORT must be a valid local port');
+const localMyUrlsPortNumber = Number(localMyUrlsPort);
+if (
+  !/^[0-9]{4,5}$/.test(localMyUrlsPort) ||
+  !Number.isInteger(localMyUrlsPortNumber) ||
+  localMyUrlsPortNumber < 1024 ||
+  localMyUrlsPortNumber > 65535
+) {
+  throw new Error('LOCAL_MYURLS_PORT must be an integer from 1024 to 65535');
 }
 
 export default defineConfig({

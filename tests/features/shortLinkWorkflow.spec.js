@@ -33,6 +33,17 @@ describe('ShortLinkWorkflow interface', () => {
     expect(copy).toHaveBeenCalledWith(result.shortUrl);
   });
 
+  it('discards a result when the conversion changes during copying', async () => {
+    let current = true;
+    const outcome = await execute({
+      client: { create: async () => result },
+      copy: async () => { current = false; },
+      input: { isCurrent: () => current },
+    });
+
+    expect(outcome).toEqual({ kind: 'stale' });
+  });
+
   it('keeps a successful result when clipboard access fails', async () => {
     const outcome = await execute({
       client: { create: async () => result },
@@ -84,6 +95,23 @@ describe('ShortLinkWorkflow interface', () => {
       maxBytes: MAX_SHORT_LINK_URL_BYTES,
     });
     expect(client.create).not.toHaveBeenCalled();
+  });
+
+  it('maps request timeout errors to a retryable user message', async () => {
+    const outcome = await execute({
+      client: {
+        create: async () => {
+          throw new ShortLinkError({ status: 408, code: 'request_timeout' });
+        },
+      },
+    });
+
+    expect(outcome).toEqual({
+      kind: 'error',
+      code: 'request_timeout',
+      message: '短链服务处理超时，请稍后重试。',
+      retryAfterSeconds: undefined,
+    });
   });
 
   it('maps rate-limit metadata to an actionable outcome', async () => {

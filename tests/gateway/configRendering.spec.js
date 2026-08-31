@@ -66,6 +66,8 @@ describe('gateway configuration rendering', () => {
     expect(result.config).toContain('server_name app.example.test;');
     expect(result.config).toContain('server_name api.example.test;');
     expect(result.config).toContain('server_name short.example.test;');
+    expect(result.config).toContain('location = /runtime-index.html {');
+    expect(result.config).toContain('alias /tmp/nginx/runtime-site/index.html;');
     expect(result.config).toContain('location = /short-api/links {');
     expect(result.config).toContain('proxy_pass $myurls_upstream/api/links;');
     expect(result.config).toContain('proxy_pass $myurls_upstream$request_uri;');
@@ -93,6 +95,19 @@ describe('gateway configuration rendering', () => {
     const result = await render({ [name]: value });
     expect(result.code).not.toBe(0);
     expect(result.stderr).not.toContain('Authorization');
+  });
+
+  it('normalizes public hostnames before rendering Origin-sensitive routes', async () => {
+    const result = await render({
+      APP_DOMAIN: 'App.Example.Test',
+      API_DOMAIN: 'Api.Example.Test',
+      SHORT_DOMAIN: 'Short.Example.Test',
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.config).toContain('server_name app.example.test;');
+    expect(result.config).toContain('"https://app.example.test" 1;');
+    expect(result.config).not.toContain('App.Example.Test');
   });
 
   it('uses forwarded client addresses only for an explicit trusted proxy CIDR', async () => {
@@ -150,14 +165,21 @@ async function setupStartFixture() {
   const configTemplate = join(directory, 'config.template.js');
   const configFile = join(directory, 'config.js');
   const gatewayConfig = join(directory, 'nginx.conf');
+  const siteRoot = join(directory, 'site');
+  const runtimeSiteRoot = join(directory, 'runtime-site');
   const events = join(directory, 'events');
   await mkdir(bin);
+  await mkdir(siteRoot);
+  await writeFile(join(siteRoot, 'index.html'), 'https://sub.ml1.one/');
+  await writeFile(join(siteRoot, 'sitemap.xml'), 'https://sub.ml1.one/');
+  await writeFile(join(siteRoot, 'robots.txt'), 'https://sub.ml1.one/sitemap.xml');
   await writeFile(configTemplate, "window.config = { apiUrl: '' };\n");
   await writeFile(renderer, `#!/bin/sh\nprintf 'render\\n' >> '${events}'\nwhile [ "$#" -gt 0 ]; do if [ "$1" = --output ]; then shift; : > "$1"; fi; shift; done\n`);
   await writeFile(nginx, `#!/bin/sh\nprintf 'nginx\\n' >> '${events}'\n`);
   await Promise.all([renderer, nginx].map((file) => chmod(file, 0o755)));
   const env = {
     ...process.env, CONFIG_TEMPLATE: configTemplate, CONFIG_FILE: configFile,
+    SITE_ROOT: siteRoot, RUNTIME_SITE_ROOT: runtimeSiteRoot,
     GATEWAY_RENDERER: renderer, GATEWAY_CONFIG_FILE: gatewayConfig, NGINX_BIN: nginx,
     APP_DOMAIN: 'app.example.test', API_DOMAIN: 'api.example.test', SHORT_DOMAIN: 'short.example.test',
     API_URL: 'https://api.example.test',
@@ -176,6 +198,26 @@ describe('gateway startup boundary', () => {
     expect(result.code).toBe(0);
     expect(await readFile(fixture.events, 'utf8')).toBe('render\nnginx\n');
     expect(result.stdout).not.toContain('Authorization');
+  });
+
+  it('fails closed when a stale runtime API URL cannot be replaced', async () => {
+    const fixture = await setupStartFixture();
+    await writeFile(fixture.env.CONFIG_FILE, "window.config = { apiUrl: 'https://stale.example.test' };\n");
+
+    const result = await run('sh', [startScript], { env: fixture.env });
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain('API_URL');
+  });
+
+  it('does not log query parameters from the API URL', async () => {
+    const fixture = await setupStartFixture();
+    const result = await run('sh', [startScript], {
+      env: { ...fixture.env, API_URL: 'https://api.example.test/convert?token=secret-value' },
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toContain('secret-value');
   });
 
   it('does not consume an unrelated PORT variable', async () => {

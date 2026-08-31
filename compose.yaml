@@ -114,6 +114,9 @@ services:
         read_only: true
     tmpfs:
       - /run/redis:uid=999,gid=1000,mode=0700
+    networks:
+      myurls-data: {}
+      redis-policy: {}
     healthcheck:
       test:
         - CMD-SHELL
@@ -125,7 +128,7 @@ services:
 
   myurls-app:
     <<: *myurls-common
-    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.5@sha256:8020ce81d843a2945b84470eb08c717aa880c61c056d1df15dfd79f8362d50b9}"
+    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3}"
     environment:
       <<: *runtime-environment
       NODE_ENV: production
@@ -153,7 +156,7 @@ services:
       SHUTDOWN_TIMEOUT_MS: "10000"
       TURNSTILE_HOSTNAME: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
     networks:
-      default: {}
+      myurls-data: {}
       myurls-edge:
         ipv4_address: "${MYURLS_APP_IP:-172.30.255.3}"
         aliases:
@@ -161,7 +164,7 @@ services:
 
   myurls-short:
     <<: *myurls-common
-    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.5@sha256:8020ce81d843a2945b84470eb08c717aa880c61c056d1df15dfd79f8362d50b9}"
+    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3}"
     environment:
       <<: *runtime-environment
       NODE_ENV: production
@@ -189,7 +192,7 @@ services:
       SHUTDOWN_TIMEOUT_MS: "10000"
       TURNSTILE_HOSTNAME: "${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
     networks:
-      default: {}
+      myurls-data: {}
       myurls-edge:
         ipv4_address: "${MYURLS_SHORT_IP:-172.30.255.4}"
         aliases:
@@ -290,6 +293,7 @@ services:
         restart: true
     networks:
       default: {}
+      redis-policy: {}
       subconverter-egress: {}
     tmpfs:
       - /tmp:uid=1000,gid=1000,mode=0700,noexec,nosuid,size=16m
@@ -317,6 +321,10 @@ volumes:
 
 networks:
   subconverter-egress:
+    internal: true
+  myurls-data:
+    internal: true
+  redis-policy:
     internal: true
   myurls-edge:
     internal: true

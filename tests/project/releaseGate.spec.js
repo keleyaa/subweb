@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { verifyEvidence } from '../../scripts/verify-evidence.mjs';
@@ -27,7 +28,7 @@ describe('release evidence and command gate', () => {
       'stage image-security-redis ./scripts/verify-image-security.sh',
       'stage image-security-subconverter ./scripts/verify-image-security.sh',
       'stage redis-operations ./scripts/verify-redis-operations.sh',
-      'stage integration ./scripts/verify-integrated-stack.sh',
+      'stage integration env',
       'stage evidence node scripts/verify-evidence.mjs',
     ];
     let previous = -1;
@@ -68,6 +69,30 @@ describe('release evidence and command gate', () => {
     expect(`${result.stdout}${result.stderr}`).toContain('tag gate passed');
   });
 
+  it('rejects a malformed MyUrls service node during standalone readiness validation', () => {
+    const script = path.join(root, 'scripts/verify-production-readiness.mjs');
+    const directory = fs.mkdtempSync(path.join(tmpdir(), 'subweb-readiness-'));
+    const lockPath = path.join(directory, 'versions.lock.json');
+    const lock = JSON.parse(
+      fs.readFileSync(path.join(root, 'deploy/versions.lock.json'), 'utf8'),
+    );
+    lock.services.myurls = ['malformed'];
+
+    try {
+      fs.writeFileSync(lockPath, JSON.stringify(lock));
+      const result = spawnSync(process.execPath, [script, lockPath], {
+        encoding: 'utf8',
+      });
+
+      expect(result.status).not.toBe(0);
+      expect(`${result.stdout}${result.stderr}`).toContain(
+        'services.myurls must be an object',
+      );
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('uses one Docker-gated quality command for CI and local release checks', () => {
     const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
     const workflow = fs.readFileSync(path.join(root, '.github/workflows/docker-build-release.yml'), 'utf8');
@@ -101,6 +126,8 @@ describe('release evidence and command gate', () => {
 
     expect(source).toContain('redis_recovery_status=$(post_json');
     expect(source).toContain('docker restart "$redis_container"');
+    expect(source).toContain('docker restart "$myurls_app_container"');
+    expect(source).toContain('docker restart "$myurls_short_container"');
     expect(source).toContain('wait_for_healthy "$redis_container"');
     expect(source).toContain('post_json_from_client "$client_a_container"');
     expect(source).toContain('redis-recovery-retry-$sentinel_value');
@@ -141,5 +168,9 @@ describe('release evidence and command gate', () => {
     expect(source).toContain('Published digest mismatch');
     expect(source).toContain('dockerhub_reference');
     expect(source).toContain('ghcr_reference');
+    expect(source).toContain('runtime_images_json=$(node');
+    expect(source).toContain('--argjson runtime_images "$runtime_images_json"');
+    expect(source).toContain('runtime_images: $runtime_images');
+    expect(source).toContain('.release_identity.runtime_images | has("redis") and has("subconverter") and has("myurls")');
   });
 });

@@ -16,7 +16,7 @@ import { isValidHttpUrl } from '@/features/url/httpUrl';
  * @returns {string}
  */
 const normalizeLinks = function (urls) {
-  return typeof urls === 'string' ? urls.split('\n').join('|') : '';
+  return typeof urls === 'string' ? urls.replace(/\r\n?|\n/gu, '|') : '';
 };
 
 /**

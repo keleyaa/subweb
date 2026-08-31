@@ -9,6 +9,7 @@ const ERROR_CODES = new Set([
   'url_not_allowed',
   'alias_invalid',
   'rate_limited',
+  'request_timeout',
   'dependency_unavailable',
   'code_generation_exhausted',
 ]);
@@ -67,11 +68,22 @@ function isCreateLinkResponse(value) {
   }
 }
 
-async function readJson(response) {
+async function readJson(response, signal) {
+  let abortHandler;
   try {
-    return await response.json();
+    const aborted = new Promise((_, reject) => {
+      abortHandler = () => reject(new Error('response body read aborted'));
+      if (signal.aborted) {
+        abortHandler();
+      } else {
+        signal.addEventListener('abort', abortHandler, { once: true });
+      }
+    });
+    return await Promise.race([response.json(), aborted]);
   } catch {
     return undefined;
+  } finally {
+    if (abortHandler) signal.removeEventListener('abort', abortHandler);
   }
 }
 
@@ -119,30 +131,33 @@ export function createShortLinkClient({
           signal: controller.signal,
         });
       } catch {
+        clearTimeout(timeout);
         throw dependencyError();
+      }
+
+      try {
+        const payload = await readJson(response, controller.signal);
+        if (response.status !== 201) {
+          if (isErrorResponse(payload)) {
+            const error = errorDetails(payload);
+            throw new ShortLinkError({
+              status: response.status,
+              code: error.code,
+              requestId: error.requestId,
+              challenge: payload.challenge,
+              retryAfterSeconds: error.retryAfterSeconds,
+            });
+          }
+          throw dependencyError();
+        }
+
+        if (!isCreateLinkResponse(payload)) {
+          throw dependencyError();
+        }
+        return payload;
       } finally {
         clearTimeout(timeout);
       }
-
-      const payload = await readJson(response);
-      if (response.status !== 201) {
-        if (isErrorResponse(payload)) {
-          const error = errorDetails(payload);
-          throw new ShortLinkError({
-            status: response.status,
-            code: error.code,
-            requestId: error.requestId,
-            challenge: payload.challenge,
-            retryAfterSeconds: error.retryAfterSeconds,
-          });
-        }
-        throw dependencyError();
-      }
-
-      if (!isCreateLinkResponse(payload)) {
-        throw dependencyError();
-      }
-      return payload;
     },
   });
 }

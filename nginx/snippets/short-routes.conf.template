@@ -1,6 +1,7 @@
 location = /healthz {
   access_log off;
   default_type text/plain;
+  if ($request_method != GET) { return 405; }
   return 200 "ok\n";
 }
 

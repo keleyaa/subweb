@@ -13,7 +13,7 @@ describe('integrated stack privacy sentinel', () => {
     for (const service of ['gateway', 'myurls-app', 'myurls-short', 'subconverter', 'redis']) {
       expect(source).toContain(service);
     }
-    expect(source).toContain('challenge-$sentinel_value');
+    expect(source).toContain('redis-recovery-$sentinel_value');
     expect(source).not.toMatch(/printf[^\n]*"\$(?:sentinel_value|secret_value)"/i);
     expect(source).not.toMatch(/set\s+-x/);
   });

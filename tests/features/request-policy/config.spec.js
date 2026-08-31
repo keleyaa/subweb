@@ -29,6 +29,20 @@ describe('request policy configuration', () => {
     expect(() => loadConfig()).toThrow('EGRESS_PROXY_PORT');
   });
 
+  it('rejects numeric settings outside the safe integer range', () => {
+    vi.stubEnv('CONVERSION_MAX_RESPONSE_BYTES', '9'.repeat(30));
+    expect(() => loadConfig()).toThrow('CONVERSION_MAX_RESPONSE_BYTES');
+  });
+
+  it('caps request and response buffers at operational limits', () => {
+    vi.stubEnv('CONVERSION_MAX_REQUEST_BYTES', String(1024 * 1024 + 1));
+    expect(() => loadConfig()).toThrow('CONVERSION_MAX_REQUEST_BYTES');
+
+    vi.stubEnv('CONVERSION_MAX_REQUEST_BYTES', '16384');
+    vi.stubEnv('CONVERSION_MAX_RESPONSE_BYTES', String(64 * 1024 * 1024 + 1));
+    expect(() => loadConfig()).toThrow('CONVERSION_MAX_RESPONSE_BYTES');
+  });
+
   it('rejects non-HTTP upstream protocols', () => {
     vi.stubEnv('SUBCONVERTER_UPSTREAM', 'file:///tmp/subconverter');
     expect(() => loadConfig()).toThrow('HTTP(S) URL');

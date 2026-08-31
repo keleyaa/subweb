@@ -7,6 +7,7 @@ import { PolicyError, validateConversionQuery } from './url-policy.mjs';
 
 const FORWARDED_PARAMS = [
   'target',
+  'ver',
   'url',
   'config',
   'include',

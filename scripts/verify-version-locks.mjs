@@ -17,6 +17,9 @@ const requiredServices = [
   'subconverter',
 ];
 const requiredPlatforms = ['linux/amd64', 'linux/arm64'];
+const myurlsSourceRepository = 'keleyaa/MyUrls';
+const myurlsImageRepository = 'ghcr.io/keleyaa/myurls';
+const myurlsReleaseTagPattern = /^v2\.\d+\.\d+$/u;
 
 const isRecord = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -82,7 +85,7 @@ const parseTaggedImageReference = (reference) => {
   const repositoryParts = repository.split('/');
 
   if (
-    !registryPattern.test(registry) ||
+    !isValidRegistry(registry) ||
     repositoryParts.length === 0 ||
     repositoryParts.some((part) => !repositoryComponentPattern.test(part)) ||
     !tagPattern.test(tag)
@@ -90,7 +93,14 @@ const parseTaggedImageReference = (reference) => {
     return null;
   }
 
-  return { tag };
+  return { registry, repository, tag };
+};
+
+const isValidRegistry = (registry) => {
+  if (!registryPattern.test(registry)) return false;
+  const portSeparator = registry.lastIndexOf(':');
+  if (portSeparator < 0) return true;
+  return Number(registry.slice(portSeparator + 1)) <= 65_535;
 };
 
 const isCanonicalUtcTimestamp = (value) => {
@@ -159,6 +169,16 @@ export function validateVersionLocks(lock) {
       if (source.prerelease !== false) {
         errors.push(`${prefix}.source.prerelease must equal false`);
       }
+      if (name === 'myurls') {
+        if (source.repository !== myurlsSourceRepository) {
+          errors.push(
+            `${prefix}.source.repository must equal ${myurlsSourceRepository}`,
+          );
+        }
+        if (!myurlsReleaseTagPattern.test(source.tag ?? '')) {
+          errors.push(`${prefix}.source.tag must be a published Rust v2 release tag`);
+        }
+      }
     }
 
     const image = service.image;
@@ -175,6 +195,17 @@ export function validateVersionLocks(lock) {
       }
       if (!digestPattern.test(image.digest ?? '')) {
         errors.push(`${prefix}.image.digest must be a sha256 digest`);
+      }
+      if (name === 'myurls' && parsedReference) {
+        const imageRepository = `${parsedReference.registry}/${parsedReference.repository}`;
+        if (imageRepository !== myurlsImageRepository) {
+          errors.push(
+            `${prefix}.image.reference must use ${myurlsImageRepository}`,
+          );
+        }
+        if (parsedReference.tag !== service.source?.tag) {
+          errors.push(`${prefix}.image.reference tag must match source.tag`);
+        }
       }
       if (!isRecord(image.platforms)) {
         errors.push(`${prefix}.image.platforms must be an object`);

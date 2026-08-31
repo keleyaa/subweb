@@ -1,21 +1,49 @@
 location = /healthz {
   access_log off;
   default_type text/plain;
+  if ($request_method != GET) { return 405; }
   return 200 "ok\n";
+}
+
+location = /runtime-index.html {
+  internal;
+  default_type text/html;
+  alias @@RUNTIME_SITE_ROOT@@/index.html;
+}
+
+location = /index.html {
+  rewrite ^ /runtime-index.html last;
 }
 
 location = /favicon.svg {
   try_files $uri =404;
 }
 
+location = /apple-touch-icon.png {
+  try_files $uri =404;
+}
+
+location = /icon-192.png {
+  try_files $uri =404;
+}
+
+location = /icon-512.png {
+  try_files $uri =404;
+}
+
+location = /site.webmanifest {
+  default_type application/manifest+json;
+  try_files $uri =404;
+}
+
 location = /robots.txt {
   default_type text/plain;
-  try_files $uri =404;
+  alias @@RUNTIME_SITE_ROOT@@/robots.txt;
 }
 
 location = /sitemap.xml {
   default_type application/xml;
-  try_files $uri =404;
+  alias @@RUNTIME_SITE_ROOT@@/sitemap.xml;
 }
 
 location ^~ /assets/ {
@@ -73,6 +101,10 @@ location ~ "^/[A-Za-z0-9_-]{1,64}$" {
 @@SECURITY_HEADERS@@
 }
 
+location = / {
+  rewrite ^ /runtime-index.html last;
+}
+
 location / {
-  try_files $uri $uri/ /index.html;
+  try_files $uri $uri/ /runtime-index.html;
 }

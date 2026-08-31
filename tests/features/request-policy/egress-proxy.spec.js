@@ -66,6 +66,18 @@ describe('request policy egress proxy', () => {
     await close(proxy);
   });
 
+  it('rejects private IP literals before opening an outbound connection', async () => {
+    const connect = vi.fn();
+    const proxy = createEgressProxy({ connect, connectTimeoutMs: 100 });
+    const proxyPort = await listen(proxy);
+
+    const response = await sendConnect(proxyPort, '127.0.0.1:443');
+
+    expect(response).toContain('HTTP/1.1 403 Forbidden');
+    expect(connect).not.toHaveBeenCalled();
+    await close(proxy);
+  });
+
   it('rejects non-HTTPS CONNECT ports before resolving the host', async () => {
     const lookup = vi.fn();
     const proxy = createEgressProxy({ lookup, connect: vi.fn(), connectTimeoutMs: 100 });

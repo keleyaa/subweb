@@ -7,13 +7,23 @@ import { afterEach, describe, expect, it } from 'vitest';
 const validatorPath = fileURLToPath(new URL('../../scripts/validate-compose.sh', import.meta.url));
 const temporaryDirectories = [];
 const validCompose = {
+  networks: {
+    default: {},
+    'myurls-data': { internal: true },
+    'myurls-edge': { internal: true },
+    'redis-policy': { internal: true },
+    'subconverter-egress': { internal: true },
+  },
   services: {
-    gateway: { ports: [{ target: 8080, published: '18080', host_ip: '127.0.0.1' }] },
-    redis: { image: 'redis' },
-    'myurls-app': { image: 'myurls' },
-    'myurls-short': { image: 'myurls' },
-    subconverter: { image: 'subconverter' },
-    'request-policy': { image: 'request-policy' },
+    gateway: {
+      ports: [{ target: 8080, published: '18080', host_ip: '127.0.0.1' }],
+      networks: { default: {}, 'myurls-edge': {} },
+    },
+    redis: { image: 'redis', networks: { 'myurls-data': {}, 'redis-policy': {} } },
+    'myurls-app': { image: 'myurls', networks: { 'myurls-data': {}, 'myurls-edge': {} } },
+    'myurls-short': { image: 'myurls', networks: { 'myurls-data': {}, 'myurls-edge': {} } },
+    subconverter: { image: 'subconverter', networks: { 'subconverter-egress': {} } },
+    'request-policy': { image: 'request-policy', networks: { default: {}, 'redis-policy': {}, 'subconverter-egress': {} } },
   },
 };
 
@@ -52,7 +62,7 @@ describe('single gateway Compose validation', () => {
     ['published internal service', { ...validCompose, services: { ...validCompose.services, redis: { ports: [{ target: 6379, published: '6379' }] } } }],
     ['unapproved published service', { ...validCompose, services: { ...validCompose.services, debug: { ports: [{ target: 9000, published: '9000' }] }, gateway: {} } }],
     ['missing internal service', { services: { gateway: validCompose.services.gateway, redis: {}, 'myurls-app': {} } }],
-     ['missing gateway', { services: { redis: {}, 'myurls-app': {}, 'myurls-short': {}, subconverter: {}, 'request-policy': {} } }],
+      ['missing gateway', { services: { redis: {}, 'myurls-app': {}, 'myurls-short': {}, subconverter: {}, 'request-policy': {} } }],
   ])('rejects rendered Compose JSON with %s', async (_name, composeJson) => {
     const fixture = await createFixture(composeJson);
     const result = await import('node:child_process').then(({ spawnSync }) => spawnSync('sh', [validatorPath], { cwd: fixture.directory, encoding: 'utf8', env: fixture.env }));
@@ -70,10 +80,42 @@ describe('single gateway Compose validation', () => {
   });
 
   it.each([
+    ['missing myurls-data network', (composeJson) => { delete composeJson.networks['myurls-data']; }],
+    ['non-internal myurls-data network', (composeJson) => { composeJson.networks['myurls-data'].internal = false; }],
+    ['missing redis-policy network', (composeJson) => { delete composeJson.networks['redis-policy']; }],
+    ['Redis on default network', (composeJson) => { composeJson.services.redis.networks.default = {}; }],
+    ['Gateway on redis-policy network', (composeJson) => { composeJson.services.gateway.networks['redis-policy'] = {}; }],
+    ['Request Policy without redis-policy network', (composeJson) => { delete composeJson.services['request-policy'].networks['redis-policy']; }],
+    ['myurls app on default network', (composeJson) => { composeJson.services['myurls-app'].networks.default = {}; }],
+    ['gateway on myurls-data network', (composeJson) => { composeJson.services.gateway.networks['myurls-data'] = {}; }],
+    ['SubConverter on default network', (composeJson) => { composeJson.services.subconverter.networks.default = {}; }],
+    ['Request Policy on MyUrls data network', (composeJson) => { composeJson.services['request-policy'].networks['myurls-data'] = {}; }],
+  ])('rejects an unsafe MyUrls network topology: %s', async (_name, mutate) => {
+    const composeJson = structuredClone(validCompose);
+    mutate(composeJson);
+    const fixture = await createFixture(composeJson);
+    const result = await import('node:child_process').then(({ spawnSync }) => spawnSync('sh', [validatorPath], { cwd: fixture.directory, encoding: 'utf8', env: fixture.env }));
+    expect(result.status).not.toBe(0);
+  });
+
+  it.each([
     ['string', '8080'], ['object', { target: 8080 }], ['null', null], ['empty array', []],
   ])('rejects gateway ports expressed as %s', async (_name, ports) => {
     const composeJson = structuredClone(validCompose);
     composeJson.services.gateway.ports = ports;
+    const fixture = await createFixture(composeJson);
+    const result = await import('node:child_process').then(({ spawnSync }) => spawnSync('sh', [validatorPath], { cwd: fixture.directory, encoding: 'utf8', env: fixture.env }));
+    expect(result.status).not.toBe(0);
+  });
+
+  it.each([
+    ['wrong target', (port) => { port.target = 80; }],
+    ['wildcard host', (port) => { port.host_ip = '0.0.0.0'; }],
+    ['missing host binding', (port) => { delete port.host_ip; }],
+    ['invalid published port', (port) => { port.published = '65536'; }],
+  ])('rejects an unsafe gateway binding: %s', async (_name, mutate) => {
+    const composeJson = structuredClone(validCompose);
+    mutate(composeJson.services.gateway.ports[0]);
     const fixture = await createFixture(composeJson);
     const result = await import('node:child_process').then(({ spawnSync }) => spawnSync('sh', [validatorPath], { cwd: fixture.directory, encoding: 'utf8', env: fixture.env }));
     expect(result.status).not.toBe(0);

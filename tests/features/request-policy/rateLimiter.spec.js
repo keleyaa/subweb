@@ -16,6 +16,18 @@ describe('request policy rate limiting', () => {
     expect(increment).toHaveBeenCalledWith('rate-key', 60);
   });
 
+  it('falls back to the configured window for an invalid Redis TTL', async () => {
+    const increment = vi.fn().mockResolvedValue({ count: 11, ttlSeconds: Number.POSITIVE_INFINITY });
+
+    await expect(
+      checkRateLimit({ increment, key: 'rate-key', limit: 10, windowSeconds: 60 }),
+    ).rejects.toMatchObject({
+      code: 'rate_limited',
+      status: 429,
+      retryAfter: 60,
+    });
+  });
+
   it('rejects requests over the limit with a stable Retry-After value', async () => {
     const increment = vi.fn().mockResolvedValue({ count: 11, ttlSeconds: 37 });
 
@@ -50,7 +62,7 @@ describe('request policy rate limiting', () => {
       count: 3,
       ttlSeconds: 57,
     });
-    expect(redisClient.eval).toHaveBeenCalledWith(expect.stringContaining('INCR'), {
+    expect(redisClient.eval).toHaveBeenCalledWith(expect.stringContaining('TTL'), {
       keys: ['rate-key'],
       arguments: ['60'],
     });

@@ -258,6 +258,15 @@ jobs:
             echo "Docker image digest is missing or malformed" >&2
             exit 1
           }
+          runtime_images_json=$(node - <<'NODE'
+          const fs = require('node:fs');
+          const lock = JSON.parse(fs.readFileSync('deploy/versions.lock.json', 'utf8'));
+          const services = Object.fromEntries(
+            ['redis', 'subconverter', 'myurls'].map((service) => [service, lock.services[service].image]),
+          );
+          process.stdout.write(JSON.stringify(services));
+          NODE
+          )
           manifest_path="$RUNNER_TEMP/rollback-manifest.json"
           jq -n \
             --arg source_sha "$GITHUB_SHA" \
@@ -267,6 +276,7 @@ jobs:
             --arg image_digest "$IMAGE_DIGEST" \
             --arg dockerhub_reference "docker.io/${DOCKERHUB_IMAGE}@${IMAGE_DIGEST}" \
             --arg ghcr_reference "ghcr.io/${GHCR_IMAGE}@${IMAGE_DIGEST}" \
+            --argjson runtime_images "$runtime_images_json" \
             --arg build_time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '{
               schema_version: "1",
@@ -279,6 +289,7 @@ jobs:
                 resolved_tag: $release_tag,
                 source_digest: $image_digest,
                 platforms: ["linux/amd64", "linux/arm64"],
+                runtime_images: $runtime_images,
                 build_time: $build_time,
                 rollback_target: {
                   source_reference: $dockerhub_reference,
@@ -290,7 +301,14 @@ jobs:
                 }
               }
             }' > "$manifest_path"
-          jq -e '.release_identity.source_sha and .release_identity.source_digest and .release_identity.rollback_target.registry_references.docker_hub and .release_identity.rollback_target.registry_references.ghcr' "$manifest_path" >/dev/null
+          jq -e '
+            .release_identity.source_sha and
+            .release_identity.source_digest and
+            .release_identity.rollback_target.registry_references.docker_hub and
+            .release_identity.rollback_target.registry_references.ghcr and
+            (.release_identity.runtime_images | has("redis") and has("subconverter") and has("myurls")) and
+            (.release_identity.runtime_images | all(.[]; .reference and (.digest | test("^sha256:[0-9a-f]{64}$"))))
+          ' "$manifest_path" >/dev/null
           echo "manifest_path=${manifest_path}" >> "$GITHUB_OUTPUT"
           echo "digest_suffix=${IMAGE_DIGEST#sha256:}" >> "$GITHUB_OUTPUT"
           {

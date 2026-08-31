@@ -49,6 +49,39 @@ describe('ShortLinkClient HTTP adapter', () => {
     });
   });
 
+  it('bounds response-body reads with the client timeout', async () => {
+    const fetchImpl = async () => new Response(new ReadableStream({ start() {} }), {
+      status: 201,
+      headers: { 'content-type': 'application/json' },
+    });
+    const client = createShortLinkClient({ fetchImpl, timeoutMs: 20 });
+    const result = client.create({ url: 'https://example.com' });
+    const outcome = await Promise.race([
+      result.then(() => 'resolved', (error) => error),
+      new Promise((resolve) => setTimeout(() => resolve('test timeout'), 250)),
+    ]);
+
+    expect(outcome).toMatchObject({ code: 'dependency_unavailable', status: 503 });
+  });
+
+  it('preserves the upstream request_timeout problem code', async () => {
+    const fetchImpl = async () => new Response(JSON.stringify({
+      type: 'https://short.example.test/problems/request_timeout',
+      title: 'Request timeout',
+      status: 408,
+      code: 'request_timeout',
+      requestId: 'req_timeout',
+    }), { status: 408, headers: { 'content-type': 'application/problem+json' } });
+    const client = createShortLinkClient({ fetchImpl });
+
+    await expect(client.create({ url: 'https://example.com' })).rejects.toMatchObject({
+      name: 'ShortLinkError',
+      status: 408,
+      code: 'request_timeout',
+      requestId: 'req_timeout',
+    });
+  });
+
   it.each([
     [200, success],
     [201, { ...success, expiresAt: 'not-a-date' }],

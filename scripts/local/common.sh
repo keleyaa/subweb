@@ -34,6 +34,11 @@ prepare_local_environment() {
     && [ "$local_subconverter_port" != "$local_vite_port" ] \
     || local_fail 'local ports must be distinct.'
 
+  export LOCAL_MYURLS_PORT="$local_myurls_port"
+  export LOCAL_SHORT_MYURLS_PORT="$local_short_myurls_port"
+  export LOCAL_SUBCONVERTER_PORT="$local_subconverter_port"
+  export LOCAL_VITE_PORT="$local_vite_port"
+
   mkdir -p "$local_runtime_directory"
   chmod 0700 "$local_runtime_directory"
   if [ ! -f "$local_env_file" ]; then
@@ -58,6 +63,20 @@ prepare_local_environment() {
   fi
   [ -f "$local_env_file" ] && [ ! -L "$local_env_file" ] \
     || local_fail 'local environment must be a regular file.'
+
+  temporary_env=$local_env_file.tmp.$$
+  if grep -q '^API_URL=' "$local_env_file"; then
+    sed "s#^API_URL=.*#API_URL=http://127.0.0.1:$local_subconverter_port#" "$local_env_file" > "$temporary_env" \
+      || local_fail 'unable to update local API URL.'
+  else
+    cp "$local_env_file" "$temporary_env" \
+      || local_fail 'unable to prepare local environment update.'
+    printf '%s\\n' "API_URL=http://127.0.0.1:$local_subconverter_port" >> "$temporary_env" \
+      || local_fail 'unable to add local API URL.'
+  fi
+  chmod 0600 "$temporary_env"
+  mv "$temporary_env" "$local_env_file" \
+    || local_fail 'unable to update local environment.'
 
   export COMPOSE_FILE=$local_project_root/compose.yaml:$local_project_root/compose.dev.yaml
   export COMPOSE_ENV_FILES=$local_env_file

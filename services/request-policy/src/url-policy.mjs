@@ -137,11 +137,18 @@ export const validateConversionQuery = async (params, inputOptions = {}) => {
   };
 
   if (!(params instanceof URLSearchParams)) reject('invalid_request', 400);
-  if (params.getAll('target').length !== 1 || params.getAll('url').length > 1 || params.getAll('config').length > 1) {
+  if (
+    params.getAll('target').length !== 1
+    || params.getAll('ver').length > 1
+    || params.getAll('url').length > 1
+    || params.getAll('config').length > 1
+  ) {
     reject('invalid_request', 400);
   }
 
   const target = validateTarget(params.get('target'));
+  const version = params.get('ver');
+  if (version !== null && !['2', '3', '4'].includes(version)) reject('invalid_request', 400);
   const urls = await validateSubscriptionValue(params.get('url'), options);
   const configValue = params.get('config');
   const config = configValue ? await validateRemoteUrl(configValue, options) : '';

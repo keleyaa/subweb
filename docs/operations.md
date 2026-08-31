@@ -2,7 +2,7 @@
 
 ## 状态与日志
 
-Docker Compose 运行 `gateway`、`request-policy`、`subconverter`、两个 MyUrls Rust v2.0.5 实例（`myurls-app`、`myurls-short`）和 `redis`，共 6 个服务；只有 Gateway 的 `8080` 端口绑定到宿主机 loopback。
+Docker Compose 运行 `gateway`、`request-policy`、`subconverter`、两个 MyUrls Rust v2.0.6 实例（`myurls-app`、`myurls-short`）和 `redis`，共 6 个服务；只有 Gateway 的 `8080` 端口绑定到宿主机 loopback。
 
 ```sh
 docker compose ps
@@ -132,7 +132,7 @@ npm run verify:locks
 ./scripts/validate-compose.sh
 ```
 
-记录 Git commit、实际解析的各服务镜像 digest（`docker compose images`）和已验证 Redis 备份。升级后检查健康、三个 Host、转换、短链创建、旧短码、日志脱敏和内部端口。失败时优先切回原 Subweb commit；`SUBWEB_IMAGE`、`REDIS_IMAGE` 和 `SUBCONVERTER_IMAGE` 可使用已验证 digest 覆盖。`MYURLS_IMAGE` 仅可单独回退到兼容当前 Rust `/api/links` 契约的镜像；回退到旧 Node `/api/v1/links` 时必须同时切回匹配的 Subweb commit。应用组件可重建，Redis 数据按已演练备份恢复。当前 Compose 中 `myurls-short` 与 Request Policy Service 尚未配置和 Gateway/Redis/`myurls-app` 相同的只读根文件系统与 capability 收紧；升级或重建时不要把它们误判为已有同等容器硬化。
+记录 Git commit、实际解析的各服务镜像 digest（`docker compose images`）、发布 workflow 生成的完整 `runtime_images` 回滚清单和已验证 Redis 备份。升级后检查健康、三个 Host、转换、短链创建、旧短码、日志脱敏和内部端口。失败时优先切回原 Subweb commit；`SUBWEB_IMAGE`、`REDIS_IMAGE` 和 `SUBCONVERTER_IMAGE` 可使用已验证 digest 覆盖。`MYURLS_IMAGE` 仅可单独回退到兼容当前 Rust `/api/links` 契约的镜像；回退到旧 Node `/api/v1/links` 时必须同时切回匹配的 Subweb commit。应用组件可重建，Redis 数据按已演练备份恢复。当前 Compose 中 `myurls-short` 与 Request Policy Service 尚未配置和 Gateway/Redis/`myurls-app` 相同的只读根文件系统与 capability 收紧；升级或重建时不要把它们误判为已有同等容器硬化。
 
 SubConverter 镜像更新后必须重建运行时卷 `subconverter-runtime`（执行 `docker compose down`，再执行 `docker volume rm subweb_subconverter-runtime`，最后执行 `up -d --wait`）。Docker 只对空卷做 copy-up；跳过此步会静默沿用旧的 `/base` 模板。`redis-data` 是业务数据，禁止以任何方式删除。
 
@@ -152,6 +152,6 @@ MyUrls 与 SubConverter 属于独立上游：先在各自边界验证，再更�
 
 - 页面健康但转换失败：区分 gateway、SubConverter、远程配置和订阅源，按浏览器 Network 状态码定位。
 - 短链创建失败但跳转正常：检查 `/short-api/links` 路由、Turnstile 状态和 MyUrls 日志，不输出 token。
-- Redis 短暂重启后请求偶发失败：先等待 MyUrls v2.0.5 重新建立连接并重试一次，再检查 Redis healthy、密码和网络；不要立即重启两个 MyUrls 实例。重启后短码丢失：确认没有删除/更换 `redis-data` 卷，检查 Compose project name 和恢复记录。
+- Redis 短暂重启后请求偶发失败：先等待 MyUrls v2.0.6 重新建立连接并重试一次，再检查 Redis healthy、密码和网络；不要立即重启两个 MyUrls 实例。重启后短码丢失：确认没有删除/更换 `redis-data` 卷，检查 Compose project name 和恢复记录。
 - 外层代理 502：先从主机用正确 Host 请求 loopback health，再核对 upstream 和防火墙。
 - 磁盘告警：先检查 Docker volume、镜像和日志占用；不要在未确认目标时运行广泛删除命令。

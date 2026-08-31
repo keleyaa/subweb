@@ -19,7 +19,8 @@ export const checkRateLimit = async ({ increment, key, limit, windowSeconds }) =
   }
 
   const count = Number(result?.count);
-  const retryAfter = Math.max(1, Number(result?.ttlSeconds) || windowSeconds);
+  const ttlSeconds = Number(result?.ttlSeconds);
+  const retryAfter = Number.isSafeInteger(ttlSeconds) && ttlSeconds > 0 ? ttlSeconds : windowSeconds;
   if (!Number.isSafeInteger(count) || count < 1) {
     throw new RateLimitError('rate_store_unavailable', 503);
   }
@@ -36,7 +37,7 @@ export const createIpHash = (ip, secret) => createHmac('sha256', secret).update(
 
 export const createRedisIncrement = (redisClient) => async (key, windowSeconds) => {
   const result = await redisClient.eval(
-    'local count = redis.call("INCR", KEYS[1]); if count == 1 then redis.call("EXPIRE", KEYS[1], ARGV[1]) end; local ttl = redis.call("TTL", KEYS[1]); return { count, ttl }',
+    'local count = redis.call("INCR", KEYS[1]); local ttl = redis.call("TTL", KEYS[1]); if ttl < 0 then redis.call("EXPIRE", KEYS[1], ARGV[1]); ttl = redis.call("TTL", KEYS[1]); end; return { count, ttl }',
     { keys: [key], arguments: [String(windowSeconds)] },
   );
 

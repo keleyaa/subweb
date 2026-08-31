@@ -90,7 +90,7 @@ describe('integrated Compose stack', () => {
     const config = await renderCompose();
     expect(config.services.gateway.image).toBe('docker.io/keleyaa/subweb:sha-2bf1a9f');
     expect(config.services.redis.image).toBe('docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5');
-    expect(config.services['myurls-app'].image).toBe('ghcr.io/keleyaa/myurls:v2.0.5@sha256:8020ce81d843a2945b84470eb08c717aa880c61c056d1df15dfd79f8362d50b9');
+    expect(config.services['myurls-app'].image).toBe('ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3');
     expect(config.services['myurls-short'].image).toBe(config.services['myurls-app'].image);
     expect(config.services['myurls-app'].user).toBe('10001:10001');
     expect(config.services['myurls-short'].user).toBe('10001:10001');
@@ -132,10 +132,23 @@ describe('integrated Compose stack', () => {
     expect(config.services['myurls-app'].networks['myurls-edge'].aliases).toEqual(['myurls-app-edge']);
     expect(config.services['myurls-short'].networks['myurls-edge'].aliases).toEqual(['myurls-short-edge']);
     expect(config.services.gateway.networks['myurls-edge'].ipv4_address).toBe('172.30.255.2');
+    expect(Object.keys(config.services.gateway.networks).sort()).toEqual(['default', 'myurls-edge']);
+    expect(Object.keys(config.services.redis.networks).sort()).toEqual(['myurls-data', 'redis-policy']);
+    for (const service of ['myurls-app', 'myurls-short']) {
+      expect(Object.keys(config.services[service].networks).sort()).toEqual(['myurls-data', 'myurls-edge']);
+    }
+    expect(config.networks['myurls-data'].internal).toBe(true);
     expect(config.networks['myurls-edge'].internal).toBe(true);
+    expect(config.networks['redis-policy'].internal).toBe(true);
     expect(config.networks['subconverter-egress'].internal).toBe(true);
+    const validator = await readFile(new URL('../../scripts/validate-compose.sh', import.meta.url), 'utf8');
+    expect(validator).toContain('["myurls-data", "myurls-edge", "redis-policy", "subconverter-egress"]');
     expect(Object.keys(config.services.subconverter.networks)).toEqual(['subconverter-egress']);
-    expect(Object.keys(config.services['request-policy'].networks).sort()).toEqual(['default', 'subconverter-egress']);
+    expect(Object.keys(config.services['request-policy'].networks).sort()).toEqual(['default', 'redis-policy', 'subconverter-egress']);
+    expect(config.services.gateway.networks).not.toHaveProperty('myurls-data');
+    expect(config.services.gateway.networks).not.toHaveProperty('redis-policy');
+    expect(config.services.redis.networks).not.toHaveProperty('default');
+    expect(config.services['request-policy'].networks).not.toHaveProperty('myurls-data');
   });
 
   it('configures authenticated durable Redis without exposing its password in commands', async () => {

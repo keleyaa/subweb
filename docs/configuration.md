@@ -40,8 +40,8 @@
 | `RESOLVE_LIMIT_10S` | 单个 IP 在 10 秒内的短链解析上限，默认值为 `600` |
 | `CONVERSION_RATE_LIMIT` | 单个匿名 IP 每分钟允许的转换次数，默认值为 `10` |
 | `CONVERSION_MAX_CONCURRENCY` | 全局同时运行的转换请求数，默认值为 `2` |
-| `CONVERSION_MAX_REQUEST_BYTES` | 转换请求的最大大小，单位为字节，默认值为 `16384` |
-| `CONVERSION_MAX_RESPONSE_BYTES` | 上游响应体大小上限，单位为字节，默认值为 `8388608` |
+| `CONVERSION_MAX_REQUEST_BYTES` | 转换请求的最大大小，单位为字节，默认值为 `16384`，上限为 `1048576` |
+| `CONVERSION_MAX_RESPONSE_BYTES` | 上游响应体大小上限，单位为字节，默认值为 `8388608`，上限为 `67108864` |
 | `CONVERSION_REQUEST_TIMEOUT_MS` | 单次转换总超时，单位为毫秒，默认值为 `10000` |
 | `CONVERSION_DNS_TIMEOUT_MS` | DNS 解析超时，单位为毫秒，默认值为 `2000` |
 | `CONVERSION_EGRESS_CONNECT_TIMEOUT_MS` | egress proxy 到已验证 IP 的 TCP 连接超时，单位为毫秒，默认值为 `5000` |
@@ -53,11 +53,11 @@
 
 ## 镜像
 
-生产默认使用带 manifest digest 的 MyUrls Rust v2.0.5 镜像。`MYURLS_IMAGE` 只可覆盖为与当前 Rust HTTP 契约兼容、已验证的镜像；Compose 只能校验 OCI 引用格式，不能自动证明替代镜像实现了 `/api/links`、RFC 9457 错误体、健康端点和非 root UID 契约。不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像。旧 Node 的 `/api/v1/links` 与当前 Rust 的 `/api/links` 不兼容，跨契约回滚必须一并回退 Gateway 路由、前端与镜像。升级时必须同步更新版本锁并重新验证。完整源码、镜像和平台 digest 记录在 [`deploy/versions.lock.json`](../deploy/versions.lock.json)。
+生产默认使用带 manifest digest 的 MyUrls Rust v2.0.6 镜像。`MYURLS_IMAGE` 只可覆盖为与当前 Rust HTTP 契约兼容、已验证的镜像；Compose 只能校验 OCI 引用格式，不能自动证明替代镜像实现了 `/api/links`、RFC 9457 错误体、健康端点和非 root UID 契约。不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像。旧 Node 的 `/api/v1/links` 与当前 Rust 的 `/api/links` 不兼容，跨契约回滚必须一并回退 Gateway 路由、前端与镜像。升级时必须同步更新版本锁并重新验证。完整源码、镜像和平台 digest 记录在 [`deploy/versions.lock.json`](../deploy/versions.lock.json)。
 
-Rust 镜像编入的 Turnstile test adapter 只供隔离 Docker 集成环境使用；它由 `compose.test.yaml` 显式设置 `NODE_ENV=test` 与 `TURNSTILE_MODE=test` 激活。生产 Compose 不会启用这些变量，Rust 服务也会拒绝生产环境的测试模式。
+v2.0.6 生产镜像不编入 Turnstile test adapter；`compose.test.yaml` 使用生产配置和较高的直接放行阈值，避免集成 smoke 触发真实 Cloudflare 请求。challenge/retry 契约由前端、Rust 和浏览器测试覆盖，测试适配器只用于本地 Rust 测试构建，不用于发布镜像。
 
-## MyUrls v2.0.5 运行时行为
+## MyUrls v2.0.6 运行时行为
 
 MyUrls 的 `REQUEST_TIMEOUT_MS` 作用于整个 HTTP 请求处理链；Redis 短暂断线时，服务会在后续操作中重新建立连接。静态 `/assets/*` 响应使用 `public, max-age=31536000, immutable`，HTML 和其他动态响应使用 `no-store`。这些行为由 Docker 集成和上游 HTTP 测试共同验证。
 

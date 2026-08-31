@@ -72,6 +72,28 @@ describe('request policy URL validation', () => {
     expect(result.urls[0]).toMatch(/^vmess:\/\/eyJhZGQiOiIxOTguNTEuMTAwLjEwIn0=$/);
   });
 
+  it('rejects duplicate or unsupported target versions', async () => {
+    for (const params of [
+      'target=surge&ver=2&ver=3&url=https%3A%2F%2Fexample.com%2Fsub',
+      'target=surge&ver=1&url=https%3A%2F%2Fexample.com%2Fsub',
+      'target=surge&ver=two&url=https%3A%2F%2Fexample.com%2Fsub',
+    ]) {
+      await expect(validateConversionQuery(new URLSearchParams(params), { lookup: publicDns })).rejects.toMatchObject({
+        code: 'invalid_request',
+        status: 400,
+      });
+    }
+  });
+
+  it('accepts the supported Surge target versions', async () => {
+    for (const version of ['2', '3', '4']) {
+      await expect(validateConversionQuery(
+        new URLSearchParams(`target=surge&ver=${version}&url=https%3A%2F%2Fexample.com%2Fsub`),
+        { lookup: publicDns },
+      )).resolves.toMatchObject({ target: 'surge' });
+    }
+  });
+
   it('rejects missing, empty, oversized and excessive inputs', async () => {
     await expect(validateConversionQuery(new URLSearchParams({ target: 'clash' }), { lookup: publicDns })).rejects.toMatchObject({
       code: 'missing_url',

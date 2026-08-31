@@ -20,6 +20,18 @@ function recordBrowserErrors(page) {
   return errors;
 }
 
+test('serves the favicon as a static SVG resource', async ({ page }) => {
+  const favicon = await page.request.get('/favicon.svg');
+  expect(favicon.status()).toBe(200);
+  expect(favicon.headers()['content-type']).toContain('image/svg+xml');
+  expect(await favicon.text()).toContain('<svg');
+
+  const faviconHead = await page.request.head('/favicon.svg');
+  expect(faviconHead.status()).toBe(200);
+  expect(faviconHead.headers()['content-type']).toContain('image/svg+xml');
+  expect(await faviconHead.body()).toHaveLength(0);
+});
+
 test('converts, copies, and creates a short link through the same-origin Rust adapter', async ({ context, page }) => {
   const browserErrors = recordBrowserErrors(page);
   let shortRequestContentType = '';
@@ -247,15 +259,9 @@ test('honors reduced motion, reduced transparency, and increased contrast', asyn
     reducedTransparency: true,
     moreContrast: true,
   });
-  const styles = await page.locator('.sub-table--modern').evaluate((element) => {
-    const computed = getComputedStyle(element);
-    return {
-      backdropFilter: computed.backdropFilter,
-      borderWidth: computed.borderTopWidth,
-    };
-  });
-  expect(styles.backdropFilter).toBe('none');
-  expect(Number.parseFloat(styles.borderWidth)).toBeGreaterThanOrEqual(1);
+  const table = page.locator('.sub-table--modern');
+  await expect(table).toHaveCSS('backdrop-filter', 'none');
+  await expect(table).toHaveCSS('border-top-width', '1px');
   await expect(page.getByRole('button', { name: '转换并复制' })).toHaveCSS('justify-content', 'center');
   await restore();
 });

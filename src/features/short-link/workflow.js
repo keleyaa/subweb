@@ -10,6 +10,7 @@ export const SHORT_LINK_MESSAGES = Object.freeze({
   url_not_allowed: '转换链接不符合短链服务的安全规则。',
   alias_invalid: '短链别名格式无效。',
   rate_limited: '短链请求过于频繁，请稍后再试。',
+  request_timeout: '短链服务处理超时，请稍后重试。',
   dependency_unavailable: '短链服务暂时不可用，请稍后重试。',
   code_generation_exhausted: '暂时无法生成短码，请稍后重试。',
   url_too_long: '转换链接超过短链服务 4096 字节上限，请减少订阅或高级参数。',
@@ -53,6 +54,9 @@ export function createShortLinkWorkflow({ client, copy }) {
           copied = true;
         } catch {
           copied = false;
+        }
+        if (!isCurrent(conversionKey)) {
+          return { kind: 'stale' };
         }
         return { kind: 'success', result, copied };
       } catch (error) {

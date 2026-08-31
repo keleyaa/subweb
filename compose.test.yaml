@@ -1,24 +1,28 @@
 services:
   myurls-app:
     environment:
-      NODE_ENV: test
+      NODE_ENV: production
       TURNSTILE_ENABLED: "true"
-      TURNSTILE_MODE: test
+      TURNSTILE_MODE: cloudflare
       TURNSTILE_SITE_KEY: test-site-key
       TURNSTILE_SECRET_KEY: test-secret-key
       TURNSTILE_HOSTNAME: app.test
-      # The integration flow exercises one SHORT-domain request before the
-      # APP-domain challenge/retry sequence against the shared Redis quota.
-      CREATE_DIRECT_LIMIT_10M: "2"
+      # Keep ordinary smoke traffic below the production challenge threshold;
+      # the integration script uses a separate client to exercise challenge flow.
+      CREATE_DIRECT_LIMIT_10M: "100"
+      CREATE_HARD_LIMIT_10M: "200"
+      CREATE_HARD_LIMIT_1D: "300"
       TEST_FORCE_CHALLENGE: "false"
 
   myurls-short:
     environment:
-      NODE_ENV: test
+      NODE_ENV: production
       TURNSTILE_ENABLED: "true"
-      TURNSTILE_MODE: test
+      TURNSTILE_MODE: cloudflare
       TURNSTILE_SITE_KEY: test-site-key
       TURNSTILE_SECRET_KEY: test-secret-key
       TURNSTILE_HOSTNAME: short.test
-      CREATE_DIRECT_LIMIT_10M: "2"
+      CREATE_DIRECT_LIMIT_10M: "100"
+      CREATE_HARD_LIMIT_10M: "200"
+      CREATE_HARD_LIMIT_1D: "300"
       TEST_FORCE_CHALLENGE: "false"

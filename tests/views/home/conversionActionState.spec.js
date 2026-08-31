@@ -38,6 +38,13 @@ describe('conversion action state', () => {
     expect(regexCheck('https://')).toBe(false);
   });
 
+  it('normalizes Windows line endings in subscription input', () => {
+    const unixInput = { ...input, urls: input.urls };
+    const windowsInput = { ...input, urls: input.urls.replaceAll('\n', '\r\n') };
+
+    expect(createConversionInputKey(windowsInput)).toBe(createConversionInputKey(unixInput));
+  });
+
   it('joins service paths before existing query parameters and removes URL fragments', () => {
     expect(
       getSubLink(

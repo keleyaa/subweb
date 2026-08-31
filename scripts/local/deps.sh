@@ -14,11 +14,11 @@ case "$1" in
     ;;
   status)
     docker compose ps redis myurls-app myurls-short subconverter
-    curl --fail --silent --show-error "http://127.0.0.1:$local_myurls_port/health/ready" >/dev/null \
+    curl --connect-timeout 5 --max-time 15 --fail --silent --show-error "http://127.0.0.1:$local_myurls_port/health/ready" >/dev/null \
       || local_fail 'APP MyUrls is not ready.'
-    curl --fail --silent --show-error "http://127.0.0.1:$local_short_myurls_port/health/ready" >/dev/null \
+    curl --connect-timeout 5 --max-time 15 --fail --silent --show-error "http://127.0.0.1:$local_short_myurls_port/health/ready" >/dev/null \
       || local_fail 'SHORT MyUrls is not ready.'
-    curl --fail --silent --show-error "http://127.0.0.1:$local_subconverter_port/healthz" >/dev/null \
+    curl --connect-timeout 5 --max-time 15 --fail --silent --show-error "http://127.0.0.1:$local_subconverter_port/healthz" >/dev/null \
       || local_fail 'SubConverter is not ready.'
     printf '%s\n' 'Local dependencies are ready.'
     ;;

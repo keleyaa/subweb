@@ -62,7 +62,11 @@ stage image-security-request-policy ./scripts/verify-image-security.sh subweb-re
 stage image-security-redis ./scripts/verify-image-security.sh --ignorefile .trivyignore.redis "$redis_image"
 stage image-security-subconverter ./scripts/verify-image-security.sh --ignorefile .trivyignore.subconverter "$subconverter_image"
 stage redis-operations ./scripts/verify-redis-operations.sh
-stage integration ./scripts/verify-integrated-stack.sh
+stage integration env \
+  REDIS_IMAGE="$redis_image" \
+  SUBCONVERTER_IMAGE="$subconverter_image" \
+  MYURLS_IMAGE="$myurls_image" \
+  ./scripts/verify-integrated-stack.sh
 stage evidence node scripts/verify-evidence.mjs
 
 printf '%s\n' 'release verification=passed'

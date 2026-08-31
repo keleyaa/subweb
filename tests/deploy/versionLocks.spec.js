@@ -24,6 +24,8 @@ const imageReferenceError =
   'services.myurls.image.reference must be a valid tagged OCI/Docker reference';
 const sourceTagError =
   'services.myurls.source.tag must be a valid non-latest source tag';
+const myurlsReleaseError =
+  'services.myurls.source.tag must be a published Rust v2 release tag';
 const verifiedAtError =
   'verifiedAt must be a canonical UTC timestamp in YYYY-MM-DDTHH:mm:ssZ format';
 
@@ -92,15 +94,15 @@ describe('integrated service artifact locks', () => {
   it('uses the approved upstream repositories and Rust MyUrls release', () => {
     expect(lock.services.myurls.source).toMatchObject({
       repository: 'keleyaa/MyUrls',
-      tag: 'v2.0.5',
-      commit: '0cf3f7dcb79041f87ff6c1827a0e09c1b4ca7417',
+      tag: 'v2.0.6',
+      commit: '9a04a210c19f97178255ed1fe096c4de56922224',
     });
     expect(lock.services.myurls.image).toMatchObject({
-      reference: 'ghcr.io/keleyaa/myurls:v2.0.5',
-      digest: 'sha256:8020ce81d843a2945b84470eb08c717aa880c61c056d1df15dfd79f8362d50b9',
+      reference: 'ghcr.io/keleyaa/myurls:v2.0.6',
+      digest: 'sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3',
       platforms: {
-        'linux/amd64': 'sha256:9350c9aaa350f0fb5459576838a171d813e830a3fb0e3787c4ce91e3c3b3606c',
-        'linux/arm64': 'sha256:06998deaafe2d0385d04f6242d6154ee466213c0361d43280302c10bae90befa',
+        'linux/amd64': 'sha256:0029651550c833d923359f0b105691c76b6dd96d48e2b775c51c6204d26fe4a0',
+        'linux/arm64': 'sha256:a34b0bbeef548b17a1eee515fd9fba4243429a31c1de8d0539fb6177c635975e',
       }
     });
     expect(lock.services.subconverter.source.repository).toBe(
@@ -113,15 +115,38 @@ describe('integrated service artifact locks', () => {
   });
 
   it.each([
-    'docker.io/nginxinc/nginx-unprivileged:1.30.4-alpine',
-    'docker.io/library/redis:8.10.1',
-    'ghcr.io/keleyaa/myurls:v1.13.0',
-    'ghcr.io/aethersailor/subconverter-extended:v1.8.6',
-  ])('accepts the tagged image reference %s', (reference) => {
+    ['ghcr.io/keleyaa/myurls:v2.0.6', 'v2.0.6'],
+    ['ghcr.io/keleyaa/myurls:v2.1.0', 'v2.1.0'],
+  ])('accepts the tagged MyUrls image reference %s', (reference, tag) => {
     const candidate = structuredClone(lock);
+    candidate.services.myurls.source.tag = tag;
     candidate.services.myurls.image.reference = reference;
 
     expect(validateVersionLocks(candidate)).not.toContain(imageReferenceError);
+  });
+
+  it('rejects a legacy or foreign MyUrls artifact', () => {
+    const candidate = structuredClone(lock);
+    candidate.services.myurls.source.repository = 'legacy/MyUrls';
+    candidate.services.myurls.source.tag = 'v1.13.0';
+    candidate.services.myurls.image.reference = 'ghcr.io/keleyaa/myurls:v2.0.6';
+
+    expect(validateVersionLocks(candidate)).toEqual(
+      expect.arrayContaining([
+        'services.myurls.source.repository must equal keleyaa/MyUrls',
+        myurlsReleaseError,
+        'services.myurls.image.reference tag must match source.tag',
+      ]),
+    );
+  });
+
+  it('rejects a MyUrls image from an unapproved registry repository', () => {
+    const candidate = structuredClone(lock);
+    candidate.services.myurls.image.reference = 'docker.io/legacy/myurls:v2.0.6';
+
+    expect(validateVersionLocks(candidate)).toContain(
+      'services.myurls.image.reference must use ghcr.io/keleyaa/myurls',
+    );
   });
 
   it.each([
@@ -129,6 +154,7 @@ describe('integrated service artifact locks', () => {
     ['ghcr.io/keleyaa/my urls:v1', imageReferenceError],
     ['ghcr.io/keleyaa/myurls:\tv1', imageReferenceError],
     ['docker..io/library/redis:v1', imageReferenceError],
+    ['registry.example:99999/library/redis:v1', imageReferenceError],
     ['ghcr.io//myurls:v1', imageReferenceError],
     ['ghcr.io/keleyaa/myurls', imageReferenceError],
     [
@@ -146,13 +172,14 @@ describe('integrated service artifact locks', () => {
     );
   });
 
-  it.each(['release-1.30.4', '8.10.1', 'v1.13.0', 'v1.8.6'])(
-    'accepts the source tag %s',
+  it.each(['v2.0.6', 'v2.1.0'])(
+    'accepts the Rust MyUrls source tag %s when the image tag matches',
     (tag) => {
       const candidate = structuredClone(lock);
       candidate.services.myurls.source.tag = tag;
+      candidate.services.myurls.image.reference = `ghcr.io/keleyaa/myurls:${tag}`;
 
-      expect(validateVersionLocks(candidate)).not.toContain(sourceTagError);
+      expect(validateVersionLocks(candidate)).toEqual([]);
     },
   );
 

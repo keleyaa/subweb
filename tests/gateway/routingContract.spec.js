@@ -49,13 +49,18 @@ describe('gateway routing contract', () => {
       expect(routes.indexOf(route)).toBeLessThan(shortCodePosition);
     }
     expect(routes).toContain('limit_except GET HEAD');
-    expect(routes).toContain('try_files $uri $uri/ /index.html');
+    expect(routes).toContain('try_files $uri $uri/ /runtime-index.html');
   });
 
   it('preserves the converter path and validated public headers', async () => {
     const routes = await readFile(rootFile('nginx/snippets/api-routes.conf.template'), 'utf8');
     const proxyHeaders = await readFile(rootFile('nginx/snippets/proxy-headers.conf.template'), 'utf8');
     expect(routes).toContain('proxy_pass $subconverter_upstream$request_uri;');
+    expect(routes).toContain('if ($request_method != GET) { return 405; }');
+    const apiBlock = routes.slice(routes.indexOf('location = /sub'), routes.indexOf('\n}', routes.indexOf('location = /sub')) + 2);
+    for (const header of ['Authorization', 'Proxy-Authorization', 'Cookie', 'Origin']) {
+      expect(apiBlock).toContain(`proxy_set_header ${header} "";`);
+    }
     expect(proxyHeaders).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
     expect(proxyHeaders).not.toContain('$proxy_add_x_forwarded_for');
     expect(proxyHeaders).toContain('proxy_set_header Host @@PUBLIC_HOST@@;');

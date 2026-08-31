@@ -23,14 +23,18 @@ LOCAL_MYURLS_PORT="$local_myurls_port" \
   npm run serve -- --host 127.0.0.1 --port "$local_vite_port" --strictPort >/dev/null 2>&1 &
 vite_pid=$!
 
+http_connect_timeout_seconds=5
+http_max_time_seconds=15
 attempt=0
-until curl --fail --silent --show-error "http://127.0.0.1:$local_vite_port/" >/dev/null 2>&1; do
+until curl --connect-timeout "$http_connect_timeout_seconds" --max-time "$http_max_time_seconds" \
+  --fail --silent --show-error "http://127.0.0.1:$local_vite_port/" >/dev/null 2>&1; do
   attempt=$((attempt + 1))
   [ "$attempt" -lt 50 ] || { printf '%s\n' 'Vite did not become ready.' >&2; exit 1; }
   sleep 0.2
 done
 
-response=$(curl --fail-with-body --silent --show-error \
+response=$(curl --connect-timeout "$http_connect_timeout_seconds" --max-time "$http_max_time_seconds" \
+  --fail-with-body --silent --show-error \
   -H 'Content-Type: application/json' \
   --data '{"url":"https://example.com/local-development-sentinel"}' \
   "http://127.0.0.1:$local_vite_port/short-api/links")
@@ -48,6 +52,7 @@ case "$short_url" in
   *) printf '%s\n' 'Local short-link response used an unexpected public base.' >&2; exit 1 ;;
 esac
 
-status=$(curl --silent --output /dev/null --write-out '%{http_code}' "$short_url")
+status=$(curl --connect-timeout "$http_connect_timeout_seconds" --max-time "$http_max_time_seconds" \
+  --silent --output /dev/null --write-out '%{http_code}' "$short_url")
 [ "$status" -eq 302 ] || { printf 'Expected a 302 redirect, got %s.\n' "$status" >&2; exit 1; }
 printf '%s\n' 'Compose-first local development flow passed.'

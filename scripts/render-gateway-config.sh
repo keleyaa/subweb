@@ -90,13 +90,19 @@ require_value MYURLS_APP_UPSTREAM "${MYURLS_APP_UPSTREAM+x}"
 require_value MYURLS_SHORT_UPSTREAM "${MYURLS_SHORT_UPSTREAM+x}"
 require_value MYURLS_MAX_BODY_BYTES "${MYURLS_MAX_BODY_BYTES+x}"
 TRUSTED_PROXY_CIDR=${TRUSTED_PROXY_CIDR:-}
+RUNTIME_SITE_ROOT=${RUNTIME_SITE_ROOT:-/tmp/nginx/runtime-site}
 
 for external_value in "$APP_DOMAIN" "$API_DOMAIN" "$SHORT_DOMAIN" \
   "$SUBCONVERTER_UPSTREAM" "$MYURLS_APP_UPSTREAM" "$MYURLS_SHORT_UPSTREAM" \
-  "$MYURLS_MAX_BODY_BYTES" "$TRUSTED_PROXY_CIDR"; do
+  "$MYURLS_MAX_BODY_BYTES" "$TRUSTED_PROXY_CIDR" "$RUNTIME_SITE_ROOT"; do
   reject_control_characters "$external_value" \
     || fail '网关环境变量不能包含换行或回车'
 done
+
+# Browser Origin hosts are serialized in lowercase; normalize before templating.
+APP_DOMAIN=$(printf '%s' "$APP_DOMAIN" | tr '[:upper:]' '[:lower:]')
+API_DOMAIN=$(printf '%s' "$API_DOMAIN" | tr '[:upper:]' '[:lower:]')
+SHORT_DOMAIN=$(printf '%s' "$SHORT_DOMAIN" | tr '[:upper:]' '[:lower:]')
 
 validate_domain() {
   value=$1
@@ -159,6 +165,8 @@ printf '%s\n' "$MYURLS_MAX_BODY_BYTES" | grep -Eq '^[0-9]+$' \
   || fail 'MYURLS_MAX_BODY_BYTES 必须在 1 到 16384 之间'
 [ -z "$TRUSTED_PROXY_CIDR" ] || validate_ipv4_cidr "$TRUSTED_PROXY_CIDR" \
   || fail 'TRUSTED_PROXY_CIDR 必须是单个 IPv4 CIDR，例如 172.18.0.1/32'
+printf '%s\n' "$RUNTIME_SITE_ROOT" | grep -Eq '^/[A-Za-z0-9._/-]+$' \
+  || fail 'RUNTIME_SITE_ROOT 必须是绝对路径'
 
 [ -r "$resolv_conf" ] || fail 'DNS resolver 配置文件不存在或不可读'
 nginx_resolver=$(awk '$1 == "nameserver" { print $2; exit }' "$resolv_conf")
@@ -287,6 +295,7 @@ sed \
   -e "s|@@MYURLS_APP_UPSTREAM@@|$MYURLS_APP_UPSTREAM|g" \
   -e "s|@@MYURLS_SHORT_UPSTREAM@@|$MYURLS_SHORT_UPSTREAM|g" \
   -e "s|@@MYURLS_MAX_BODY_BYTES@@|$MYURLS_MAX_BODY_BYTES|g" \
+  -e "s|@@RUNTIME_SITE_ROOT@@|$RUNTIME_SITE_ROOT|g" \
   -e "s|@@NGINX_RESOLVER@@|$nginx_resolver|g" \
   "$assembled" > "$rendered_config"
 

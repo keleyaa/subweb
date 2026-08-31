@@ -62,22 +62,36 @@ describe('container runtime configuration', () => {
     expect(result.stderr).toContain('缺少必需的 API_URL');
   });
 
-  it('derives crawler-facing canonical URLs from APP_DOMAIN', async () => {
+  it.each([
+    'javascript:alert(1)',
+    'http://api.example.com',
+    'https://',
+    'https://api.example.com:65536',
+    'https://user:secret@api.example.com',
+  ])('fails closed for an unsafe API_URL: %s', async (apiUrl) => {
+    const { result } = await invoke(apiUrl);
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain('API_URL 必须是 HTTPS 地址');
+  });
+
+  it('derives crawler-facing canonical URLs in a writable runtime copy', async () => {
     const item = await fixture();
     const siteRoot = join(item.directory, 'site');
+    const runtimeSiteRoot = join(item.directory, 'runtime-site');
     await mkdir(siteRoot);
     await writeFile(join(siteRoot, 'index.html'), 'https://sub.ml1.one/');
     await writeFile(join(siteRoot, 'sitemap.xml'), 'https://sub.ml1.one/');
     await writeFile(join(siteRoot, 'robots.txt'), 'https://sub.ml1.one/sitemap.xml');
     const env = {
       ...process.env, PATH: `${item.bin}:${process.env.PATH}`, API_URL: 'https://api.example.test',
-      APP_DOMAIN: 'self-hosted.example', SITE_ROOT: siteRoot, CONFIG_TEMPLATE: item.template,
-      CONFIG_FILE: item.config, GATEWAY_RENDERER: item.renderer,
+      APP_DOMAIN: 'self-hosted.example', SITE_ROOT: siteRoot, RUNTIME_SITE_ROOT: runtimeSiteRoot,
+      CONFIG_TEMPLATE: item.template, CONFIG_FILE: item.config, GATEWAY_RENDERER: item.renderer,
       GATEWAY_CONFIG_FILE: join(item.directory, 'nginx.conf'), NGINX_BIN: item.nginx,
     };
     expect((await run('sh', [script], { env })).code).toBe(0);
     for (const file of ['index.html', 'sitemap.xml', 'robots.txt']) {
-      expect(await readFile(join(siteRoot, file), 'utf8')).toContain('https://self-hosted.example');
+      expect(await readFile(join(runtimeSiteRoot, file), 'utf8')).toContain('https://self-hosted.example');
+      expect(await readFile(join(siteRoot, file), 'utf8')).toContain('https://sub.ml1.one');
     }
   });
 });

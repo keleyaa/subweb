@@ -31,7 +31,7 @@ case "$*" in
   'compose version') exit 0 ;;
   'compose config --quiet') exit 0 ;;
   'compose config --format json')
-     printf '%s\\n' '{"services":{"gateway":{"ports":[{"published":"18080"}]},"redis":{},"myurls-app":{},"myurls-short":{},"subconverter":{},"request-policy":{}}}'
+      printf '%s\\n' '{"networks":{"default":{},"myurls-data":{"internal":true},"myurls-edge":{"internal":true},"redis-policy":{"internal":true},"subconverter-egress":{"internal":true}},"services":{"gateway":{"ports":[{"host_ip":"127.0.0.1","published":"18080","target":8080}],"networks":{"default":{},"myurls-edge":{}}},"redis":{"networks":{"myurls-data":{},"redis-policy":{}}},"myurls-app":{"networks":{"myurls-data":{},"myurls-edge":{}}},"myurls-short":{"networks":{"myurls-data":{},"myurls-edge":{}}},"subconverter":{"networks":{"subconverter-egress":{}}},"request-policy":{"networks":{"default":{},"redis-policy":{},"subconverter-egress":{}}}}}'
     ;;
   'compose pull gateway redis myurls-app myurls-short subconverter') exit "\${DOCKER_PULL_STATUS:-0}" ;;
   'compose build request-policy') exit 0 ;;
@@ -82,9 +82,9 @@ describe('Docker image quick deployment', () => {
       'compose version',
       'compose config --quiet',
       'compose config --format json',
-       'compose pull gateway redis myurls-app myurls-short subconverter',
-       'compose build request-policy',
-       'compose up -d --no-build --pull never --wait',
+      'compose pull gateway redis myurls-app myurls-short subconverter',
+      'compose build request-policy',
+      'compose up -d --no-build --pull never --wait',
       'compose ps',
       '',
     ].join('\n'));
@@ -110,7 +110,7 @@ describe('Docker image quick deployment', () => {
 
     expect(result.status).not.toBe(0);
     const log = await readFile(join(root, 'docker.log'), 'utf8');
-     expect(log).toContain('compose pull gateway redis myurls-app myurls-short subconverter');
+    expect(log).toContain('compose pull gateway redis myurls-app myurls-short subconverter');
     expect(log).not.toContain('compose up');
   });
 });

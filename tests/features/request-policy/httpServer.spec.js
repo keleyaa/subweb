@@ -36,14 +36,14 @@ describe('request policy HTTP server', () => {
   it('forwards validated conversion queries and returns upstream content', async () => {
     const context = await startServer();
     try {
-      const response = await fetch(`${context.url}/sub?target=clash&url=https%3A%2F%2Fexample.com%2Fsub`, {
+      const response = await fetch(`${context.url}/sub?target=surge&ver=2&url=https%3A%2F%2Fexample.com%2Fsub`, {
         headers: { 'x-real-ip': '203.0.113.10' },
       });
 
       expect(response.status).toBe(200);
       expect(await response.text()).toBe('converted output');
       expect(context.upstreamFetch).toHaveBeenCalledWith(
-        'http://subconverter:25500/sub?target=clash&url=https%3A%2F%2Fexample.com%2Fsub',
+        'http://subconverter:25500/sub?target=surge&ver=2&url=https%3A%2F%2Fexample.com%2Fsub',
         expect.objectContaining({ method: 'GET' }),
       );
       expect(context.rateStore.increment).toHaveBeenCalledWith(expect.stringMatching(/^subweb:rate:convert:/), 60);

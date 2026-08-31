@@ -53,7 +53,7 @@ describe('Docker runtime contract', () => {
     expect(compose).toContain('cap_drop:');
     expect(compose).toContain('- ALL');
     expect(compose).toContain(
-      'image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.5@sha256:8020ce81d843a2945b84470eb08c717aa880c61c056d1df15dfd79f8362d50b9}"',
+      'image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3}"',
     );
   });
 
@@ -88,7 +88,7 @@ describe('Docker runtime contract', () => {
     const routes = await readFile(rootFile('nginx/snippets/app-routes.conf.template'), 'utf8');
 
     expect(routes).toContain('location = /healthz');
-    expect(routes).toContain("try_files $uri $uri/ /index.html");
+    expect(routes).toContain("try_files $uri $uri/ /runtime-index.html");
     expect(nginx).toContain('Content-Security-Policy');
     expect(nginx).toContain("connect-src 'self' https: http://127.0.0.1:* http://localhost:*");
     expect(nginx).not.toContain("connect-src 'self' https: http:;");

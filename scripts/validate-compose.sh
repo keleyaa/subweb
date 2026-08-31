@@ -71,6 +71,24 @@ process.stdin.on("end", () => {
     console.error(`Compose validation error: only ${expectedGateway} may publish ports.`);
     process.exitCode = 1;
   }
+  const gatewayPorts = services[expectedGateway]?.ports;
+  const gatewayPort = gatewayPorts?.length === 1 ? gatewayPorts[0] : null;
+  const isPortNumber = (value) => {
+    const number = Number(value);
+    return /^\d+$/.test(String(value)) && Number.isInteger(number) && number >= 1 && number <= 65535;
+  };
+  if (
+    !gatewayPort ||
+    typeof gatewayPort !== "object" ||
+    gatewayPort.host_ip !== "127.0.0.1" ||
+    gatewayPort.target !== 8080 ||
+    !isPortNumber(gatewayPort.published)
+  ) {
+    console.error(
+      `Compose validation error: ${expectedGateway} must publish container port 8080 on host loopback.`,
+    );
+    process.exitCode = 1;
+  }
   for (const name of ["redis", "myurls-app", "myurls-short", "subconverter", "request-policy"]) {
     if (!services[name]) {
       console.error(`Compose validation error: required internal service ${name} is missing.`);
@@ -83,7 +101,31 @@ process.stdin.on("end", () => {
       process.exitCode = 1;
     }
   }
+
+  const networks = config.networks ?? {};
+  for (const name of ["myurls-data", "myurls-edge", "redis-policy", "subconverter-egress"]) {
+    if (networks[name]?.internal !== true) {
+      console.error(`Compose validation error: ${name} must be an internal network.`);
+      process.exitCode = 1;
+    }
+  }
+
+  const expectedNetworks = {
+    redis: ["myurls-data", "redis-policy"],
+    "myurls-app": ["myurls-data", "myurls-edge"],
+    "myurls-short": ["myurls-data", "myurls-edge"],
+    gateway: ["default", "myurls-edge"],
+    subconverter: ["subconverter-egress"],
+    "request-policy": ["default", "redis-policy", "subconverter-egress"],
+  };
+  for (const [name, expected] of Object.entries(expectedNetworks)) {
+    const actual = Object.keys(services[name]?.networks ?? {}).sort();
+    if (actual.join("\n") !== [...expected].sort().join("\n")) {
+      console.error(`Compose validation error: service ${name} has an unsafe network topology.`);
+      process.exitCode = 1;
+    }
+  }
 });
 ' "$expectedGateway"
 
-printf 'Compose single-gateway and published-port contract are valid.\n'
+printf 'Compose gateway, network, and published-port contracts are valid.\n'
