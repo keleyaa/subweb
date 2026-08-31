@@ -29,6 +29,8 @@ describe('Compose-first local development workflow', () => {
     expect(override).toContain('https_proxy: ""');
     expect(override).toContain('127.0.0.1:${LOCAL_MYURLS_PORT:-18082}:3000');
     expect(override).toContain('http://127.0.0.1:${LOCAL_SHORT_MYURLS_PORT:-18083}');
+    expect(override).toContain('local-published: {}');
+    expect(override).toContain('local-published:\n    internal: false');
     expect(dependencies).toContain('SHORT MyUrls is not ready.');
     expect(vite).toContain('Number.isInteger(localMyUrlsPortNumber)');
     expect(vite).toContain('localMyUrlsPortNumber < 1024');
