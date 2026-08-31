@@ -114,6 +114,7 @@ git diff --check
 **验证、来源与维护**
 
 - [单一 HTTP Docker 集成验证](docs/validation/docker-integration.md)
+- [Compose-first 本地验证](docs/validation/local-dev.md)
 - [Command Interface 界面验证](docs/validation/interface.md)
 - [SubConverter 容器契约](deploy/subconverter/README.md)
 - [第三方来源](docs/third-party-sources.md)

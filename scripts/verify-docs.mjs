@@ -16,6 +16,7 @@ export const requiredDocuments = [
   'docs/remote-config-sources.md',
   'docs/maintenance.md',
   'docs/validation/docker-integration.md',
+  'docs/validation/local-dev.md',
   'docs/validation/interface.md',
   'deploy/subconverter/README.md',
 ];

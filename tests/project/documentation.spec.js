@@ -97,7 +97,7 @@ const hasEmbeddedReadmeImage = (source, asset) => {
 describe('documentation contract', () => {
   it('keeps the documentation graph complete and linkable', () => {
     expect(verifyDocs({ root })).toEqual([]);
-    expect(requiredDocuments).toHaveLength(15);
+    expect(requiredDocuments).toHaveLength(16);
   });
 
   it('documents exactly the approved deployment families and source lineage', () => {
