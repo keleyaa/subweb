@@ -184,6 +184,35 @@ func TestDependencyImplicitWriteDetectsContentType(t *testing.T) {
 	}
 }
 
+func TestDependencyEmptyWriteIsAllowedAfterNoContent(t *testing.T) {
+	var written int
+	var writeErr error
+	server := newTestServer(t, Dependencies{
+		Converter: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+			written, writeErr = w.Write([]byte{})
+		}),
+	})
+
+	response := serveRequest(t, server, http.MethodGet, "api.example.test", "/sub", nil)
+
+	if written != 0 {
+		t.Fatalf("Write count = %d, want 0", written)
+	}
+	if writeErr != nil {
+		t.Fatalf("Write error = %v, want nil", writeErr)
+	}
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
+	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "" {
+		t.Fatalf("Content-Type = %q, want empty", contentType)
+	}
+	if body := response.Body.String(); body != "" {
+		t.Fatalf("body = %q, want empty", body)
+	}
+}
+
 func TestDependencyWriteRejectsBodiesForNoContentAndNotModified(t *testing.T) {
 	for _, status := range []int{http.StatusNoContent, http.StatusNotModified} {
 		t.Run(strconv.Itoa(status), func(t *testing.T) {
@@ -215,6 +244,34 @@ func TestDependencyWriteRejectsBodiesForNoContentAndNotModified(t *testing.T) {
 				t.Fatalf("body = %q, want empty", body)
 			}
 		})
+	}
+}
+
+func TestShortHeadDependencyEmptyWriteIsAllowedWithImplicitOK(t *testing.T) {
+	var written int
+	var writeErr error
+	server := newTestServer(t, Dependencies{
+		ShortLinks: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			written, writeErr = w.Write([]byte{})
+		}),
+	})
+
+	response := serveRequest(t, server, http.MethodHead, "short.example.test", "/code", nil)
+
+	if written != 0 {
+		t.Fatalf("Write count = %d, want 0", written)
+	}
+	if writeErr != nil {
+		t.Fatalf("Write error = %v, want nil", writeErr)
+	}
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "" {
+		t.Fatalf("Content-Type = %q, want empty", contentType)
+	}
+	if body := response.Body.String(); body != "" {
+		t.Fatalf("body = %q, want empty", body)
 	}
 }
 

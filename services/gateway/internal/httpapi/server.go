@@ -424,7 +424,7 @@ func (writer *bufferedResponseWriter) Write(body []byte) (int, error) {
 		}
 		writer.WriteHeader(http.StatusOK)
 	}
-	if writer.method == http.MethodHead || writer.status == http.StatusNoContent || writer.status == http.StatusNotModified {
+	if len(body) > 0 && (writer.method == http.MethodHead || writer.status == http.StatusNoContent || writer.status == http.StatusNotModified) {
 		return 0, http.ErrBodyNotAllowed
 	}
 	return writer.body.Write(body)
