@@ -3,8 +3,10 @@ package policy
 import (
 	"context"
 	"errors"
+	"net"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -53,11 +55,20 @@ func ValidateRemoteURL(ctx context.Context, value string, resolver Resolver, opt
 	}
 
 	parsed, err := url.ParseRequestURI(value)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.Hostname() == "" || parsed.User != nil || (parsed.Port() != "" && parsed.Port() != "443") {
+	if err != nil || parsed == nil || !strings.EqualFold(parsed.Scheme, "https") || parsed.Host == "" || parsed.Hostname() == "" || parsed.User != nil {
 		return DialTarget{}, PolicyError{Code: "url_not_allowed", Status: 403}
+	}
+	if port := parsed.Port(); port != "" {
+		portNumber, err := strconv.Atoi(port)
+		if err != nil || portNumber != 443 {
+			return DialTarget{}, PolicyError{Code: "url_not_allowed", Status: 403}
+		}
 	}
 
 	hostname := parsed.Hostname()
+	if strings.Contains(hostname, "%") {
+		return DialTarget{}, PolicyError{Code: "url_not_allowed", Status: 403}
+	}
 	if address, err := netip.ParseAddr(hostname); err == nil {
 		if !isPublicUnicast(address) {
 			return DialTarget{}, PolicyError{Code: "private_address", Status: 403}
@@ -70,7 +81,8 @@ func ValidateRemoteURL(ctx context.Context, value string, resolver Resolver, opt
 	}
 	addresses, err := resolver.LookupNetIP(ctx, "ip", hostname)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		var networkError net.Error
+		if (errors.As(err, &networkError) && networkError.Timeout()) || errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return DialTarget{}, PolicyError{Code: "dns_timeout", Status: 403}
 		}
 		return DialTarget{}, PolicyError{Code: "dns_unresolvable", Status: 403}

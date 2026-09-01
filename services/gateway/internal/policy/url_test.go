@@ -3,6 +3,7 @@ package policy
 import (
 	"context"
 	"errors"
+	"net"
 	"net/netip"
 	"strings"
 	"testing"
@@ -67,6 +68,18 @@ func TestValidateAcceptsPublicIPWithoutResolver(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsCaseInsensitiveHTTPSWithNumericDefaultPort(t *testing.T) {
+	resolver := &fakeResolver{addresses: []netip.Addr{netip.MustParseAddr("93.184.216.34")}}
+
+	_, err := ValidateRemoteURL(context.Background(), "HTTPS://example.com:0443/path", resolver, Options{})
+	if err != nil {
+		t.Fatalf("ValidateRemoteURL() error = %v, want nil", err)
+	}
+	if resolver.calls != 1 || resolver.host != "example.com" {
+		t.Fatalf("resolver call = %d, host = %q; want one lookup for example.com", resolver.calls, resolver.host)
+	}
+}
+
 func TestValidateAcceptsPublicIPv6WithoutResolver(t *testing.T) {
 	publicAddress := netip.MustParseAddr("2001:4860:4860::8888")
 	resolver := &fakeResolver{lookup: func(context.Context) ([]netip.Addr, error) {
@@ -88,15 +101,16 @@ func TestValidateAcceptsPublicIPv6WithoutResolver(t *testing.T) {
 
 func TestValidateRejectsUnsafeURLForms(t *testing.T) {
 	for name, input := range map[string]string{
-		"HTTP":           "http://example.com/path",
-		"FTP":            "ftp://example.com/path",
-		"userinfo":       "https://user:password@example.com/path",
-		"fragment":       "https://example.com/path#fragment",
-		"empty fragment": "https://example.com/path#",
-		"non-443 port":   "https://example.com:8443/path",
-		"missing host":   "https:///path",
-		"malformed":      "https://[2001:db8::1/path",
-		"invalid port":   "https://example.com:not-a-port/path",
+		"HTTP":                "http://example.com/path",
+		"FTP":                 "ftp://example.com/path",
+		"userinfo":            "https://user:password@example.com/path",
+		"fragment":            "https://example.com/path#fragment",
+		"empty fragment":      "https://example.com/path#",
+		"non-443 port":        "https://example.com:8443/path",
+		"missing host":        "https:///path",
+		"malformed":           "https://[2001:db8::1/path",
+		"invalid port":        "https://example.com:not-a-port/path",
+		"scoped IPv6 literal": "https://[fe80::1%25en0]/",
 	} {
 		t.Run(name, func(t *testing.T) {
 			resolver := &fakeResolver{addresses: []netip.Addr{netip.MustParseAddr("93.184.216.34")}}
@@ -110,8 +124,12 @@ func TestValidateRejectsUnsafeURLForms(t *testing.T) {
 }
 
 func TestValidateRejectsURLContainingLiteralHash(t *testing.T) {
-	_, err := ValidateRemoteURL(context.Background(), "https://example.com/path%23fragment#", &fakeResolver{}, Options{})
+	resolver := &fakeResolver{}
+	_, err := ValidateRemoteURL(context.Background(), "https://example.com/path%23fragment#", resolver, Options{})
 	assertPolicyError(t, err, "url_not_allowed", 403)
+	if resolver.calls != 0 {
+		t.Fatalf("resolver calls = %d, want 0 for rejected URL", resolver.calls)
+	}
 }
 
 func TestValidateRejectsURLLongerThanConfiguredMaximum(t *testing.T) {
@@ -167,6 +185,25 @@ func TestValidateRejectsHostnameWithAnyPrivateDNSAnswer(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsSpecialPurposeDNSAnswers(t *testing.T) {
+	for _, value := range []string{
+		"192.52.193.1",
+		"192.175.48.1",
+		"2001:3::1",
+		"2001:30::1",
+		"2620:4f:8000::1",
+	} {
+		t.Run(value, func(t *testing.T) {
+			resolver := &fakeResolver{addresses: []netip.Addr{netip.MustParseAddr(value)}}
+			_, err := ValidateRemoteURL(context.Background(), "https://example.com/path", resolver, Options{})
+			assertPolicyError(t, err, "private_address", 403)
+			if resolver.calls != 1 {
+				t.Fatalf("resolver calls = %d, want exactly one", resolver.calls)
+			}
+		})
+	}
+}
+
 func TestValidateRejectsNoDNSAnswersWithLegacyPrivateAddressError(t *testing.T) {
 	resolver := &fakeResolver{}
 
@@ -182,6 +219,13 @@ func TestValidateMapsResolverErrorToDNSUnresolvable(t *testing.T) {
 	if err.Error() != "dns_unresolvable" {
 		t.Fatalf("error = %q, want machine code only", err)
 	}
+}
+
+func TestValidateMapsResolverTimeoutToDNSTimeout(t *testing.T) {
+	resolver := &fakeResolver{err: &net.DNSError{Err: "i/o timeout", Name: "example.com", IsTimeout: true}}
+
+	_, err := ValidateRemoteURL(context.Background(), "https://example.com/path", resolver, Options{})
+	assertPolicyError(t, err, "dns_timeout", 403)
 }
 
 func TestValidateMapsContextDeadlineToDNSTimeout(t *testing.T) {

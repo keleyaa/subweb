@@ -32,6 +32,8 @@ func TestAddressRejectsNonPublicUnicast(t *testing.T) {
 		"100.64.0.1",               // carrier-grade NAT
 		"198.18.0.1",               // benchmarking
 		"192.0.2.1",                // TEST-NET-1 documentation
+		"192.52.193.1",             // special-purpose allocation
+		"192.175.48.1",             // special-purpose allocation
 		"198.51.100.1",             // TEST-NET-2 documentation
 		"203.0.113.1",              // TEST-NET-3 documentation
 		"240.0.0.1",                // reserved
@@ -42,8 +44,13 @@ func TestAddressRejectsNonPublicUnicast(t *testing.T) {
 		"ff02::1",                  // IPv6 multicast
 		"2001:db8::1",              // IPv6 documentation
 		"2001:2::1",                // IPv6 benchmarking
+		"2001:3::1",                // special-purpose allocation
+		"2001:30::1",               // special-purpose allocation
 		"2001:0000::1",             // Teredo
 		"2002::1",                  // 6to4
+		"2620:4f:8000::1",          // special-purpose allocation
+		"5f00::1",                  // outside current global-unicast allocation
+		"100:0:0:1::1",             // outside current global-unicast allocation
 		"::ffff:192.0.2.1",         // IPv4-mapped IPv6
 		"2001:4860:4860::8888%en0", // scoped address
 	} {
