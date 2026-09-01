@@ -29,6 +29,7 @@ var blockedPrefixes = [...]netip.Prefix{
 	netip.MustParsePrefix("::/128"),
 	netip.MustParsePrefix("100::/64"),
 	netip.MustParsePrefix("2001:0::/32"),
+	netip.MustParsePrefix("2001::/23"),
 	netip.MustParsePrefix("2001:2::/48"),
 	netip.MustParsePrefix("2001:3::/32"),
 	netip.MustParsePrefix("2001:10::/28"),

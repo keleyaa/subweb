@@ -44,6 +44,8 @@ func TestAddressRejectsNonPublicUnicast(t *testing.T) {
 		"ff02::1",                  // IPv6 multicast
 		"2001:db8::1",              // IPv6 documentation
 		"2001:2::1",                // IPv6 benchmarking
+		"2001:100::1",              // IPv6 protocol assignment
+		"2001:1::1",                // IPv6 protocol assignment
 		"2001:3::1",                // special-purpose allocation
 		"2001:30::1",               // special-purpose allocation
 		"2001:0000::1",             // Teredo
