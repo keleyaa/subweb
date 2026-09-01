@@ -12,6 +12,6 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 cd "$local_project_root"
-export VITE_LOCAL_SUBCONVERTER_URL="http://127.0.0.1:$local_subconverter_port"
+export VITE_LOCAL_SUBCONVERTER_URL="http://127.0.0.1:$local_subweb_port"
 export LOCAL_MYURLS_PORT="$local_myurls_port"
 npm run serve -- --host 127.0.0.1 --port "$local_vite_port" --strictPort

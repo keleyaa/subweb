@@ -12,8 +12,8 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-docker build --check .
-docker build --tag "$image" .
+docker build --check --file Dockerfile.simple .
+docker build --file Dockerfile.simple --tag "$image" .
 docker run -d --name "$container" \
   --read-only \
   --cap-drop ALL \
@@ -24,9 +24,8 @@ docker run -d --name "$container" \
   -e APP_DOMAIN='app.example.com' \
   -e API_DOMAIN='api.example.com' \
   -e SHORT_DOMAIN='short.example.com' \
-  -e SUBCONVERTER_UPSTREAM='http://subconverter:25500' \
-  -e MYURLS_APP_UPSTREAM='http://myurls-app-edge:3000' \
-  -e MYURLS_SHORT_UPSTREAM='http://myurls-short-edge:3000' \
+  -e SUBCONVERTER_UPSTREAM='http://127.0.0.1:25500' \
+  -e MYURLS_UPSTREAM='http://myurls:3000' \
   -e MYURLS_MAX_BODY_BYTES='16384' \
   "$image" >/dev/null
 
@@ -71,6 +70,9 @@ esac
 
 docker exec "$container" wget -q -O /dev/null \
   --header='Host: app.example.com' http://127.0.0.1:8080/healthz
+docker exec "$container" wget -q -O /dev/null \
+  --header='Host: api.example.com' http://127.0.0.1:8080/healthz
+docker exec "$container" wget -q -O /dev/null http://127.0.0.1:25500/healthz
 docker exec "$container" cat /usr/share/nginx/html/conf/config.js > "$config_output"
 node --check --input-type=commonjs < "$config_output"
 node -e "const fs=require('node:fs');const vm=require('node:vm');const window={};vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),{window});if(window.config.apiUrl!=='https://converter.example.com/api?source=ci&mode=test'||Object.hasOwn(window.config,'shortUrl'))process.exit(1);" "$config_output"

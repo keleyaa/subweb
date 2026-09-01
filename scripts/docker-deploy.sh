@@ -14,8 +14,6 @@ api_domain=
 short_domain=
 turnstile_site_key=
 turnstile_secret_key=
-trusted_proxy_cidr=
-trusted_proxy_cidr_seen=0
 image=
 image_seen=0
 
@@ -46,13 +44,6 @@ while [ "$#" -gt 0 ]; do
       turnstile_secret_key=$2
       shift 2
       ;;
-    --trusted-proxy-cidr)
-      [ "$trusted_proxy_cidr_seen" -eq 0 ] || fail '--trusted-proxy-cidr may be provided only once.'
-      [ "$#" -ge 2 ] || fail '--trusted-proxy-cidr requires a value.'
-      trusted_proxy_cidr=$2
-      trusted_proxy_cidr_seen=1
-      shift 2
-      ;;
     --image)
       [ "$image_seen" -eq 0 ] || fail '--image may be provided only once.'
       [ "$#" -ge 2 ] || fail '--image requires a value.'
@@ -81,28 +72,16 @@ docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
 
 cd "$PROJECT_DIRECTORY"
 
-if [ "$trusted_proxy_cidr_seen" -eq 1 ]; then
-  "$SCRIPT_DIRECTORY/configure.sh" \
-    --app-domain "$app_domain" \
-    --api-domain "$api_domain" \
-    --short-domain "$short_domain" \
-    --turnstile-site-key "$turnstile_site_key" \
-    --turnstile-secret-key "$turnstile_secret_key" \
-    --trusted-proxy-cidr "$trusted_proxy_cidr" \
-    --subweb-image "$image"
-else
-  "$SCRIPT_DIRECTORY/configure.sh" \
-    --app-domain "$app_domain" \
-    --api-domain "$api_domain" \
-    --short-domain "$short_domain" \
-    --turnstile-site-key "$turnstile_site_key" \
-    --turnstile-secret-key "$turnstile_secret_key" \
-    --subweb-image "$image"
-fi
+"$SCRIPT_DIRECTORY/configure.sh" \
+  --app-domain "$app_domain" \
+  --api-domain "$api_domain" \
+  --short-domain "$short_domain" \
+  --turnstile-site-key "$turnstile_site_key" \
+  --turnstile-secret-key "$turnstile_secret_key" \
+  --subweb-image "$image"
 
 "$SCRIPT_DIRECTORY/validate-compose.sh"
-docker compose pull gateway redis myurls-app myurls-short subconverter
-docker compose build request-policy
+docker compose pull subweb redis myurls
 docker compose up -d --no-build --pull never --wait
 docker compose ps
 

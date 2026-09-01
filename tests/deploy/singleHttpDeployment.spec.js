@@ -23,14 +23,14 @@ describe('single HTTP deployment contract', () => {
     const compose = await readFile(rootFile('compose.yaml'), 'utf8');
     const validator = await readFile(rootFile('scripts/validate-compose.sh'), 'utf8');
 
-    expect(compose).toContain('  gateway:');
+    expect(compose).toContain('  subweb:');
     expect(compose).toContain('127.0.0.1:${SUBWEB_PORT:-18080}:8080');
     expect(compose).not.toContain('gateway-http:');
     expect(compose).not.toContain('gateway-tls:');
     expect(compose).not.toContain('profiles:');
     expect(compose).not.toContain('TLS_CERT_PATH');
     expect(compose).not.toContain('TLS_KEY_PATH');
-    expect(validator).toContain('expectedGateway="gateway"');
+    expect(validator).toContain('expectedGateway=subweb');
     expect(validator).not.toContain('COMPOSE_PROFILES');
   });
 

@@ -33,19 +33,19 @@ describe('Docker runtime contract', () => {
     expect(startScript).not.toContain('normalize_platform_upstream');
   });
 
-  it('provides an integrated Compose deployment with one loopback gateway', async () => {
+  it('provides a compact three-service Compose deployment with one loopback entrypoint', async () => {
     const compose = await readFile(rootFile('compose.yaml'), 'utf8');
 
-    expect(compose).toContain('x-gateway-common:');
     expect(compose).toContain('x-runtime-environment: &runtime-environment');
     expect(compose).toContain('TZ: Asia/Shanghai');
     expect(compose).toContain('x-runtime-logging: &runtime-logging');
     expect(compose).toContain('driver: json-file');
     expect(compose).toContain('max-size: "10m"');
     expect(compose).toContain('max-file: "3"');
-    expect(compose).toContain('gateway:');
-    expect(compose).not.toContain('gateway-http:');
-    expect(compose).not.toContain('gateway-tls:');
+    expect(compose).toContain('subweb:');
+    expect(compose).toContain('myurls:');
+    expect(compose).toContain('redis:');
+    expect(compose).not.toContain('request-policy:');
     expect(compose).not.toContain('profiles:');
     expect(compose).toContain('${SUBWEB_PORT:-18080}:8080');
     expect(compose).toContain('redis-data:');
@@ -68,9 +68,8 @@ describe('Docker runtime contract', () => {
     expect(verifier).toContain('--tmpfs /tmp:uid=101,gid=101,mode=0700');
     expect(verifier).toContain('--tmpfs /usr/share/nginx/html/conf:uid=101,gid=101,mode=0700');
     expect(verifier).toContain("-e SHORT_DOMAIN='short.example.com'");
-    expect(verifier).toContain("-e SUBCONVERTER_UPSTREAM='http://subconverter:25500'");
-    expect(verifier).toContain("-e MYURLS_APP_UPSTREAM='http://myurls-app-edge:3000'");
-    expect(verifier).toContain("-e MYURLS_SHORT_UPSTREAM='http://myurls-short-edge:3000'");
+    expect(verifier).toContain("-e SUBCONVERTER_UPSTREAM='http://127.0.0.1:25500'");
+    expect(verifier).toContain("-e MYURLS_UPSTREAM='http://myurls:3000'");
     expect(verifier).not.toContain('MYURLS_API_TOKEN');
     expect(verifier).toContain("ReadonlyRootfs");
     expect(verifier).toContain("CapDrop");
@@ -102,6 +101,9 @@ describe('Docker runtime contract', () => {
       rootFile('scripts/verify-integrated-stack.sh'),
       'utf8',
     );
+    const simpleVerifier = await readFile(rootFile('scripts/verify-simple-stack.sh'), 'utf8');
+    const releaseVerifier = await readFile(rootFile('scripts/verify-release.sh'), 'utf8');
+    const simpleDockerfile = await readFile(rootFile('Dockerfile.simple'), 'utf8');
     const operationsVerifier = await readFile(
       rootFile('scripts/verify-redis-operations.sh'),
       'utf8',
@@ -136,13 +138,36 @@ describe('Docker runtime contract', () => {
       );
     }
     expect(packageJson.scripts['verify:container']).toBe('./scripts/verify-container.sh subweb:ci');
-    expect(packageJson.scripts['verify:integration']).toBe('./scripts/verify-integrated-stack.sh');
+    expect(packageJson.scripts['verify:simple']).toBe('./scripts/verify-simple-stack.sh');
+    expect(packageJson.scripts['verify:integration']).toBe(
+      'npm run verify:simple && ./scripts/verify-integrated-stack.sh',
+    );
+    expect(simpleVerifier).toContain('compose up --build --detach --wait');
+    expect(simpleVerifier).toContain('default Compose must define only myurls, redis, and subweb');
+    expect(simpleVerifier).toContain('SHORT domain exposed MyUrls API');
+    expect(simpleVerifier).toContain('MANAGED_CONFIG_PREFIX');
+    expect(simpleVerifier).toContain('SUBCONVERTER_SECURITY_PROFILE');
+    expect(simpleVerifier).toContain('SUBCONVERTER_ALLOW_PUBLIC_UPLOAD');
     expect(workflow).toContain('if: always()');
     expect(workflow).toContain('rm -f .env');
     expect(workflow).not.toMatch(/upload-artifact[\s\S]{0,500}(?:\.env|fullchain\.pem|privkey\.pem|compose\.log|services\.log)/);
     expect(workflow).toContain('aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25');
     expect(workflow).toContain('trivyignores: .trivyignore.redis');
-    expect(workflow).toContain('trivyignores: .trivyignore.subconverter');
+    expect(workflow).toContain('docker compose -f compose.hardened.yaml build request-policy');
+    const finalImageScan = workflow.slice(
+      workflow.indexOf('- name: Scan final image'),
+      workflow.indexOf('- name: Scan external runtime images (Redis)'),
+    );
+    const releaseCandidateScan = workflow.slice(
+      workflow.indexOf('- name: Scan release candidate'),
+      workflow.indexOf('- name: Promote verified candidate'),
+    );
+    expect(finalImageScan).toContain('trivyignores: .trivyignore.subconverter');
+    expect(releaseCandidateScan).toContain('trivyignores: .trivyignore.subconverter');
+    expect(releaseVerifier).toContain('docker compose -f compose.hardened.yaml build request-policy');
+    expect(releaseVerifier).toContain('--ignorefile .trivyignore.subconverter "$candidate_image"');
+    expect(simpleDockerfile).toContain('FROM ${SUBCONVERTER_IMAGE} AS runtime');
+    expect(simpleDockerfile).toContain('USER 101');
     expect(workflow).toContain('needs: quality');
     expect(workflow).toContain('packages: write');
     expect(workflow).not.toContain('id-token: write');

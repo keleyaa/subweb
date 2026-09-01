@@ -1,5 +1,5 @@
 services:
-  myurls-app:
+  myurls:
     environment:
       NODE_ENV: test
       PUBLIC_BASE_URL: "http://127.0.0.1:${LOCAL_MYURLS_PORT:-18082}"
@@ -10,36 +10,3 @@ services:
       TURNSTILE_SECRET_KEY: ""
     ports:
       - "127.0.0.1:${LOCAL_MYURLS_PORT:-18082}:3000"
-    networks:
-      local-published: {}
-
-  myurls-short:
-    environment:
-      NODE_ENV: test
-      PUBLIC_BASE_URL: "http://127.0.0.1:${LOCAL_SHORT_MYURLS_PORT:-18083}"
-      TRUST_PROXY_CIDRS: ""
-      TURNSTILE_ENABLED: "false"
-      TURNSTILE_MODE: cloudflare
-      TURNSTILE_SITE_KEY: ""
-      TURNSTILE_SECRET_KEY: ""
-      TURNSTILE_HOSTNAME: short.local.test
-    ports:
-      - "127.0.0.1:${LOCAL_SHORT_MYURLS_PORT:-18083}:3000"
-    networks:
-      local-published: {}
-
-  subconverter:
-    environment:
-      HTTPS_PROXY: ""
-      https_proxy: ""
-      NO_PROXY: "127.0.0.1,localhost"
-      no_proxy: "127.0.0.1,localhost"
-    ports:
-      - "127.0.0.1:${LOCAL_SUBCONVERTER_PORT:-25500}:25500"
-    networks:
-      local-published: {}
-
-networks:
-  # Internal networks do not publish container ports to the host.
-  local-published:
-    internal: false

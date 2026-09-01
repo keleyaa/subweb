@@ -6,8 +6,7 @@ fail() {
   exit 1
 }
 
-expectedGateway="gateway"
-
+expectedGateway=subweb
 validation_env_file=""
 if [ ! -f .env ]; then
   validation_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-compose-validation.XXXXXX")
@@ -35,7 +34,6 @@ compose_config() {
 }
 
 compose_config config --quiet
-
 compose_json=$(compose_config config --format json)
 printf '%s\n' "$compose_json" | node -e '
 let input = "";
@@ -44,88 +42,55 @@ process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => { input += chunk; });
 process.stdin.on("end", () => {
   let config;
-  try {
-    config = JSON.parse(input);
-  } catch {
-    console.error("Compose validation error: docker compose returned invalid JSON.");
-    process.exit(1);
-  }
+  try { config = JSON.parse(input); } catch { console.error("Compose validation error: invalid JSON."); process.exit(1); }
   const services = config.services ?? {};
-  const hasOwnPorts = (service) =>
-    service !== null &&
-    typeof service === "object" &&
-    Object.prototype.hasOwnProperty.call(service, "ports");
+  const expectedServices = [expectedGateway, "myurls", "redis"];
+  if (Object.keys(services).sort().join("\n") !== expectedServices.sort().join("\n")) {
+    console.error("Compose validation error: default deployment must contain only subweb, myurls, and redis.");
+    process.exitCode = 1;
+  }
+  const hasOwnPorts = (service) => service !== null && typeof service === "object" && Object.hasOwn(service, "ports");
   for (const [name, service] of Object.entries(services)) {
     if (hasOwnPorts(service) && !Array.isArray(service.ports)) {
       console.error(`Compose validation error: service ${name} ports must be an array when present.`);
       process.exitCode = 1;
     }
   }
-  const publishedServices = Object.entries(services).filter(
-    ([, service]) => Array.isArray(service?.ports) && service.ports.length > 0,
-  );
-  if (
-    publishedServices.length !== 1 ||
-    publishedServices[0][0] !== expectedGateway
-  ) {
+  const publishedServices = Object.entries(services).filter(([, service]) => Array.isArray(service?.ports) && service.ports.length > 0);
+  if (publishedServices.length !== 1 || publishedServices[0][0] !== expectedGateway) {
     console.error(`Compose validation error: only ${expectedGateway} may publish ports.`);
     process.exitCode = 1;
   }
   const gatewayPorts = services[expectedGateway]?.ports;
   const gatewayPort = gatewayPorts?.length === 1 ? gatewayPorts[0] : null;
-  const isPortNumber = (value) => {
-    const number = Number(value);
-    return /^\d+$/.test(String(value)) && Number.isInteger(number) && number >= 1 && number <= 65535;
-  };
-  if (
-    !gatewayPort ||
-    typeof gatewayPort !== "object" ||
-    gatewayPort.host_ip !== "127.0.0.1" ||
-    gatewayPort.target !== 8080 ||
-    !isPortNumber(gatewayPort.published)
-  ) {
-    console.error(
-      `Compose validation error: ${expectedGateway} must publish container port 8080 on host loopback.`,
-    );
+  const portNumber = (value) => /^\d+$/.test(String(value)) && Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 65535;
+  if (!gatewayPort || typeof gatewayPort !== "object" || gatewayPort.host_ip !== "127.0.0.1" || gatewayPort.target !== 8080 || !portNumber(gatewayPort.published)) {
+    console.error(`Compose validation error: ${expectedGateway} must publish container port 8080 on host loopback.`);
     process.exitCode = 1;
   }
-  for (const name of ["redis", "myurls-app", "myurls-short", "subconverter", "request-policy"]) {
-    if (!services[name]) {
+  for (const name of ["redis", "myurls"]) {
+    const service = services[name];
+    if (!service) {
       console.error(`Compose validation error: required internal service ${name} is missing.`);
       process.exitCode = 1;
-    } else if (
-      hasOwnPorts(services[name]) &&
-      (!Array.isArray(services[name].ports) || services[name].ports.length > 0)
-    ) {
+    } else if (hasOwnPorts(service) && (!Array.isArray(service.ports) || service.ports.length > 0)) {
       console.error(`Compose validation error: internal service ${name} must not publish ports.`);
       process.exitCode = 1;
     }
   }
-
-  const networks = config.networks ?? {};
-  for (const name of ["myurls-data", "myurls-edge", "redis-policy", "subconverter-egress"]) {
-    if (networks[name]?.internal !== true) {
-      console.error(`Compose validation error: ${name} must be an internal network.`);
+  for (const [name, service] of Object.entries(services)) {
+    const actualNetworks = Object.keys(service?.networks ?? {}).sort();
+    if (actualNetworks.length !== 1 || actualNetworks[0] !== "default") {
+      console.error(`Compose validation error: service ${name} must use only the default private network.`);
       process.exitCode = 1;
     }
   }
-
-  const expectedNetworks = {
-    redis: ["myurls-data", "redis-policy"],
-    "myurls-app": ["myurls-data", "myurls-edge"],
-    "myurls-short": ["myurls-data", "myurls-edge"],
-    gateway: ["default", "myurls-edge"],
-    subconverter: ["subconverter-egress"],
-    "request-policy": ["default", "redis-policy", "subconverter-egress"],
-  };
-  for (const [name, expected] of Object.entries(expectedNetworks)) {
-    const actual = Object.keys(services[name]?.networks ?? {}).sort();
-    if (actual.join("\n") !== [...expected].sort().join("\n")) {
-      console.error(`Compose validation error: service ${name} has an unsafe network topology.`);
-      process.exitCode = 1;
-    }
+  const defaultNetwork = config.networks?.default;
+  if (defaultNetwork?.internal === true) {
+    console.error("Compose validation error: default network must allow outbound access for the bundled converter.");
+    process.exitCode = 1;
   }
 });
 ' "$expectedGateway"
 
-printf 'Compose gateway, network, and published-port contracts are valid.\n'
+printf 'Compose simple deployment, network, and published-port contracts are valid.\n'

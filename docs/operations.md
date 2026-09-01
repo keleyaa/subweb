@@ -2,13 +2,15 @@
 
 ## 状态与日志
 
-Docker Compose 运行 `gateway`、`request-policy`、`subconverter`、两个 MyUrls Rust v2.0.6 实例（`myurls-app`、`myurls-short`）和 `redis`，共 6 个服务；只有 Gateway 的 `8080` 端口绑定到宿主机 loopback。
+默认 Docker Compose 运行 `subweb`、一个 MyUrls Rust v2.0.6 实例（`myurls`）和 `redis`，共 3 个服务；只有 Subweb 的 `8080` 端口绑定到宿主机 loopback。
 
 ```sh
 docker compose ps
-docker compose logs --tail=200 gateway request-policy myurls-app myurls-short subconverter redis
+docker compose logs --tail=200 subweb myurls redis
 docker compose config --services
 ```
+
+`compose.hardened.yaml` 运行 `gateway`、`request-policy`、`subconverter`、两个 MyUrls 实例（`myurls-app`、`myurls-short`）和 `redis`。使用它时为命令添加 `-f compose.hardened.yaml`。
 
 本机源码运行时使用：
 
@@ -20,7 +22,7 @@ npm run dev:status
 
 Docker 服务和 Gateway 镜像统一使用 `Asia/Shanghai` 时区。Gateway、MyUrls 与 Request Policy 的日志只记录 ISO 8601 时间、方法、隐私安全的路由模板、状态码、耗时和错误分类；真实短码统一显示为 `/:shortKey`。日志不记录 Query、请求体、Authorization、原始 IP、User-Agent、订阅 URL、Token、Redis 密码或 IP 哈希秘密。
 
-MyUrls 日志级别由 `.env` 的 `MYURLS_LOG_LEVEL` 控制；日志量较大时，可设为 `warn` 后重建两个 MyUrls 容器。访问日志由 MyUrls 写入 stdout，再由 Docker `json-file` 驱动统一轮转。需要审计特定版本时，应在 `.env` 中显式指定已验证、与当前 Rust `/api/links` 契约兼容的镜像，并始终限制 Docker 管理权限。
+MyUrls 日志级别由 `.env` 的 `MYURLS_LOG_LEVEL` 控制；日志量较大时，可设为 `warn` 后重建默认模式的 `myurls` 容器。Hardened 模式则重建 `myurls-app` 与 `myurls-short`。访问日志由 MyUrls 写入 stdout，再由 Docker `json-file` 驱动统一轮转。需要审计特定版本时，应在 `.env` 中显式指定已验证、与当前 Rust `/api/links` 契约兼容的镜像，并始终限制 Docker 管理权限。
 
 所有容器的 `json-file` 标准输出日志限制为单文件 `10 MB`、最多 3 个文件。SubConverter 的输出先经过项目内置过滤器：完整 URI、编码后的 `url` / `link` 请求来源和 Authorization 会变为 `[redacted]`。成功的 `/healthz` 不写入 Gateway 访问日志；当 `MYURLS_LOG_LEVEL=warn` 时，MyUrls 会抑制成功记录，但保留失败的健康检查。
 
@@ -28,27 +30,33 @@ MyUrls 日志级别由 `.env` 的 `MYURLS_LOG_LEVEL` 控制；日志量较大时
 
 ## 受控订阅出站
 
-Request Policy Service 同时承担 `/sub` 请求策略与 SubConverter 专用 HTTPS CONNECT egress proxy。它在单一边界内解析远程 HTTPS 主机、拒绝 loopback / 私网 / link-local / 保留地址，并按已验证 IP 建立连接；SubConverter 仅加入内部 `subconverter-egress` 网络，没有默认网络的直接出站路径。
+默认 `subweb` 中的 SubConverter 直接访问订阅源，减少了容器和网络数量，但不包含请求策略或受控 egress。`compose.hardened.yaml` 中的 Request Policy Service 同时承担 `/sub` 请求策略与 SubConverter 专用 HTTPS CONNECT egress proxy。它在单一边界内解析远程 HTTPS 主机、拒绝 loopback / 私网 / link-local / 保留地址，并按已验证 IP 建立连接；Hardened SubConverter 仅加入内部 `subconverter-egress` 网络，没有默认网络的直接出站路径。
 
 SubConverter 依赖项目受控的 `deploy/subconverter/gai.conf`，在 DNS 同时返回 IPv4 和 IPv6、但 Docker 主机没有可用 IPv6 出站路由时优先使用 IPv4。该配置不改变公开端口、DNS 策略、egress proxy 或其他容器网络行为。
 
-更新本仓库后，先验证 Compose，再重建策略服务与 SubConverter：
+更新默认部署后，先验证 Compose，再重建合并的 Subweb 容器：
 
 ```sh
 ./scripts/validate-compose.sh
-docker compose build request-policy
-docker compose up -d --no-build --force-recreate --wait request-policy subconverter
-docker compose logs --tail=100 request-policy subconverter
+docker compose up -d --build --force-recreate --wait subweb
+docker compose logs --tail=100 subweb
 ```
 
-`gai.conf` 不能修复目标规则源自身不可达、DNS 故障或 egress proxy 配置错误。需要排查订阅转换时，先检查 Request Policy 的错误分类、SubConverter 健康与 Gateway 路由；不要通过关闭 Docker 网络或添加不受控全局代理绕过边界。
+更新 hardened 部署中的策略服务与独立 SubConverter 时，使用 `docker compose -f compose.hardened.yaml build request-policy` 并在相同 `-f` 参数下重建相应服务。
 
-若升级前的 SubConverter 日志已经包含真实订阅 URL，先轮换订阅凭据，再只重建该服务以移除当前 Docker 容器日志。不要添加 `-v`，否则会一并删除 `/base` 运行卷：
+`gai.conf` 不能修复目标规则源自身不可达、DNS 故障或 egress proxy 配置错误。默认模式排查订阅转换时，先检查 Subweb 中 SubConverter 的健康与 Nginx 路由；hardened 模式再检查 Request Policy 的错误分类。不要通过关闭 Docker 网络或添加不受控全局代理绕过边界。
+
+若升级前的 SubConverter 日志已经包含真实订阅 URL，先轮换订阅凭据，再重建包含它的默认 `subweb` 容器，或 hardened 模式的独立 `subconverter` 服务。不要添加 `-v`，否则会一并删除 hardened 模式的 `/base` 运行卷：
 
 ```sh
-docker compose rm -sf subconverter
-docker compose up -d --no-build --force-recreate subconverter
-docker compose logs --tail=100 subconverter
+# 默认模式
+docker compose up -d --no-build --force-recreate subweb
+docker compose logs --tail=100 subweb
+
+# Hardened 模式
+docker compose -f compose.hardened.yaml rm -sf subconverter
+docker compose -f compose.hardened.yaml up -d --no-build --force-recreate subconverter
+docker compose -f compose.hardened.yaml logs --tail=100 subconverter
 ```
 
 Compose-first 本地模式不下载上游源码，也不生成独立日志文件。停止本机栈后，确认凭据已轮换、无需保留诊断证据时再清空该单个文件；不要删除 `.runtime/local/redis` 或整个 `.runtime/local/` 目录。任何已上传到日志平台、备份系统或工单的旧副本都需要在对应系统中单独清除。
@@ -106,7 +114,7 @@ D1 已批准采用 `cap-90d`：迁移后的 TTL 取旧 key 剩余 TTL 与 90 天
 
 维护者展示部署使用 `sub.ml1.one`、`api.ml1.one` 和 `ml1.one`。其他部署者更换域名时，应同时更新 3 条 DNS 记录、`.env`、外层代理和证书中的 SAN。
 
-更换域名：更新 3 条 DNS 记录，重新运行 `configure.sh`，更新外层代理或 SAN 证书，执行 `validate-compose.sh`。源码构建执行 `docker compose build request-policy` 后再执行 `docker compose up -d --build --wait`；镜像部署由 `docker-deploy.sh` 拉取外部镜像、构建本地 `request-policy`，再执行 `--no-build --pull never` 启动。完成后验证网页、API、短链创建、旧短码和受控订阅转换。
+更换域名：更新 3 条 DNS 记录，重新运行 `configure.sh`，更新外层代理或 SAN 证书，执行 `validate-compose.sh`，再执行 `docker compose up -d --build --wait`。默认镜像部署由 `docker-deploy.sh` 拉取锁定的运行时镜像并以 `--no-build --pull never` 启动；Hardened 模式需要额外构建本地 `request-policy`。完成后验证网页、API、短链创建、旧短码；Hardened 模式还需验证受控订阅转换。
 
 ## 公开发现性与搜索收录
 
@@ -116,7 +124,7 @@ D1 已批准采用 `cap-90d`：迁移后的 TTL 取旧 key 剩余 TTL 与 90 天
 
 API、转换请求、短链创建、短码跳转和带 query 的页面均不应被索引。Gateway 为 API 与短链路由返回 `X-Robots-Tag: noindex, nofollow, noarchive`；`robots.txt` 只是爬虫提示，不能替代访问控制，也不会消除已泄漏的 URL。
 
-Gateway 转换接口默认限制为每个来源地址每分钟 `10` 次，并全局最多同时运行 `2` 个转换；短链创建接口限制为每分钟 `20` 次；短链解析默认按 IP 每 `10` 秒 `600` 次。出现 `429` 时，先检查外层代理是否把所有用户汇聚成同一个来源地址；确认反代到 Gateway 的实际来源 IPv4 后，用精确的 `TRUSTED_PROXY_CIDR` 启用可信的 `X-Forwarded-For`，不要直接关闭内部限流或信任任意来源。
+默认模式由 Nginx 在转换、短链创建和短码解析路径上执行基础限速；它不替代 Request Policy Service 的匿名限流。Hardened 模式的转换接口默认限制为每个来源地址每分钟 `10` 次，并全局最多同时运行 `2` 个转换；短链创建接口限制为每分钟 `20` 次；短链解析默认按 IP 每 `10` 秒 `600` 次。出现 `429` 时，先检查外层代理是否把所有用户汇聚成同一个来源地址；确认反代到 Gateway 的实际来源 IPv4 后，用精确的 `TRUSTED_PROXY_CIDR` 启用可信的 `X-Forwarded-For`，不要直接关闭内部限流或信任任意来源。
 
 公开文档应只保留可验证的能力、部署方式、安全边界、版本和来源说明。不得把订阅 URL、短链、Token、用户配置、日志样本或请求 query 写入 Schema、sitemap、页面示例、截图或公开工单。
 
@@ -132,9 +140,9 @@ npm run verify:locks
 ./scripts/validate-compose.sh
 ```
 
-记录 Git commit、实际解析的各服务镜像 digest（`docker compose images`）、发布 workflow 生成的完整 `runtime_images` 回滚清单和已验证 Redis 备份。升级后检查健康、三个 Host、转换、短链创建、旧短码、日志脱敏和内部端口。失败时优先切回原 Subweb commit；`SUBWEB_IMAGE`、`REDIS_IMAGE` 和 `SUBCONVERTER_IMAGE` 可使用已验证 digest 覆盖。`MYURLS_IMAGE` 仅可单独回退到兼容当前 Rust `/api/links` 契约的镜像；回退到旧 Node `/api/v1/links` 时必须同时切回匹配的 Subweb commit。应用组件可重建，Redis 数据按已演练备份恢复。当前 Compose 中 `myurls-short` 与 Request Policy Service 尚未配置和 Gateway/Redis/`myurls-app` 相同的只读根文件系统与 capability 收紧；升级或重建时不要把它们误判为已有同等容器硬化。
+记录 Git commit、实际解析的各服务镜像 digest（`docker compose images`）、发布 workflow 生成的完整 `runtime_images` 回滚清单和已验证 Redis 备份。升级后检查健康、三个 Host、转换、短链创建、旧短码、日志脱敏和内部端口。失败时优先切回原 Subweb commit；`SUBWEB_IMAGE`、`REDIS_IMAGE` 和 `SUBCONVERTER_IMAGE` 可使用已验证 digest 覆盖。`MYURLS_IMAGE` 仅可单独回退到兼容当前 Rust `/api/links` 契约的镜像；回退到旧 Node `/api/v1/links` 时必须同时切回匹配的 Subweb commit。应用组件可重建，Redis 数据按已演练备份恢复。Hardened Compose 中 `myurls-short` 与 Request Policy Service 尚未配置和 Gateway/Redis/`myurls-app` 相同的只读根文件系统与 capability 收紧；升级或重建时不要把它们误判为已有同等容器硬化。
 
-SubConverter 镜像更新后必须重建运行时卷 `subconverter-runtime`（执行 `docker compose down`，再执行 `docker volume rm subweb_subconverter-runtime`，最后执行 `up -d --wait`）。Docker 只对空卷做 copy-up；跳过此步会静默沿用旧的 `/base` 模板。`redis-data` 是业务数据，禁止以任何方式删除。
+默认模式的 SubConverter 与 `subweb` 镜像一起更新，不使用运行时卷。Hardened 模式更新 SubConverter 镜像后必须重建运行时卷 `subconverter-runtime`（执行 `docker compose -f compose.hardened.yaml down`，再执行 `docker volume rm subweb_subconverter-runtime`，最后使用同一 `-f` 参数执行 `up -d --wait`）。Docker 只对空卷做 copy-up；跳过此步会静默沿用旧的 `/base` 模板。`redis-data` 是业务数据，禁止以任何方式删除。
 
 比较两个锁文件时先运行预检。Redis 主版本变化必须提供已验证备份和显式确认：
 

@@ -15,14 +15,14 @@ if [ ! -f .env ]; then
   printf '%s\n' 'release verification environment=ephemeral'
 fi
 
-build_request_policy() {
+build_hardened_request_policy() {
   if [ "$use_ephemeral_compose_env" -eq 1 ]; then
     env APP_DOMAIN="$APP_DOMAIN" API_DOMAIN="$API_DOMAIN" API_URL="$API_URL" SHORT_DOMAIN="$SHORT_DOMAIN" \
       TURNSTILE_SITE_KEY="$TURNSTILE_SITE_KEY" TURNSTILE_SECRET_KEY="$TURNSTILE_SECRET_KEY" \
       IP_HASH_SECRET="$IP_HASH_SECRET" REDIS_PASSWORD="$REDIS_PASSWORD" \
-      docker compose build request-policy
+      docker compose -f compose.hardened.yaml build request-policy
   else
-    docker compose build request-policy
+    docker compose -f compose.hardened.yaml build request-policy
   fi
 }
 
@@ -43,7 +43,7 @@ stage production-readiness node scripts/verify-production-readiness.mjs
 stage compose npm run verify:compose
 stage documentation npm run verify:docs
 stage container ./scripts/verify-container.sh subweb:release-check
-stage request-policy-container build_request_policy
+stage hardened-request-policy-container build_hardened_request_policy
 locked_images=$(node - <<'NODE'
 const fs = require('node:fs');
 const lock = JSON.parse(fs.readFileSync('deploy/versions.lock.json', 'utf8'));
@@ -58,8 +58,9 @@ candidate_image=$1
 redis_image=$2
 subconverter_image=$3
 myurls_image=$4
-stage image-security ./scripts/verify-image-security.sh "$candidate_image" "$myurls_image"
-stage image-security-request-policy ./scripts/verify-image-security.sh subweb-request-policy:local
+stage image-security ./scripts/verify-image-security.sh --ignorefile .trivyignore.subconverter "$candidate_image"
+stage image-security-myurls ./scripts/verify-image-security.sh "$myurls_image"
+stage image-security-hardened-request-policy ./scripts/verify-image-security.sh subweb-request-policy:local
 stage image-security-redis ./scripts/verify-image-security.sh --ignorefile .trivyignore.redis "$redis_image"
 stage image-security-subconverter ./scripts/verify-image-security.sh --ignorefile .trivyignore.subconverter "$subconverter_image"
 stage redis-operations ./scripts/verify-redis-operations.sh

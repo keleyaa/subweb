@@ -25,6 +25,8 @@ describe('release evidence and command gate', () => {
       'stage documentation npm run verify:docs',
       'stage container ./scripts/verify-container.sh subweb:release-check',
       'stage image-security ./scripts/verify-image-security.sh',
+      'stage image-security-myurls ./scripts/verify-image-security.sh',
+      'stage image-security-hardened-request-policy ./scripts/verify-image-security.sh',
       'stage image-security-redis ./scripts/verify-image-security.sh',
       'stage image-security-subconverter ./scripts/verify-image-security.sh',
       'stage redis-operations ./scripts/verify-redis-operations.sh',
@@ -40,7 +42,7 @@ describe('release evidence and command gate', () => {
     expect(source).toMatch(/^set -eu$/mu);
   });
 
-  it('scopes an ephemeral Compose environment to the policy-image build when local deployment config is absent', () => {
+  it('scopes an ephemeral Compose environment to the hardened policy-image build when local deployment config is absent', () => {
     const source = fs.readFileSync(path.join(root, 'scripts/verify-release.sh'), 'utf8');
 
     expect(source).toContain('if [ ! -f .env ]; then');
@@ -56,9 +58,10 @@ describe('release evidence and command gate', () => {
     ]) {
       expect(source).toContain(assignment);
     }
-    expect(source).toContain('build_request_policy() {');
+    expect(source).toContain('build_hardened_request_policy() {');
     expect(source).toContain('env APP_DOMAIN="$APP_DOMAIN"');
-    expect(source).toContain('stage request-policy-container build_request_policy');
+    expect(source).toContain('docker compose -f compose.hardened.yaml build request-policy');
+    expect(source).toContain('stage hardened-request-policy-container build_hardened_request_policy');
     expect(source).not.toContain('export APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN');
   });
 

@@ -36,7 +36,7 @@ NODE
 fi
 
 cleanup() {
-  COMPOSE_FILE=$project_root/compose.yaml:$project_root/compose.test.yaml \
+  COMPOSE_FILE=$project_root/compose.hardened.yaml:$project_root/compose.test.yaml \
   COMPOSE_ENV_FILES=$env_file COMPOSE_PROJECT_NAME=$project_name \
     docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$temporary_directory"
@@ -65,7 +65,7 @@ trap cleanup EXIT HUP INT TERM
 } > "$env_file"
 chmod 0600 "$env_file"
 
-export COMPOSE_FILE=$project_root/compose.yaml:$project_root/compose.test.yaml
+export COMPOSE_FILE=$project_root/compose.hardened.yaml:$project_root/compose.test.yaml
 export COMPOSE_ENV_FILES=$env_file
 export COMPOSE_PROJECT_NAME=$project_name
 export SUBWEB_OPERATIONS_RUNTIME_DIR=$temporary_directory/rollback

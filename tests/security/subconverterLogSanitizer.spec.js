@@ -40,14 +40,22 @@ describe('SubConverter log sanitization', () => {
     expect(result.stdout).toContain('Authorization: [redacted]');
   });
 
-  it('uses the sanitizer and a transient privacy configuration in the Compose service', async () => {
+  it('uses the sanitizer and a transient privacy configuration in both deployment modes', async () => {
     await expect(access(rootFile('scripts/subconverter-docker-entrypoint.sh'))).resolves.toBeUndefined();
     await expect(access(rootFile('scripts/subconverter-log-filter.awk'))).resolves.toBeUndefined();
-    const compose = await readFile(rootFile('compose.yaml'), 'utf8');
+    const [hardenedCompose, simpleDockerfile, simpleStart] = await Promise.all([
+      readFile(rootFile('compose.hardened.yaml'), 'utf8'),
+      readFile(rootFile('Dockerfile.simple'), 'utf8'),
+      readFile(rootFile('scripts/simple-start.sh'), 'utf8'),
+    ]);
 
-    expect(compose).toContain('/usr/local/bin/subweb-subconverter-entrypoint');
-    expect(compose).toContain('/usr/local/bin/subweb-log-supervisor');
-    expect(compose).toContain('/usr/local/bin/subweb-log-filter.awk');
-    expect(compose).toContain('/run/subconverter:mode=0700');
+    expect(hardenedCompose).toContain('/usr/local/bin/subweb-subconverter-entrypoint');
+    expect(hardenedCompose).toContain('/usr/local/bin/subweb-log-supervisor');
+    expect(hardenedCompose).toContain('/usr/local/bin/subweb-log-filter.awk');
+    expect(hardenedCompose).toContain('/run/subconverter:mode=0700');
+    expect(simpleDockerfile).toContain('/usr/local/bin/subweb-subconverter-entrypoint');
+    expect(simpleDockerfile).toContain('/usr/local/bin/subweb-log-supervisor');
+    expect(simpleDockerfile).toContain('/usr/local/bin/subweb-log-filter.awk');
+    expect(simpleStart).toContain('/tmp/subconverter');
   });
 });

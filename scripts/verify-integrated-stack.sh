@@ -10,7 +10,7 @@ docker compose version >/dev/null 2>&1 || { printf '%s\n' 'Docker Compose v2 is 
 
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 repository_root=$(CDPATH= cd -- "$script_directory/.." && pwd -P)
-base_compose=$repository_root/compose.yaml
+base_compose=$repository_root/compose.hardened.yaml
 test_compose=$repository_root/compose.test.yaml
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/subweb-integration.XXXXXX")
 project_name=subweb-verify-$(openssl rand -hex 6)

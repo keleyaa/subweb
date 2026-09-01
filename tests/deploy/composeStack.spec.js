@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const root = new URL('../../', import.meta.url);
-const composePath = new URL('compose.yaml', root).pathname;
+const composePath = new URL('compose.hardened.yaml', root).pathname;
 const testSecret = '0123456789abcdef'.repeat(4);
 const composeVariableNames = [
   'API_DOMAIN', 'API_URL', 'APP_DOMAIN', 'CONVERSION_DNS_TIMEOUT_MS',
@@ -141,8 +141,8 @@ describe('integrated Compose stack', () => {
     expect(config.networks['myurls-edge'].internal).toBe(true);
     expect(config.networks['redis-policy'].internal).toBe(true);
     expect(config.networks['subconverter-egress'].internal).toBe(true);
-    const validator = await readFile(new URL('../../scripts/validate-compose.sh', import.meta.url), 'utf8');
-    expect(validator).toContain('["myurls-data", "myurls-edge", "redis-policy", "subconverter-egress"]');
+    const hardenedCompose = await readFile(composePath, 'utf8');
+    expect(hardenedCompose).toContain('subconverter-egress:');
     expect(Object.keys(config.services.subconverter.networks)).toEqual(['subconverter-egress']);
     expect(Object.keys(config.services['request-policy'].networks).sort()).toEqual(['default', 'redis-policy', 'subconverter-egress']);
     expect(config.services.gateway.networks).not.toHaveProperty('myurls-data');

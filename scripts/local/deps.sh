@@ -10,20 +10,19 @@ cd "$local_project_root"
 
 case "$1" in
   up)
-    docker compose up -d --wait redis myurls-app myurls-short subconverter
+    docker compose up -d --build --remove-orphans --wait redis myurls subweb
     ;;
   status)
-    docker compose ps redis myurls-app myurls-short subconverter
+    docker compose ps redis myurls subweb
     curl --connect-timeout 5 --max-time 15 --fail --silent --show-error "http://127.0.0.1:$local_myurls_port/health/ready" >/dev/null \
-      || local_fail 'APP MyUrls is not ready.'
-    curl --connect-timeout 5 --max-time 15 --fail --silent --show-error "http://127.0.0.1:$local_short_myurls_port/health/ready" >/dev/null \
-      || local_fail 'SHORT MyUrls is not ready.'
-    curl --connect-timeout 5 --max-time 15 --fail --silent --show-error "http://127.0.0.1:$local_subconverter_port/healthz" >/dev/null \
-      || local_fail 'SubConverter is not ready.'
+      || local_fail 'MyUrls is not ready.'
+    curl --connect-timeout 5 --max-time 15 --fail --silent --show-error \
+      --header 'Host: app.local.test' "http://127.0.0.1:$local_subweb_port/healthz" >/dev/null \
+      || local_fail 'Subweb and bundled SubConverter are not ready.'
     printf '%s\n' 'Local dependencies are ready.'
     ;;
   down)
-    docker compose stop myurls-app myurls-short subconverter redis
+    docker compose stop subweb myurls redis
     ;;
   *) local_fail 'usage: deps.sh up|status|down' ;;
 esac

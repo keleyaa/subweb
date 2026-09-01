@@ -60,8 +60,8 @@ jobs:
       - name: Verify container runtime
         run: npm run verify:container
 
-      - name: Build request policy image
-        run: docker compose build request-policy
+      - name: Build hardened request policy image
+        run: docker compose -f compose.hardened.yaml build request-policy
 
       # Export the exact locked artifacts so integration and vulnerability
       # scans inspect the same images as production defaults.
@@ -109,6 +109,9 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: subweb:ci
+          # The final image derives from the locked SubConverter image, so it
+          # carries the same reviewed OpenSSL exception.
+          trivyignores: .trivyignore.subconverter
           format: table
           exit-code: "1"
           ignore-unfixed: true
@@ -202,6 +205,7 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
+          file: ./Dockerfile.simple
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: mode=max
@@ -214,6 +218,9 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ghcr.io/${{ env.GHCR_IMAGE }}@${{ steps.image.outputs.digest }}
+          # The candidate derives from the locked SubConverter image, so it
+          # carries the same reviewed OpenSSL exception.
+          trivyignores: .trivyignore.subconverter
           format: table
           exit-code: "1"
           ignore-unfixed: true

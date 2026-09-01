@@ -1,6 +1,6 @@
 # 本地开发
 
-本地开发采用 Vite + Docker Compose。Vite 运行 Subweb 页面；Compose 运行 Redis、两个 MyUrls Rust v2.0.6 实例和 SubConverter。Compose override 为需要被宿主机访问的本地端口服务增加专用的非 internal `local-published` 网络；这只服务于本地调试，不改变生产 Compose 的网络隔离。此模式为了调试直接暴露本机 SubConverter 端口，因此**不复现生产的 Gateway、Request Policy Service 与 HTTPS CONNECT egress 边界**。只使用可信测试订阅；完整匿名请求安全验证请运行 Docker 集成门禁。
+本地开发采用 Vite + Docker Compose。Vite 运行 Subweb 页面；Compose 运行与默认部署相同的 `subweb`、一个 MyUrls Rust v2.0.6 实例和 Redis。`subweb` 在容器内同时运行 Nginx 和 SubConverter，Compose override 只将 `subweb` 与 MyUrls 的调试端口绑定到 loopback。此模式直接使用默认部署边界，不提供 hardened Compose 的 Request Policy、DNS/SSRF 校验、匿名限流或 HTTPS CONNECT egress 约束；只使用可信测试订阅。
 
 ## 前提
 
@@ -15,7 +15,7 @@ npm ci
 npm run dev
 ```
 
-打开 `http://127.0.0.1:5173/`。Vite 将 `/short-api/links` 同源代理到 `http://127.0.0.1:18082/api/links`；转换请求使用 `http://127.0.0.1:25500`。不要在其他项目目录执行这些脚本。
+打开 `http://127.0.0.1:5173/`。Vite 将 `/short-api/links` 同源代理到 `http://127.0.0.1:18082/api/links`；转换请求通过 `http://127.0.0.1:18081/sub` 进入合并容器。不要在其他项目目录执行这些脚本。
 
 ## 生命周期
 
@@ -32,18 +32,17 @@ npm run verify:local
 ```sh
 LOCAL_VITE_PORT=5174 \
 LOCAL_MYURLS_PORT=18092 \
-LOCAL_SHORT_MYURLS_PORT=18093 \
-LOCAL_SUBCONVERTER_PORT=25501 \
+LOCAL_SUBWEB_PORT=18091 \
 npm run dev
 ```
 
-端口必须互不相同。生成的私有环境位于 `.runtime/local/compose.env`，权限为 `0600`，不应提交或直接输出。
+三个端口必须互不相同。生成的私有环境位于 `.runtime/local/compose.env`，权限为 `0600`，不应提交或直接输出。
 
 ## 验证边界
 
-`npm run verify:local` 验证页面、MyUrls JSON 创建和 `302` 跳转。它不验证生产 egress proxy、DNS rebinding 防护、Gateway Host 隔离、Turnstile 或 Redis 恢复。
+`npm run verify:local` 验证页面、合并 Subweb 容器健康、MyUrls JSON 创建和 `302` 跳转。它不验证 hardened Compose 的 egress proxy、DNS rebinding 防护、Request Policy 限流、Turnstile 或 Redis 恢复。
 
-完整的生产边界由以下命令覆盖：
+完整的 hardened 边界由以下命令覆盖：
 
 ```sh
 npm run verify:integration

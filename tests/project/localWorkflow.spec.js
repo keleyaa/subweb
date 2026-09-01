@@ -27,7 +27,8 @@ describe('Compose-first local workflow contract', () => {
     ]);
     expect(common).toContain('LOCAL_VITE_PORT');
     expect(common).toContain('LOCAL_MYURLS_PORT');
-    expect(common).toContain('LOCAL_SUBCONVERTER_PORT');
+    expect(common).toContain('LOCAL_SUBWEB_PORT');
     expect(override).not.toMatch(/redis:[\s\S]*?ports:/u);
+    expect(override).not.toContain('subconverter:');
   });
 });

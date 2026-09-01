@@ -19,37 +19,23 @@
 
 ## 已验证的启动配置
 
-2026-08-01 使用上述 digest 实际启动容器时，采用了以下配置：
+Subweb 默认 Compose 将下列配置注入合并后的 `subweb` 容器：
 
 ```text
-MANAGED_CONFIG_PREFIX=http://127.0.0.1:25500
+MANAGED_CONFIG_PREFIX=<API_URL>
 SUBCONVERTER_SECURITY_PROFILE=public
 SUBCONVERTER_ALLOW_PUBLIC_UPLOAD=false
 ```
 
-镜像工作目录为 `/base`，启动命令为 `/usr/local/bin/start-subconverter`。上游镜像在未显式
-设置 `PREF_PATH` 时会从 `/base/pref.example.toml` 生成 `/base/pref.toml`。这是上游单独运行时的
-通用行为。本项目的 Compose 不使用该持久配置路径，以免部署者的旧配置恢复详细请求日志。不要覆盖整个
-`/base`，以免遮盖镜像自带资源。`/base/stats` 仅在启用统计功能时需要持久化。
+`API_URL` 必须是面向客户端的转换入口；不得回退为容器内部的 `127.0.0.1:25500`。
 
-集成 Compose 不接受部署者留在卷内的 `pref.toml` 作为运行配置。每次启动都会从镜像自带的
-`pref.example.toml` 在 `/base` 中重新派生 `pref.subweb.toml`，强制 `log_level = "warn"` 与
-`print_debug_info = false`，避免旧命名卷重新启用详细请求日志。SubConverter 标准输出还会在进入 Docker
-日志驱动前经过项目过滤器，完整 URI、编码 `url`/`link` 参数和 Authorization 值不会写入容器日志。
-实际容器检查确认，该上游镜像仍需以 root 身份启动，但根文件系统可以保持只读。命名卷
-`subconverter-runtime` 挂到 `/base`
-时，Docker 首次挂载会把镜像中完整的 `/base` 复制进空卷，启动脚本可在其中生成
-`pref.toml`，同时不会开放宿主机端口或放宽 `cap_drop: ALL`、
-`no-new-privileges:true`。
+镜像工作目录为 `/base`，启动命令为 `/usr/local/bin/start-subconverter`。上游镜像在未显式设置 `PREF_PATH` 时会从 `/base/pref.example.toml` 生成 `/base/pref.toml`。这是上游单独运行时的通用行为。
 
-`subconverter-runtime` 只是可重建的镜像运行时副本，不是 Redis 那类业务持久数据，
-部署不得依赖其中保存业务状态。升级锁定镜像后，Docker 不会把新镜像的
-`/base` 复制进已有卷，因此升级后需先删除旧卷让新镜像重新填充 `/base`。先用 `docker compose config --volumes` 确认当前 Compose project 实际生成的运行时卷名；默认 project 才可能是 `subweb_subconverter-runtime`。确认新版本验证通过后再删除旧卷，并保留旧卷直到确认无需回滚。
+默认 Compose 使用非 root、只读的合并 `subweb` 容器。它会把镜像自带 `/base` 复制到私有 tmpfs 的 `/tmp/subconverter/base`，再从 `pref.example.toml` 生成 `pref.subweb.toml`，强制 `log_level = "warn"` 和 `print_debug_info = false`。这既保留上游资源的相对路径，又不让旧配置恢复详细请求日志。SubConverter 标准输出还会在进入 Docker 日志驱动前经过项目过滤器，完整 URI、编码 `url`/`link` 参数和 Authorization 值不会写入容器日志。
 
-集成 Compose 还会将本目录的 `gai.conf` 只读挂载到 `/etc/gai.conf`。当 Docker 主机能解析 IPv6 地址却
-没有可用 IPv6 默认路由时，这会让 SubConverter 使用的 glibc/libcurl 优先选择 IPv4，减少远程规则集下载
-因 IPv6 黑洞失败的概率。该策略不会开放端口、设置代理或修改其他容器；更新后只需重建
-`subconverter` 服务即可生效。
+Hardened Compose 的独立 SubConverter 保留名为 `subconverter-runtime` 的 `/base` 运行卷，并在启动时从 `pref.example.toml` 重新派生受控偏好文件。该卷只是可重建的镜像运行时副本，不是 Redis 那类业务持久数据；升级锁定镜像后必须删除并重建旧卷，让 Docker 重新复制新版 `/base`。先用 `docker compose -f compose.hardened.yaml config --volumes` 确认当前项目的实际卷名；默认项目才可能是 `subweb_subconverter-runtime`。确认新版本验证通过后再删除旧卷，并保留旧卷直到确认无需回滚。
+
+Hardened Compose 还会将本目录的 `gai.conf` 只读挂载到 `/etc/gai.conf`。当 Docker 主机能解析 IPv6 地址却没有可用 IPv6 默认路由时，这会让 SubConverter 使用的 glibc/libcurl 优先选择 IPv4，减少远程规则集下载因 IPv6 黑洞失败的概率。该策略不会开放端口、设置代理或修改其他容器；更新后只需重建 hardened 的 `subconverter` 服务即可生效。
 
 ## 已验证的 HTTP 行为
 

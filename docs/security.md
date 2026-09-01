@@ -3,15 +3,15 @@
 ## 请求边界
 
 - APP 的 `/short-api/links` 只接受 POST、JSON、空查询参数和精确的 APP Origin。
-- Gateway 清除 Authorization、Proxy-Authorization、Cookie 和 Origin 后再转发请求。
-- SHORT 域透明代理 MyUrls，由 MyUrls 自行校验同源请求、JSON Schema、URL 和 Turnstile。
-- API 域的 `/sub` 先进入 `Request Policy Service`，执行 URL 协议、主机地址、端口、大小、超时、并发和匿名频率限制，再转发到 SubConverter；上传能力保持关闭，`print_debug_info = false`。
+- Subweb Gateway 清除 Authorization、Proxy-Authorization、Cookie 和 Origin 后再转发请求。
+- 默认 SHORT 域只代理短码，MyUrls UI、API 和健康路由返回 404。
+- 默认 API 域的 `/sub` 直接进入合并容器中的 SubConverter；上传能力保持关闭，`print_debug_info = false`。
 
-MyUrls 拒绝 loopback、私网和不安全 URL，以降低 SSRF 与开放重定向风险。策略服务对转换请求执行输入级 SSRF 防护，并在 DNS 解析结果上拒绝 loopback、私网、link-local 和保留地址。SubConverter 仅加入内部 `subconverter-egress` 网络，强制通过策略服务的 HTTPS CONNECT egress proxy 访问远程 HTTPS：代理在单一安全边界内解析目标、校验地址并按已验证 IP 建连，避免 DNS rebinding 使二次解析绕过策略。部分转换结果仍会生成由最终客户端继续拉取的 `proxy-providers` URL；这些客户端侧请求不经过本服务。短码和订阅链接都属于持有即可访问的数据，不应进入日志、分析系统或公开工单。
+MyUrls 拒绝 loopback、私网和不安全 URL，以降低短链 SSRF 与开放重定向风险。默认模式**不**对转换请求执行输入级 SSRF/DNS 防护、匿名频率限制或受控 egress；它只能用于可信维护者和可信订阅输入。`compose.hardened.yaml` 中的 Request Policy Service 对转换请求执行这些校验，并在 DNS 解析结果上拒绝 loopback、私网、link-local 和保留地址。该模式的 SubConverter 仅加入内部 `subconverter-egress` 网络，强制通过策略服务的 HTTPS CONNECT egress proxy 访问远程 HTTPS：代理在单一安全边界内解析目标、校验地址并按已验证 IP 建连，避免 DNS rebinding 使二次解析绕过策略。部分转换结果仍会生成由最终客户端继续拉取的 `proxy-providers` URL；这些客户端侧请求不经过本服务。短码和订阅链接都属于持有即可访问的数据，不应进入日志、分析系统或公开工单。
 
 ## 客户端 IP
 
-Gateway 到 MyUrls 使用独立的内部网络，MyUrls 默认只信任固定的 Gateway 地址。Gateway 覆盖而不是追加 `X-Forwarded-For` 和 `Forwarded`。Request Policy Service 只在 Compose 内部网络可访问，并使用 Redis DB `1` 保存带 TTL 的匿名限流计数。外部 `TRUSTED_PROXY_CIDR` 必须是实际的反代来源，禁止使用 `0.0.0.0/0`。
+默认模式中 Subweb、MyUrls 和 Redis 使用同一个私有 Compose 网络，且只发布 Subweb 的 loopback 端口。Subweb 覆盖而不是追加 `X-Forwarded-For` 和 `Forwarded`。Hardened 模式让 Gateway 到 MyUrls 使用独立内部网络，MyUrls 只信任固定的 Gateway 地址；Request Policy Service 只在 Compose 内部网络可访问，并使用 Redis DB `1` 保存带 TTL 的匿名限流计数。外部 `TRUSTED_PROXY_CIDR` 必须是实际的反代来源，禁止使用 `0.0.0.0/0`。
 
 ## 秘密
 
@@ -23,8 +23,8 @@ Gateway 到 MyUrls 使用独立的内部网络，MyUrls 默认只信任固定的
 
 - MyUrls Rust v2.0.6 生产镜像使用 semver 标签和 manifest digest；升级镜像时，必须同步更新版本锁文件并重新完成安全验证。
 - `MYURLS_IMAGE` 仅用于当前 Rust `/api/links` 契约内经过确认的版本回滚。旧 Node `/api/v1/links` 回滚必须同时回退 Subweb 路由与前端，不能只换镜像。
-- MyUrls、Redis、SubConverter 和 Request Policy Service 不发布宿主机端口。
-- Gateway、Redis、`myurls-app` 与 SubConverter 使用只读根文件系统、最小 capabilities 和日志轮转。`myurls-short` 与 Request Policy Service 目前未配置同等的只读根文件系统和 capability 收紧；它们只允许在 Compose 内部网络可达，后续硬化前不得误记为同一保证。
+- 默认模式只发布 Subweb 的宿主机 loopback 端口；MyUrls 和 Redis 不发布端口。Hardened 模式中的 MyUrls、Redis、SubConverter 和 Request Policy Service 同样不发布端口。
+- 默认 Subweb、Redis 与 MyUrls 使用只读根文件系统、最小 capabilities 和日志轮转。Hardened 模式中 Gateway、Redis、`myurls-app` 与 SubConverter 使用同等设置；`myurls-short` 与 Request Policy Service 目前未配置相同的收紧配置，后续硬化前不得误记为同一保证。
 - MyUrls v2.0.6 的请求总超时和 Redis 断线恢复降低单次依赖故障的影响，但不替代 Redis 健康监控和备份。
 - 所有服务统一使用 `Asia/Shanghai` 时区。
 

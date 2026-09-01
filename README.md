@@ -1,6 +1,6 @@
 # Subconverter Web
 
-> 面向自托管维护者的在线订阅转换与短链服务。固定黑色命令界面、单一 Gateway、受控订阅访问边界。
+> 面向自托管维护者的在线订阅转换与短链服务。固定黑色命令界面、三容器默认部署与可选的受控订阅访问边界。
 
 <p align="center">
   <img src="./assets/readme/command-interface.png" alt="Subconverter Web 固定黑色命令界面：订阅输入、客户端选择、订阅后端、高级参数与转换并复制操作" width="100%">
@@ -11,8 +11,8 @@
 - **订阅转换：** 输入订阅链接或节点，选择客户端与远程配置后生成可复制的转换地址。
 - **状态行设置：** 「订阅后端」在默认后端与自定义 API 地址之间切换；「高级参数」采用保存前草稿与显式重置，两个区域互斥原位展开。
 - **短链：** 通过同源 `/short-api/links` 创建短链；浏览器不接触 MyUrls 内部 Token。
-- **匿名请求保护：** Request Policy Service 对转换输入执行 HTTPS、域名/IP、DNS、端口、大小、超时、并发和频率限制。
-- **受控出站：** SubConverter 仅加入内部 egress 网络，必须经 Request Policy Service 的 HTTPS CONNECT proxy 按已验证 IP 访问公网订阅，避免二次 DNS 解析绕过校验。
+- **简化默认部署：** `subweb` 容器同时运行前端 Gateway 与 SubConverter，配合一个 MyUrls 和 Redis 容器即可运行。
+- **可选加固部署：** `compose.hardened.yaml` 保留 Request Policy Service、受控 HTTPS CONNECT egress 和独立网络，适合公开、多用户或不可信订阅输入。
 - **PWA 图标：** 提供命令链接 favicon、Apple Touch Icon、`192 px` / `512 px` 图标与 manifest。
 
 ## 快速开始
@@ -36,7 +36,6 @@ cd subweb
   --turnstile-site-key YOUR_SITE_KEY \
   --turnstile-secret-key YOUR_SECRET_KEY
 ./scripts/validate-compose.sh
-docker compose build request-policy
 docker compose up -d --build --wait
 ```
 
@@ -51,16 +50,17 @@ Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 
 ## 架构
 
 <p align="center">
-  <img src="./assets/readme/security-architecture.svg" alt="浏览器经 Gateway 访问 Request Policy Service、SubConverter、MyUrls 与 Redis；SubConverter 的公网订阅访问经 HTTPS CONNECT egress proxy 按已验证 IP 建连" width="100%">
+  <img src="./assets/readme/security-architecture.svg" alt="Hardened Compose 中浏览器经 Gateway 访问 Request Policy Service、SubConverter、MyUrls 与 Redis；SubConverter 的公网订阅访问经 HTTPS CONNECT egress proxy 按已验证 IP 建连" width="100%">
 </p>
+
+上图描述可选的 hardened Compose；默认 3 容器路径见 [Docker 部署](docs/deployment-docker.md)。
 
 | 边界 | 职责 |
 | --- | --- |
-| Gateway | 唯一公开容器端口；按 APP / API / SHORT Host 路由，清理凭据与不可信请求头。 |
-| Request Policy Service | `/sub` 输入校验、匿名限流、并发与大小限制、熔断；同时提供 SubConverter 专用 HTTPS CONNECT egress proxy。 |
-| SubConverter | 仅处理转换，加入内部 egress 网络；没有默认网络的直接出站路径。 |
-| MyUrls Rust v2.0.6 | APP / SHORT 两个实例处理短链 API、管理页面与跳转；准确的多平台镜像证据记录在版本锁。 |
-| Redis | DB `0` 保存短链，DB `1` 保存带 TTL 的匿名限流状态；不保存普通转换 URL 或转换结果。 |
+| Subweb | 唯一公开容器端口；在一个容器内运行 Nginx Gateway 与 SubConverter，按 APP / API / SHORT Host 路由。 |
+| MyUrls Rust v2.0.6 | 单实例处理 APP 同源短链创建与 SHORT 短码跳转；管理 UI/API 不对 SHORT 域公开。 |
+| Redis | DB `0` 保存短链；不保存普通转换 URL 或转换结果。 |
+| Hardened profile | `compose.hardened.yaml` 额外运行 Gateway、Request Policy、SubConverter 和两个 MyUrls 实例，恢复匿名限流与受控 egress。 |
 
 ## 界面操作
 
@@ -73,8 +73,8 @@ Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 
 
 ## 安全与隐私
 
-- 只允许通过 Gateway 访问公开路由；Redis、MyUrls、SubConverter 与 Request Policy Service 不发布宿主机端口。
-- 匿名转换默认每个来源 IP 每分钟最多 `10` 次，同时最多运行 `2` 个请求；达到限制时返回 `429` 与 `Retry-After`。
+- 默认模式只发布 `subweb` 的 loopback 端口；MyUrls 和 Redis 不发布宿主机端口。
+- 默认模式直接由合并容器中的 SubConverter 请求订阅源；公开、多用户或不可信输入必须使用 `docker compose -f compose.hardened.yaml up -d --build --wait`，以启用匿名限流、DNS/SSRF 校验和受控 egress。
 - 转换 URL 与结果不写入 Redis；用户主动创建短链时，短链目标按 TTL 保存，短链属于持有即可访问的数据。
 - 日志不记录原始 IP、订阅 URL、Query、Token、Redis 密码或完整短码；请勿将这些值放入截图、Issue 或公开工单。
 - `proxy-providers` URL 由最终客户端直接拉取，不经过本服务的 egress proxy；部署者应理解并接受这一客户端侧边界。

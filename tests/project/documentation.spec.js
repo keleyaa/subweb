@@ -126,9 +126,9 @@ describe('documentation contract', () => {
       'docker-deploy.sh',
       'configure.sh',
       'validate-compose.sh',
-      'docker compose up -d --build --wait',
-      'docker compose build request-policy',
-      'docker compose up -d --no-build --pull never --wait',
+        'docker compose up -d --build --wait',
+        'compose.hardened.yaml',
+        'docker compose up -d --no-build --pull never --wait',
     ]) {
       expect(docker).toContain(command);
     }
@@ -138,8 +138,8 @@ describe('documentation contract', () => {
     expect(docker).toContain('不要直接执行 `cat .env`');
     expect(docker).toContain('无需手动填写');
     expect(local).toContain('http://127.0.0.1:5173/');
-    expect(local).toContain('local-published');
-    expect(local).toContain('生产 Compose 的网络隔离');
+    expect(local).toContain('合并容器');
+    expect(local).toContain('hardened Compose 的 Request Policy');
     expect(local).toContain('不要在其他项目目录执行');
     for (const ignored of ['.env', '.runtime/', 'dist/', 'test-results/']) expect(maintenance).toContain(ignored);
   });

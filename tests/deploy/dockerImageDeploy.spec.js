@@ -31,10 +31,9 @@ case "$*" in
   'compose version') exit 0 ;;
   'compose config --quiet') exit 0 ;;
   'compose config --format json')
-      printf '%s\\n' '{"networks":{"default":{},"myurls-data":{"internal":true},"myurls-edge":{"internal":true},"redis-policy":{"internal":true},"subconverter-egress":{"internal":true}},"services":{"gateway":{"ports":[{"host_ip":"127.0.0.1","published":"18080","target":8080}],"networks":{"default":{},"myurls-edge":{}}},"redis":{"networks":{"myurls-data":{},"redis-policy":{}}},"myurls-app":{"networks":{"myurls-data":{},"myurls-edge":{}}},"myurls-short":{"networks":{"myurls-data":{},"myurls-edge":{}}},"subconverter":{"networks":{"subconverter-egress":{}}},"request-policy":{"networks":{"default":{},"redis-policy":{},"subconverter-egress":{}}}}}'
+      printf '%s\n' '{"networks":{"default":{}},"services":{"subweb":{"ports":[{"host_ip":"127.0.0.1","published":"18080","target":8080}],"networks":{"default":{}}},"redis":{"networks":{"default":{}}},"myurls":{"networks":{"default":{}}}}}'
     ;;
-  'compose pull gateway redis myurls-app myurls-short subconverter') exit "\${DOCKER_PULL_STATUS:-0}" ;;
-  'compose build request-policy') exit 0 ;;
+  'compose pull subweb redis myurls') exit "\${DOCKER_PULL_STATUS:-0}" ;;
   'compose up -d --no-build --pull never --wait') exit 0 ;;
   'compose ps') exit 0 ;;
   *) exit 64 ;;
@@ -69,21 +68,19 @@ afterEach(async () => {
 });
 
 describe('Docker image quick deployment', () => {
-  it('persists the selected image, pulls external services, and builds policy locally', async () => {
+  it('persists the selected image and pulls the three default services', async () => {
     const root = await makeFixture();
     const image = 'docker.io/keleyaa/subweb:sha-2bf1a9f';
 
-    const result = runDeploy(root, ['--image', image, '--trusted-proxy-cidr', '172.18.0.1/32']);
+    const result = runDeploy(root, ['--image', image]);
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(await readFile(join(root, '.env'), 'utf8')).toContain(`SUBWEB_IMAGE=${image}\n`);
-    expect(await readFile(join(root, '.env'), 'utf8')).toContain('TRUSTED_PROXY_CIDR=172.18.0.1/32\n');
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toBe([
       'compose version',
       'compose config --quiet',
       'compose config --format json',
-      'compose pull gateway redis myurls-app myurls-short subconverter',
-      'compose build request-policy',
+      'compose pull subweb redis myurls',
       'compose up -d --no-build --pull never --wait',
       'compose ps',
       '',
@@ -100,6 +97,9 @@ describe('Docker image quick deployment', () => {
     expect(missing.stderr).toContain('--image is required');
     expect(mutable.status).not.toBe(0);
     expect(mutable.stderr).toContain('immutable sha-* tag or sha256 digest');
+    const hardenedOnly = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f', '--trusted-proxy-cidr', '172.18.0.1/32']);
+    expect(hardenedOnly.status).not.toBe(0);
+    expect(hardenedOnly.stderr).toContain('Unknown argument: --trusted-proxy-cidr');
     await expect(readFile(join(root, 'docker.log'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
@@ -110,7 +110,7 @@ describe('Docker image quick deployment', () => {
 
     expect(result.status).not.toBe(0);
     const log = await readFile(join(root, 'docker.log'), 'utf8');
-    expect(log).toContain('compose pull gateway redis myurls-app myurls-short subconverter');
+    expect(log).toContain('compose pull subweb redis myurls');
     expect(log).not.toContain('compose up');
   });
 });
