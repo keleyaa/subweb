@@ -186,7 +186,7 @@ func TestRouteContracts(t *testing.T) {
 		{name: "health method", method: http.MethodPost, host: "app.example.test", path: "/healthz", wantCode: http.StatusMethodNotAllowed, wantAllow: http.MethodGet},
 		{name: "ready method", method: http.MethodPost, host: "app.example.test", path: "/readyz", wantCode: http.StatusMethodNotAllowed, wantAllow: http.MethodGet},
 		{name: "api sub method", method: http.MethodPost, host: "api.example.test", path: "/sub", wantCode: http.StatusMethodNotAllowed, wantAllow: http.MethodGet},
-		{name: "api other path", method: http.MethodGet, host: "api.example.test", path: "/other", wantCode: http.StatusMisdirectedRequest},
+		{name: "api other path", method: http.MethodGet, host: "api.example.test", path: "/other", wantCode: http.StatusNotFound},
 		{name: "app links method", method: http.MethodGet, host: "app.example.test", path: "/short-api/links", wantCode: http.StatusMethodNotAllowed, wantAllow: http.MethodPost},
 		{name: "app other path", method: http.MethodGet, host: "app.example.test", path: "/", wantCode: http.StatusNotFound},
 		{name: "short code method", method: http.MethodPost, host: "short.example.test", path: "/abc_123-XYZ", wantCode: http.StatusMethodNotAllowed, wantAllow: "GET, HEAD"},
@@ -489,6 +489,36 @@ func TestBufferedDependencyResponseCommitsFinalStatusAfterInformationalResponse(
 	}
 }
 
+func TestBufferedDependencyResponseSnapshotsFinalHeaders(t *testing.T) {
+	server := newTestServer(t, Dependencies{
+		Converter: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("X-First", "initial")
+			w.WriteHeader(http.StatusOK)
+			w.Header().Set("X-First", "mutated")
+			w.Header().Set("X-Later", "later")
+			w.Header().Set("X-Sensitive", "secret")
+			_, _ = w.Write([]byte("final response"))
+		}),
+	})
+
+	response := serveRequest(t, server, http.MethodGet, "api.example.test", "/sub", nil)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if value := response.Header().Get("X-First"); value != "initial" {
+		t.Fatalf("X-First = %q, want initial", value)
+	}
+	for _, header := range []string{"X-Later", "X-Sensitive"} {
+		if values := response.Header().Values(header); len(values) != 0 {
+			t.Fatalf("%s = %q, want removed", header, values)
+		}
+	}
+	if body := response.Body.String(); body != "final response" {
+		t.Fatalf("body = %q, want final response", body)
+	}
+}
+
 func TestBufferedDependencyResponseRejectsProtocolUpgrade(t *testing.T) {
 	server := newTestServer(t, Dependencies{
 		Converter: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -515,6 +545,45 @@ func TestBufferedDependencyResponseRejectsProtocolUpgrade(t *testing.T) {
 	}
 	if body := response.Body.String(); !strings.Contains(body, `"code":"upstream_protocol_not_supported"`) || !strings.Contains(body, `"title":"Bad Gateway"`) || strings.Contains(body, "secret") || strings.Contains(body, "leaked") {
 		t.Fatalf("body = %q, want sanitized bad gateway problem", body)
+	}
+}
+
+func TestBufferedDependencyResponseRejectsInvalidFinalStatus(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		status int
+	}{
+		{name: "99", status: 99},
+		{name: "1000", status: 1000},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := newTestServer(t, Dependencies{
+				Converter: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.Header().Set("X-Sensitive", "secret")
+					w.Header().Set("Set-Cookie", "session=leaked")
+					w.WriteHeader(test.status)
+					_, _ = w.Write([]byte("leaked response"))
+				}),
+			})
+
+			response := serveRequest(t, server, http.MethodGet, "api.example.test", "/sub", nil)
+
+			if response.Code != http.StatusBadGateway {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusBadGateway)
+			}
+			if value := response.Header().Get("X-Sensitive"); value != "" {
+				t.Fatalf("X-Sensitive = %q, want removed", value)
+			}
+			if values := response.Header().Values("Set-Cookie"); len(values) != 0 {
+				t.Fatalf("Set-Cookie = %q, want removed", values)
+			}
+			if requestID := response.Header().Get("X-Request-ID"); requestID == "" {
+				t.Fatal("X-Request-ID is empty")
+			}
+			if body := response.Body.String(); !strings.Contains(body, `"code":"upstream_invalid_status"`) || !strings.Contains(body, `"title":"Bad Gateway"`) || strings.Contains(body, "secret") || strings.Contains(body, "leaked") {
+				t.Fatalf("body = %q, want sanitized bad gateway problem", body)
+			}
+		})
 	}
 }
 

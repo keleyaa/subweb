@@ -131,7 +131,7 @@ func (handler gatewayHandler) serveHTTP(response http.ResponseWriter, request *h
 
 func (handler gatewayHandler) serveAPI(writer http.ResponseWriter, request *http.Request, requestID string) {
 	if request.URL.Path != "/sub" {
-		writeStatusProblem(writer, requestID, http.StatusMisdirectedRequest, "misdirected_request")
+		writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
 		return
 	}
 	if request.Method != http.MethodGet {
@@ -216,6 +216,10 @@ func (handler gatewayHandler) serveDependency(dependency http.Handler, writer ht
 
 	buffer := newBufferedResponseWriter()
 	dependency.ServeHTTP(buffer, dependencyRequest)
+	if buffer.invalidStatus {
+		writeStatusProblem(writer, requestID, http.StatusBadGateway, "upstream_invalid_status")
+		return
+	}
 	if buffer.status == http.StatusSwitchingProtocols {
 		writeStatusProblem(writer, requestID, http.StatusBadGateway, "upstream_protocol_not_supported")
 		return
@@ -368,10 +372,12 @@ func (writer *requestIDResponseWriter) enforceRequestID() {
 }
 
 type bufferedResponseWriter struct {
-	header      http.Header
-	body        bytes.Buffer
-	status      int
-	wroteHeader bool
+	header        http.Header
+	finalHeader   http.Header
+	body          bytes.Buffer
+	status        int
+	wroteHeader   bool
+	invalidStatus bool
 }
 
 func newBufferedResponseWriter() *bufferedResponseWriter {
@@ -386,10 +392,21 @@ func (writer *bufferedResponseWriter) WriteHeader(status int) {
 	if writer.wroteHeader {
 		return
 	}
-	if status >= http.StatusContinue && status < http.StatusOK && status != http.StatusSwitchingProtocols {
+	if status < http.StatusContinue || status > 999 {
+		writer.invalidStatus = true
+		writer.wroteHeader = true
+		return
+	}
+	if status < http.StatusOK {
+		if status != http.StatusSwitchingProtocols {
+			return
+		}
+		writer.status = status
+		writer.wroteHeader = true
 		return
 	}
 	writer.status = status
+	writer.finalHeader = writer.header.Clone()
 	writer.wroteHeader = true
 }
 
@@ -401,17 +418,25 @@ func (writer *bufferedResponseWriter) Write(body []byte) (int, error) {
 }
 
 func (writer *bufferedResponseWriter) commit(destination http.ResponseWriter) {
+	if writer.invalidStatus {
+		return
+	}
+
+	status := writer.status
+	header := writer.finalHeader
+	if !writer.wroteHeader {
+		status = http.StatusOK
+		header = writer.header
+	}
+
 	destinationHeader := destination.Header()
 	for name := range destinationHeader {
 		delete(destinationHeader, name)
 	}
-	for name, values := range writer.header {
+	for name, values := range header {
 		destinationHeader[name] = append([]string(nil), values...)
 	}
-	if !writer.wroteHeader {
-		writer.status = http.StatusOK
-	}
-	destination.WriteHeader(writer.status)
+	destination.WriteHeader(status)
 	if writer.body.Len() > 0 {
 		_, _ = destination.Write(writer.body.Bytes())
 	}
