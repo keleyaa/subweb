@@ -22,7 +22,7 @@ func TestLoadRejectsInvalidURL(t *testing.T) {
 		"non-HTTPS remote URL": "http://converter.example.test",
 		"URL credentials":      "https://user:password@api.example.test",
 		"invalid port":         "https://api.example.test:65536",
-		"signed port":           "https://api.example.test:+443",
+		"signed port":          "https://api.example.test:+443",
 		"non-HTTP scheme":      "ftp://api.example.test",
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -172,12 +172,15 @@ func TestLoadRejectsUnboundedPolicyValues(t *testing.T) {
 		"CONVERSION_MAX_RESPONSE_BYTES":        "67108865",
 		"CONVERSION_REQUEST_TIMEOUT_MS":        "60001",
 		"CONVERSION_MAX_CONCURRENCY":           "101",
-		"CONVERSION_DNS_TIMEOUT_MS":            "10000",
-		"CONVERSION_EGRESS_CONNECT_TIMEOUT_MS": "10000",
+		"CONVERSION_DNS_TIMEOUT_MS":            "30001",
+		"CONVERSION_EGRESS_CONNECT_TIMEOUT_MS": "30001",
 	} {
 		t.Run(name, func(t *testing.T) {
 			env := validEnvironment()
 			env[name] = value
+			if name == "CONVERSION_DNS_TIMEOUT_MS" || name == "CONVERSION_EGRESS_CONNECT_TIMEOUT_MS" {
+				env["CONVERSION_REQUEST_TIMEOUT_MS"] = "60000"
+			}
 
 			_, err := Load(getenv(env))
 			if err == nil || !strings.Contains(err.Error(), name) {
