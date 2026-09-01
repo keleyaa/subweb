@@ -214,7 +214,7 @@ func (handler gatewayHandler) serveDependency(dependency http.Handler, writer ht
 		dependencyRequest.Header.Set("X-Real-IP", clientIP)
 	}
 
-	buffer := newBufferedResponseWriter()
+	buffer := newBufferedResponseWriter(request.Method)
 	dependency.ServeHTTP(buffer, dependencyRequest)
 	if buffer.invalidStatus {
 		writeStatusProblem(writer, requestID, http.StatusBadGateway, "upstream_invalid_status")
@@ -368,20 +368,27 @@ func (writer *requestIDResponseWriter) Unwrap() http.ResponseWriter {
 }
 
 func (writer *requestIDResponseWriter) enforceRequestID() {
-	writer.Header().Set("X-Request-ID", writer.requestID)
+	header := writer.Header()
+	for name := range header {
+		if strings.EqualFold(name, "X-Request-ID") {
+			delete(header, name)
+		}
+	}
+	header.Set("X-Request-ID", writer.requestID)
 }
 
 type bufferedResponseWriter struct {
 	header        http.Header
 	finalHeader   http.Header
 	body          bytes.Buffer
+	method        string
 	status        int
 	wroteHeader   bool
 	invalidStatus bool
 }
 
-func newBufferedResponseWriter() *bufferedResponseWriter {
-	return &bufferedResponseWriter{header: make(http.Header)}
+func newBufferedResponseWriter(method string) *bufferedResponseWriter {
+	return &bufferedResponseWriter{header: make(http.Header), method: method}
 }
 
 func (writer *bufferedResponseWriter) Header() http.Header {
@@ -412,7 +419,13 @@ func (writer *bufferedResponseWriter) WriteHeader(status int) {
 
 func (writer *bufferedResponseWriter) Write(body []byte) (int, error) {
 	if !writer.wroteHeader {
+		if len(body) > 0 && writer.header.Get("Content-Type") == "" {
+			writer.header.Set("Content-Type", http.DetectContentType(body))
+		}
 		writer.WriteHeader(http.StatusOK)
+	}
+	if writer.method == http.MethodHead || writer.status == http.StatusNoContent || writer.status == http.StatusNotModified {
+		return 0, http.ErrBodyNotAllowed
 	}
 	return writer.body.Write(body)
 }

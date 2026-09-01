@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -160,6 +161,112 @@ func TestRequestIDIsGeneratedAndReturned(t *testing.T) {
 	}
 	if dependencyRequestID != requestID {
 		t.Fatalf("dependency X-Request-ID = %q, want %q", dependencyRequestID, requestID)
+	}
+}
+
+func TestDependencyImplicitWriteDetectsContentType(t *testing.T) {
+	server := newTestServer(t, Dependencies{
+		Converter: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("plain text"))
+		}),
+	})
+
+	response := serveRequest(t, server, http.MethodGet, "api.example.test", "/sub", nil)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "text/plain; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want text/plain; charset=utf-8", contentType)
+	}
+	if body := response.Body.String(); body != "plain text" {
+		t.Fatalf("body = %q, want plain text", body)
+	}
+}
+
+func TestDependencyWriteRejectsBodiesForNoContentAndNotModified(t *testing.T) {
+	for _, status := range []int{http.StatusNoContent, http.StatusNotModified} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			var written int
+			var writeErr error
+			server := newTestServer(t, Dependencies{
+				Converter: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.Header().Set("X-Upstream", "preserved")
+					w.WriteHeader(status)
+					written, writeErr = w.Write([]byte("must not emit"))
+				}),
+			})
+
+			response := serveRequest(t, server, http.MethodGet, "api.example.test", "/sub", nil)
+
+			if written != 0 {
+				t.Fatalf("Write count = %d, want 0", written)
+			}
+			if !errors.Is(writeErr, http.ErrBodyNotAllowed) {
+				t.Fatalf("Write error = %v, want %v", writeErr, http.ErrBodyNotAllowed)
+			}
+			if response.Code != status {
+				t.Fatalf("status = %d, want %d", response.Code, status)
+			}
+			if got := response.Header().Get("X-Upstream"); got != "preserved" {
+				t.Fatalf("X-Upstream = %q, want preserved", got)
+			}
+			if body := response.Body.String(); body != "" {
+				t.Fatalf("body = %q, want empty", body)
+			}
+		})
+	}
+}
+
+func TestShortHeadDependencyWriteRejectsBodyWithImplicitContentType(t *testing.T) {
+	var written int
+	var writeErr error
+	server := newTestServer(t, Dependencies{
+		ShortLinks: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			written, writeErr = w.Write([]byte("head response"))
+		}),
+	})
+
+	response := serveRequest(t, server, http.MethodHead, "short.example.test", "/code", nil)
+
+	if written != 0 {
+		t.Fatalf("Write count = %d, want 0", written)
+	}
+	if !errors.Is(writeErr, http.ErrBodyNotAllowed) {
+		t.Fatalf("Write error = %v, want %v", writeErr, http.ErrBodyNotAllowed)
+	}
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "text/plain; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want text/plain; charset=utf-8", contentType)
+	}
+	if body := response.Body.String(); body != "" {
+		t.Fatalf("body = %q, want empty", body)
+	}
+}
+
+func TestRequestIDResponseHeaderRemovesCaseInsensitiveDuplicates(t *testing.T) {
+	server := newTestServer(t, Dependencies{
+		Converter: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header()["x-request-id"] = []string{"spoofed"}
+			w.WriteHeader(http.StatusAccepted)
+		}),
+	})
+
+	response := serveRequest(t, server, http.MethodGet, "api.example.test", "/sub", nil)
+	keys, values := headerEntriesEqualFold(response.Header(), "X-Request-ID")
+	if len(keys) != 1 {
+		t.Fatalf("case-insensitive X-Request-ID keys = %q, want exactly one key", keys)
+	}
+	if keys[0] != "X-Request-Id" {
+		t.Fatalf("X-Request-ID key = %q, want canonical key", keys[0])
+	}
+	if len(values) != 1 {
+		t.Fatalf("case-insensitive X-Request-ID values = %q, want exactly one value", values)
+	}
+	if values[0] == "" || values[0] == "spoofed" {
+		t.Fatalf("X-Request-ID value = %q, want a gateway-generated value", values[0])
 	}
 }
 
@@ -588,7 +695,7 @@ func TestBufferedDependencyResponseRejectsInvalidFinalStatus(t *testing.T) {
 }
 
 func TestBufferedResponseWriterDoesNotSupportStreaming(t *testing.T) {
-	buffer := newBufferedResponseWriter()
+	buffer := newBufferedResponseWriter(http.MethodGet)
 
 	if _, ok := any(buffer).(http.Flusher); ok {
 		t.Fatal("buffered response writer implements http.Flusher")
@@ -622,6 +729,16 @@ func TestPanicDiscardsDependencyResponse(t *testing.T) {
 	if requestID := response.Header().Get("X-Request-ID"); requestID == "" {
 		t.Fatal("X-Request-ID is empty")
 	}
+}
+
+func headerEntriesEqualFold(header http.Header, name string) (keys []string, values []string) {
+	for key, entries := range header {
+		if strings.EqualFold(key, name) {
+			keys = append(keys, key)
+			values = append(values, entries...)
+		}
+	}
+	return keys, values
 }
 
 func addSpoofedForwardingHeaders(request *http.Request) {
