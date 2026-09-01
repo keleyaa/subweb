@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -289,7 +290,7 @@ func loadURL(name, value string) (*url.URL, error) {
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.Hostname() == "" {
 		return nil, fmt.Errorf("%s must be a valid URL", name)
 	}
-	if net.ParseIP(parsed.Hostname()) == nil && !isValidHostname(parsed.Hostname()) {
+	if _, err := netip.ParseAddr(parsed.Hostname()); err != nil && !isValidHostname(parsed.Hostname()) {
 		return nil, fmt.Errorf("%s must be a valid URL", name)
 	}
 	if parsed.User != nil {
@@ -316,6 +317,9 @@ func validateURLPort(parsed *url.URL) error {
 }
 
 func validatePort(value string) error {
+	if !isDecimal(value) {
+		return fmt.Errorf("contains an invalid port")
+	}
 	port, err := strconv.Atoi(value)
 	if err != nil || port < 1 || port > 65535 {
 		return fmt.Errorf("contains an invalid port")

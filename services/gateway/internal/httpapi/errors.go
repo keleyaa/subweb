@@ -43,15 +43,30 @@ func WriteProblem(w http.ResponseWriter, requestID string, err error) {
 		}
 	}
 	problem = normalizeProblem(problem, requestID)
+	body, marshalErr := json.Marshal(problem)
+	if marshalErr != nil {
+		problem = normalizeProblem(Problem{
+			Type:   "about:blank",
+			Title:  http.StatusText(http.StatusInternalServerError),
+			Status: http.StatusInternalServerError,
+			Code:   "internal_error",
+		}, requestID)
+		body, marshalErr = json.Marshal(problem)
+		if marshalErr != nil {
+			body = []byte(`{"type":"about:blank","title":"Internal Server Error","status":500,"code":"internal_error","requestId":""}`)
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Request-ID", requestID)
 	if problem.RetryAfterSeconds > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(problem.RetryAfterSeconds))
+	} else {
+		w.Header().Del("Retry-After")
 	}
 	w.WriteHeader(problem.Status)
-	_ = json.NewEncoder(w).Encode(problem)
+	_, _ = w.Write(body)
 }
 
 func normalizeProblem(problem Problem, requestID string) Problem {

@@ -53,6 +53,39 @@ func TestWriteProblemWritesConfiguredProblem(t *testing.T) {
 	}
 }
 
+func TestWriteProblemFallsBackForUnencodableChallenge(t *testing.T) {
+	recorder := httptest.NewRecorder()
+
+	WriteProblem(recorder, "req_challenge", Problem{Challenge: func() {}})
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusInternalServerError)
+	}
+	if contentType := response.Header.Get("Content-Type"); contentType != "application/problem+json" {
+		t.Fatalf("Content-Type = %q, want application/problem+json", contentType)
+	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", cacheControl)
+	}
+	if requestID := response.Header.Get("X-Request-ID"); requestID != "req_challenge" {
+		t.Fatalf("X-Request-ID = %q, want req_challenge", requestID)
+	}
+
+	var problem Problem
+	if err := json.NewDecoder(response.Body).Decode(&problem); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if problem.Status != http.StatusInternalServerError || problem.Code != "internal_error" || problem.RequestID != "req_challenge" {
+		t.Fatalf("problem = %#v, want sanitized internal error", problem)
+	}
+	if problem.Challenge != nil {
+		t.Fatalf("Challenge = %#v, want nil", problem.Challenge)
+	}
+}
+
 func TestWriteProblemDoesNotExposeInternalError(t *testing.T) {
 	recorder := httptest.NewRecorder()
 

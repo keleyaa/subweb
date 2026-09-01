@@ -22,6 +22,7 @@ func TestLoadRejectsInvalidURL(t *testing.T) {
 		"non-HTTPS remote URL": "http://converter.example.test",
 		"URL credentials":      "https://user:password@api.example.test",
 		"invalid port":         "https://api.example.test:65536",
+		"signed port":           "https://api.example.test:+443",
 		"non-HTTP scheme":      "ftp://api.example.test",
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -33,6 +34,16 @@ func TestLoadRejectsInvalidURL(t *testing.T) {
 				t.Fatalf("Load() error = %v, want API_URL validation error", err)
 			}
 		})
+	}
+}
+
+func TestLoadRejectsSignedListenPort(t *testing.T) {
+	env := validEnvironment()
+	env["LISTEN_ADDR"] = "0.0.0.0:+8080"
+
+	_, err := Load(getenv(env))
+	if err == nil || !strings.Contains(err.Error(), "LISTEN_ADDR") {
+		t.Fatalf("Load() error = %v, want LISTEN_ADDR validation error", err)
 	}
 }
 
@@ -69,6 +80,19 @@ func TestLoadAcceptsIPLiteralURLHostnames(t *testing.T) {
 				t.Fatalf("Load() error = %v, want IP literal URL hostname to be accepted", err)
 			}
 		})
+	}
+}
+
+func TestLoadAcceptsZoneScopedIPv6APIURL(t *testing.T) {
+	env := validEnvironment()
+	env["API_URL"] = "https://[fe80::1%25en0]:8443"
+
+	cfg, err := Load(getenv(env))
+	if err != nil {
+		t.Fatalf("Load() error = %v, want zone-scoped IPv6 API URL to be accepted", err)
+	}
+	if got := cfg.APIURL.String(); got != env["API_URL"] {
+		t.Fatalf("APIURL = %q, want %q", got, env["API_URL"])
 	}
 }
 
