@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -8,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -69,7 +71,6 @@ func (handler gatewayHandler) serveHTTP(response http.ResponseWriter, request *h
 			handler.logger.Error("gateway handler panic",
 				"request_id", requestID,
 				"method", request.Method,
-				"host", request.Host,
 				"status", http.StatusInternalServerError,
 			)
 			WriteProblem(writer, requestID, Problem{
@@ -131,23 +132,30 @@ func (handler gatewayHandler) serveAPI(writer http.ResponseWriter, request *http
 		writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
 		return
 	}
-	handler.serveDependency(handler.deps.Converter, writer, request, requestID)
+	handler.serveDependency(handler.deps.Converter, writer, request, requestID, handler.cfg.APIDomain)
 }
 
 func (handler gatewayHandler) serveApp(writer http.ResponseWriter, request *http.Request, requestID string) {
-	if request.URL.Path != "/short-api/links" {
-		writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
-		return
-	}
-	if request.Method != http.MethodPost {
-		writeMethodNotAllowed(writer, requestID, http.MethodPost)
-		return
+	if request.URL.Path == "/short-api/links" {
+		if request.Method != http.MethodPost {
+			writeMethodNotAllowed(writer, requestID, http.MethodPost)
+			return
+		}
+	} else {
+		if !isShortCodePath(request.URL.Path) {
+			writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
+			return
+		}
+		if request.Method != http.MethodGet && request.Method != http.MethodHead {
+			writeMethodNotAllowed(writer, requestID, "GET, HEAD")
+			return
+		}
 	}
 	if handler.deps.ShortLinks == nil {
 		writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
 		return
 	}
-	handler.serveDependency(handler.deps.ShortLinks, writer, request, requestID)
+	handler.serveDependency(handler.deps.ShortLinks, writer, request, requestID, handler.cfg.AppDomain)
 }
 
 func (handler gatewayHandler) serveShort(writer http.ResponseWriter, request *http.Request, requestID string) {
@@ -163,16 +171,39 @@ func (handler gatewayHandler) serveShort(writer http.ResponseWriter, request *ht
 		writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
 		return
 	}
-	handler.serveDependency(handler.deps.ShortLinks, writer, request, requestID)
+	handler.serveDependency(handler.deps.ShortLinks, writer, request, requestID, handler.cfg.ShortDomain)
 }
 
-func (handler gatewayHandler) serveDependency(dependency http.Handler, writer http.ResponseWriter, request *http.Request, requestID string) {
+func (handler gatewayHandler) serveDependency(dependency http.Handler, writer http.ResponseWriter, request *http.Request, requestID, publicDomain string) {
 	dependencyRequest := request.Clone(request.Context())
 	if dependencyRequest.Header == nil {
 		dependencyRequest.Header = make(http.Header)
 	}
+	for _, header := range []string{
+		"Authorization",
+		"Proxy-Authorization",
+		"Cookie",
+		"Origin",
+		"Forwarded",
+		"X-Forwarded-For",
+		"X-Forwarded-Host",
+		"X-Forwarded-Proto",
+		"X-Real-IP",
+	} {
+		dependencyRequest.Header.Del(header)
+	}
+	dependencyRequest.Host = publicDomain
+	dependencyRequest.Header.Set("X-Forwarded-Host", publicDomain)
+	dependencyRequest.Header.Set("X-Forwarded-Proto", "https")
 	dependencyRequest.Header.Set("X-Request-ID", requestID)
-	dependency.ServeHTTP(writer, dependencyRequest)
+	if clientIP := socketClientIP(request.RemoteAddr); clientIP != "" {
+		dependencyRequest.Header.Set("X-Forwarded-For", clientIP)
+		dependencyRequest.Header.Set("X-Real-IP", clientIP)
+	}
+
+	buffer := newBufferedResponseWriter()
+	dependency.ServeHTTP(buffer, dependencyRequest)
+	buffer.commit(writer)
 }
 
 func (handler gatewayHandler) classifyHost(value string) hostKind {
@@ -190,13 +221,45 @@ func (handler gatewayHandler) classifyHost(value string) hostKind {
 }
 
 func requestHostname(value string) string {
-	if host, _, err := net.SplitHostPort(value); err == nil {
-		return host
-	}
-	if strings.Contains(value, ":") {
+	if value == "" {
 		return ""
 	}
-	return value
+	if !strings.Contains(value, ":") {
+		return value
+	}
+	if strings.Count(value, ":") != 1 {
+		return ""
+	}
+	host, port, found := strings.Cut(value, ":")
+	if !found || host == "" || strings.ContainsAny(host, "[]") || !isValidAuthorityPort(port) {
+		return ""
+	}
+	return host
+}
+
+func isValidAuthorityPort(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, character := range value {
+		if character < '0' || character > '9' {
+			return false
+		}
+	}
+	port, err := strconv.Atoi(value)
+	return err == nil && port >= 1 && port <= 65535
+}
+
+func socketClientIP(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return ""
+	}
+	address := net.ParseIP(host)
+	if address == nil {
+		return ""
+	}
+	return address.String()
 }
 
 func isShortCodePath(path string) bool {
@@ -253,6 +316,53 @@ func (writer *requestIDResponseWriter) Unwrap() http.ResponseWriter {
 
 func (writer *requestIDResponseWriter) enforceRequestID() {
 	writer.Header().Set("X-Request-ID", writer.requestID)
+}
+
+type bufferedResponseWriter struct {
+	header      http.Header
+	body        bytes.Buffer
+	status      int
+	wroteHeader bool
+}
+
+func newBufferedResponseWriter() *bufferedResponseWriter {
+	return &bufferedResponseWriter{header: make(http.Header)}
+}
+
+func (writer *bufferedResponseWriter) Header() http.Header {
+	return writer.header
+}
+
+func (writer *bufferedResponseWriter) WriteHeader(status int) {
+	if writer.wroteHeader {
+		return
+	}
+	writer.status = status
+	writer.wroteHeader = true
+}
+
+func (writer *bufferedResponseWriter) Write(body []byte) (int, error) {
+	if !writer.wroteHeader {
+		writer.WriteHeader(http.StatusOK)
+	}
+	return writer.body.Write(body)
+}
+
+func (writer *bufferedResponseWriter) commit(destination http.ResponseWriter) {
+	destinationHeader := destination.Header()
+	for name := range destinationHeader {
+		delete(destinationHeader, name)
+	}
+	for name, values := range writer.header {
+		destinationHeader[name] = append([]string(nil), values...)
+	}
+	if !writer.wroteHeader {
+		writer.status = http.StatusOK
+	}
+	destination.WriteHeader(writer.status)
+	if writer.body.Len() > 0 {
+		_, _ = destination.Write(writer.body.Bytes())
+	}
 }
 
 var requestIDFallbackCounter atomic.Uint64
