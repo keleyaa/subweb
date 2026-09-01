@@ -36,8 +36,45 @@ func TestLoadRejectsInvalidURL(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsInvalidDNSHostname(t *testing.T) {
+	for _, variable := range []string{"API_URL", "SUBCONVERTER_UPSTREAM", "MYURLS_UPSTREAM"} {
+		for name, value := range map[string]string{
+			"underscore":     "https://api_example.test",
+			"leading hyphen": "https://-bad.example.test",
+			"empty label":    "https://api..example.test",
+		} {
+			t.Run(variable+"/"+name, func(t *testing.T) {
+				env := validEnvironment()
+				env[variable] = value
+
+				_, err := Load(getenv(env))
+				if err == nil || !strings.Contains(err.Error(), variable) {
+					t.Fatalf("Load() error = %v, want %s validation error", err, variable)
+				}
+			})
+		}
+	}
+}
+
+func TestLoadAcceptsIPLiteralURLHostnames(t *testing.T) {
+	for name, value := range map[string]string{
+		"IPv4": "https://127.0.0.1",
+		"IPv6": "https://[::1]",
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := validEnvironment()
+			env["API_URL"] = value
+
+			if _, err := Load(getenv(env)); err != nil {
+				t.Fatalf("Load() error = %v, want IP literal URL hostname to be accepted", err)
+			}
+		})
+	}
+}
+
 func TestLoadRequiresShortLinkSecretsWhenEnabled(t *testing.T) {
 	for name, unset := range map[string]string{
+		"Redis URL":            "REDIS_URL",
 		"Redis password":       "REDIS_PASSWORD",
 		"IP hash secret":       "IP_HASH_SECRET",
 		"Turnstile site key":   "TURNSTILE_SITE_KEY",

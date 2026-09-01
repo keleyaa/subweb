@@ -222,20 +222,27 @@ func loadDomain(name, value string) (string, error) {
 	if value == "" {
 		return "", fmt.Errorf("%s is required", name)
 	}
-	if len(value) > 253 || strings.HasSuffix(value, ".") {
+	if !isValidHostname(value) {
 		return "", fmt.Errorf("%s must be a hostname", name)
+	}
+	return strings.ToLower(value), nil
+}
+
+func isValidHostname(value string) bool {
+	if len(value) > 253 || strings.HasSuffix(value, ".") {
+		return false
 	}
 	for _, label := range strings.Split(value, ".") {
 		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
-			return "", fmt.Errorf("%s must be a hostname", name)
+			return false
 		}
 		for _, character := range label {
 			if !(character >= 'a' && character <= 'z') && !(character >= 'A' && character <= 'Z') && !(character >= '0' && character <= '9') && character != '-' {
-				return "", fmt.Errorf("%s must be a hostname", name)
+				return false
 			}
 		}
 	}
-	return strings.ToLower(value), nil
+	return true
 }
 
 func loadAPIURL(value string) (*url.URL, error) {
@@ -280,6 +287,9 @@ func loadURL(name, value string) (*url.URL, error) {
 	}
 	parsed, err := url.ParseRequestURI(value)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.Hostname() == "" {
+		return nil, fmt.Errorf("%s must be a valid URL", name)
+	}
+	if net.ParseIP(parsed.Hostname()) == nil && !isValidHostname(parsed.Hostname()) {
 		return nil, fmt.Errorf("%s must be a valid URL", name)
 	}
 	if parsed.User != nil {
