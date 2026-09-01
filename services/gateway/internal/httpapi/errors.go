@@ -53,7 +53,7 @@ func WriteProblem(w http.ResponseWriter, requestID string, err error) {
 		}, requestID)
 		body, marshalErr = json.Marshal(problem)
 		if marshalErr != nil {
-			body = []byte(`{"type":"about:blank","title":"Internal Server Error","status":500,"code":"internal_error","requestId":""}`)
+			body = []byte(`{"type":"about:blank","title":"Internal Server Error","status":500,"code":"internal_error","requestId":` + strconv.Quote(requestID) + `}`)
 		}
 	}
 
