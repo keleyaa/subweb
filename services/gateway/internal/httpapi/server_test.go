@@ -28,22 +28,30 @@ func TestHealthzDoesNotRequireDependencies(t *testing.T) {
 		},
 	})
 
-	response := serveRequest(t, server, http.MethodGet, "APP.EXAMPLE.TEST:8443", "/healthz", nil)
+	for _, host := range []string{
+		"APP.EXAMPLE.TEST:8443",
+		"api.example.test",
+		"short.example.test",
+	} {
+		t.Run(host, func(t *testing.T) {
+			response := serveRequest(t, server, http.MethodGet, host, "/healthz", nil)
 
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
-	}
-	if contentType := response.Header().Get("Content-Type"); contentType != "text/plain" {
-		t.Fatalf("Content-Type = %q, want text/plain", contentType)
-	}
-	if body := response.Body.String(); body != "ok\n" {
-		t.Fatalf("body = %q, want ok\\n", body)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+			}
+			if contentType := response.Header().Get("Content-Type"); contentType != "text/plain" {
+				t.Fatalf("Content-Type = %q, want text/plain", contentType)
+			}
+			if body := response.Body.String(); body != "ok\n" {
+				t.Fatalf("body = %q, want ok\\n", body)
+			}
+			if requestID := response.Header().Get("X-Request-ID"); requestID == "" {
+				t.Fatal("X-Request-ID is empty")
+			}
+		})
 	}
 	if converterCalled || shortLinksCalled || readinessCalled {
 		t.Fatalf("dependencies called: converter=%t shortLinks=%t readiness=%t", converterCalled, shortLinksCalled, readinessCalled)
-	}
-	if requestID := response.Header().Get("X-Request-ID"); requestID == "" {
-		t.Fatal("X-Request-ID is empty")
 	}
 }
 
@@ -70,6 +78,19 @@ func TestUnknownRouteReturns404(t *testing.T) {
 	}
 }
 
+func TestReadyzReturnsOKOnAppAndAPIHosts(t *testing.T) {
+	server := newTestServer(t, Dependencies{})
+
+	for _, host := range []string{"app.example.test", "api.example.test"} {
+		t.Run(host, func(t *testing.T) {
+			response := serveRequest(t, server, http.MethodGet, host, "/readyz", nil)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+			}
+		})
+	}
+}
+
 func TestReadinessFailsWhenEnabledDependencyIsDown(t *testing.T) {
 	server := newTestServer(t, Dependencies{
 		Readiness: func(context.Context) error {
@@ -77,16 +98,39 @@ func TestReadinessFailsWhenEnabledDependencyIsDown(t *testing.T) {
 		},
 	})
 
-	response := serveRequest(t, server, http.MethodGet, "api.example.test", "/readyz", nil)
+	for _, host := range []string{"app.example.test", "api.example.test"} {
+		t.Run(host, func(t *testing.T) {
+			response := serveRequest(t, server, http.MethodGet, host, "/readyz", nil)
 
-	if response.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+			if response.Code != http.StatusServiceUnavailable {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+			}
+			if contentType := response.Header().Get("Content-Type"); contentType != "application/problem+json" {
+				t.Fatalf("Content-Type = %q, want application/problem+json", contentType)
+			}
+			if body := response.Body.String(); strings.Contains(body, "super-secret") || strings.Contains(body, "redis://") {
+				t.Fatalf("response body leaked readiness error: %q", body)
+			}
+		})
 	}
-	if contentType := response.Header().Get("Content-Type"); contentType != "application/problem+json" {
-		t.Fatalf("Content-Type = %q, want application/problem+json", contentType)
+}
+
+func TestShortHostReadyzReturns404WithoutCheckingReadiness(t *testing.T) {
+	readinessCalled := false
+	server := newTestServer(t, Dependencies{
+		Readiness: func(context.Context) error {
+			readinessCalled = true
+			return errors.New("readiness should not be checked")
+		},
+	})
+
+	response := serveRequest(t, server, http.MethodGet, "short.example.test", "/readyz", nil)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
 	}
-	if body := response.Body.String(); strings.Contains(body, "super-secret") || strings.Contains(body, "redis://") {
-		t.Fatalf("response body leaked readiness error: %q", body)
+	if readinessCalled {
+		t.Fatal("Readiness was called")
 	}
 }
 
@@ -295,6 +339,7 @@ func TestAppShortCodeRouteContract(t *testing.T) {
 		{name: "short code head", method: http.MethodHead, path: "/abc_123-XYZ", wantCode: http.StatusNoContent},
 		{name: "short code post", method: http.MethodPost, path: "/abc_123-XYZ", wantCode: http.StatusMethodNotAllowed, wantAllow: "GET, HEAD"},
 		{name: "invalid path", method: http.MethodGet, path: "/not/a/code", wantCode: http.StatusNotFound},
+		{name: "short api query", method: http.MethodPost, path: "/short-api/links?x=1", wantCode: http.StatusNotFound},
 		{name: "short api post", method: http.MethodPost, path: "/short-api/links", wantCode: http.StatusNoContent},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -344,6 +389,7 @@ func TestDependencyRequestHeadersAreGatewayControlled(t *testing.T) {
 			request.Host = test.host
 			request.RemoteAddr = test.remoteAddr
 			addSpoofedForwardingHeaders(request)
+			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
 			server.Handler.ServeHTTP(response, request)
 
@@ -365,12 +411,17 @@ func TestDependencyRequestHeadersAreGatewayControlled(t *testing.T) {
 			if got := receivedHeaders.Get("X-Forwarded-For"); got != test.wantIP {
 				t.Fatalf("dependency X-Forwarded-For = %q, want %q", got, test.wantIP)
 			}
+			if got := receivedHeaders.Get("Content-Type"); got != "application/json" {
+				t.Fatalf("dependency Content-Type = %q, want application/json", got)
+			}
 			for _, header := range []string{
 				"Authorization",
 				"Proxy-Authorization",
 				"Cookie",
 				"Origin",
 				"Forwarded",
+				"X-Forwarded-By",
+				"X-Forwarded-Client-Cert",
 			} {
 				if values := receivedHeaders.Values(header); len(values) != 0 {
 					t.Fatalf("dependency %s = %q, want removed", header, values)
@@ -423,9 +474,12 @@ func addSpoofedForwardingHeaders(request *http.Request) {
 		"X-Forwarded-For",
 		"X-Forwarded-Host",
 		"X-Forwarded-Proto",
+		"X-Forwarded-By",
 		"X-Real-IP",
 		"X-Request-ID",
 	} {
 		request.Header.Add(header, "spoofed-"+strings.ToLower(header))
 	}
+	request.Header["fOrWaRdEd"] = []string{"spoofed-forwarded-mixed-case"}
+	request.Header["x-FoRwArDeD-Client-Cert"] = []string{"spoofed-client-cert"}
 }

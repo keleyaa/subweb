@@ -81,7 +81,8 @@ func (handler gatewayHandler) serveHTTP(response http.ResponseWriter, request *h
 		writer.enforceRequestID()
 	}()
 
-	if handler.classifyHost(request.Host) == unknownHost {
+	host := handler.classifyHost(request.Host)
+	if host == unknownHost {
 		writeStatusProblem(writer, requestID, http.StatusMisdirectedRequest, "misdirected_request")
 		return
 	}
@@ -95,6 +96,10 @@ func (handler gatewayHandler) serveHTTP(response http.ResponseWriter, request *h
 		writeOK(writer)
 		return
 	case "/readyz":
+		if host == shortHost {
+			writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
+			return
+		}
 		if request.Method != http.MethodGet {
 			writeMethodNotAllowed(writer, requestID, http.MethodGet)
 			return
@@ -107,7 +112,7 @@ func (handler gatewayHandler) serveHTTP(response http.ResponseWriter, request *h
 		return
 	}
 
-	switch handler.classifyHost(request.Host) {
+	switch host {
 	case apiHost:
 		handler.serveAPI(writer, request, requestID)
 	case appHost:
@@ -137,6 +142,10 @@ func (handler gatewayHandler) serveAPI(writer http.ResponseWriter, request *http
 
 func (handler gatewayHandler) serveApp(writer http.ResponseWriter, request *http.Request, requestID string) {
 	if request.URL.Path == "/short-api/links" {
+		if request.URL.RawQuery != "" {
+			writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
+			return
+		}
 		if request.Method != http.MethodPost {
 			writeMethodNotAllowed(writer, requestID, http.MethodPost)
 			return
@@ -179,18 +188,17 @@ func (handler gatewayHandler) serveDependency(dependency http.Handler, writer ht
 	if dependencyRequest.Header == nil {
 		dependencyRequest.Header = make(http.Header)
 	}
-	for _, header := range []string{
-		"Authorization",
-		"Proxy-Authorization",
-		"Cookie",
-		"Origin",
-		"Forwarded",
-		"X-Forwarded-For",
-		"X-Forwarded-Host",
-		"X-Forwarded-Proto",
-		"X-Real-IP",
-	} {
-		dependencyRequest.Header.Del(header)
+	for header := range dependencyRequest.Header {
+		name := strings.ToLower(header)
+		if name == "authorization" ||
+			name == "proxy-authorization" ||
+			name == "cookie" ||
+			name == "origin" ||
+			name == "forwarded" ||
+			strings.HasPrefix(name, "x-forwarded-") ||
+			name == "x-real-ip" {
+			delete(dependencyRequest.Header, header)
+		}
 	}
 	dependencyRequest.Host = publicDomain
 	dependencyRequest.Header.Set("X-Forwarded-Host", publicDomain)
