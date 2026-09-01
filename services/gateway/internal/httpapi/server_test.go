@@ -292,6 +292,33 @@ func serveRequest(t *testing.T, server *http.Server, method, host, path string, 
 	return response
 }
 
+func TestHostAuthorityRejectsUnicodeSimpleFoldEquivalent(t *testing.T) {
+	handlerCalls := 0
+	server := newTestServer(t, Dependencies{
+		ShortLinks: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			handlerCalls++
+			w.WriteHeader(http.StatusNoContent)
+		}),
+	})
+
+	uppercaseResponse := serveRequest(t, server, http.MethodGet, "APP.EXAMPLE.TEST", "/code", nil)
+	if uppercaseResponse.Code != http.StatusNoContent {
+		t.Fatalf("uppercase status = %d, want %d", uppercaseResponse.Code, http.StatusNoContent)
+	}
+	if handlerCalls != 1 {
+		t.Fatalf("uppercase handler calls = %d, want 1", handlerCalls)
+	}
+
+	handlerCalls = 0
+	unicodeResponse := serveRequest(t, server, http.MethodGet, "app.example.te\u017ft", "/code", nil)
+	if unicodeResponse.Code != http.StatusMisdirectedRequest {
+		t.Fatalf("Unicode status = %d, want %d", unicodeResponse.Code, http.StatusMisdirectedRequest)
+	}
+	if handlerCalls != 0 {
+		t.Fatalf("Unicode host handler calls = %d, want 0", handlerCalls)
+	}
+}
+
 func TestHostAuthorityRequiresConfiguredDomainAndValidOptionalPort(t *testing.T) {
 	server := newTestServer(t, Dependencies{})
 
@@ -435,6 +462,70 @@ func TestDependencyRequestHeadersAreGatewayControlled(t *testing.T) {
 				t.Fatalf("dependency X-Request-ID = %q, want %q", got, requestID)
 			}
 		})
+	}
+}
+
+func TestBufferedDependencyResponseCommitsFinalStatusAfterInformationalResponse(t *testing.T) {
+	server := newTestServer(t, Dependencies{
+		Converter: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Add("X-Upstream-Value", "first")
+			w.WriteHeader(http.StatusEarlyHints)
+			w.Header().Add("X-Upstream-Value", "second")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("final response"))
+		}),
+	})
+
+	response := serveRequest(t, server, http.MethodGet, "api.example.test", "/sub", nil)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if values := response.Header().Values("X-Upstream-Value"); strings.Join(values, ",") != "first,second" {
+		t.Fatalf("X-Upstream-Value = %q, want [first second]", values)
+	}
+	if body := response.Body.String(); body != "final response" {
+		t.Fatalf("body = %q, want final response", body)
+	}
+}
+
+func TestBufferedDependencyResponseRejectsProtocolUpgrade(t *testing.T) {
+	server := newTestServer(t, Dependencies{
+		Converter: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("X-Sensitive", "secret")
+			w.Header().Set("Set-Cookie", "session=leaked")
+			w.WriteHeader(http.StatusSwitchingProtocols)
+			_, _ = w.Write([]byte("leaked response"))
+		}),
+	})
+
+	response := serveRequest(t, server, http.MethodGet, "api.example.test", "/sub", nil)
+
+	if response.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadGateway)
+	}
+	if value := response.Header().Get("X-Sensitive"); value != "" {
+		t.Fatalf("X-Sensitive = %q, want removed", value)
+	}
+	if values := response.Header().Values("Set-Cookie"); len(values) != 0 {
+		t.Fatalf("Set-Cookie = %q, want removed", values)
+	}
+	if requestID := response.Header().Get("X-Request-ID"); requestID == "" {
+		t.Fatal("X-Request-ID is empty")
+	}
+	if body := response.Body.String(); !strings.Contains(body, `"code":"upstream_protocol_not_supported"`) || !strings.Contains(body, `"title":"Bad Gateway"`) || strings.Contains(body, "secret") || strings.Contains(body, "leaked") {
+		t.Fatalf("body = %q, want sanitized bad gateway problem", body)
+	}
+}
+
+func TestBufferedResponseWriterDoesNotSupportStreaming(t *testing.T) {
+	buffer := newBufferedResponseWriter()
+
+	if _, ok := any(buffer).(http.Flusher); ok {
+		t.Fatal("buffered response writer implements http.Flusher")
+	}
+	if err := http.NewResponseController(buffer).Flush(); !errors.Is(err, http.ErrNotSupported) {
+		t.Fatalf("ResponseController.Flush() error = %v, want %v", err, http.ErrNotSupported)
 	}
 }
 

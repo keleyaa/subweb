@@ -18,6 +18,11 @@ import (
 )
 
 // Dependencies are the handlers and readiness check used by the HTTP server.
+//
+// Dependency handlers must use only http.ResponseWriter's base Header, WriteHeader,
+// and Write methods. Gateway atomically buffers their responses, so streaming,
+// WebSocket upgrades, connection hijacking, HTTP/2 push, flushing, and other
+// optional ResponseWriter capabilities are unsupported.
 type Dependencies struct {
 	Converter  http.Handler
 	ShortLinks http.Handler
@@ -211,11 +216,18 @@ func (handler gatewayHandler) serveDependency(dependency http.Handler, writer ht
 
 	buffer := newBufferedResponseWriter()
 	dependency.ServeHTTP(buffer, dependencyRequest)
+	if buffer.status == http.StatusSwitchingProtocols {
+		writeStatusProblem(writer, requestID, http.StatusBadGateway, "upstream_protocol_not_supported")
+		return
+	}
 	buffer.commit(writer)
 }
 
 func (handler gatewayHandler) classifyHost(value string) hostKind {
 	host := requestHostname(value)
+	if !isStrictASCIIHostname(host) {
+		return unknownHost
+	}
 	switch {
 	case strings.EqualFold(host, handler.cfg.AppDomain):
 		return appHost
@@ -243,6 +255,35 @@ func requestHostname(value string) string {
 		return ""
 	}
 	return host
+}
+
+func isStrictASCIIHostname(value string) bool {
+	if len(value) == 0 || len(value) > 253 {
+		return false
+	}
+
+	labelStart := 0
+	for index := 0; index <= len(value); index++ {
+		if index != len(value) && value[index] != '.' {
+			continue
+		}
+
+		label := value[labelStart:index]
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, character := range label {
+			if (character < 'a' || character > 'z') &&
+				(character < 'A' || character > 'Z') &&
+				(character < '0' || character > '9') &&
+				character != '-' {
+				return false
+			}
+		}
+		labelStart = index + 1
+	}
+
+	return true
 }
 
 func isValidAuthorityPort(value string) bool {
@@ -343,6 +384,9 @@ func (writer *bufferedResponseWriter) Header() http.Header {
 
 func (writer *bufferedResponseWriter) WriteHeader(status int) {
 	if writer.wroteHeader {
+		return
+	}
+	if status >= http.StatusContinue && status < http.StatusOK && status != http.StatusSwitchingProtocols {
 		return
 	}
 	writer.status = status
