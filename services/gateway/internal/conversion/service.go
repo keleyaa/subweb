@@ -108,7 +108,7 @@ func (service *Service) ServeHTTP(response http.ResponseWriter, request *http.Re
 	defer release()
 
 	if err := service.validateQuery(requestContext, request.URL.Query()); err != nil {
-		if service.isContextError(requestContext, err) {
+		if request.Context().Err() != nil {
 			return
 		}
 		service.writeError(response, requestID, err)
@@ -126,7 +126,7 @@ func (service *Service) ServeHTTP(response http.ResponseWriter, request *http.Re
 		return
 	}
 	if _, err := service.RateLimiter.Allow(requestContext, conversionRateKey(ipHash)); err != nil {
-		if service.isContextError(requestContext, err) {
+		if request.Context().Err() != nil {
 			return
 		}
 		service.writeError(response, requestID, err)
@@ -135,7 +135,7 @@ func (service *Service) ServeHTTP(response http.ResponseWriter, request *http.Re
 
 	upstreamResponse, body, err := service.fetch(requestContext, request)
 	if err != nil {
-		if service.isContextError(requestContext, err) {
+		if request.Context().Err() != nil {
 			return
 		}
 		service.writeError(response, requestID, err)
@@ -367,8 +367,4 @@ func (service *Service) writeProblem(response http.ResponseWriter, requestID str
 		RetryAfterSeconds: retryAfterSeconds,
 	}
 	httpapi.WriteProblem(response, requestID, problem)
-}
-
-func (service *Service) isContextError(ctx context.Context, err error) bool {
-	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil
 }

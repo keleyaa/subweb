@@ -143,10 +143,12 @@ describe('release evidence and command gate', () => {
     expect(source).not.toContain('/short-api/v1/links');
   });
 
-  it('keeps an integration entrypoint that delegates to unified recovery verification', () => {
+  it('keeps an integration entrypoint that delegates to unified stack verification', () => {
     const source = fs.readFileSync(path.join(root, 'scripts/verify-integrated-stack.sh'), 'utf8');
+    const operations = fs.readFileSync(path.join(root, 'scripts/verify-redis-operations.sh'), 'utf8');
 
-    expect(source).toContain('exec "$script_directory/verify-redis-operations.sh"');
+    expect(source).toContain('exec "$script_directory/verify-unified-stack.sh"');
+    expect(operations).toContain('Unified Redis backup, restore, and service recovery verification passed.');
     expect(source).not.toContain('compose.hardened.yaml');
     expect(source).not.toContain('request-policy');
   });

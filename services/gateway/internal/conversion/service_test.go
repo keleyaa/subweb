@@ -268,6 +268,22 @@ func TestServicePropagatesClientCancellationToUpstream(t *testing.T) {
 	}
 }
 
+func TestServiceMapsItsOwnDeadlineToGatewayTimeout(t *testing.T) {
+	upstreamStarted := make(chan struct{})
+	transport := roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		close(upstreamStarted)
+		<-request.Context().Done()
+		return nil, request.Context().Err()
+	})
+	service := newTestService(t, "http://converter.invalid", acceptingPolicy())
+	service.Transport = transport
+	service.Timeout = 20 * time.Millisecond
+
+	response := serveConversionRequest(service, "https://public.example/feed")
+	<-upstreamStarted
+	assertProblem(t, response, http.StatusGatewayTimeout, "upstream_timeout")
+}
+
 func TestServiceAcceptsOnlyGET(t *testing.T) {
 	service := newTestService(t, "http://127.0.0.1:1", acceptingPolicy())
 	request := httptest.NewRequest(http.MethodPost, "/sub", nil)

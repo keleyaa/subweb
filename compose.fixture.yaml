@@ -1,0 +1,26 @@
+services:
+  gateway:
+    environment:
+      CONVERSION_RATE_LIMIT: "10"
+      CONVERSION_REQUEST_TIMEOUT_MS: "400"
+      CONVERSION_DNS_TIMEOUT_MS: "100"
+      CONVERSION_EGRESS_CONNECT_TIMEOUT_MS: "200"
+      CONVERSION_MAX_RESPONSE_BYTES: "1024"
+
+  subconverter:
+    build:
+      context: ./tests/fixtures/conversion-upstream
+      dockerfile: Dockerfile
+    image: subweb-conversion-upstream:local
+    user: "65532:65532"
+    cap_add: !reset []
+    environment: !reset {}
+    volumes: !reset []
+    tmpfs: !reset []
+    command: []
+    healthcheck:
+      test: [CMD, /fixture, --healthcheck]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      start_period: 2s

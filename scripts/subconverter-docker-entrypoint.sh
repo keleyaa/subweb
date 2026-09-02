@@ -28,6 +28,7 @@ trap 'rm -f "$temporary_pref"' EXIT HUP INT TERM
 sed -E \
   -e 's/^[[:space:]]*log_level[[:space:]]*=.*/log_level = "warn"/' \
   -e 's/^[[:space:]]*print_debug_info[[:space:]]*=.*/print_debug_info = false/' \
+  -e 's|^[[:space:]]*default_external_config[[:space:]]*=.*|default_external_config = "config/example_external_config.ini"|' \
   "$base_path/pref.example.toml" > "$temporary_pref"
 chmod 0600 "$temporary_pref"
 mv -f "$temporary_pref" "$pref_path"
