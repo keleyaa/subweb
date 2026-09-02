@@ -34,6 +34,28 @@ func TestSemaphoreStartsWithDistinctPermits(t *testing.T) {
 	semaphore.slots <- permitB
 }
 
+func TestSemaphoreTryAcquireReturnsImmediatelyWhenFull(t *testing.T) {
+	semaphore, err := NewSemaphore(1)
+	if err != nil {
+		t.Fatalf("NewSemaphore() error = %v", err)
+	}
+
+	release, err := semaphore.Acquire(context.Background())
+	if err != nil {
+		t.Fatalf("Acquire() error = %v", err)
+	}
+	if nextRelease, ok := semaphore.TryAcquire(); ok {
+		nextRelease()
+		t.Fatal("TryAcquire() succeeded while semaphore was full")
+	}
+	release()
+	if nextRelease, ok := semaphore.TryAcquire(); !ok {
+		t.Fatal("TryAcquire() failed after slot was released")
+	} else {
+		nextRelease()
+	}
+}
+
 func TestSemaphoreCancellationWhileWaitingConsumesNoSlot(t *testing.T) {
 	semaphore, err := NewSemaphore(1)
 	if err != nil {

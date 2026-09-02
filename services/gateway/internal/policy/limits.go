@@ -42,6 +42,22 @@ func NewSemaphore(capacity int) (*Semaphore, error) {
 	return &Semaphore{slots: slots}, nil
 }
 
+// TryAcquire takes a slot without waiting. It returns false when all slots are busy.
+func (semaphore *Semaphore) TryAcquire() (func(), bool) {
+	if semaphore == nil || semaphore.slots == nil {
+		return nil, false
+	}
+	select {
+	case permit := <-semaphore.slots:
+		var releaseOnce sync.Once
+		return func() {
+			releaseOnce.Do(func() { semaphore.slots <- permit })
+		}, true
+	default:
+		return nil, false
+	}
+}
+
 // Acquire waits for a slot or returns the context cancellation/deadline.
 func (semaphore *Semaphore) Acquire(ctx context.Context) (func(), error) {
 	if semaphore == nil || semaphore.slots == nil {
