@@ -12,6 +12,34 @@ import (
 	"github.com/keleyaa/subweb/services/gateway/internal/config"
 )
 
+func TestAppHostServesStaticPagesButAPIAndShortHostsDoNot(t *testing.T) {
+	staticCalls := 0
+	server := newTestServer(t, Dependencies{
+		Static: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			staticCalls++
+			if r.Host != "app.example.test" {
+				t.Errorf("static request Host = %q, want app.example.test", r.Host)
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte("app"))
+		}),
+	})
+
+	appResponse := serveRequest(t, server, http.MethodGet, "app.example.test", "/dashboard/settings", nil)
+	if appResponse.Code != http.StatusOK || appResponse.Body.String() != "app" {
+		t.Fatalf("app response = %d %q, want 200 app", appResponse.Code, appResponse.Body.String())
+	}
+	for _, host := range []string{"api.example.test", "short.example.test"} {
+		response := serveRequest(t, server, http.MethodGet, host, "/dashboard/settings", nil)
+		if response.Code != http.StatusNotFound {
+			t.Errorf("%s status = %d, want %d", host, response.Code, http.StatusNotFound)
+		}
+	}
+	if staticCalls != 1 {
+		t.Fatalf("static calls = %d, want 1", staticCalls)
+	}
+}
+
 func TestHealthzDoesNotRequireDependencies(t *testing.T) {
 	converterCalled := false
 	shortLinksCalled := false

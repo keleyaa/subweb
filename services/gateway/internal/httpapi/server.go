@@ -26,6 +26,7 @@ import (
 type Dependencies struct {
 	Converter  http.Handler
 	ShortLinks http.Handler
+	Static     http.Handler
 	Readiness  func(context.Context) error
 	Logger     *slog.Logger
 }
@@ -155,21 +156,36 @@ func (handler gatewayHandler) serveApp(writer http.ResponseWriter, request *http
 			writeMethodNotAllowed(writer, requestID, http.MethodPost)
 			return
 		}
-	} else {
-		if !isShortCodePath(request.URL.Path) {
+		if handler.deps.ShortLinks == nil {
 			writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
 			return
 		}
+		handler.serveDependency(handler.deps.ShortLinks, writer, request, requestID, handler.cfg.AppDomain)
+		return
+	}
+
+	if isShortCodePath(request.URL.Path) {
 		if request.Method != http.MethodGet && request.Method != http.MethodHead {
 			writeMethodNotAllowed(writer, requestID, "GET, HEAD")
 			return
 		}
+		if handler.deps.ShortLinks == nil {
+			writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
+			return
+		}
+		handler.serveDependency(handler.deps.ShortLinks, writer, request, requestID, handler.cfg.AppDomain)
+		return
 	}
-	if handler.deps.ShortLinks == nil {
+
+	if strings.HasPrefix(request.URL.Path, "/short-api/") {
 		writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
 		return
 	}
-	handler.serveDependency(handler.deps.ShortLinks, writer, request, requestID, handler.cfg.AppDomain)
+	if handler.deps.Static == nil {
+		writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
+		return
+	}
+	handler.deps.Static.ServeHTTP(writer, request)
 }
 
 func (handler gatewayHandler) serveShort(writer http.ResponseWriter, request *http.Request, requestID string) {

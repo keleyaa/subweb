@@ -66,6 +66,18 @@ describe('gateway routing contract', () => {
     expect(proxyHeaders).toContain('proxy_set_header Host @@PUBLIC_HOST@@;');
   });
 
+  it('routes Vite short-link development requests through the local Gateway', async () => {
+    const viteConfig = await readFile(rootFile('vite.config.mjs'), 'utf8');
+    expect(viteConfig).toContain('LOCAL_SUBWEB_PORT');
+    expect(viteConfig).toContain('target: `http://127.0.0.1:${localGatewayPort}`');
+    expect(viteConfig).not.toContain('LOCAL_MYURLS_PORT');
+    expect(viteConfig).not.toContain('VITE_LOCAL_SUBCONVERTER_URL');
+    expect(viteConfig).not.toContain('rewrite:');
+    for (const header of ['authorization', 'proxy-authorization', 'cookie', 'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip']) {
+      expect(viteConfig).toContain(`request.removeHeader('${header}')`);
+    }
+  });
+
   it('returns 421 for unknown hosts and uses a runtime resolver', async () => {
     const template = await readFile(rootFile('nginx/templates/http.conf.template'), 'utf8');
     const start = template.indexOf('server_name _;');
