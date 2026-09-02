@@ -111,7 +111,7 @@ describe('release evidence and command gate', () => {
     const releaseVerifier = fs.readFileSync(path.join(root, 'scripts/verify-release.sh'), 'utf8');
 
     expect(packageJson.scripts['verify:ci']).toBe(
-      'RUN_NGINX_GATEWAY_TESTS=1 RUN_DOCKER_INTEGRATION=1 RUN_REDIS_INTEGRATION=1 npm run verify',
+      'RUN_DOCKER_INTEGRATION=1 RUN_REDIS_INTEGRATION=1 npm run verify',
     );
     expect(workflow).toContain('run: npm run verify:ci');
     expect(workflow).toContain('file: ./Dockerfile');
@@ -143,17 +143,12 @@ describe('release evidence and command gate', () => {
     expect(source).not.toContain('/short-api/v1/links');
   });
 
-  it('checks a real MyUrls request after Redis restart', () => {
+  it('keeps an integration entrypoint that delegates to unified recovery verification', () => {
     const source = fs.readFileSync(path.join(root, 'scripts/verify-integrated-stack.sh'), 'utf8');
 
-    expect(source).toContain('redis_recovery_status=$(post_json');
-    expect(source).toContain('docker restart "$redis_container"');
-    expect(source).toContain('docker restart "$myurls_app_container"');
-    expect(source).toContain('docker restart "$myurls_short_container"');
-    expect(source).toContain('wait_for_healthy "$redis_container"');
-    expect(source).toContain('post_json_from_client "$client_a_container"');
-    expect(source).toContain('redis-recovery-retry-$sentinel_value');
-    expect(source).toContain('MyUrls did not recover Redis access after restart');
+    expect(source).toContain('exec "$script_directory/verify-redis-operations.sh"');
+    expect(source).not.toContain('compose.hardened.yaml');
+    expect(source).not.toContain('request-policy');
   });
 
   it('publishes one multi-platform release to Docker Hub and GHCR', () => {

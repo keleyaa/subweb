@@ -25,8 +25,7 @@
     "test:e2e": "playwright test",
     "verify:compose": "./scripts/validate-compose.sh",
     "verify:container": "./scripts/verify-container.sh subweb:ci",
-    "verify:simple": "./scripts/verify-simple-stack.sh",
-    "verify:integration": "npm run verify:simple && ./scripts/verify-integrated-stack.sh",
+    "verify:integration": "./scripts/verify-integrated-stack.sh",
     "verify:operations": "./scripts/verify-redis-operations.sh",
     "verify:local": "./scripts/verify-local-dev.sh",
     "verify:locks": "node scripts/verify-version-locks.mjs",
@@ -34,7 +33,7 @@
     "verify:evidence": "node scripts/verify-evidence.mjs",
     "verify:release": "./scripts/verify-release.sh",
     "verify": "npm test && npm run lint && npm run build",
-    "verify:ci": "RUN_NGINX_GATEWAY_TESTS=1 RUN_DOCKER_INTEGRATION=1 RUN_REDIS_INTEGRATION=1 npm run verify"
+    "verify:ci": "RUN_DOCKER_INTEGRATION=1 RUN_REDIS_INTEGRATION=1 npm run verify"
   },
   "dependencies": {
     "vue": "3.5.42"

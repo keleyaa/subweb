@@ -23,9 +23,7 @@ describe('Docker runtime contract', () => {
     expect(finalStage).toContain('USER 65532:65532');
     expect(finalStage).not.toContain('nginx');
     expect(finalStage).not.toMatch(/^(?:ARG|ENV)\s+(?:MYURLS_API_TOKEN|REDIS_PASSWORD)/m);
-    const startScript = await readFile(rootFile('start.sh'), 'utf8');
-    expect(startScript).not.toContain('configure_platform_runtime');
-    expect(startScript).not.toContain('normalize_platform_upstream');
+    await expect(access(rootFile('start.sh'))).rejects.toThrow();
   });
 
   it('provides a five-service Compose deployment with one loopback entrypoint', async () => {
@@ -54,42 +52,34 @@ describe('Docker runtime contract', () => {
     );
   });
 
-  it('ships reusable runtime smoke verification and environment examples', async () => {
+  it('ships a distroless Gateway healthcheck verifier without the retired combined image', async () => {
     await expect(access(rootFile('scripts/verify-container.sh'))).resolves.toBeUndefined();
     const verifier = await readFile(rootFile('scripts/verify-container.sh'), 'utf8');
-    const example = await readFile(rootFile('.env.example'), 'utf8');
 
+    expect(verifier).toContain('docker build --check --file Dockerfile .');
+    expect(verifier).toContain('docker build --file Dockerfile --tag "$image" .');
+    expect(verifier).toContain('State.Health');
+    expect(verifier).toContain('Gateway healthcheck did not pass before timeout');
     expect(verifier).toContain('--read-only');
     expect(verifier).toContain('--cap-drop ALL');
     expect(verifier).toContain('--security-opt no-new-privileges:true');
-    expect(verifier).toContain('--tmpfs /tmp:uid=101,gid=101,mode=0700');
-    expect(verifier).toContain('--tmpfs /usr/share/nginx/html/conf:uid=101,gid=101,mode=0700');
-    expect(verifier).toContain("-e SHORT_DOMAIN='short.example.com'");
-    expect(verifier).toContain("-e SUBCONVERTER_UPSTREAM='http://127.0.0.1:25500'");
-    expect(verifier).toContain("-e MYURLS_UPSTREAM='http://myurls:3000'");
+    expect(verifier).toContain('.Config.User');
+    expect(verifier).toContain('65532:65532');
+    expect(verifier).not.toContain('Dockerfile.simple');
+    expect(verifier).not.toContain('nginx');
     expect(verifier).not.toContain('MYURLS_API_TOKEN');
-    expect(verifier).toContain("ReadonlyRootfs");
-    expect(verifier).toContain("CapDrop");
-    expect(verifier).toContain("SecurityOpt");
-    expect(verifier).toContain("grep -Eq 'TOKEN|SECRET|PASSWORD'");
-    expect(verifier.match(/--header='Host: app\.example\.com'/g)).toHaveLength(2);
-    expect(example).toContain('API_URL=https://api.ml1.one');
-    expect(example).not.toContain('SHORT_URL=');
-    expect(example).toContain('IP_HASH_SECRET=REPLACE_WITH_64_CHARACTER_HEX');
-    expect(example).toContain('SUBWEB_PORT=18080');
   });
 
-  it('serves the SPA with security headers and an explicit health endpoint', async () => {
-    const nginx = await readFile(rootFile('nginx/snippets/security-headers.conf'), 'utf8');
-    const routes = await readFile(rootFile('nginx/snippets/app-routes.conf.template'), 'utf8');
-
-    expect(routes).toContain('location = /healthz');
-    expect(routes).toContain("try_files $uri $uri/ /runtime-index.html");
-    expect(nginx).toContain('Content-Security-Policy');
-    expect(nginx).toContain("connect-src 'self' https: http://127.0.0.1:* http://localhost:*");
-    expect(nginx).not.toContain("connect-src 'self' https: http:;");
-    expect(nginx).toContain('X-Content-Type-Options');
-    expect(nginx).toContain('Referrer-Policy');
+  it('removes retired Docker and Compose runtime artifacts', async () => {
+    for (const path of [
+      'Dockerfile.simple',
+      'compose.hardened.yaml',
+      'scripts/simple-start.sh',
+      'scripts/render-simple-gateway-config.sh',
+      'scripts/verify-simple-stack.sh',
+    ]) {
+      await expect(access(rootFile(path))).rejects.toThrow();
+    }
   });
 
   it('blocks releases until unified application, browser, and locked-image checks pass', async () => {

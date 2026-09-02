@@ -46,11 +46,8 @@ describe('normalizeRuntimeConfig', () => {
     expect(config).not.toHaveProperty('uxMode');
   });
 
-  it('keeps the public template secret-free and the container API marker aligned', async () => {
-    const [publicSource, startScript] = await Promise.all([
-      readFile(new URL('../../public/conf/config.js', import.meta.url), 'utf8'),
-      readFile(new URL('../../start.sh', import.meta.url), 'utf8'),
-    ]);
+  it('keeps the public template secret-free', async () => {
+    const publicSource = await readFile(new URL('../../public/conf/config.js', import.meta.url), 'utf8');
     const window = {};
     vm.runInNewContext(publicSource, { window });
     expect(window.__SUBWEB_CONFIG__).toEqual({
@@ -59,9 +56,6 @@ describe('normalizeRuntimeConfig', () => {
       remoteConfigOptions: DEFAULT_RUNTIME_CONFIG.remoteConfigOptions,
     });
     expect(window.config).toBe(window.__SUBWEB_CONFIG__);
-    expect(startScript).toContain('缺少必需的 API_URL');
-    expect(startScript).toContain('apiUrl:');
-    expect(startScript).not.toContain('SHORT_URL');
     expect(publicSource).not.toMatch(/SECRET|TOKEN|PASSWORD/u);
   });
 });

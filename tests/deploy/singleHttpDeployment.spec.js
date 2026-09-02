@@ -37,18 +37,12 @@ describe('single HTTP deployment contract', () => {
     expect(validator).not.toContain('COMPOSE_PROFILES');
   });
 
-  it('renders only the HTTP gateway and never validates TLS at startup', async () => {
-    const renderer = await readFile(rootFile('scripts/render-gateway-config.sh'), 'utf8');
-    const start = await readFile(rootFile('start.sh'), 'utf8');
+  it('starts the Go Gateway without a runtime Nginx renderer or direct TLS configuration', async () => {
     const dockerfile = await readFile(rootFile('Dockerfile'), 'utf8');
 
-    expect(renderer).toContain('http.conf.template');
-    expect(renderer).not.toContain('direct-tls.conf.template');
-    expect(renderer).not.toContain('GATEWAY_MODE');
-    expect(renderer).not.toContain('TLS_CERT_PATH');
-    expect(start).not.toContain('validate_direct_tls');
-    expect(start).not.toContain('openssl');
     expect(dockerfile).toContain('EXPOSE 8080 25502');
     expect(dockerfile).not.toContain('EXPOSE 8080 8443');
+    await expect(readFile(rootFile('start.sh'), 'utf8')).rejects.toThrow();
+    await expect(readFile(rootFile('scripts/render-gateway-config.sh'), 'utf8')).rejects.toThrow();
   });
 });

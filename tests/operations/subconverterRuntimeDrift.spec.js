@@ -21,9 +21,9 @@ describe('SubConverter runtime drift detection', () => {
   });
 
   it('is exercised by the integrated stack verifier on a fresh stack', async () => {
-    const verifier = await readFile(rootFile('scripts/verify-integrated-stack.sh'), 'utf8');
+    const verifier = await readFile(rootFile('scripts/verify-redis-operations.sh'), 'utf8');
 
-    expect(verifier).toContain('subconverter');
-    expect(verifier).toContain('compose logs');
+    expect(verifier).toContain('subconverter_runs_as_101');
+    expect(verifier).toContain('Unified Redis backup, restore, and service recovery verification passed.');
   });
 });
