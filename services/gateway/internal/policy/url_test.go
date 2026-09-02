@@ -49,6 +49,30 @@ func TestValidateAcceptsPublicHTTPSHostnameAndRetainsDialAddresses(t *testing.T)
 	}
 }
 
+func TestValidateRejectsOversizedResolverResult(t *testing.T) {
+	addresses := make([]netip.Addr, 17)
+	for index := range addresses {
+		addresses[index] = netip.MustParseAddr("93.184.216.34")
+	}
+	resolver := &fakeResolver{addresses: addresses}
+
+	_, err := ValidateRemoteURL(context.Background(), "https://example.com/path", resolver, Options{})
+	assertPolicyError(t, err, "too_many_addresses", 403)
+}
+
+func TestValidateRejectsSuccessfulLookupAfterContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	resolver := &fakeResolver{lookup: func(context.Context) ([]netip.Addr, error) {
+		cancel()
+		return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
+	}}
+
+	_, err := ValidateRemoteURL(ctx, "https://example.com/path", resolver, Options{})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("ValidateRemoteURL() error = %v, want context.Canceled", err)
+	}
+}
+
 func TestValidateAcceptsPublicIPWithoutResolver(t *testing.T) {
 	publicAddress := netip.MustParseAddr("1.1.1.1")
 	resolver := &fakeResolver{lookup: func(context.Context) ([]netip.Addr, error) {

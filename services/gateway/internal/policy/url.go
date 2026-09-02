@@ -10,7 +10,10 @@ import (
 	"strings"
 )
 
-const defaultMaxURLLength = 4096
+const (
+	defaultMaxURLLength  = 4096
+	maxResolvedAddresses = 16
+)
 
 // Resolver resolves all addresses for a hostname.
 type Resolver interface {
@@ -58,6 +61,12 @@ func ValidateRemoteURL(ctx context.Context, value string, resolver Resolver, opt
 	if err != nil || parsed == nil || !strings.EqualFold(parsed.Scheme, "https") || parsed.Host == "" || parsed.Hostname() == "" || parsed.User != nil {
 		return DialTarget{}, PolicyError{Code: "url_not_allowed", Status: 403}
 	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		if errors.Is(ctxErr, context.Canceled) {
+			return DialTarget{}, ctxErr
+		}
+		return DialTarget{}, PolicyError{Code: "dns_timeout", Status: 403}
+	}
 	if port := parsed.Port(); port != "" {
 		portNumber, err := strconv.Atoi(port)
 		if err != nil || portNumber != 443 {
@@ -81,11 +90,23 @@ func ValidateRemoteURL(ctx context.Context, value string, resolver Resolver, opt
 	}
 	addresses, err := resolver.LookupNetIP(ctx, "ip", hostname)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			return DialTarget{}, context.Canceled
+		}
 		var networkError net.Error
 		if (errors.As(err, &networkError) && networkError.Timeout()) || errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return DialTarget{}, PolicyError{Code: "dns_timeout", Status: 403}
 		}
 		return DialTarget{}, PolicyError{Code: "dns_unresolvable", Status: 403}
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		if errors.Is(ctxErr, context.Canceled) {
+			return DialTarget{}, ctxErr
+		}
+		return DialTarget{}, PolicyError{Code: "dns_timeout", Status: 403}
+	}
+	if len(addresses) > maxResolvedAddresses {
+		return DialTarget{}, PolicyError{Code: "too_many_addresses", Status: 403}
 	}
 	if len(addresses) == 0 {
 		return DialTarget{}, PolicyError{Code: "private_address", Status: 403}
