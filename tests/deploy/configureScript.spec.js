@@ -48,12 +48,42 @@ describe('single HTTP deployment configuration', () => {
     ['identical domains', ['--app-domain', 'example.com', '--api-domain', 'example.com', '--short-domain', 'short.example.com']],
     ['duplicate APP domain', [...baseArgs, '--app-domain', 'other.example.com']],
     ['TLS option', [...baseArgs, '--tls-cert', '/tmp/cert.pem']],
+    ['invalid Subweb port', [...baseArgs, '--subweb-port', '65536']],
+    ['non-loopback HTTP API URL', [...baseArgs, '--api-url', 'http://example.com']],
+    ['API URL userinfo', [...baseArgs, '--api-url', 'https://user@example.com']],
   ])('rejects %s without creating an environment file', async (_name, args) => {
     const cwd = await makeDirectory();
     const result = runConfigure(cwd, args);
     expect(result.status).not.toBe(0);
     await expect(readFile(join(cwd, '.env'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
     expect((await readdir(cwd)).filter((name) => name.includes('.tmp.'))).toEqual([]);
+  });
+
+  it('allows short links to be disabled without short-link domains or secrets', async () => {
+    const cwd = await makeDirectory();
+    const result = runConfigure(cwd, [
+      '--app-domain', 'example.com', '--api-domain', 'api.example.com',
+      '--short-links-enabled', 'false', '--custom-backend-enabled', 'false',
+    ]);
+    const env = parseEnv(await readFile(join(cwd, '.env'), 'utf8'));
+    expect(result.status, `${result.stdout}\\n${result.stderr}`).toBe(0);
+    expect(env).toMatchObject({
+      APP_DOMAIN: 'example.com', API_DOMAIN: 'api.example.com', API_URL: 'https://api.example.com',
+      SHORT_LINKS_ENABLED: 'false', CUSTOM_BACKEND_ENABLED: 'false',
+    });
+    for (const omitted of ['SHORT_DOMAIN', 'TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET_KEY', 'IP_HASH_SECRET', 'REDIS_PASSWORD']) {
+      expect(env[omitted]).toBeUndefined();
+    }
+  });
+
+  it.each([
+    ['short links', ['--short-links-enabled', 'maybe']],
+    ['custom backend', ['--custom-backend-enabled', '1']],
+  ])('rejects invalid %s feature values', async (_name, featureArgs) => {
+    const cwd = await makeDirectory();
+    const result = runConfigure(cwd, [...baseArgs, ...featureArgs]);
+    expect(result.status).not.toBe(0);
+    await expect(readFile(join(cwd, '.env'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('writes the fixed three-domain configuration with private generated secrets', async () => {

@@ -271,7 +271,7 @@ func (handler gatewayHandler) classifyHost(value string) hostKind {
 		return appHost
 	case strings.EqualFold(host, handler.cfg.APIDomain):
 		return apiHost
-	case strings.EqualFold(host, handler.cfg.ShortDomain):
+	case handler.cfg.ShortDomain != "" && strings.EqualFold(host, handler.cfg.ShortDomain):
 		return shortHost
 	default:
 		return unknownHost

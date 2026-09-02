@@ -29,13 +29,20 @@ set -eu
 printf '%s\\n' "$*" >> "$DOCKER_LOG"
 case "$*" in
   'compose version') exit 0 ;;
-  'compose config --quiet') exit 0 ;;
-  'compose config --format json')
-      printf '%s\n' '{"networks":{"default":{}},"services":{"subweb":{"ports":[{"host_ip":"127.0.0.1","published":"18080","target":8080}],"networks":{"default":{}}},"redis":{"networks":{"default":{}}},"myurls":{"networks":{"default":{}}}}}'
+  'compose -f compose.yaml config --quiet') exit 0 ;;
+  'compose -f compose.yaml config --format json')
+      printf '%s\n' '{"networks":{"default":{},"myurls-data":{"internal":true},"myurls-edge":{"internal":true},"redis-policy":{"internal":true},"subconverter-egress":{"internal":true}},"services":{"gateway":{"ports":[{"host_ip":"127.0.0.1","published":"18080","target":8080}],"networks":{"default":{},"myurls-edge":{},"redis-policy":{},"subconverter-egress":{}},"user":"65532:65532","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"],"environment":{"EGRESS_LISTEN_ADDR":"0.0.0.0:25502"}},"myurls-app":{"networks":{"myurls-data":{},"myurls-edge":{}},"user":"10001:10001","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"]},"myurls-short":{"networks":{"myurls-data":{},"myurls-edge":{}},"user":"10001:10001","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"]},"redis":{"networks":{"myurls-data":{},"redis-policy":{}},"user":"999:999","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"]},"subconverter":{"networks":{"subconverter-egress":{}},"user":"101:101","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"],"environment":{"HTTPS_PROXY":"http://gateway:25502"}}}}'
     ;;
-  'compose pull subweb redis myurls') exit "\${DOCKER_PULL_STATUS:-0}" ;;
-  'compose up -d --no-build --pull never --wait') exit 0 ;;
-  'compose ps') exit 0 ;;
+  'compose -f compose.yaml pull gateway subconverter myurls-app myurls-short redis') exit "\${DOCKER_PULL_STATUS:-0}" ;;
+  'compose -f compose.disabled-short-links.yaml config --quiet') exit 0 ;;
+  'compose -f compose.disabled-short-links.yaml config --format json')
+      printf '%s\n' '{"networks":{"default":{},"subconverter-egress":{"internal":true}},"services":{"gateway":{"ports":[{"host_ip":"127.0.0.1","published":"18080","target":8080}],"networks":{"default":{},"subconverter-egress":{}},"user":"65532:65532","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"],"environment":{"EGRESS_LISTEN_ADDR":"0.0.0.0:25502"}},"subconverter":{"networks":{"subconverter-egress":{}},"user":"101:101","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"]}}}'
+    ;;
+  'compose -f compose.disabled-short-links.yaml pull gateway subconverter') exit "\${DOCKER_PULL_STATUS:-0}" ;;
+  'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --wait') exit 0 ;;
+  'compose -f compose.disabled-short-links.yaml ps') exit 0 ;;
+  'compose -f compose.yaml up -d --no-build --pull never --wait') exit 0 ;;
+  'compose -f compose.yaml ps') exit 0 ;;
   *) exit 64 ;;
 esac
 `);
@@ -78,11 +85,11 @@ describe('Docker image quick deployment', () => {
     expect(await readFile(join(root, '.env'), 'utf8')).toContain(`SUBWEB_IMAGE=${image}\n`);
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toBe([
       'compose version',
-      'compose config --quiet',
-      'compose config --format json',
-      'compose pull subweb redis myurls',
-      'compose up -d --no-build --pull never --wait',
-      'compose ps',
+      'compose -f compose.yaml config --quiet',
+      'compose -f compose.yaml config --format json',
+      'compose -f compose.yaml pull gateway subconverter myurls-app myurls-short redis',
+      'compose -f compose.yaml up -d --no-build --pull never --wait',
+      'compose -f compose.yaml ps',
       '',
     ].join('\n'));
   });
@@ -97,10 +104,25 @@ describe('Docker image quick deployment', () => {
     expect(missing.stderr).toContain('--image is required');
     expect(mutable.status).not.toBe(0);
     expect(mutable.stderr).toContain('immutable sha-* tag or sha256 digest');
-    const hardenedOnly = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f', '--trusted-proxy-cidr', '172.18.0.1/32']);
-    expect(hardenedOnly.status).not.toBe(0);
-    expect(hardenedOnly.stderr).toContain('Unknown argument: --trusted-proxy-cidr');
-    await expect(readFile(join(root, 'docker.log'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    const invalidProxy = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f', '--trusted-proxy-cidr', '0.0.0.0/0']);
+    expect(invalidProxy.status).not.toBe(0);
+    expect(invalidProxy.stderr).toContain('TRUSTED_PROXY_CIDR');
+    const invalidProxyLog = await readFile(join(root, 'docker.log'), 'utf8');
+    expect(invalidProxyLog).toBe('compose version\n');
+  });
+
+  it('deploys only Gateway and SubConverter when short links are disabled', async () => {
+    const root = await makeFixture();
+    const result = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f', '--disable-short-links']);
+
+    expect(result.status, `${result.stdout}\\n${result.stderr}`).toBe(0);
+    const env = await readFile(join(root, '.env'), 'utf8');
+    expect(env).toContain('SHORT_LINKS_ENABLED=false\n');
+    expect(env).not.toMatch(/(?:SHORT_DOMAIN|TURNSTILE_|IP_HASH_SECRET|REDIS_PASSWORD)=/);
+    const log = await readFile(join(root, 'docker.log'), 'utf8');
+    expect(log).toContain('compose -f compose.disabled-short-links.yaml pull gateway subconverter');
+    expect(log).toContain('compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --wait');
+    expect(log).not.toContain('compose -f compose.yaml pull');
   });
 
   it('does not start containers when pulling an image fails', async () => {
@@ -110,7 +132,7 @@ describe('Docker image quick deployment', () => {
 
     expect(result.status).not.toBe(0);
     const log = await readFile(join(root, 'docker.log'), 'utf8');
-    expect(log).toContain('compose pull subweb redis myurls');
+    expect(log).toContain('compose -f compose.yaml pull gateway subconverter myurls-app myurls-short redis');
     expect(log).not.toContain('compose up');
   });
 });

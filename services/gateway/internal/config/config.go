@@ -83,19 +83,22 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	shortDomain, err := loadDomain("SHORT_DOMAIN", getenv("SHORT_DOMAIN"))
+	shortLinksEnabled, err := loadBoolean("SHORT_LINKS_ENABLED", getenv("SHORT_LINKS_ENABLED"), true)
 	if err != nil {
 		return Config{}, err
 	}
-	if appDomain == apiDomain || appDomain == shortDomain || apiDomain == shortDomain {
+	shortDomain := ""
+	if shortLinksEnabled {
+		shortDomain, err = loadDomain("SHORT_DOMAIN", getenv("SHORT_DOMAIN"))
+		if err != nil {
+			return Config{}, err
+		}
+	}
+	if appDomain == apiDomain || (shortDomain != "" && (appDomain == shortDomain || apiDomain == shortDomain)) {
 		return Config{}, fmt.Errorf("APP_DOMAIN, API_DOMAIN, and SHORT_DOMAIN must be distinct")
 	}
 
 	apiURL, err := loadAPIURL(getenv("API_URL"))
-	if err != nil {
-		return Config{}, err
-	}
-	shortLinksEnabled, err := loadBoolean("SHORT_LINKS_ENABLED", getenv("SHORT_LINKS_ENABLED"), true)
 	if err != nil {
 		return Config{}, err
 	}

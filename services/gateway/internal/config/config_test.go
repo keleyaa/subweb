@@ -117,9 +117,10 @@ func TestLoadRequiresShortLinkSecretsWhenEnabled(t *testing.T) {
 	}
 }
 
-func TestLoadDoesNotRequireShortLinkSecretsWhenDisabled(t *testing.T) {
+func TestLoadDoesNotRequireShortDomainOrShortLinkSecretsWhenDisabled(t *testing.T) {
 	env := validEnvironment()
 	env["SHORT_LINKS_ENABLED"] = "false"
+	delete(env, "SHORT_DOMAIN")
 
 	shortLinkOnlyVariables := []string{
 		"REDIS_URL",
@@ -148,6 +149,9 @@ func TestLoadDoesNotRequireShortLinkSecretsWhenDisabled(t *testing.T) {
 		if requested[name] {
 			t.Fatalf("Load() read %s when short links are disabled", name)
 		}
+	}
+	if cfg.ShortDomain != "" {
+		t.Fatalf("Load() ShortDomain = %q, want empty", cfg.ShortDomain)
 	}
 }
 

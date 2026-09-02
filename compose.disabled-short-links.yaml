@@ -34,7 +34,6 @@ services:
       API_URL: "${API_URL:?Set API_URL with scripts/configure.sh}"
       APP_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
       API_DOMAIN: "${API_DOMAIN:?Set API_DOMAIN with scripts/configure.sh}"
-      SHORT_DOMAIN: "${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
       SHORT_LINKS_ENABLED: "false"
       CUSTOM_BACKEND_ENABLED: "${CUSTOM_BACKEND_ENABLED:-true}"
       TRUSTED_PROXY_CIDR: "${TRUSTED_PROXY_CIDR:-}"
