@@ -27,6 +27,11 @@ function isChallenge(value) {
   );
 }
 
+function isContentType(response, mediaType) {
+  const contentType = response.headers.get('content-type') ?? '';
+  return new RegExp(`^${mediaType}(?:\\s*;|\\s*$)`, 'iu').test(contentType);
+}
+
 function errorDetails(value) {
   return isRecord(value?.error) ? value.error : value;
 }
@@ -151,7 +156,7 @@ export function createShortLinkClient({
           throw dependencyError();
         }
 
-        if (!isCreateLinkResponse(payload)) {
+        if (!isContentType(response, 'application/json') || !isCreateLinkResponse(payload)) {
           throw dependencyError();
         }
         return payload;

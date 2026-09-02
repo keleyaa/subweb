@@ -87,4 +87,22 @@ describe('gateway routing contract', () => {
     expect(template).toContain('resolver @@NGINX_RESOLVER@@ ipv6=off valid=30s;');
     expect(template).toContain('limit_req_zone $binary_remote_addr zone=subweb_short:10m rate=20r/m;');
   });
+
+  it('keeps the Go MyUrls adapter on the public short-link boundaries', async () => {
+    const [server, client, handler] = await Promise.all([
+      readFile(rootFile('services/gateway/internal/httpapi/server.go'), 'utf8'),
+      readFile(rootFile('services/gateway/internal/myurls/client.go'), 'utf8'),
+      readFile(rootFile('services/gateway/internal/myurls/handler.go'), 'utf8'),
+    ]);
+
+    expect(server).toContain('request.URL.Path == "/short-api/links"');
+    expect(server).toContain('case shortHost:');
+    expect(server).toContain('handler.serveDependency(handler.deps.ShortLinks');
+    expect(client).toContain('target.Path = requestPath');
+    expect(client).toContain('"/api/links"');
+    expect(client).not.toContain('/api/v1/links');
+    expect(handler).toContain('createPath       = "/short-api/links"');
+    expect(handler).toContain('shortCodePattern');
+    expect(handler).toContain('writeMyURLsError');
+  });
 });

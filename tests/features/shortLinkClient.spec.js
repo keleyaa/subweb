@@ -29,6 +29,20 @@ describe('ShortLinkClient HTTP adapter', () => {
     });
   });
 
+  it('rejects a valid payload served with a non-JSON content type', async () => {
+    const client = createShortLinkClient({
+      fetchImpl: async () => new Response(JSON.stringify(success), {
+        status: 201,
+        headers: { 'content-type': 'text/plain' },
+      }),
+    });
+
+    await expect(client.create({ url: 'https://example.com' })).rejects.toMatchObject({
+      code: 'dependency_unavailable',
+      status: 503,
+    });
+  });
+
   it('preserves stable challenge details from an RFC 9457 problem response', async () => {
     const fetchImpl = async () => new Response(JSON.stringify({
       type: 'https://short.example.test/problems/challenge_required',

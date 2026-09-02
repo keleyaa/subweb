@@ -26,9 +26,9 @@ describe('Compose-first local development workflow', () => {
     expect(override).toContain('PUBLIC_BASE_URL: "http://127.0.0.1:${LOCAL_MYURLS_PORT:-18082}"');
     expect(override).toContain('127.0.0.1:${LOCAL_MYURLS_PORT:-18082}:3000');
     expect(dependencies).toContain('Subweb and bundled SubConverter are not ready.');
-    expect(vite).toContain('Number.isInteger(localMyUrlsPortNumber)');
-    expect(vite).toContain('localMyUrlsPortNumber < 1024');
-    expect(vite).toContain('localMyUrlsPortNumber > 65535');
+    expect(vite).toContain('Number.isInteger(localGatewayPortNumber)');
+    expect(vite).toContain('localGatewayPortNumber < 1024');
+    expect(vite).toContain('localGatewayPortNumber > 65535');
     expect(vite).toContain("'/short-api'");
     expect(verifier).toContain('/short-api/links');
     expect(verifier).toContain('--connect-timeout');
