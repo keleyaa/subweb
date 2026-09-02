@@ -101,7 +101,9 @@ describe('release evidence and command gate', () => {
     const workflow = fs.readFileSync(path.join(root, '.github/workflows/docker-build-release.yml'), 'utf8');
     const releaseVerifier = fs.readFileSync(path.join(root, 'scripts/verify-release.sh'), 'utf8');
 
-    expect(packageJson.scripts['verify:ci']).toBe('RUN_NGINX_GATEWAY_TESTS=1 RUN_DOCKER_INTEGRATION=1 npm run verify');
+    expect(packageJson.scripts['verify:ci']).toBe(
+      'RUN_NGINX_GATEWAY_TESTS=1 RUN_DOCKER_INTEGRATION=1 RUN_REDIS_INTEGRATION=1 npm run verify',
+    );
     expect(workflow).toContain('run: npm run verify:ci');
     expect(workflow).toContain('run: npm run verify:local');
     expect(workflow).toContain('run: node scripts/verify-production-readiness.mjs');

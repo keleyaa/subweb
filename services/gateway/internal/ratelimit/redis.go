@@ -14,6 +14,7 @@ import (
 const (
 	conversionRateKeyPrefix = "subweb:rate:convert:"
 	redisHashLength         = 64
+	redisClientTimeout      = 5 * time.Second
 	redisIncrementScript    = `local count = redis.call("INCR", KEYS[1])
 local ttl = redis.call("TTL", KEYS[1])
 if ttl < 0 then
@@ -62,6 +63,18 @@ func NewRedisStore(redisURL, password string) (*RedisStore, error) {
 	}
 	options.Password = password
 	options.DB = 1
+	// This store performs a non-idempotent INCR inside Lua. A lost response
+	// must not cause go-redis to replay the script and count the request twice.
+	options.MaxRetries = -1
+	options.MinRetryBackoff = -1
+	options.MaxRetryBackoff = -1
+	options.ContextTimeoutEnabled = true
+	// Do not let URL query parameters disable the finite I/O budget. Request
+	// contexts remain the primary deadline; these bounds cover callers without one.
+	options.DialTimeout = redisClientTimeout
+	options.ReadTimeout = redisClientTimeout
+	options.WriteTimeout = redisClientTimeout
+	options.PoolTimeout = redisClientTimeout
 
 	client := redisv9.NewClient(options)
 	return &RedisStore{
@@ -158,7 +171,7 @@ func parseRedisIncrementResult(result any) (int64, error) {
 		return 0, errRedisUnavailable
 	}
 	ttl, ok := redisInt64(values[1])
-	if !ok || ttl < 1 {
+	if !ok || ttl < 0 {
 		return 0, errRedisUnavailable
 	}
 	return count, nil
