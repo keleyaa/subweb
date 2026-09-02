@@ -19,6 +19,21 @@ func TestNewSemaphoreRejectsInvalidCapacity(t *testing.T) {
 	}
 }
 
+func TestSemaphoreStartsWithDistinctPermits(t *testing.T) {
+	semaphore, err := NewSemaphore(2)
+	if err != nil {
+		t.Fatalf("NewSemaphore() error = %v", err)
+	}
+
+	permitA := <-semaphore.slots
+	permitB := <-semaphore.slots
+	if permitA == permitB {
+		t.Fatal("semaphore permits are not distinct")
+	}
+	semaphore.slots <- permitA
+	semaphore.slots <- permitB
+}
+
 func TestSemaphoreCancellationWhileWaitingConsumesNoSlot(t *testing.T) {
 	semaphore, err := NewSemaphore(1)
 	if err != nil {

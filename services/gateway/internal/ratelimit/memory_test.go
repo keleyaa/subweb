@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -31,6 +32,24 @@ func TestMemoryStoreIncrementsAndExpiresWindow(t *testing.T) {
 	}
 	if got != 1 {
 		t.Fatalf("Increment() after expiration = %d, want 1", got)
+	}
+}
+
+func TestMemoryStoreKeepsCountersSeparateForDifferentWindows(t *testing.T) {
+	now := time.Unix(100, 0)
+	store := newMemoryStore(func() time.Time { return now })
+	longWindow := 10 * time.Minute
+	shortWindow := time.Minute
+
+	if got, err := store.Increment(context.Background(), "client", longWindow); err != nil || got != 1 {
+		t.Fatalf("long-window initial Increment() = (%d, %v), want (1, nil)", got, err)
+	}
+	now = now.Add(2 * time.Minute)
+	if got, err := store.Increment(context.Background(), "client", shortWindow); err != nil || got != 1 {
+		t.Fatalf("short-window Increment() = (%d, %v), want (1, nil)", got, err)
+	}
+	if got, err := store.Increment(context.Background(), "client", longWindow); err != nil || got != 2 {
+		t.Fatalf("long-window continued Increment() = (%d, %v), want (2, nil)", got, err)
 	}
 }
 
@@ -71,9 +90,41 @@ func TestMemoryStoreRejectsInvalidWindowAndOverflow(t *testing.T) {
 		}
 	}
 
-	store.entries["full"] = memoryEntry{started: store.now(), count: math.MaxInt64}
+	store.entries[memoryEntryKey{key: "full", window: time.Hour}] = memoryEntry{started: store.now(), count: math.MaxInt64}
 	if _, err := store.Increment(context.Background(), "full", time.Hour); err == nil {
 		t.Fatal("Increment() at MaxInt64 error = nil, want overflow error")
+	}
+}
+
+func TestMemoryStoreRejectsOverlongKeysWithoutChangingState(t *testing.T) {
+	store := NewMemoryStore()
+	if _, err := store.Increment(context.Background(), "client", time.Minute); err != nil {
+		t.Fatalf("initial Increment() error = %v", err)
+	}
+	longKey := strings.Repeat("k", 257)
+	beforeEntries := len(store.entries)
+	if _, err := store.Increment(context.Background(), longKey, time.Minute); err == nil {
+		t.Error("Increment() with overlong key error = nil, want error")
+	}
+	if len(store.entries) != beforeEntries {
+		t.Errorf("entries after overlong key = %d, want %d", len(store.entries), beforeEntries)
+	}
+	if got, err := store.Increment(context.Background(), "client", time.Minute); err != nil || got != 2 {
+		t.Errorf("Increment() after rejected key = (%d, %v), want (2, nil)", got, err)
+	}
+
+	limiterStore := NewMemoryStore()
+	limiter, err := NewRateLimiter(limiterStore, 1, time.Minute)
+	if err != nil {
+		t.Fatalf("NewRateLimiter() error = %v", err)
+	}
+	result, err := limiter.Allow(context.Background(), longKey)
+	if result.Allowed || result.Remaining != 0 {
+		t.Errorf("Allow() with overlong key = %+v, want unavailable", result)
+	}
+	assertRateLimitError(t, err, "rate_limit_unavailable", 503)
+	if len(limiterStore.entries) != 0 {
+		t.Errorf("entries after unavailable key = %d, want 0", len(limiterStore.entries))
 	}
 }
 

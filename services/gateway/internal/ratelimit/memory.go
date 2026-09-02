@@ -8,9 +8,15 @@ import (
 	"time"
 )
 
-const maxMemoryStoreKeys = 10_000
+const (
+	maxMemoryStoreKeys     = 10_000
+	maxMemoryStoreKeyBytes = 256
+)
 
-var errMemoryStoreFull = errors.New("memory store key limit reached")
+var (
+	errMemoryStoreFull       = errors.New("memory store key limit reached")
+	errMemoryStoreKeyTooLong = errors.New("memory store key is too long")
+)
 
 // MemoryStore is a process-local CounterStore for the simplified single-
 // Gateway mode (SHORT_LINKS_ENABLED=false). It is not distributed and must not
@@ -18,8 +24,13 @@ var errMemoryStoreFull = errors.New("memory store key limit reached")
 type MemoryStore struct {
 	admissionOnce sync.Once
 	admission     chan struct{}
-	entries       map[string]memoryEntry
+	entries       map[memoryEntryKey]memoryEntry
 	now           func() time.Time
+}
+
+type memoryEntryKey struct {
+	key    string
+	window time.Duration
 }
 
 type memoryEntry struct {
@@ -36,13 +47,16 @@ func newMemoryStore(now func() time.Time) *MemoryStore {
 	if now == nil {
 		now = time.Now
 	}
-	return &MemoryStore{entries: make(map[string]memoryEntry), now: now}
+	return &MemoryStore{entries: make(map[memoryEntryKey]memoryEntry), now: now}
 }
 
 // Increment atomically increments key, resetting it after window expires.
 func (store *MemoryStore) Increment(ctx context.Context, key string, window time.Duration) (int64, error) {
 	if store == nil || !validWindow(window) {
 		return 0, errInvalidRateLimit
+	}
+	if len(key) > maxMemoryStoreKeyBytes {
+		return 0, errMemoryStoreKeyTooLong
 	}
 	if ctx == nil {
 		return 0, context.Canceled
@@ -66,16 +80,16 @@ func (store *MemoryStore) Increment(ctx context.Context, key string, window time
 		return 0, err
 	}
 	if store.entries == nil {
-		store.entries = make(map[string]memoryEntry)
+		store.entries = make(map[memoryEntryKey]memoryEntry)
 	}
 	now := time.Now()
 	if store.now != nil {
 		now = store.now()
 	}
 
-	expired := make([]string, 0)
+	expired := make([]memoryEntryKey, 0)
 	for entryKey, entry := range store.entries {
-		if !withinWindow(now, entry.started, window) {
+		if !withinWindow(now, entry.started, entryKey.window) {
 			expired = append(expired, entryKey)
 		}
 	}
@@ -86,7 +100,8 @@ func (store *MemoryStore) Increment(ctx context.Context, key string, window time
 		delete(store.entries, entryKey)
 	}
 
-	entry, ok := store.entries[key]
+	entryKey := memoryEntryKey{key: key, window: window}
+	entry, ok := store.entries[entryKey]
 	if !ok || !withinWindow(now, entry.started, window) {
 		entry = memoryEntry{started: now}
 	}
@@ -100,7 +115,7 @@ func (store *MemoryStore) Increment(ctx context.Context, key string, window time
 		return 0, err
 	}
 	entry.count++
-	store.entries[key] = entry
+	store.entries[entryKey] = entry
 	return entry.count, nil
 }
 

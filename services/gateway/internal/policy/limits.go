@@ -23,7 +23,11 @@ var (
 // Semaphore bounds concurrent work without reserving a slot for canceled
 // waiters. Each successful acquisition owns its idempotent release function.
 type Semaphore struct {
-	slots chan struct{}
+	slots chan *semaphorePermit
+}
+
+type semaphorePermit struct {
+	_ byte
 }
 
 // NewSemaphore constructs a semaphore with capacity slots.
@@ -31,7 +35,11 @@ func NewSemaphore(capacity int) (*Semaphore, error) {
 	if capacity <= 0 || capacity > maxSemaphoreCapacity {
 		return nil, errInvalidSemaphoreCapacity
 	}
-	return &Semaphore{slots: make(chan struct{}, capacity)}, nil
+	slots := make(chan *semaphorePermit, capacity)
+	for range capacity {
+		slots <- &semaphorePermit{}
+	}
+	return &Semaphore{slots: slots}, nil
 }
 
 // Acquire waits for a slot or returns the context cancellation/deadline.
@@ -48,14 +56,14 @@ func (semaphore *Semaphore) Acquire(ctx context.Context) (func(), error) {
 	default:
 	}
 	select {
-	case semaphore.slots <- struct{}{}:
+	case permit := <-semaphore.slots:
 		if err := ctx.Err(); err != nil {
-			<-semaphore.slots
+			semaphore.slots <- permit
 			return nil, err
 		}
 		var releaseOnce sync.Once
 		return func() {
-			releaseOnce.Do(func() { <-semaphore.slots })
+			releaseOnce.Do(func() { semaphore.slots <- permit })
 		}, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
