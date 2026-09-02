@@ -74,15 +74,17 @@ func (semaphore *Semaphore) Acquire(ctx context.Context) (func(), error) {
 // larger than maxBytes. The body is always closed; cancellation closes it too
 // so a transport that unblocks on Close cannot leave a read goroutine behind.
 func ReadResponseBody(ctx context.Context, body io.ReadCloser, maxBytes int64) ([]byte, error) {
+	var closeOnce sync.Once
+	closeBody := func() {
+		if body != nil {
+			closeOnce.Do(func() { _ = body.Close() })
+		}
+	}
+	defer closeBody()
+
 	if ctx == nil || body == nil || maxBytes < 0 || maxBytes > maxResponseBodyBytes {
 		return nil, errInvalidResponseLimit
 	}
-
-	var closeOnce sync.Once
-	closeBody := func() {
-		closeOnce.Do(func() { _ = body.Close() })
-	}
-	defer closeBody()
 
 	if err := ctx.Err(); err != nil {
 		closeBody()

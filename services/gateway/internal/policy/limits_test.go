@@ -105,6 +105,33 @@ func TestSemaphoreReleaseOnlyReleasesItsAcquisition(t *testing.T) {
 	releaseC()
 }
 
+func TestReadResponseBodyClosesBodyWhenRejectingArguments(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		ctx  context.Context
+		max  int64
+	}{
+		{name: "nil context", max: 1},
+		{name: "limit exceeds maximum", ctx: context.Background(), max: maxResponseBodyBytes + 1},
+		{name: "negative limit", ctx: context.Background(), max: -1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			body := &trackingReadCloser{reader: strings.NewReader("unread")}
+			_, err := ReadResponseBody(test.ctx, body, test.max)
+			if !errors.Is(err, errInvalidResponseLimit) {
+				t.Fatalf("ReadResponseBody() error = %v, want errInvalidResponseLimit", err)
+			}
+
+			body.mu.Lock()
+			closeCount := body.closeCount
+			body.mu.Unlock()
+			if closeCount != 1 {
+				t.Fatalf("body Close() calls = %d, want 1", closeCount)
+			}
+		})
+	}
+}
+
 func TestReadResponseBodyAllowsEmptyAndExactLimit(t *testing.T) {
 	for _, test := range []struct {
 		name string
@@ -184,9 +211,10 @@ func TestWithTotalTimeoutCombinesParentContext(t *testing.T) {
 }
 
 type trackingReadCloser struct {
-	reader  io.Reader
-	mu      sync.Mutex
-	maxRead int
+	reader     io.Reader
+	mu         sync.Mutex
+	maxRead    int
+	closeCount int
 }
 
 func (body *trackingReadCloser) Read(buffer []byte) (int, error) {
@@ -198,7 +226,12 @@ func (body *trackingReadCloser) Read(buffer []byte) (int, error) {
 	return body.reader.Read(buffer)
 }
 
-func (body *trackingReadCloser) Close() error { return nil }
+func (body *trackingReadCloser) Close() error {
+	body.mu.Lock()
+	body.closeCount++
+	body.mu.Unlock()
+	return nil
+}
 
 type blockingReadCloser struct {
 	started chan struct{}
