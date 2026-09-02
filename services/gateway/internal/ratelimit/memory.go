@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strings"
 	"sync"
 	"time"
 )
@@ -58,6 +59,7 @@ func (store *MemoryStore) Increment(ctx context.Context, key string, window time
 	if len(key) > maxMemoryStoreKeyBytes {
 		return 0, errMemoryStoreKeyTooLong
 	}
+	key = strings.Clone(key)
 	if ctx == nil {
 		return 0, context.Canceled
 	}

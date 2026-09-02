@@ -96,6 +96,26 @@ func TestMemoryStoreRejectsInvalidWindowAndOverflow(t *testing.T) {
 	}
 }
 
+func TestMemoryStoreCopiesShortKeysBeforeStoring(t *testing.T) {
+	backing := strings.Repeat("client", 1<<20)
+	key := backing[:len("client")]
+	store := NewMemoryStore()
+	window := time.Minute
+
+	if _, err := store.Increment(context.Background(), key, window); err != nil {
+		t.Fatalf("initial Increment() error = %v", err)
+	}
+
+	allocs := testing.AllocsPerRun(100, func() {
+		if _, err := store.Increment(context.Background(), key, window); err != nil {
+			t.Fatalf("repeated Increment() error = %v", err)
+		}
+	})
+	if allocs == 0 {
+		t.Fatalf("repeated Increment() allocations = %v, want a fresh key copy", allocs)
+	}
+}
+
 func TestMemoryStoreRejectsOverlongKeysWithoutChangingState(t *testing.T) {
 	store := NewMemoryStore()
 	if _, err := store.Increment(context.Background(), "client", time.Minute); err != nil {
