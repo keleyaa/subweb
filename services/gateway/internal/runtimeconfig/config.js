@@ -1,7 +1,10 @@
 /* global window */
 
-window.config = {
+window.__SUBWEB_CONFIG__ = {
   apiUrl: 'https://api.ml1.one',
+  shortLinksEnabled: true,
+  customBackendEnabled: true,
+  turnstileSiteKey: '',
   menuItem: [
     {
       title: 'GitHub',
@@ -28,3 +31,4 @@ window.config = {
     },
   ],
 };
+window.config = window.__SUBWEB_CONFIG__;

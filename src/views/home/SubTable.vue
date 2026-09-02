@@ -40,6 +40,7 @@
     </fieldset>
 
     <button
+      v-if="customBackendEnabled"
       id="subscription-backend-toggle"
       type="button"
       class="settings-status-row"
@@ -52,7 +53,7 @@
       <span class="settings-status-chevron" aria-hidden="true"></span>
     </button>
 
-    <Transition name="advanced-reveal" @after-leave="openPendingSettingsPanel">
+    <Transition v-if="customBackendEnabled" name="advanced-reveal" @after-leave="openPendingSettingsPanel">
       <fieldset v-if="isShowServiceSettings" id="subscription-backend-panel" class="advanced-config">
         <legend class="visually-hidden">订阅后端</legend>
         <div class="form-field">
@@ -139,6 +140,7 @@
           <small v-if="result.shortUrlExpiresAt">有效期至 {{ shortUrlExpiryLabel }}</small>
         </div>
         <button
+          v-if="shortLinksEnabled"
           type="button"
           class="secondary-action-button result-action-button"
           :disabled="isGeneratingShortUrl || isShortCopying"
@@ -148,14 +150,14 @@
           {{ shortActionLabel }}
         </button>
         <TurnstileChallenge
-          v-if="shortChallenge"
+          v-if="shortLinksEnabled && shortChallenge"
           :key="shortChallengeKey"
-          :site-key="shortChallenge.siteKey"
+          :site-key="shortChallenge.siteKey || turnstileSiteKey"
           :message="shortStatusMessage"
           @token="retryShortLink"
           @error="handleChallengeError"
         />
-        <p v-else-if="shortStatusMessage" class="short-link-feedback" role="status" aria-live="polite">
+        <p v-else-if="shortLinksEnabled && shortStatusMessage" class="short-link-feedback" role="status" aria-live="polite">
           {{ shortStatusMessage }}
         </p>
       </fieldset>
@@ -184,6 +186,8 @@ import {
   prepareConversion,
 } from './index.js';
 
+const runtimeConfig = window.__SUBWEB_CONFIG__ ?? window.config;
+
 export default {
   name: 'SubTable',
   components: { TurnstileChallenge },
@@ -191,8 +195,11 @@ export default {
     return {
       placeholder: '多订阅链接或节点请确保每行一条\n支持手动使用"|"分割多链接或节点',
       targetOptions: TARGET_OPTIONS.map((option) => ({ ...option })),
-      apiUrl: window.config.apiUrl,
-      remoteConfigOptions: window.config.remoteConfigOptions,
+      apiUrl: runtimeConfig.apiUrl,
+      remoteConfigOptions: runtimeConfig.remoteConfigOptions,
+      shortLinksEnabled: runtimeConfig.shortLinksEnabled,
+      customBackendEnabled: runtimeConfig.customBackendEnabled,
+      turnstileSiteKey: runtimeConfig.turnstileSiteKey,
       moreConfig: createDefaultMoreConfig(),
       moreConfigDraft: createDefaultMoreConfig(),
       isShowServiceSettings: false,
@@ -204,13 +211,15 @@ export default {
       shortChallenge: null,
       shortChallengeKey: 0,
       shortStatusMessage: '',
-      shortLinkWorkflow: createShortLinkWorkflow({
-        client: createShortLinkClient(),
-        copy: copyText,
-      }),
+      shortLinkWorkflow: runtimeConfig.shortLinksEnabled
+        ? createShortLinkWorkflow({
+            client: createShortLinkClient(),
+            copy: copyText,
+          })
+        : null,
       result: createEmptyResultState(),
       urls: '',
-      api: window.config.apiUrl,
+      api: runtimeConfig.apiUrl,
       target: 'clash',
       remoteConfig: '',
     };
@@ -240,7 +249,7 @@ export default {
       return hasCurrentConversionResult(this.result, this.conversionInput);
     },
     hasCurrentShortUrl() {
-      return hasCurrentShortUrlResult(this.result, this.conversionInput);
+      return this.shortLinksEnabled && hasCurrentShortUrlResult(this.result, this.conversionInput);
     },
     isSubscriptionCopying() {
       return this.result.subscriptionCopyStatus === COPY_STATUS.COPYING;
@@ -288,12 +297,14 @@ export default {
   },
   methods: {
     showServiceSettings() {
+      if (!this.customBackendEnabled) return;
       this.toggleSettingsPanel('backend');
     },
     showMoreConfig() {
       this.toggleSettingsPanel('advanced');
     },
     toggleSettingsPanel(panel) {
+      if (panel === 'backend' && !this.customBackendEnabled) return;
       const isOpen = panel === 'backend' ? this.isShowServiceSettings : this.isShowMoreConfig;
 
       if (isOpen) {
@@ -331,6 +342,11 @@ export default {
       this.openSettingsPanel(panel);
     },
     selectApi(event) {
+      if (!this.customBackendEnabled) {
+        this.isShowManualApiUrl = false;
+        this.api = this.apiUrl;
+        return;
+      }
       if (event.target.value === 'manual') {
         this.api = '';
         this.isShowManualApiUrl = true;
@@ -383,7 +399,7 @@ export default {
       await this.getSubUrl();
     },
     async handleShortUrlAction() {
-      if (this.isGeneratingShortUrl || this.isShortCopying) return;
+      if (!this.shortLinksEnabled || !this.shortLinkWorkflow || this.isGeneratingShortUrl || this.isShortCopying) return;
       if (this.hasCurrentShortUrl) {
         await this.copyResult(this.result.shortUrl, 'short');
         return;
@@ -398,6 +414,7 @@ export default {
         target: this.target,
         remoteConfig: this.remoteConfig,
         isShowManualApiUrl: this.isShowManualApiUrl,
+        customBackendEnabled: this.customBackendEnabled,
         isShowRemoteConfig: this.isShowRemoteConfig,
         isShowMoreConfig: this.hasAppliedMoreConfig,
         moreConfig: this.moreConfig,
@@ -427,6 +444,7 @@ export default {
       await this.copyResult(this.result.subUrl, 'subscription');
     },
     async getShortUrl(challengeToken) {
+      if (!this.shortLinksEnabled || !this.shortLinkWorkflow) return;
       if (!this.hasCurrentSubscriptionResult && !this.getConverter()) return;
       const requestConversionKey = this.result.conversionKey;
       const requestSubUrl = this.result.subUrl;
@@ -463,9 +481,11 @@ export default {
       }
     },
     retryShortLink(token) {
+      if (!this.shortLinksEnabled) return;
       void this.getShortUrl(token);
     },
     handleChallengeError() {
+      if (!this.shortLinksEnabled) return;
       this.shortStatusMessage = '验证服务暂时不可用，请稍后重试。';
       this.shortChallenge = null;
     },

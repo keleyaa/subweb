@@ -1,6 +1,9 @@
-window.config = {
+window.__SUBWEB_CONFIG__ = {
   // 转换后端 API 地址
   apiUrl: 'https://api.ml1.one',
+  shortLinksEnabled: true,
+  customBackendEnabled: true,
+  turnstileSiteKey: '',
   // 可选 GitHub 项目来源；首个安全 HTTPS GitHub URL 会显示在页脚，不作为顶部导航项。
   menuItem: [
     {
@@ -29,3 +32,4 @@ window.config = {
     },
   ],
 };
+window.config = window.__SUBWEB_CONFIG__;

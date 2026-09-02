@@ -178,6 +178,7 @@ const getSubLink = function (urls, api, target, remoteConfig, isShowMoreConfig, 
  * @param {*} input.target
  * @param {*} input.remoteConfig
  * @param {*} input.isShowManualApiUrl
+ * @param {boolean} [input.customBackendEnabled=true]
  * @param {*} input.isShowRemoteConfig
  * @param {*} input.isShowMoreConfig
  * @param {MoreConfig} input.moreConfig
@@ -187,12 +188,15 @@ const prepareConversion = function (input) {
   if (input.urls == '') {
     return { ok: false, error: 'missingUrls' };
   }
-  if (!input.isShowManualApiUrl && !regexCheck(input.apiUrl)) {
+  const customBackendEnabled = input.customBackendEnabled !== false;
+  if (!regexCheck(input.apiUrl)) {
     return { ok: false, error: 'invalidRuntimeApi' };
   }
-  if (!regexCheck(input.api)) {
+  if (customBackendEnabled && !regexCheck(input.api)) {
     return { ok: false, error: 'invalidApi' };
   }
+
+  const api = normalizeApi(customBackendEnabled ? input.api : input.apiUrl);
   if (input.remoteConfig == '' && input.isShowRemoteConfig) {
     return { ok: false, error: 'missingRemoteConfig' };
   }
@@ -200,7 +204,6 @@ const prepareConversion = function (input) {
     return { ok: false, error: 'invalidRemoteConfig' };
   }
 
-  const api = normalizeApi(input.api);
   return {
     ok: true,
     api,

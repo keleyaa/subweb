@@ -10,7 +10,14 @@ describe('normalizeRuntimeConfig', () => {
       shortUrl: 'https://retired.example.test',
       ignored: 'value',
     });
-    expect(Object.keys(config)).toEqual(['apiUrl', 'menuItem', 'remoteConfigOptions']);
+    expect(Object.keys(config)).toEqual([
+      'apiUrl',
+      'shortLinksEnabled',
+      'customBackendEnabled',
+      'turnstileSiteKey',
+      'menuItem',
+      'remoteConfigOptions',
+    ]);
     expect(config.apiUrl).toBe('https://api.example.test');
     expect(config).not.toHaveProperty('shortUrl');
   });
@@ -46,7 +53,12 @@ describe('normalizeRuntimeConfig', () => {
     ]);
     const window = {};
     vm.runInNewContext(publicSource, { window });
-    expect(window.config).toEqual(DEFAULT_RUNTIME_CONFIG);
+    expect(window.__SUBWEB_CONFIG__).toEqual({
+      ...DEFAULT_RUNTIME_CONFIG,
+      menuItem: DEFAULT_RUNTIME_CONFIG.menuItem,
+      remoteConfigOptions: DEFAULT_RUNTIME_CONFIG.remoteConfigOptions,
+    });
+    expect(window.config).toBe(window.__SUBWEB_CONFIG__);
     expect(startScript).toContain('缺少必需的 API_URL');
     expect(startScript).toContain('apiUrl:');
     expect(startScript).not.toContain('SHORT_URL');
