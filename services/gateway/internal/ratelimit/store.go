@@ -29,7 +29,10 @@ type RateLimiter struct {
 	window time.Duration
 }
 
-const maxRateLimitWindow = 24 * time.Hour
+const (
+	maxRateLimitWindow = 24 * time.Hour
+	maxRateLimit       = 10_000
+)
 
 var (
 	errInvalidRateLimit = errors.New("rate limiter configuration is invalid")
@@ -38,7 +41,7 @@ var (
 
 // NewRateLimiter validates and constructs a rate limiter.
 func NewRateLimiter(store CounterStore, limit int64, window time.Duration) (*RateLimiter, error) {
-	if store == nil || limit <= 0 || window <= 0 || window > maxRateLimitWindow {
+	if store == nil || limit <= 0 || limit > maxRateLimit || window <= 0 || window > maxRateLimitWindow {
 		return nil, errInvalidRateLimit
 	}
 	return &RateLimiter{store: store, limit: limit, window: window}, nil
@@ -48,7 +51,7 @@ func NewRateLimiter(store CounterStore, limit int64, window time.Duration) (*Rat
 // the request is rejected. Store failures fail closed as a service-unavailable
 // policy error rather than allowing an unmetered request through.
 func (limiter *RateLimiter) Allow(ctx context.Context, key string) (RateLimitResult, error) {
-	if limiter == nil || limiter.store == nil || limiter.limit <= 0 || limiter.window <= 0 || limiter.window > maxRateLimitWindow {
+	if limiter == nil || limiter.store == nil || limiter.limit <= 0 || limiter.limit > maxRateLimit || limiter.window <= 0 || limiter.window > maxRateLimitWindow {
 		return RateLimitResult{}, policy.PolicyError{Code: "rate_limit_unavailable", Status: 503}
 	}
 	if ctx == nil {

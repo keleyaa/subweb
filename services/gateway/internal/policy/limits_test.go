@@ -4,53 +4,90 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
 
+func TestNewSemaphoreRejectsInvalidCapacity(t *testing.T) {
+	for _, capacity := range []int{0, maxSemaphoreCapacity + 1, math.MaxInt} {
+		if _, err := NewSemaphore(capacity); err == nil {
+			t.Fatalf("NewSemaphore(%d) error = nil, want error", capacity)
+		}
+	}
+}
+
 func TestSemaphoreCancellationWhileWaitingConsumesNoSlot(t *testing.T) {
 	semaphore, err := NewSemaphore(1)
 	if err != nil {
 		t.Fatalf("NewSemaphore() error = %v", err)
 	}
-	if err := semaphore.Acquire(context.Background()); err != nil {
+	releaseFirst, err := semaphore.Acquire(context.Background())
+	if err != nil {
 		t.Fatalf("first Acquire() error = %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	acquired := make(chan error, 1)
-	go func() { acquired <- semaphore.Acquire(ctx) }()
+	acquired := make(chan struct {
+		release func()
+		err     error
+	}, 1)
+	go func() {
+		release, err := semaphore.Acquire(ctx)
+		acquired <- struct {
+			release func()
+			err     error
+		}{release: release, err: err}
+	}()
 	cancel()
 
-	if err := <-acquired; !errors.Is(err, context.Canceled) {
-		t.Fatalf("waiting Acquire() error = %v, want context.Canceled", err)
+	result := <-acquired
+	if !errors.Is(result.err, context.Canceled) {
+		t.Fatalf("waiting Acquire() error = %v, want context.Canceled", result.err)
 	}
-	semaphore.Release()
+	releaseFirst()
 
-	if err := semaphore.Acquire(context.Background()); err != nil {
+	releaseNext, err := semaphore.Acquire(context.Background())
+	if err != nil {
 		t.Fatalf("Acquire() after canceled waiter error = %v", err)
 	}
-	semaphore.Release()
+	releaseNext()
 }
 
-func TestSemaphoreReleaseIsSafeForDefer(t *testing.T) {
+func TestSemaphoreReleaseOnlyReleasesItsAcquisition(t *testing.T) {
 	semaphore, err := NewSemaphore(1)
 	if err != nil {
 		t.Fatalf("NewSemaphore() error = %v", err)
 	}
 
-	semaphore.Release()
-	if err := semaphore.Acquire(context.Background()); err != nil {
-		t.Fatalf("Acquire() after empty Release() error = %v", err)
+	releaseA, err := semaphore.Acquire(context.Background())
+	if err != nil {
+		t.Fatalf("Acquire(A) error = %v", err)
 	}
-	semaphore.Release()
-	semaphore.Release()
-	if err := semaphore.Acquire(context.Background()); err != nil {
-		t.Fatalf("Acquire() after duplicate Release() error = %v", err)
+	releaseA()
+	releaseB, err := semaphore.Acquire(context.Background())
+	if err != nil {
+		t.Fatalf("Acquire(B) error = %v", err)
 	}
-	semaphore.Release()
+	releaseA()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	if releaseC, err := semaphore.Acquire(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		if err == nil {
+			releaseC()
+		}
+		t.Fatalf("Acquire(C) after duplicate release error = %v, want deadline exceeded", err)
+	}
+
+	releaseB()
+	releaseC, err := semaphore.Acquire(context.Background())
+	if err != nil {
+		t.Fatalf("Acquire(C) after B release error = %v", err)
+	}
+	releaseC()
 }
 
 func TestReadResponseBodyAllowsEmptyAndExactLimit(t *testing.T) {

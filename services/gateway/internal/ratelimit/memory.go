@@ -2,18 +2,24 @@ package ratelimit
 
 import (
 	"context"
+	"errors"
 	"math"
 	"sync"
 	"time"
 )
 
+const maxMemoryStoreKeys = 10_000
+
+var errMemoryStoreFull = errors.New("memory store key limit reached")
+
 // MemoryStore is a process-local CounterStore for the simplified single-
 // Gateway mode (SHORT_LINKS_ENABLED=false). It is not distributed and must not
 // be used when multiple Gateway instances need a shared rate-limit view.
 type MemoryStore struct {
-	mu      sync.Mutex
-	entries map[string]memoryEntry
-	now     func() time.Time
+	admissionOnce sync.Once
+	admission     chan struct{}
+	entries       map[string]memoryEntry
+	now           func() time.Time
 }
 
 type memoryEntry struct {
@@ -45,8 +51,20 @@ func (store *MemoryStore) Increment(ctx context.Context, key string, window time
 		return 0, err
 	}
 
-	store.mu.Lock()
-	defer store.mu.Unlock()
+	store.admissionOnce.Do(func() {
+		store.admission = make(chan struct{}, 1)
+		store.admission <- struct{}{}
+	})
+	select {
+	case <-store.admission:
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
+	defer func() { store.admission <- struct{}{} }()
+
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	if store.entries == nil {
 		store.entries = make(map[string]memoryEntry)
 	}
@@ -55,12 +73,31 @@ func (store *MemoryStore) Increment(ctx context.Context, key string, window time
 		now = store.now()
 	}
 
+	expired := make([]string, 0)
+	for entryKey, entry := range store.entries {
+		if !withinWindow(now, entry.started, window) {
+			expired = append(expired, entryKey)
+		}
+	}
+	for _, entryKey := range expired {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		delete(store.entries, entryKey)
+	}
+
 	entry, ok := store.entries[key]
 	if !ok || !withinWindow(now, entry.started, window) {
 		entry = memoryEntry{started: now}
 	}
+	if !ok && len(store.entries) >= maxMemoryStoreKeys {
+		return 0, errMemoryStoreFull
+	}
 	if entry.count == math.MaxInt64 {
 		return 0, errCounterOverflow
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
 	}
 	entry.count++
 	store.entries[key] = entry

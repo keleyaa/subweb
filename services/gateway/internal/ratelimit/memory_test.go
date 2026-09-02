@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -84,6 +85,101 @@ func TestMemoryStoreHonorsCanceledContext(t *testing.T) {
 	}
 }
 
+func TestMemoryStoreCanceledWaiterDoesNotMutateAfterHeldLock(t *testing.T) {
+	nowStarted := make(chan struct{})
+	var nowStartedOnce sync.Once
+	allowNow := make(chan struct{})
+	store := newMemoryStore(func() time.Time {
+		nowStartedOnce.Do(func() { close(nowStarted) })
+		<-allowNow
+		return time.Unix(100, 0)
+	})
+
+	firstResult := make(chan error, 1)
+	go func() {
+		_, err := store.Increment(context.Background(), "client", time.Minute)
+		firstResult <- err
+	}()
+	<-nowStarted
+
+	waiter := newAdmissionContext()
+	waiterResult := make(chan error, 1)
+	go func() {
+		_, err := store.Increment(waiter, "waiter", time.Minute)
+		waiterResult <- err
+	}()
+	select {
+	case <-waiter.entered:
+	case <-time.After(time.Second):
+		waiter.cancel()
+		close(allowNow)
+		<-firstResult
+		t.Fatal("canceled waiter did not reach admission wait")
+	}
+
+	waiter.cancel()
+	select {
+	case err := <-waiterResult:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("canceled waiter error = %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		close(allowNow)
+		<-firstResult
+		t.Fatal("canceled waiter waited for held lock release")
+	}
+
+	close(allowNow)
+	if err := <-firstResult; err != nil {
+		t.Fatalf("first Increment() error = %v", err)
+	}
+	got, err := store.Increment(context.Background(), "next", time.Minute)
+	if err != nil {
+		t.Fatalf("Increment() after canceled waiter error = %v", err)
+	}
+	if got != 1 {
+		t.Fatalf("Increment() after canceled waiter = %d, want 1", got)
+	}
+}
+
+func TestMemoryStoreBoundsKeysAndCleansExpiredEntries(t *testing.T) {
+	now := time.Unix(100, 0)
+	store := newMemoryStore(func() time.Time { return now })
+	for i := 0; i < maxMemoryStoreKeys; i++ {
+		key := "client-" + strconv.Itoa(i)
+		if _, err := store.Increment(context.Background(), key, time.Minute); err != nil {
+			t.Fatalf("Increment(%q) error = %v", key, err)
+		}
+	}
+
+	if _, err := store.Increment(context.Background(), "new", time.Minute); !errors.Is(err, errMemoryStoreFull) {
+		t.Fatalf("Increment(new key at cap) error = %v, want key-cap error", err)
+	}
+
+	now = now.Add(time.Minute)
+	got, err := store.Increment(context.Background(), "new", time.Minute)
+	if err != nil {
+		t.Fatalf("Increment(new key after expiration) error = %v", err)
+	}
+	if got != 1 {
+		t.Fatalf("Increment(new key after expiration) = %d, want 1", got)
+	}
+	if len(store.entries) != 1 {
+		t.Fatalf("entries after expiration cleanup = %d, want 1", len(store.entries))
+	}
+}
+
+func TestRateLimiterAllowsMaximumFiniteLimit(t *testing.T) {
+	if _, err := NewRateLimiter(NewMemoryStore(), 10_000, time.Minute); err != nil {
+		t.Fatalf("NewRateLimiter(max finite limit) error = %v", err)
+	}
+	for _, limit := range []int64{10_001, math.MaxInt64} {
+		if _, err := NewRateLimiter(NewMemoryStore(), limit, time.Minute); err == nil {
+			t.Fatalf("NewRateLimiter(%d) error = nil, want error", limit)
+		}
+	}
+}
+
 func TestRateLimiterRejectsAfterLimitAndReportsMetadata(t *testing.T) {
 	limiter, err := NewRateLimiter(NewMemoryStore(), 2, time.Minute)
 	if err != nil {
@@ -133,6 +229,42 @@ func TestRateLimiterRejectsInvalidConfiguration(t *testing.T) {
 		if _, err := NewRateLimiter(NewMemoryStore(), test.limit, test.window); err == nil {
 			t.Fatalf("NewRateLimiter(%d, %v) error = nil, want error", test.limit, test.window)
 		}
+	}
+}
+
+type admissionContext struct {
+	done    chan struct{}
+	entered chan struct{}
+	once    sync.Once
+}
+
+func newAdmissionContext() *admissionContext {
+	return &admissionContext{done: make(chan struct{}), entered: make(chan struct{})}
+}
+
+func (ctx *admissionContext) Deadline() (time.Time, bool) { return time.Time{}, false }
+
+func (ctx *admissionContext) Done() <-chan struct{} {
+	ctx.once.Do(func() { close(ctx.entered) })
+	return ctx.done
+}
+
+func (ctx *admissionContext) Err() error {
+	select {
+	case <-ctx.done:
+		return context.Canceled
+	default:
+		return nil
+	}
+}
+
+func (ctx *admissionContext) Value(any) any { return nil }
+
+func (ctx *admissionContext) cancel() {
+	select {
+	case <-ctx.done:
+	default:
+		close(ctx.done)
 	}
 }
 

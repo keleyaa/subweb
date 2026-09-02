@@ -11,61 +11,54 @@ import (
 const (
 	maxResponseBodyBytes   int64         = 64 * 1024 * 1024
 	maxTotalRequestTimeout time.Duration = time.Hour
+	maxSemaphoreCapacity                 = 100
 )
 
 var (
-	errInvalidSemaphoreCapacity = errors.New("semaphore capacity must be positive")
+	errInvalidSemaphoreCapacity = errors.New("semaphore capacity is invalid")
 	errInvalidResponseLimit     = errors.New("response size limit is invalid")
 	errInvalidRequestTimeout    = errors.New("request timeout is invalid")
 )
 
 // Semaphore bounds concurrent work without reserving a slot for canceled
-// waiters. Release is intentionally idempotent so it is safe to defer.
+// waiters. Each successful acquisition owns its idempotent release function.
 type Semaphore struct {
 	slots chan struct{}
 }
 
 // NewSemaphore constructs a semaphore with capacity slots.
 func NewSemaphore(capacity int) (*Semaphore, error) {
-	if capacity <= 0 {
+	if capacity <= 0 || capacity > maxSemaphoreCapacity {
 		return nil, errInvalidSemaphoreCapacity
 	}
 	return &Semaphore{slots: make(chan struct{}, capacity)}, nil
 }
 
 // Acquire waits for a slot or returns the context cancellation/deadline.
-func (semaphore *Semaphore) Acquire(ctx context.Context) error {
+func (semaphore *Semaphore) Acquire(ctx context.Context) (func(), error) {
 	if semaphore == nil || semaphore.slots == nil {
-		return errInvalidSemaphoreCapacity
+		return nil, errInvalidSemaphoreCapacity
 	}
 	if ctx == nil {
-		return context.Canceled
+		return nil, context.Canceled
 	}
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return nil, ctx.Err()
 	default:
 	}
 	select {
 	case semaphore.slots <- struct{}{}:
 		if err := ctx.Err(); err != nil {
-			semaphore.Release()
-			return err
+			<-semaphore.slots
+			return nil, err
 		}
-		return nil
+		var releaseOnce sync.Once
+		return func() {
+			releaseOnce.Do(func() { <-semaphore.slots })
+		}, nil
 	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-// Release returns a slot. Releasing an empty semaphore is a no-op.
-func (semaphore *Semaphore) Release() {
-	if semaphore == nil || semaphore.slots == nil {
-		return
-	}
-	select {
-	case <-semaphore.slots:
-	default:
+		return nil, ctx.Err()
 	}
 }
 
