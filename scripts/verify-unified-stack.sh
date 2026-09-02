@@ -11,6 +11,16 @@ done
 
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 project_root=$(CDPATH= cd -- "$script_directory/.." && pwd -P)
+
+# This verifier owns every variable in its temporary Compose environment.
+unset \
+  APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN \
+  SHORT_LINKS_ENABLED CUSTOM_BACKEND_ENABLED \
+  CONVERSION_RATE_LIMIT CONVERSION_RATE_WINDOW_SECONDS \
+  SUBWEB_PORT MYURLS_NETWORK_SUBNET MYURLS_GATEWAY_IP MYURLS_APP_IP MYURLS_SHORT_IP MYURLS_TRUST_PROXY_CIDR \
+  REDIS_PASSWORD IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY \
+  MYURLS_IMAGE REDIS_IMAGE SUBCONVERTER_IMAGE
+
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/subweb-unified-smoke.XXXXXX")
 project_name=subweb-unified-smoke-$(openssl rand -hex 6)
 compose_files=$project_root/compose.yaml:$project_root/compose.test.yaml

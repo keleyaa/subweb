@@ -6,9 +6,8 @@
       "evidence": "docs/validation/docker-integration.md"
     },
     "local": {
-      "status": "designed",
-      "evidence": "docs/validation/local-dev.md",
-      "reason": "Static lifecycle contracts are verified, but the current maintainer machine lacks required native tools for a fresh full run."
+      "status": "verified",
+      "evidence": "docs/validation/local-dev.md"
     }
   }
 }

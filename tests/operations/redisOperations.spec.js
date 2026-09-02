@@ -82,4 +82,27 @@ describe('Redis operations safety contracts', () => {
     expect(verifier).toContain('image.reference}@${image.digest}');
     expect(verifier).toContain('printf \'%s\\n\' "$myurls_image"');
   });
+
+  it('isolates temporary Compose environments from caller configuration', () => {
+    const unifiedVerifier = fs.readFileSync(
+      path.join(root, 'scripts/verify-unified-stack.sh'),
+      'utf8',
+    );
+    const isolationBlock = `unset \\
+  APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN \\
+  SHORT_LINKS_ENABLED CUSTOM_BACKEND_ENABLED \\
+  CONVERSION_RATE_LIMIT CONVERSION_RATE_WINDOW_SECONDS \\
+  SUBWEB_PORT MYURLS_NETWORK_SUBNET MYURLS_GATEWAY_IP MYURLS_APP_IP MYURLS_SHORT_IP MYURLS_TRUST_PROXY_CIDR \\
+  REDIS_PASSWORD IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY \\
+  MYURLS_IMAGE REDIS_IMAGE SUBCONVERTER_IMAGE`;
+
+    for (const verifier of [operationsVerifier, path.join(root, 'scripts/verify-unified-stack.sh')]) {
+      const source = verifier === operationsVerifier
+        ? fs.readFileSync(verifier, 'utf8')
+        : unifiedVerifier;
+
+      expect(source).toContain(isolationBlock);
+      expect(source.indexOf(isolationBlock)).toBeLessThan(source.indexOf('export COMPOSE_FILE'));
+    }
+  });
 });

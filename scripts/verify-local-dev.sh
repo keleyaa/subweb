@@ -4,6 +4,11 @@ set -eu
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 project_root=$(CDPATH= cd -- "$script_directory/.." && pwd -P)
 
+# This verifier owns the generated local Compose environment.
+unset \
+  APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN SUBWEB_PORT \
+  REDIS_PASSWORD IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY
+
 "$script_directory/local/deps.sh" up
 cleanup() {
   if [ -n "${vite_pid:-}" ]; then

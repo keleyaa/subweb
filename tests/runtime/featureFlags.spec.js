@@ -64,7 +64,7 @@ describe('runtime business feature flags', () => {
     expect(source).toContain('v-if="customBackendEnabled"');
     expect(source).toContain('shortLinkWorkflow: runtimeConfig.shortLinksEnabled');
     expect(source).toContain('customBackendEnabled: runtimeConfig.customBackendEnabled');
-    expect(source).toContain('const runtimeConfig = window.__SUBWEB_CONFIG__ ?? window.config;');
+    expect(source).toContain('const runtimeConfig = normalizeRuntimeConfig(window.__SUBWEB_CONFIG__ ?? window.config);');
   });
 
   it('publishes the feature flags through the public config namespace', async () => {

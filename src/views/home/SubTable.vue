@@ -167,6 +167,7 @@
 
 <script>
 import TurnstileChallenge from '@/components/turnstile/TurnstileChallenge.vue';
+import { normalizeRuntimeConfig } from '@/runtime/config';
 import { copyText } from '@/features/clipboard/copy';
 import { TARGET_OPTIONS, createDefaultMoreConfig } from '@/features/conversion/options';
 import { createShortLinkClient } from '@/features/short-link/client';
@@ -186,7 +187,7 @@ import {
   prepareConversion,
 } from './index.js';
 
-const runtimeConfig = window.__SUBWEB_CONFIG__ ?? window.config;
+const runtimeConfig = normalizeRuntimeConfig(window.__SUBWEB_CONFIG__ ?? window.config);
 
 export default {
   name: 'SubTable',
