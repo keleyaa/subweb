@@ -74,9 +74,19 @@ func TestClientCreateUsesRustAPIPathAndSafeHeaders(t *testing.T) {
 		if request.Header.Get("X-Request-ID") != "req-create" {
 			t.Fatalf("X-Request-ID = %q, want req-create", request.Header.Get("X-Request-ID"))
 		}
-		for _, name := range []string{"Authorization", "Proxy-Authorization", "Cookie", "Origin"} {
+		for _, name := range []string{"Authorization", "Proxy-Authorization", "Cookie", "Origin", "Forwarded"} {
 			if got := request.Header.Get(name); got != "" {
 				t.Fatalf("%s = %q, want empty", name, got)
+			}
+		}
+		for name, want := range map[string]string{
+			"X-Forwarded-For":   "198.51.100.10",
+			"X-Forwarded-Host":  "app.example.test",
+			"X-Forwarded-Proto": "https",
+			"X-Real-IP":         "198.51.100.10",
+		} {
+			if got := request.Header.Get(name); got != want {
+				t.Fatalf("%s = %q, want %q", name, got, want)
 			}
 		}
 		body, err := io.ReadAll(request.Body)
@@ -95,6 +105,11 @@ func TestClientCreateUsesRustAPIPathAndSafeHeaders(t *testing.T) {
 	headers.Set("Proxy-Authorization", "secret")
 	headers.Set("Cookie", "secret")
 	headers.Set("Origin", "https://evil.test")
+	headers.Set("Forwarded", "for=evil.test")
+	headers.Set("X-Forwarded-For", "198.51.100.10")
+	headers.Set("X-Forwarded-Host", "app.example.test")
+	headers.Set("X-Forwarded-Proto", "https")
+	headers.Set("X-Real-IP", "198.51.100.10")
 	upstream, err := client.Create(context.Background(), []byte(`{"url":"https://example.test/sub"}`), headers)
 	if err != nil {
 		t.Fatal(err)
@@ -114,7 +129,7 @@ func TestClientDoesNotFollowMyURLsRedirects(t *testing.T) {
 		return redirect, nil
 	}))
 
-	upstream, err := client.Resolve(context.Background(), "Ab3dE9_x-1")
+	upstream, err := client.Resolve(context.Background(), "Ab3dE9_x-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,14 +153,14 @@ func TestClientResolveValidatesCodeAndUsesExactPath(t *testing.T) {
 		return response(http.StatusFound, ""), nil
 	}))
 
-	upstream, err := client.Resolve(context.Background(), "Ab3dE9_x-1")
+	upstream, err := client.Resolve(context.Background(), "Ab3dE9_x-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer upstream.Body.Close()
 
 	for _, code := range []string{"", "../secret", "bad/code", strings.Repeat("a", 65)} {
-		if _, err := client.Resolve(context.Background(), code); err == nil {
+		if _, err := client.Resolve(context.Background(), code, nil); err == nil {
 			t.Fatalf("Resolve(%q) succeeded, want validation error", code)
 		}
 	}
@@ -158,7 +173,7 @@ func TestClientBoundsUpstreamRequests(t *testing.T) {
 	}), 20*time.Millisecond)
 
 	started := time.Now()
-	_, err := client.Resolve(context.Background(), "Ab3dE9_x-1")
+	_, err := client.Resolve(context.Background(), "Ab3dE9_x-1", nil)
 	if err != ErrUnavailable {
 		t.Fatalf("error = %v, want ErrUnavailable", err)
 	}
@@ -173,7 +188,7 @@ func TestClientRejectsNilContext(t *testing.T) {
 		return nil, nil
 	}))
 
-	if _, err := client.Resolve(nil, "Ab3dE9_x-1"); err != ErrUnavailable {
+	if _, err := client.Resolve(nil, "Ab3dE9_x-1", nil); err != ErrUnavailable {
 		t.Fatalf("error = %v, want ErrUnavailable", err)
 	}
 }

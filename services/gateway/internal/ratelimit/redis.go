@@ -119,6 +119,21 @@ func (store *RedisStore) Increment(ctx context.Context, key string, window time.
 	return count, nil
 }
 
+// Ping verifies that the Redis dependency is reachable.
+func (store *RedisStore) Ping(ctx context.Context) error {
+	if store == nil || store.executor == nil || ctx == nil {
+		return errRedisUnavailable
+	}
+	pinger, ok := store.executor.(interface{ Ping(context.Context) error })
+	if !ok {
+		return errRedisUnavailable
+	}
+	if err := pinger.Ping(ctx); err != nil {
+		return errRedisUnavailable
+	}
+	return nil
+}
+
 // Close releases the Redis connection pool owned by the store.
 func (store *RedisStore) Close() error {
 	if store == nil || store.close == nil {
@@ -196,4 +211,8 @@ func redisInt64(value any) (int64, bool) {
 
 func (executor *redisExecutorAdapter) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {
 	return executor.client.Eval(ctx, script, keys, args...).Result()
+}
+
+func (executor *redisExecutorAdapter) Ping(ctx context.Context) error {
+	return executor.client.Ping(ctx).Err()
 }

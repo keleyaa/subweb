@@ -9,31 +9,26 @@ describe('Docker runtime contract', () => {
     const dockerfile = await readFile(rootFile('Dockerfile'), 'utf8');
     const finalStage = dockerfile.slice(dockerfile.lastIndexOf('FROM '));
 
-    expect(dockerfile).toMatch(/^FROM node:24-alpine@sha256:[0-9a-f]{64} AS build/m);
-    expect(finalStage).toMatch(/^FROM nginxinc\/nginx-unprivileged:1\.30\.4-alpine@sha256:[0-9a-f]{64}/m);
+    expect(dockerfile).toMatch(/^FROM node:24-alpine@sha256:[0-9a-f]{64} AS frontend-build/m);
+    expect(dockerfile).toMatch(/^FROM golang:1\.25-alpine@sha256:[0-9a-f]{64} AS gateway-build/m);
+    expect(finalStage).toMatch(/^FROM gcr\.io\/distroless\/static-debian12:nonroot@sha256:[0-9a-f]{64}/m);
     expect(finalStage).toContain('org.opencontainers.image.source="https://github.com/keleyaa/subweb"');
-    expect(finalStage).toContain('RUN apk update');
-    expect(finalStage).toContain('apk upgrade libcrypto3 libssl3');
-    expect(finalStage).toContain('apk add --no-cache tzdata');
-    expect(finalStage).toContain('tzdata');
-    expect(finalStage).toContain('ENV TZ=Asia/Shanghai');
-    expect(finalStage).toContain('EXPOSE 8080');
+    expect(dockerfile).toContain('RUN apk add --no-cache ca-certificates tzdata');
+    expect(finalStage).toContain('EXPOSE 8080 25502');
     expect(finalStage).toContain('HEALTHCHECK');
-    expect(finalStage).not.toContain('GATEWAY_MODE" = platform');
-    expect(finalStage).toContain('http://127.0.0.1:8080/healthz');
-    expect(finalStage).not.toContain('8443');
-    expect(finalStage).not.toContain('http://127.0.0.1:${GATEWAY_PORT}/healthz');
-    expect(finalStage).toContain('COPY --chown=101:101 nginx/templates /etc/nginx/gateway/templates');
-    expect(finalStage).toContain('COPY --chown=101:101 nginx/snippets /etc/nginx/gateway/snippets');
-    expect(finalStage).toContain('scripts/render-gateway-config.sh');
-    expect(finalStage).not.toContain('nginx/default.conf');
+    expect(finalStage).toContain('CMD ["/app/gateway", "--healthcheck"]');
+    expect(finalStage).toContain('COPY --from=frontend-build --chown=65532:65532 /app/dist /app/dist');
+    expect(finalStage).toContain('COPY --from=gateway-build /etc/ssl/certs/ca-certificates.crt');
+    expect(finalStage).toContain('COPY --from=gateway-build /usr/share/zoneinfo /usr/share/zoneinfo');
+    expect(finalStage).toContain('USER 65532:65532');
+    expect(finalStage).not.toContain('nginx');
     expect(finalStage).not.toMatch(/^(?:ARG|ENV)\s+(?:MYURLS_API_TOKEN|REDIS_PASSWORD)/m);
     const startScript = await readFile(rootFile('start.sh'), 'utf8');
     expect(startScript).not.toContain('configure_platform_runtime');
     expect(startScript).not.toContain('normalize_platform_upstream');
   });
 
-  it('provides a compact three-service Compose deployment with one loopback entrypoint', async () => {
+  it('provides a five-service Compose deployment with one loopback entrypoint', async () => {
     const compose = await readFile(rootFile('compose.yaml'), 'utf8');
 
     expect(compose).toContain('x-runtime-environment: &runtime-environment');
@@ -42,12 +37,14 @@ describe('Docker runtime contract', () => {
     expect(compose).toContain('driver: json-file');
     expect(compose).toContain('max-size: "10m"');
     expect(compose).toContain('max-file: "3"');
-    expect(compose).toContain('subweb:');
-    expect(compose).toContain('myurls:');
+    expect(compose).toContain('gateway:');
+    expect(compose).toContain('myurls-app:');
+    expect(compose).toContain('myurls-short:');
     expect(compose).toContain('redis:');
+    expect(compose).toContain('subconverter:');
     expect(compose).not.toContain('request-policy:');
     expect(compose).not.toContain('profiles:');
-    expect(compose).toContain('${SUBWEB_PORT:-18080}:8080');
+    expect(compose).toContain('127.0.0.1:${SUBWEB_PORT:-18080}:8080');
     expect(compose).toContain('redis-data:');
     expect(compose).toContain('no-new-privileges:true');
     expect(compose).toContain('cap_drop:');

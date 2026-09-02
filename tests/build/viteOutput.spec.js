@@ -13,7 +13,7 @@ describe('Vite production output', () => {
   it('keeps the Docker runtime contract aligned with the Vite output directory', async () => {
     const dockerfile = await readFile(new URL('../../Dockerfile', import.meta.url), 'utf8');
 
-    expect(dockerfile).toMatch(/COPY --chown=101:101 --from=build \/app\/dist \/usr\/share\/nginx\/html/);
+    expect(dockerfile).toMatch(/COPY --from=frontend-build --chown=65532:65532 \/app\/dist \/app\/dist/);
   });
 
   it('keeps secrets, private service names, and local runtime paths out of the production bundle', async () => {

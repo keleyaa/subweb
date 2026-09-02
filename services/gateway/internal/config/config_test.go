@@ -48,7 +48,7 @@ func TestLoadRejectsSignedListenPort(t *testing.T) {
 }
 
 func TestLoadRejectsInvalidDNSHostname(t *testing.T) {
-	for _, variable := range []string{"API_URL", "SUBCONVERTER_UPSTREAM", "MYURLS_UPSTREAM"} {
+	for _, variable := range []string{"API_URL", "SUBCONVERTER_UPSTREAM", "MYURLS_APP_UPSTREAM", "MYURLS_SHORT_UPSTREAM"} {
 		for name, value := range map[string]string{
 			"underscore":     "https://api_example.test",
 			"leading hyphen": "https://-bad.example.test",
@@ -98,11 +98,12 @@ func TestLoadAcceptsZoneScopedIPv6APIURL(t *testing.T) {
 
 func TestLoadRequiresShortLinkSecretsWhenEnabled(t *testing.T) {
 	for name, unset := range map[string]string{
-		"Redis URL":            "REDIS_URL",
-		"Redis password":       "REDIS_PASSWORD",
-		"IP hash secret":       "IP_HASH_SECRET",
-		"Turnstile site key":   "TURNSTILE_SITE_KEY",
-		"Turnstile secret key": "TURNSTILE_SECRET_KEY",
+		"Redis URL":             "REDIS_URL",
+		"Redis password":        "REDIS_PASSWORD",
+		"IP hash secret":        "IP_HASH_SECRET",
+		"Turnstile site key":    "TURNSTILE_SITE_KEY",
+		"MyUrls app upstream":   "MYURLS_APP_UPSTREAM",
+		"MyUrls short upstream": "MYURLS_SHORT_UPSTREAM",
 	} {
 		t.Run(name, func(t *testing.T) {
 			env := validEnvironment()
@@ -125,8 +126,8 @@ func TestLoadDoesNotRequireShortLinkSecretsWhenDisabled(t *testing.T) {
 		"REDIS_PASSWORD",
 		"IP_HASH_SECRET",
 		"TURNSTILE_SITE_KEY",
-		"TURNSTILE_SECRET_KEY",
-		"MYURLS_UPSTREAM",
+		"MYURLS_APP_UPSTREAM",
+		"MYURLS_SHORT_UPSTREAM",
 	}
 	for _, name := range shortLinkOnlyVariables {
 		delete(env, name)
@@ -204,7 +205,8 @@ func validEnvironment() map[string]string {
 		"TURNSTILE_SITE_KEY":     "turnstile-site-key",
 		"TURNSTILE_SECRET_KEY":   "turnstile-secret-key",
 		"SUBCONVERTER_UPSTREAM":  "http://subconverter:25500",
-		"MYURLS_UPSTREAM":        "http://myurls:3000",
+		"MYURLS_APP_UPSTREAM":    "http://myurls-app:3000",
+		"MYURLS_SHORT_UPSTREAM":  "http://myurls-short:3000",
 	}
 }
 

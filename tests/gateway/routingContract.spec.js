@@ -97,7 +97,8 @@ describe('gateway routing contract', () => {
 
     expect(server).toContain('request.URL.Path == "/short-api/links"');
     expect(server).toContain('case shortHost:');
-    expect(server).toContain('handler.serveDependency(handler.deps.ShortLinks');
+    expect(server).toContain('handler.deps.AppShortLinks');
+    expect(server).toContain('handler.deps.ShortLinks');
     expect(client).toContain('target.Path = requestPath');
     expect(client).toContain('"/api/links"');
     expect(client).not.toContain('/api/v1/links');

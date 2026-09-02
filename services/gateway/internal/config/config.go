@@ -13,6 +13,7 @@ import (
 
 const (
 	defaultListenAddr                  = "0.0.0.0:8080"
+	defaultEgressListenAddr            = "0.0.0.0:25502"
 	defaultConversionRateLimit         = 10
 	defaultConversionRateWindowSeconds = 60
 	defaultMaxRequestBytes             = 16 * 1024
@@ -35,6 +36,7 @@ const (
 // Config contains the Gateway's validated runtime configuration.
 type Config struct {
 	ListenAddr                 string
+	EgressListenAddr           string
 	AppDomain                  string
 	APIDomain                  string
 	ShortDomain                string
@@ -46,9 +48,9 @@ type Config struct {
 	RedisPassword              string
 	IPHashSecret               []byte
 	TurnstileSiteKey           string
-	TurnstileSecretKey         string
 	SubConverterUpstream       *url.URL
-	MyURLsUpstream             *url.URL
+	MyURLsAppUpstream          *url.URL
+	MyURLsShortUpstream        *url.URL
 	ConversionRateLimit        int
 	ConversionRateWindow       time.Duration
 	ConversionMaxRequestBytes  int64
@@ -66,6 +68,10 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	listenAddr, err := loadListenAddr(getenv("LISTEN_ADDR"))
+	if err != nil {
+		return Config{}, err
+	}
+	egressListenAddr, err := loadListenAddrNamed("EGRESS_LISTEN_ADDR", getenv("EGRESS_LISTEN_ADDR"), defaultEgressListenAddr)
 	if err != nil {
 		return Config{}, err
 	}
@@ -109,6 +115,7 @@ func Load(getenv func(string) string) (Config, error) {
 
 	cfg := Config{
 		ListenAddr:           listenAddr,
+		EgressListenAddr:     egressListenAddr,
 		AppDomain:            appDomain,
 		APIDomain:            apiDomain,
 		ShortDomain:          shortDomain,
@@ -128,7 +135,11 @@ func Load(getenv func(string) string) (Config, error) {
 		if err != nil {
 			return Config{}, err
 		}
-		myURLsUpstream, err := loadHTTPURL("MYURLS_UPSTREAM", getenv("MYURLS_UPSTREAM"))
+		myURLsAppUpstream, err := loadHTTPURL("MYURLS_APP_UPSTREAM", getenv("MYURLS_APP_UPSTREAM"))
+		if err != nil {
+			return Config{}, err
+		}
+		myURLsShortUpstream, err := loadHTTPURL("MYURLS_SHORT_UPSTREAM", getenv("MYURLS_SHORT_UPSTREAM"))
 		if err != nil {
 			return Config{}, err
 		}
@@ -140,17 +151,12 @@ func Load(getenv func(string) string) (Config, error) {
 		if err != nil {
 			return Config{}, err
 		}
-		turnstileSecretKey, err := required("TURNSTILE_SECRET_KEY", getenv("TURNSTILE_SECRET_KEY"))
-		if err != nil {
-			return Config{}, err
-		}
-
 		cfg.RedisURL = redisURL
 		cfg.RedisPassword = redisPassword
 		cfg.IPHashSecret = ipHashSecret
 		cfg.TurnstileSiteKey = turnstileSiteKey
-		cfg.TurnstileSecretKey = turnstileSecretKey
-		cfg.MyURLsUpstream = myURLsUpstream
+		cfg.MyURLsAppUpstream = myURLsAppUpstream
+		cfg.MyURLsShortUpstream = myURLsShortUpstream
 	}
 
 	if cfg.ConversionRateLimit, err = loadPositiveInt(getenv, "CONVERSION_RATE_LIMIT", defaultConversionRateLimit, maxConversionRateLimit); err != nil {
@@ -206,15 +212,19 @@ func Load(getenv func(string) string) (Config, error) {
 }
 
 func loadListenAddr(value string) (string, error) {
+	return loadListenAddrNamed("LISTEN_ADDR", value, defaultListenAddr)
+}
+
+func loadListenAddrNamed(name, value, fallback string) (string, error) {
 	if value == "" {
-		return defaultListenAddr, nil
+		return fallback, nil
 	}
 	host, port, err := net.SplitHostPort(value)
 	if err != nil || host == "" {
-		return "", fmt.Errorf("LISTEN_ADDR must be a host and port")
+		return "", fmt.Errorf("%s must be a host and port", name)
 	}
 	if err := validatePort(port); err != nil {
-		return "", fmt.Errorf("LISTEN_ADDR %w", err)
+		return "", fmt.Errorf("%s %w", name, err)
 	}
 	return value, nil
 }

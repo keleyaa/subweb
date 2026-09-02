@@ -75,9 +75,7 @@ func (handler *Handler) create(writer http.ResponseWriter, request *http.Request
 		writeProblem(writer, requestID, status, "invalid_request", nil, 0)
 		return
 	}
-	clientHeaders := make(http.Header)
-	clientHeaders.Set("X-Request-ID", requestID)
-	response, err := handler.client.Create(request.Context(), body, clientHeaders)
+	response, err := handler.client.Create(request.Context(), body, upstreamHeaders(request.Header, requestID))
 	if err != nil {
 		writeUnavailable(writer, requestID)
 		return
@@ -96,12 +94,19 @@ func (handler *Handler) resolve(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 
-	response, err := handler.client.Resolve(request.Context(), strings.TrimPrefix(request.URL.Path, "/"))
+	response, err := handler.client.Resolve(request.Context(), strings.TrimPrefix(request.URL.Path, "/"), upstreamHeaders(request.Header, requestID))
 	if err != nil {
 		writeUnavailable(writer, requestID)
 		return
 	}
 	writeResolveResponse(writer, response, requestID, handler.maxBodyBytes)
+}
+
+func upstreamHeaders(source http.Header, requestID string) http.Header {
+	headers := make(http.Header)
+	headers.Set("X-Request-ID", requestID)
+	copyForwardedHeaders(headers, source)
+	return headers
 }
 
 func writeCreateResponse(writer http.ResponseWriter, response *http.Response, requestID string, maxBodyBytes int64) {

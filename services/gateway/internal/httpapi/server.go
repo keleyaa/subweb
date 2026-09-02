@@ -24,11 +24,13 @@ import (
 // WebSocket upgrades, connection hijacking, HTTP/2 push, flushing, and other
 // optional ResponseWriter capabilities are unsupported.
 type Dependencies struct {
-	Converter  http.Handler
-	ShortLinks http.Handler
-	Static     http.Handler
-	Readiness  func(context.Context) error
-	Logger     *slog.Logger
+	Converter     http.Handler
+	AppShortLinks http.Handler
+	ShortLinks    http.Handler
+	Static        http.Handler
+	RuntimeConfig http.Handler
+	Readiness     func(context.Context) error
+	Logger        *slog.Logger
 }
 
 // NewServer creates the Gateway's single HTTP entrypoint.
@@ -156,11 +158,15 @@ func (handler gatewayHandler) serveApp(writer http.ResponseWriter, request *http
 			writeMethodNotAllowed(writer, requestID, http.MethodPost)
 			return
 		}
-		if handler.deps.ShortLinks == nil {
+		shortLinks := handler.deps.AppShortLinks
+		if shortLinks == nil {
+			shortLinks = handler.deps.ShortLinks
+		}
+		if shortLinks == nil {
 			writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
 			return
 		}
-		handler.serveDependency(handler.deps.ShortLinks, writer, request, requestID, handler.cfg.AppDomain)
+		handler.serveDependency(shortLinks, writer, request, requestID, handler.cfg.AppDomain)
 		return
 	}
 
@@ -169,16 +175,24 @@ func (handler gatewayHandler) serveApp(writer http.ResponseWriter, request *http
 			writeMethodNotAllowed(writer, requestID, "GET, HEAD")
 			return
 		}
-		if handler.deps.ShortLinks == nil {
+		shortLinks := handler.deps.AppShortLinks
+		if shortLinks == nil {
+			shortLinks = handler.deps.ShortLinks
+		}
+		if shortLinks == nil {
 			writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
 			return
 		}
-		handler.serveDependency(handler.deps.ShortLinks, writer, request, requestID, handler.cfg.AppDomain)
+		handler.serveDependency(shortLinks, writer, request, requestID, handler.cfg.AppDomain)
 		return
 	}
 
 	if strings.HasPrefix(request.URL.Path, "/short-api/") {
 		writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
+		return
+	}
+	if request.URL.Path == "/conf/config.js" && handler.deps.RuntimeConfig != nil {
+		handler.deps.RuntimeConfig.ServeHTTP(writer, request)
 		return
 	}
 	if handler.deps.Static == nil {
@@ -197,11 +211,15 @@ func (handler gatewayHandler) serveShort(writer http.ResponseWriter, request *ht
 		writeMethodNotAllowed(writer, requestID, "GET, HEAD")
 		return
 	}
-	if handler.deps.ShortLinks == nil {
+	shortLinks := handler.deps.ShortLinks
+	if shortLinks == nil {
+		shortLinks = handler.deps.AppShortLinks
+	}
+	if shortLinks == nil {
 		writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
 		return
 	}
-	handler.serveDependency(handler.deps.ShortLinks, writer, request, requestID, handler.cfg.ShortDomain)
+	handler.serveDependency(shortLinks, writer, request, requestID, handler.cfg.ShortDomain)
 }
 
 func (handler gatewayHandler) serveDependency(dependency http.Handler, writer http.ResponseWriter, request *http.Request, requestID, publicDomain string) {

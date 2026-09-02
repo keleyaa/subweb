@@ -18,7 +18,7 @@ var ErrUnavailable = errors.New("myurls unavailable")
 // Client is the narrow Gateway boundary for the MyUrls service.
 type Client interface {
 	Create(ctx context.Context, body []byte, headers http.Header) (*http.Response, error)
-	Resolve(ctx context.Context, code string) (*http.Response, error)
+	Resolve(ctx context.Context, code string, headers http.Header) (*http.Response, error)
 	Health(ctx context.Context) error
 }
 
@@ -70,18 +70,25 @@ func (client *HTTPClient) Create(ctx context.Context, body []byte, headers http.
 	if !validRequestID(requestID) {
 		requestID = newRequestID()
 	}
-	return client.do(ctx, http.MethodPost, "/api/links", body, requestID, true)
+	return client.do(ctx, http.MethodPost, "/api/links", body, requestID, true, headers)
 }
 
-func (client *HTTPClient) Resolve(ctx context.Context, code string) (*http.Response, error) {
+func (client *HTTPClient) Resolve(ctx context.Context, code string, headers http.Header) (*http.Response, error) {
 	if !shortCodePattern.MatchString(code) {
 		return nil, ErrUnavailable
 	}
-	return client.do(ctx, http.MethodGet, "/"+code, nil, newRequestID(), false)
+	requestID := ""
+	if headers != nil {
+		requestID = headers.Get("X-Request-ID")
+	}
+	if !validRequestID(requestID) {
+		requestID = newRequestID()
+	}
+	return client.do(ctx, http.MethodGet, "/"+code, nil, requestID, false, headers)
 }
 
 func (client *HTTPClient) Health(ctx context.Context) error {
-	response, err := client.do(ctx, http.MethodGet, "/health/live", nil, newRequestID(), false)
+	response, err := client.do(ctx, http.MethodGet, "/health/live", nil, newRequestID(), false, nil)
 	if err != nil {
 		return ErrUnavailable
 	}
@@ -95,7 +102,7 @@ func (client *HTTPClient) Health(ctx context.Context) error {
 	return nil
 }
 
-func (client *HTTPClient) do(ctx context.Context, method, requestPath string, body []byte, requestID string, hasBody bool) (*http.Response, error) {
+func (client *HTTPClient) do(ctx context.Context, method, requestPath string, body []byte, requestID string, hasBody bool, headers http.Header) (*http.Response, error) {
 	if ctx == nil || client.baseURL == nil || client.httpClient == nil {
 		return nil, ErrUnavailable
 	}
@@ -121,6 +128,7 @@ func (client *HTTPClient) do(ctx context.Context, method, requestPath string, bo
 		requestID = newRequestID()
 	}
 	request.Header.Set("X-Request-ID", requestID)
+	copyForwardedHeaders(request.Header, headers)
 
 	response, err := client.httpClient.Do(request)
 	if err != nil {
@@ -133,6 +141,17 @@ func (client *HTTPClient) do(ctx context.Context, method, requestPath string, bo
 		return nil, ErrUnavailable
 	}
 	return response, nil
+}
+
+func copyForwardedHeaders(destination, source http.Header) {
+	if source == nil {
+		return
+	}
+	for _, name := range []string{"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "X-Real-IP"} {
+		if value := source.Get(name); value != "" {
+			destination.Set(name, value)
+		}
+	}
 }
 
 var shortCodePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)

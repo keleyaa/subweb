@@ -23,14 +23,17 @@ describe('single HTTP deployment contract', () => {
     const compose = await readFile(rootFile('compose.yaml'), 'utf8');
     const validator = await readFile(rootFile('scripts/validate-compose.sh'), 'utf8');
 
-    expect(compose).toContain('  subweb:');
+    expect(compose).toContain('  gateway:');
     expect(compose).toContain('127.0.0.1:${SUBWEB_PORT:-18080}:8080');
-    expect(compose).not.toContain('gateway-http:');
+    expect(compose).toContain('  subconverter:');
+    expect(compose).toContain('  myurls-app:');
+    expect(compose).toContain('  myurls-short:');
+    expect(compose).not.toContain('  request-policy:');
     expect(compose).not.toContain('gateway-tls:');
     expect(compose).not.toContain('profiles:');
     expect(compose).not.toContain('TLS_CERT_PATH');
     expect(compose).not.toContain('TLS_KEY_PATH');
-    expect(validator).toContain('expectedGateway=subweb');
+    expect(validator).toContain('"gateway", "myurls-app", "myurls-short", "redis", "subconverter"');
     expect(validator).not.toContain('COMPOSE_PROFILES');
   });
 
@@ -45,7 +48,7 @@ describe('single HTTP deployment contract', () => {
     expect(renderer).not.toContain('TLS_CERT_PATH');
     expect(start).not.toContain('validate_direct_tls');
     expect(start).not.toContain('openssl');
-    expect(dockerfile).toContain('EXPOSE 8080');
+    expect(dockerfile).toContain('EXPOSE 8080 25502');
     expect(dockerfile).not.toContain('EXPOSE 8080 8443');
   });
 });

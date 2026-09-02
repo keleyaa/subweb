@@ -4,12 +4,9 @@ import { describe, expect, it } from 'vitest';
 
 const root = new URL('../../', import.meta.url);
 const composePath = new URL('../../compose.yaml', import.meta.url).pathname;
-const hardenedComposePath = new URL('../../compose.hardened.yaml', import.meta.url).pathname;
-const simpleDockerfilePath = new URL('../../Dockerfile.simple', import.meta.url).pathname;
-const simpleStartPath = new URL('../../scripts/simple-start.sh', import.meta.url).pathname;
-const simpleNginxPath = new URL('../../nginx/simple.conf.template', import.meta.url).pathname;
+const disabledComposePath = new URL('../../compose.disabled-short-links.yaml', import.meta.url).pathname;
 
-const renderCompose = () => {
+const renderCompose = (file = composePath, values = {}) => {
   const env = {
     ...process.env,
     APP_DOMAIN: 'app.example.com',
@@ -20,81 +17,103 @@ const renderCompose = () => {
     IP_HASH_SECRET: '0123456789abcdef'.repeat(4),
     TURNSTILE_SITE_KEY: 'test-site-key',
     TURNSTILE_SECRET_KEY: 'test-secret-key',
+    ...values,
   };
   for (const name of [
-    'SUBWEB_IMAGE', 'MYURLS_IMAGE', 'REDIS_IMAGE', 'SUBWEB_PORT',
-    'TRUSTED_PROXY_CIDR', 'MYURLS_TRUST_PROXY_CIDR',
+    'SUBWEB_IMAGE',
+    'MYURLS_IMAGE',
+    'REDIS_IMAGE',
+    'SUBWEB_PORT',
+    'TRUSTED_PROXY_CIDR',
+    'MYURLS_TRUST_PROXY_CIDR',
+    'SHORT_LINKS_ENABLED',
+    'CUSTOM_BACKEND_ENABLED',
   ]) delete env[name];
-  const result = spawnSync('docker', [
-    'compose', '-f', composePath, 'config', '--format', 'json',
-  ], { cwd: root.pathname, encoding: 'utf8', env });
+  const result = spawnSync('docker', ['compose', '-f', file, 'config', '--format', 'json'], {
+    cwd: root.pathname,
+    encoding: 'utf8',
+    env,
+  });
   expect(result.status, result.stderr).toBe(0);
   return JSON.parse(result.stdout);
 };
 
-describe('simple three-service deployment', () => {
-  it('renders only the bundled Subweb, one MyUrls, and Redis services', () => {
+describe('unified Compose deployment', () => {
+  it('renders the five-service production topology with one loopback entrypoint', () => {
     const config = renderCompose();
-    expect(Object.keys(config.services).sort()).toEqual(['myurls', 'redis', 'subweb']);
-    expect(config.services.subweb.ports).toEqual([
+    expect(Object.keys(config.services).sort()).toEqual([
+      'gateway',
+      'myurls-app',
+      'myurls-short',
+      'redis',
+      'subconverter',
+    ]);
+    expect(config.services.gateway.ports).toEqual([
       expect.objectContaining({ host_ip: '127.0.0.1', published: '18080', target: 8080 }),
     ]);
-    expect(config.services.myurls.ports).toBeUndefined();
-    expect(config.services.redis.ports).toBeUndefined();
-    expect(config.services.subweb.environment).toMatchObject({
+    for (const name of ['myurls-app', 'myurls-short', 'redis', 'subconverter']) {
+      expect(config.services[name].ports).toBeUndefined();
+    }
+    expect(config.services.gateway.environment).toMatchObject({
       API_URL: 'https://api.example.com',
       APP_DOMAIN: 'app.example.com',
       API_DOMAIN: 'api.example.com',
       SHORT_DOMAIN: 'short.example.com',
-      MANAGED_CONFIG_PREFIX: 'https://api.example.com',
-      SUBCONVERTER_SECURITY_PROFILE: 'public',
-      SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: 'false',
-      SUBCONVERTER_UPSTREAM: 'http://127.0.0.1:25500',
-      MYURLS_UPSTREAM: 'http://myurls:3000',
-    });
-    expect(config.services.myurls.environment).toMatchObject({
-      PUBLIC_BASE_URL: 'https://short.example.com',
-      TURNSTILE_HOSTNAME: 'app.example.com',
-      REDIS_URL: 'redis://redis:6379/0',
-      TRUST_PROXY_CIDRS: '172.16.0.0/12',
+      EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
+      SUBCONVERTER_UPSTREAM: 'http://subconverter:25500',
+      MYURLS_APP_UPSTREAM: 'http://myurls-app-edge:3000',
+      MYURLS_SHORT_UPSTREAM: 'http://myurls-short-edge:3000',
+      REDIS_URL: 'redis://redis:6379/1',
     });
   });
 
-  it('keeps the simplified and hardened local image fallbacks isolated', async () => {
-    const [simpleCompose, hardenedCompose] = await Promise.all([
-      readFile(composePath, 'utf8'),
-      readFile(hardenedComposePath, 'utf8'),
-    ]);
-
-    expect(simpleCompose).toContain('image: "${SUBWEB_IMAGE:-subweb:local}"');
-    expect(hardenedCompose).toContain('image: "${SUBWEB_IMAGE:-subweb:hardened-local}"');
-  });
-
-  it("keeps all services on Docker's one default Compose network", () => {
+  it('keeps the Gateway, data, and egress networks isolated', () => {
     const config = renderCompose();
-    for (const name of ['subweb', 'myurls', 'redis']) {
-      expect(Object.keys(config.services[name].networks)).toEqual(['default']);
+    expect(Object.keys(config.services.gateway.networks).sort()).toEqual([
+      'default',
+      'myurls-edge',
+      'redis-policy',
+      'subconverter-egress',
+    ]);
+    expect(Object.keys(config.services.redis.networks).sort()).toEqual(['myurls-data', 'redis-policy']);
+    for (const name of ['myurls-app', 'myurls-short']) {
+      expect(Object.keys(config.services[name].networks).sort()).toEqual(['myurls-data', 'myurls-edge']);
     }
-    expect(config.services.subweb.networks.default).toBeNull();
+    expect(Object.keys(config.services.subconverter.networks)).toEqual(['subconverter-egress']);
+    for (const name of ['myurls-data', 'myurls-edge', 'redis-policy', 'subconverter-egress']) {
+      expect(config.networks[name].internal).toBe(true);
+    }
   });
 
-  it('bundles the converter and starts both processes under one container', async () => {
-    const dockerfile = await readFile(simpleDockerfilePath, 'utf8');
-    const start = await readFile(simpleStartPath, 'utf8');
-    expect(dockerfile).toContain('ARG SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:');
-    expect(dockerfile).toContain('FROM ${SUBCONVERTER_IMAGE} AS runtime');
-    expect(dockerfile).toContain('--header="Host: $APP_DOMAIN"');
-    expect(dockerfile).not.toContain('--header="Host: $$APP_DOMAIN"');
-    expect(start).toContain('/usr/local/bin/subweb-subconverter-entrypoint');
-    expect(start).toContain('mkdir -p "${runtime_base%/*}"');
-    expect(start).toContain('nginx_bin')
+  it('renders only Gateway and SubConverter when short links are disabled', () => {
+    const config = renderCompose(disabledComposePath, { SHORT_LINKS_ENABLED: 'false' });
+    expect(Object.keys(config.services).sort()).toEqual(['gateway', 'subconverter']);
+    expect(config.services.gateway.environment.SHORT_LINKS_ENABLED).toBe('false');
+    expect(config.services.gateway.environment.REDIS_URL).toBeUndefined();
+    expect(config.services.gateway.environment.REDIS_PASSWORD).toBeUndefined();
+    expect(config.networks['myurls-data']).toBeUndefined();
+    expect(config.networks['redis-policy']).toBeUndefined();
   });
 
-  it('keeps SHORT as a redirect-only public host', async () => {
-    const nginx = await readFile(simpleNginxPath, 'utf8');
-    expect(nginx).toContain('server_name @@SHORT_DOMAIN@@;');
-    expect(nginx).toContain('location ~ "^/[A-Za-z0-9_-]{1,64}$"');
-    expect(nginx).toContain('location = /api/links { return 404; }');
-    expect(nginx).toContain('location / { return 404; }');
+  it('applies non-root read-only security defaults to every service', () => {
+    const config = renderCompose();
+    for (const [name, service] of Object.entries(config.services)) {
+      expect(service.user, name).toMatch(/^[1-9][0-9]*:[1-9][0-9]*$/);
+      expect(service.read_only, name).toBe(true);
+      expect(service.cap_drop, name).toContain('ALL');
+      expect(service.security_opt, name).toContain('no-new-privileges:true');
+    }
+  });
+
+  it('uses the Go Gateway Dockerfile and preserves the runtime contract', async () => {
+    const [compose, dockerfile] = await Promise.all([
+      readFile(new URL('../../compose.yaml', import.meta.url), 'utf8'),
+      readFile(new URL('../../Dockerfile', import.meta.url), 'utf8'),
+    ]);
+    expect(compose).toContain('dockerfile: Dockerfile');
+    expect(dockerfile).toContain('FROM golang:1.25-alpine@sha256:');
+    expect(dockerfile).toContain('FROM gcr.io/distroless/static-debian12:nonroot@sha256:');
+    expect(dockerfile).toContain('EXPOSE 8080 25502');
+    expect(dockerfile).toContain('ENTRYPOINT ["/app/gateway"]');
   });
 });

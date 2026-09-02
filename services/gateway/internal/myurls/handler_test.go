@@ -11,7 +11,7 @@ import (
 
 type fakeClient struct {
 	create  func(context.Context, []byte, http.Header) (*http.Response, error)
-	resolve func(context.Context, string) (*http.Response, error)
+	resolve func(context.Context, string, http.Header) (*http.Response, error)
 	health  func(context.Context) error
 }
 
@@ -19,8 +19,8 @@ func (client fakeClient) Create(ctx context.Context, body []byte, headers http.H
 	return client.create(ctx, body, headers)
 }
 
-func (client fakeClient) Resolve(ctx context.Context, code string) (*http.Response, error) {
-	return client.resolve(ctx, code)
+func (client fakeClient) Resolve(ctx context.Context, code string, headers http.Header) (*http.Response, error) {
+	return client.resolve(ctx, code, headers)
 }
 
 func (client fakeClient) Health(ctx context.Context) error {
@@ -134,7 +134,7 @@ func TestHandlerMapsRustProblemDetailsWithoutLeakingUpstreamData(t *testing.T) {
 func TestHandlerResolvesOnlyShortCodesAndCopiesLocation(t *testing.T) {
 	resolved := ""
 	handler := NewHandler(fakeClient{
-		resolve: func(_ context.Context, code string) (*http.Response, error) {
+		resolve: func(_ context.Context, code string, _ http.Header) (*http.Response, error) {
 			resolved = code
 			result := response(http.StatusFound, "")
 			result.Header.Set("Location", "https://short.example.test/"+code)
@@ -188,7 +188,7 @@ func TestHandlerRejectsUnsafeRedirectLocations(t *testing.T) {
 	for _, location := range []string{"javascript:alert(1)", "https://user:secret@example.test/path", "//example.test/path"} {
 		t.Run(location, func(t *testing.T) {
 			handler := NewHandler(fakeClient{
-				resolve: func(context.Context, string) (*http.Response, error) {
+				resolve: func(context.Context, string, http.Header) (*http.Response, error) {
 					result := response(http.StatusFound, "")
 					result.Header.Set("Location", location)
 					return result, nil

@@ -19,7 +19,84 @@ x-runtime-security: &runtime-security
   stop_grace_period: 10s
   logging: *runtime-logging
 
+x-myurls-common: &myurls-common
+  <<: *runtime-security
+  user: "10001:10001"
+  depends_on:
+    redis:
+      condition: service_healthy
+      restart: true
+  tmpfs:
+    - /tmp:uid=10001,gid=10001,mode=0700,noexec,nosuid,size=16m
+  healthcheck:
+    test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:3000/health/live"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 10s
+
 services:
+  gateway:
+    <<: *runtime-security
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: "${SUBWEB_IMAGE:-subweb:local}"
+    user: "65532:65532"
+    environment:
+      <<: *runtime-environment
+      LISTEN_ADDR: "0.0.0.0:8080"
+      EGRESS_LISTEN_ADDR: "0.0.0.0:25502"
+      API_URL: "${API_URL:?Set API_URL with scripts/configure.sh}"
+      APP_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
+      API_DOMAIN: "${API_DOMAIN:?Set API_DOMAIN with scripts/configure.sh}"
+      SHORT_DOMAIN: "${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
+      SHORT_LINKS_ENABLED: "${SHORT_LINKS_ENABLED:-true}"
+      CUSTOM_BACKEND_ENABLED: "${CUSTOM_BACKEND_ENABLED:-true}"
+      TRUSTED_PROXY_CIDR: "${TRUSTED_PROXY_CIDR:-}"
+      SUBCONVERTER_UPSTREAM: http://subconverter:25500
+      MYURLS_APP_UPSTREAM: http://myurls-app-edge:3000
+      MYURLS_SHORT_UPSTREAM: http://myurls-short-edge:3000
+      REDIS_URL: redis://redis:6379/1
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
+      IP_HASH_SECRET: "${IP_HASH_SECRET:?Set IP_HASH_SECRET with scripts/configure.sh}"
+      TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY:?Set TURNSTILE_SITE_KEY with scripts/configure.sh}"
+      CONVERSION_RATE_LIMIT: "${CONVERSION_RATE_LIMIT:-10}"
+      CONVERSION_RATE_WINDOW_SECONDS: "${CONVERSION_RATE_WINDOW_SECONDS:-60}"
+      CONVERSION_MAX_REQUEST_BYTES: "${CONVERSION_MAX_REQUEST_BYTES:-16384}"
+      CONVERSION_MAX_RESPONSE_BYTES: "${CONVERSION_MAX_RESPONSE_BYTES:-8388608}"
+      CONVERSION_REQUEST_TIMEOUT_MS: "${CONVERSION_REQUEST_TIMEOUT_MS:-10000}"
+      CONVERSION_DNS_TIMEOUT_MS: "${CONVERSION_DNS_TIMEOUT_MS:-2000}"
+      CONVERSION_EGRESS_CONNECT_TIMEOUT_MS: "${CONVERSION_EGRESS_CONNECT_TIMEOUT_MS:-5000}"
+      CONVERSION_MAX_CONCURRENCY: "${CONVERSION_MAX_CONCURRENCY:-2}"
+    depends_on:
+      redis:
+        condition: service_healthy
+        restart: true
+      myurls-app:
+        condition: service_healthy
+        restart: true
+      myurls-short:
+        condition: service_healthy
+        restart: true
+      subconverter:
+        condition: service_healthy
+        restart: true
+    networks:
+      default: {}
+      redis-policy: {}
+      myurls-edge:
+        ipv4_address: "${MYURLS_GATEWAY_IP:-172.30.255.2}"
+      subconverter-egress: {}
+    ports:
+      - "127.0.0.1:${SUBWEB_PORT:-18080}:8080"
+    healthcheck:
+      test: [CMD, /app/gateway, --healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   redis:
     <<: *runtime-security
     image: "${REDIS_IMAGE:-docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5}"
@@ -45,29 +122,29 @@ services:
           create_host_path: false
     tmpfs:
       - /run/redis:uid=999,gid=1000,mode=0700
+    networks:
+      myurls-data: {}
+      redis-policy: {}
     healthcheck:
-      test:
-        - CMD-SHELL
-        - REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli ping | grep -qx PONG
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli ping | grep -qx PONG']
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
-  myurls:
-    <<: *runtime-security
+  myurls-app:
+    <<: *myurls-common
     image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3}"
-    user: "10001:10001"
     environment:
       <<: *runtime-environment
       NODE_ENV: production
       LOG_LEVEL: "${MYURLS_LOG_LEVEL:-info}"
       APP_PORT: "3000"
-      PUBLIC_BASE_URL: "https://${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
+      PUBLIC_BASE_URL: "https://${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
       REDIS_URL: redis://redis:6379/0
       REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
       IP_HASH_SECRET: "${IP_HASH_SECRET:?Set IP_HASH_SECRET with scripts/configure.sh}"
-      TRUST_PROXY_CIDRS: "${MYURLS_TRUST_PROXY_CIDR:-172.16.0.0/12}"
+      TRUST_PROXY_CIDRS: "${MYURLS_TRUST_PROXY_CIDR:-172.30.255.2/32}"
       TURNSTILE_ENABLED: "true"
       TURNSTILE_MODE: cloudflare
       TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY:?Set TURNSTILE_SITE_KEY with scripts/configure.sh}"
@@ -83,65 +160,92 @@ services:
       TURNSTILE_TIMEOUT_MS: "2500"
       REQUEST_TIMEOUT_MS: "10000"
       SHUTDOWN_TIMEOUT_MS: "10000"
-    depends_on:
-      redis:
-        condition: service_healthy
-        restart: true
-    tmpfs:
-      - /tmp:uid=10001,gid=10001,mode=0700,noexec,nosuid,size=16m
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - --fail
-        - --silent
-        - http://127.0.0.1:3000/health/live
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+    networks:
+      myurls-data: {}
+      myurls-edge:
+        ipv4_address: "${MYURLS_APP_IP:-172.30.255.3}"
+        aliases: [myurls-app-edge]
 
-  subweb:
+  myurls-short:
+    <<: *myurls-common
+    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3}"
+    environment:
+      <<: *runtime-environment
+      NODE_ENV: production
+      LOG_LEVEL: "${MYURLS_LOG_LEVEL:-info}"
+      APP_PORT: "3000"
+      PUBLIC_BASE_URL: "https://${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
+      REDIS_URL: redis://redis:6379/0
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
+      IP_HASH_SECRET: "${IP_HASH_SECRET:?Set IP_HASH_SECRET with scripts/configure.sh}"
+      TRUST_PROXY_CIDRS: "${MYURLS_TRUST_PROXY_CIDR:-172.30.255.2/32}"
+      TURNSTILE_ENABLED: "true"
+      TURNSTILE_MODE: cloudflare
+      TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY:?Set TURNSTILE_SITE_KEY with scripts/configure.sh}"
+      TURNSTILE_SECRET_KEY: "${TURNSTILE_SECRET_KEY:?Set TURNSTILE_SECRET_KEY with scripts/configure.sh}"
+      TURNSTILE_HOSTNAME: "${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
+      CREATE_DIRECT_LIMIT_10M: "5"
+      CREATE_HARD_LIMIT_10M: "20"
+      CREATE_HARD_LIMIT_1D: "100"
+      RESOLVE_LIMIT_10S: "600"
+      RISK_CHALLENGE_SCORE: "3"
+      RISK_BLOCK_SCORE: "8"
+      REDIS_TIMEOUT_MS: "750"
+      TURNSTILE_TIMEOUT_MS: "2500"
+      REQUEST_TIMEOUT_MS: "10000"
+      SHUTDOWN_TIMEOUT_MS: "10000"
+    networks:
+      myurls-data: {}
+      myurls-edge:
+        ipv4_address: "${MYURLS_SHORT_IP:-172.30.255.4}"
+        aliases: [myurls-short-edge]
+
+  subconverter:
     <<: *runtime-security
-    build:
-      context: .
-      dockerfile: Dockerfile.simple
-      args:
-        SUBCONVERTER_IMAGE: "${SUBCONVERTER_IMAGE:-ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475}"
-    image: "${SUBWEB_IMAGE:-subweb:local}"
+    image: "${SUBCONVERTER_IMAGE:-ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475}"
     user: "101:101"
     environment:
       <<: *runtime-environment
-      API_URL: "${API_URL:?Set API_URL with scripts/configure.sh}"
-      APP_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
-      API_DOMAIN: "${API_DOMAIN:?Set API_DOMAIN with scripts/configure.sh}"
-      SHORT_DOMAIN: "${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
       MANAGED_CONFIG_PREFIX: "${API_URL:?Set API_URL with scripts/configure.sh}"
       SUBCONVERTER_SECURITY_PROFILE: public
       SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: "false"
-      SUBCONVERTER_UPSTREAM: http://127.0.0.1:25500
-      MYURLS_UPSTREAM: http://myurls:3000
-      MYURLS_MAX_BODY_BYTES: "16384"
-      GATEWAY_RENDERER: /app/render-simple-gateway-config.sh
-      GATEWAY_TEMPLATE_ROOT: /etc/nginx/simple
-      GATEWAY_CONFIG_FILE: /tmp/nginx/nginx.conf
-      NGINX_BIN: nginx
-    depends_on:
-      myurls:
-        condition: service_healthy
-        restart: true
+      HTTPS_PROXY: http://gateway:25502
+      https_proxy: http://gateway:25502
+      NO_PROXY: 127.0.0.1,localhost
+      no_proxy: 127.0.0.1,localhost
+    networks:
+      subconverter-egress: {}
+    volumes:
+      - subconverter-runtime:/base
+      - type: bind
+        source: ./deploy/subconverter/gai.conf
+        target: /etc/gai.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./scripts/subconverter-docker-entrypoint.sh
+        target: /usr/local/bin/subweb-subconverter-entrypoint
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./scripts/subconverter-log-supervisor.sh
+        target: /usr/local/bin/subweb-log-supervisor
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./scripts/subconverter-log-filter.awk
+        target: /usr/local/bin/subweb-log-filter.awk
+        read_only: true
+        bind:
+          create_host_path: false
     tmpfs:
-      - /tmp:uid=101,gid=101,mode=0700
-      - /usr/share/nginx/html/conf:uid=101,gid=101,mode=0700
-    ports:
-      - "127.0.0.1:${SUBWEB_PORT:-18080}:8080"
+      - /run/subconverter:uid=101,gid=101,mode=0700
+    command: [/bin/sh, /usr/local/bin/subweb-subconverter-entrypoint]
     healthcheck:
-      test:
-        - CMD-SHELL
-        - >-
-          wget -q -O /dev/null --header="Host: $${APP_DOMAIN}"
-          http://127.0.0.1:8080/healthz &&
-          wget -q -O /dev/null http://127.0.0.1:25500/healthz
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:25500/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -149,3 +253,17 @@ services:
 
 volumes:
   redis-data:
+  subconverter-runtime:
+
+networks:
+  subconverter-egress:
+    internal: true
+  myurls-data:
+    internal: true
+  redis-policy:
+    internal: true
+  myurls-edge:
+    internal: true
+    ipam:
+      config:
+        - subnet: "${MYURLS_NETWORK_SUBNET:-172.30.255.0/29}"
