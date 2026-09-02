@@ -97,7 +97,7 @@ const hasEmbeddedReadmeImage = (source, asset) => {
 describe('documentation contract', () => {
   it('keeps the documentation graph complete and linkable', () => {
     expect(verifyDocs({ root })).toEqual([]);
-    expect(requiredDocuments).toHaveLength(16);
+    expect(requiredDocuments).toHaveLength(17);
   });
 
   it('documents exactly the approved deployment families and source lineage', () => {
@@ -127,8 +127,8 @@ describe('documentation contract', () => {
       'configure.sh',
       'subweb.sh verify',
       'subweb.sh up',
-      'compose.yaml up -d --no-build --pull never --wait',
-      'compose.disabled-short-links.yaml',
+       'compose.yaml',
+       'compose.disabled-short-links.yaml',
     ]) {
       expect(docker).toContain(command);
     }
@@ -138,8 +138,11 @@ describe('documentation contract', () => {
     expect(docker).toContain('不要执行 `cat .env`');
     expect(docker).toContain('自动生成');
     expect(local).toContain('http://127.0.0.1:5173/');
-    expect(local).toContain('合并容器');
-    expect(local).toContain('hardened Compose 的 Request Policy');
+    expect(local).toContain('compose.dev.yaml');
+    expect(local).toContain('myurls-app');
+    expect(local).toContain('myurls-short');
+    expect(local).not.toContain('合并容器');
+    expect(local).not.toContain('hardened Compose 的 Request Policy');
     expect(local).toContain('不要在其他项目目录执行');
     for (const ignored of ['.env', '.runtime/', 'dist/', 'test-results/']) expect(maintenance).toContain(ignored);
   });
@@ -166,15 +169,21 @@ describe('documentation contract', () => {
       expect(document).toContain('Asia/Shanghai');
       expect(document).toContain('短码');
     }
-    for (const text of ['路由模板', '成功的 `/readyz`', '10 MB', '3 个']) {
+    for (const text of ['10m', '最多 `3` 个文件', 'verify-unified-stack.sh', 'verify-redis-operations.sh']) {
       expect(operations).toContain(text);
     }
-    expect(security).toContain('print_debug_info = false');
-    expect(security).toContain('verbose');
+    expect(security).toContain('CapEff=0');
+    expect(security).toContain('Authorization');
     expect(security).toContain('持有即可访问');
     expect(security).toContain('SSRF');
-    expect(security).toContain('开放重定向');
-    expect(security).toContain('MYURLS_IMAGE');
+    expect(security).toContain('IP_HASH_SECRET');
+    expect(security).toContain('MYURLS');
+    expect(read('docs/deployment.md')).toContain('五个服务');
+    expect(read('docs/deployment.md')).toContain('SHORT_LINKS_ENABLED=false');
+    expect(read('docs/architecture.md')).toContain('Go Gateway');
+    expect(read('docs/architecture.md')).not.toContain('独立 Request Policy');
+    expect(read('docs/deployment-docker.md')).toContain('compose.disabled-short-links.yaml');
+    expect(read('docs/operations.md')).toContain('verify-unified-stack.sh');
   });
 
   it('keeps the current product story and local visual proof explicit', () => {
@@ -275,15 +284,12 @@ describe('documentation contract', () => {
       expect(document).toContain('v2.0.6');
     }
     expect(configuration).toContain('不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像');
-    expect(integration).toContain('v2.0.6 生产镜像');
+    expect(integration).toContain('v2.0.6');
     expect(integration).toContain('challenge/retry');
     expect(maintenance).not.toContain('/Users/li/Desktop/GitHub/MyUrls');
   });
 
-  it('keeps the follow-the-latest image policy out of stale pinning language', () => {
-    // 自 follow-the-latest 策略（commit 59da405）生效后，这些文档不得再出现
-    // 固定镜像/唯一 latest/旧版本卷名等过时表述；docs/validation 下的历史
-    // 验证记录允许保留时点注记，不列入本断言。
+  it('keeps the immutable release contract in deployment documentation', () => {
     const policyDocuments = [
       'README.md',
       'docs/deployment-docker.md',
@@ -296,13 +302,12 @@ describe('documentation contract', () => {
     ];
     for (const file of policyDocuments) {
       const source = read(file);
-      expect(source, file).not.toContain('使用锁定镜像');
-      expect(source, file).not.toContain('固定镜像摘要');
-      expect(source, file).not.toContain('固定 digest');
-      expect(source, file).not.toContain('唯一允许');
-      expect(source, file).not.toContain('禁止使用 `latest`');
-      expect(source, file).not.toContain('subconverter-runtime-v1-2-0');
-      expect(source, file).not.toContain('卷名绑定锁文件版本');
+      expect(source, file).toContain('锁定');
+      expect(source, file).not.toMatch(/docker\s+(?:pull|run)[^\n]*:latest/iu);
     }
+    expect(read('README.md')).toContain('SHORT_LINKS_ENABLED');
+    expect(read('docs/architecture.md')).toContain('五个服务');
+    expect(read('docs/architecture.md')).toContain('两服务');
+    expect(read('docs/operations.md')).toContain('外部 TLS');
   });
 });

@@ -1,26 +1,34 @@
 # 单一 HTTP Docker 集成验证
 
-验证脚本启动完整 Compose 栈：`gateway`、`request-policy`、`subconverter`、`myurls-app`、`myurls-short` 与 `redis`。所有公开请求仍只经 Gateway 的单一 HTTP 入口；Request Policy Service 与 HTTPS CONNECT egress proxy 仅在内部网络可达。
+## 目的
 
-运行：
+该验证确认统一生产栈作为用户可访问的 HTTP 服务工作，而不是只确认容器处于 running。入口是：
 
 ```sh
 npm run verify:integration
 ```
 
-脚本在项目隔离 Docker network 中执行，并为每次运行选择未占用的私有 `/29` 网段，避免与本机其他 Compose 项目冲突。它不会删除或修改其他项目的容器、网络或卷。
+脚本 [`scripts/verify-integrated-stack.sh`](../../scripts/verify-integrated-stack.sh) 委托 [`scripts/verify-unified-stack.sh`](../../scripts/verify-unified-stack.sh)。恢复演练不在这个脚本中重复实现，由 `npm run verify:operations` 调用独立的 Redis operations verifier。
 
 ## 覆盖范围
 
-- Gateway、Request Policy、SubConverter、两个 MyUrls Rust v2.0.6 实例和 Redis 均达到健康状态；
-- APP、API、SHORT Host 路由与单一 HTTP 行为；
-- `/sub` 经 Request Policy 拒绝私网、非 HTTPS、危险端口与超限输入；
-- SubConverter 只可通过内部 HTTPS CONNECT egress proxy 访问远程 HTTPS，未直接加入默认出站网络；
-- APP 创建短链、SHORT 跳转与 MyUrls JSON 响应；
-- 所有公开路径只使用 Gateway 的监听端口，MyUrls、Redis、SubConverter、Request Policy 与 egress proxy 不发布宿主机端口；
-- Redis 短暂重启后 MyUrls v2.0.6 与 Request Policy 的恢复；存活的 MyUrls 客户端可能先返回一次 `503` 并使旧连接失效，随后重新建立 Redis 连接，重试请求成功；两个 MyUrls 实例随后分别重启，并验证新建短链与既有短链仍可解析；
-- MyUrls Web UI 的带哈希 JavaScript/CSS、`favicon.svg`、`robots.txt` 与 `sitemap.xml` 均可访问并返回预期 MIME 类型；
-- Gateway、Request Policy、MyUrls 与 SubConverter 日志不出现订阅 URL、挑战 Token、Redis 密码、IP 哈希秘密或真实短码；
-- 容器、网络与临时 volume 在脚本正常退出后按本次项目名前缀清理；被外部终止的运行应由维护者按 Compose project label 复核和清理。
+启用短链的五服务 profile 使用锁定的 MyUrls Rust v2.0.6、SubConverter 和 Redis production 镜像，并检查：
 
-MyUrls 创建与解析检查使用 APP / SHORT 域名 Host，转换接口使用 API Host。集成 smoke 使用 v2.0.6 生产镜像和 `compose.test.yaml` 的生产 Turnstile 配置，并把直接放行阈值设在挑战阈值之上，避免向真实 Cloudflare 发送测试请求；challenge/retry 的 `application/problem+json` 契约由前端、Rust 和浏览器测试覆盖。验证配置的域名只在脚本隔离环境中使用，不能作为生产部署值。MyUrls 的请求总超时由 `REQUEST_TIMEOUT_MS` 控制；静态 `/assets/*` 应返回 immutable 缓存头，HTML 和动态响应应保持 `no-store`。
+- APP、API、SHORT 三个 Host 的路由隔离；
+- `config.js`、favicon、manifest、PWA 图标、robots 和 sitemap 的状态与 MIME；
+- `/sub` 的允许输入、inline conversion、私网 URL 拒绝、请求大小、响应大小、超时、并发和限流；
+- `/short-api/links` 创建、SHORT 短码解析、TTL 过期、Turnstile challenge/retry 和错误 problem-details；
+- Gateway、SubConverter、`myurls-app`、`myurls-short` 和 Redis 的独立重启恢复；
+- Authorization、Cookie、Origin、Proxy-Authorization、客户端转发头、订阅 URL、Token 和 IP 的日志/依赖边界隐私；
+- `SHORT_LINKS_ENABLED=false` 的两服务 profile：不读取 Redis、MyUrls、SHORT 域名或 Turnstile 私钥，同时普通转换仍可用。
+
+超时、过大响应和依赖 header 清理使用脚本内的 test-only fixture overlay；该 overlay 不属于生产 Compose，不替换锁定的生产 image。
+
+## 运行要求
+
+- Docker Engine、Docker Compose v2、curl、awk、Node.js 24 和 npm 11；
+- 可访问 Docker Hub/GHCR 的网络；
+- 足够的镜像和 volume 空间；
+- 运行结束后脚本必须清理其临时 Compose project、volume 和环境文件。
+
+失败时保留终端中最后一个明确失败阶段，并先检查脚本输出和 Docker 状态；不要用旧的 Nginx、Request Policy 或历史 Compose 验证器代替本验证。

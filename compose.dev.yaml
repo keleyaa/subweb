@@ -1,12 +1,33 @@
 services:
-  myurls:
+  gateway:
     environment:
-      NODE_ENV: test
+      SHORT_LINKS_ENABLED: "true"
+      CUSTOM_BACKEND_ENABLED: "true"
+
+  subconverter:
+    environment:
+      SUBCONVERTER_PROFILE: public
+      SUBCONVERTER_ENABLE_UPLOADS: "false"
+
+  myurls-app:
+    environment:
+      NODE_ENV: development
       PUBLIC_BASE_URL: "http://127.0.0.1:${LOCAL_MYURLS_PORT:-18082}"
-      TRUST_PROXY_CIDRS: ""
       TURNSTILE_ENABLED: "false"
       TURNSTILE_MODE: cloudflare
       TURNSTILE_SITE_KEY: ""
       TURNSTILE_SECRET_KEY: ""
+
+  myurls-short:
+    environment:
+      NODE_ENV: development
+      PUBLIC_BASE_URL: "http://127.0.0.1:${LOCAL_MYURLS_PORT:-18082}"
+      TURNSTILE_ENABLED: "false"
+      TURNSTILE_MODE: cloudflare
+      TURNSTILE_SITE_KEY: ""
+      TURNSTILE_SECRET_KEY: ""
+    # Docker Desktop does not publish ports from an internal-only container.
+    networks:
+      default: {}
     ports:
       - "127.0.0.1:${LOCAL_MYURLS_PORT:-18082}:3000"

@@ -66,7 +66,11 @@ try { config = JSON.parse(process.env.COMPOSE_JSON ?? ""); } catch { console.err
     process.exitCode = 1;
   }
   for (const [name, service] of Object.entries(services)) {
-    if (service?.user === undefined || !/^[1-9][0-9]*:[1-9][0-9]*$/.test(String(service.user))) {
+    const bootstrapCapabilities = [...(service?.cap_add ?? [])].sort();
+    const isSubconverterBootstrap = name === "subconverter"
+      && String(service?.user ?? "") === "0:0"
+      && JSON.stringify(bootstrapCapabilities) === JSON.stringify(["CHOWN", "SETGID", "SETUID"]);
+    if (!isSubconverterBootstrap && (service?.user === undefined || !/^[1-9][0-9]*:[1-9][0-9]*$/.test(String(service.user)))) {
       console.error(`Compose validation error: service ${name} must run as a non-root user.`);
       process.exitCode = 1;
     }

@@ -19,8 +19,9 @@ local_myurls_port=${LOCAL_MYURLS_PORT:-18082}
 local_subweb_port=${LOCAL_SUBWEB_PORT:-18081}
 cd "$project_root"
 VITE_LOCAL_SUBCONVERTER_URL="http://127.0.0.1:$local_subweb_port" \
+LOCAL_SUBWEB_PORT="$local_subweb_port" \
 LOCAL_MYURLS_PORT="$local_myurls_port" \
-  npm run serve -- --host 127.0.0.1 --port "$local_vite_port" --strictPort >/dev/null 2>&1 &
+  ./node_modules/.bin/vite --host 127.0.0.1 --port "$local_vite_port" --strictPort >/dev/null 2>&1 &
 vite_pid=$!
 
 http_connect_timeout_seconds=5

@@ -1,49 +1,42 @@
 # 架构
 
-Subweb 是独立维护的自托管订阅转换发行栈。默认 Compose 启动合并的 `subweb`、一个 MyUrls Rust v2.0.6 实例和 Redis，共 3 个服务。公网反向代理、TLS 和 DNS 不属于本仓库的运行时。
+Subweb 面向外置 TLS 的自托管部署。项目自己的 Go Gateway 与 Request Policy 已统一为一个 Go 1.25 单二进制；前端是 Vue 3 + Vite 静态 SPA；SubConverter、MyUrls Rust v2.0.6 和 Redis 保持独立容器。公网只看到外层 TLS 入口和 Gateway 的 loopback 转发端口。
 
-```text
-Browser
-  |-- APP_DOMAIN
-  |     `-- subweb (Nginx + SubConverter)
-  |           |-- /                     -> Subweb Vue 工作区
-  |           `-- /short-api/links      -> MyUrls -> Redis
-  |
-  |-- API_DOMAIN
-  |     `-- subweb -> /sub?... -> bundled SubConverter
-  |
-  `-- SHORT_DOMAIN
-        `-- subweb -> MyUrls redirect for /:code
-```
+## 生产服务
 
-## 路由契约
+短链启用时，`compose.yaml` 运行以下五个服务：
 
-| 公开入口 | 默认行为 |
-| --- | --- |
-| `APP_DOMAIN/` | Subweb Vue 工作区 |
-| `APP_DOMAIN/short-api/links` | 仅接受 POST JSON，转发到 MyUrls `/api/links` |
-| `APP_DOMAIN/:code` | 兼容已分享短码的 302 跳转 |
-| `API_DOMAIN/sub?...` | 仅接受转换请求，转发到合并容器中的 SubConverter |
-| `SHORT_DOMAIN/:code` | 仅短码跳转 |
-| `SHORT_DOMAIN/*` | 返回 404；不公开 MyUrls UI、API 或健康端点 |
+| 服务 | 作用 | 对外发布 |
+| --- | --- | --- |
+| `gateway` | APP/API/SHORT Host 路由、静态资源、转换策略、限流、MyUrls 适配、内部 CONNECT egress | 仅 `127.0.0.1:<SUBWEB_PORT>` |
+| `subconverter` | 订阅转换执行器 | 无 |
+| `myurls-app` | APP 域名的短链创建和管理 API | 无 |
+| `myurls-short` | SHORT 域名的短码解析和跳转 | 无 |
+| `redis` | DB `0` 短链数据、DB `1` Gateway 限流状态 | 无 |
 
-APP 适配入口清除浏览器的 Authorization、Cookie 和 Origin，覆盖客户端 IP 转发头，不注入旧 Bearer Token。SHORT 只会把已校验的短码路径转发给同一个 MyUrls 实例。该实例的 `TURNSTILE_HOSTNAME` 是 APP 域，`PUBLIC_BASE_URL` 是 SHORT 域，因此短链创建能保留 APP 域的挑战校验，生成的链接仍指向 SHORT 域。MyUrls v2.0.6 在 Redis 短暂断线后会重新建立连接；`REQUEST_TIMEOUT_MS` 为每个请求提供总超时边界。
+当 `SHORT_LINKS_ENABLED=false` 时选择 `compose.disabled-short-links.yaml`，只部署 `gateway` 和 `subconverter`，即受支持的两服务 profile。这是一个完整的受支持 profile，不是通过删改生产 Compose 服务临时拼出的状态。
 
-## 默认信任边界
+## 请求路径
 
-默认模式的所有服务只在一个 Compose 私有网络中通信，只有 `subweb` 将 `8080` 绑定到宿主机 loopback。Redis 和 MyUrls 不发布宿主机端口。合并后的 SubConverter 通过默认网络直接访问远程订阅源，这减少服务和网络复杂度，但不提供输入级 SSRF/DNS 防护、匿名限流、并发限制或按已验证 IP 的 CONNECT egress。它只适合可信维护者自用或受控输入。
+1. 外部 TLS 代理保留请求 Host，将请求转发到 Gateway。
+2. Gateway 依 Host 选择 APP、API 或 SHORT 路由，并重建受信任的客户端身份头。
+3. `/sub` 请求先经过 URL、DNS、响应大小、超时、并发和 IP 限流策略，再由 Gateway 访问 SubConverter。
+4. SubConverter 的外部订阅访问只通过 Gateway 的内部 `:25502` HTTPS CONNECT listener；授权时解析并验证地址，连接时使用已验证 IP，不允许第二次 hostname 解析。
+5. 短链创建只到 `myurls-app`，短码解析只到 `myurls-short`。Gateway Redis 限流使用 DB `1`，MyUrls 使用 DB `0`。
 
-## Hardened Compose
+Gateway 的依赖响应采用完整内存缓冲，不支持流式传输、协议升级或任意 `ResponseWriter` 可选能力；这样 panic recovery 可以在提交响应前保持原子性。依赖边界会清理客户端凭据、Cookie、Origin 和未受信任的转发头，只转发 Gateway 重建的身份信息与有效 request ID。
 
-`compose.hardened.yaml` 保留之前的六服务拓扑：Gateway、Request Policy Service、SubConverter、分别服务 APP/SHORT hostname 的两个 MyUrls 实例和 Redis。Request Policy Service 验证 URL、DNS、端口、大小、超时、并发和匿名频率，并为仅在 `subconverter-egress` 网络上的 SubConverter 提供 HTTPS CONNECT proxy。Gateway 与 MyUrls、Redis、Request Policy 分别使用独立网络，避免默认网络路径越过安全边界。公开、多用户或不可信订阅输入必须使用此模式。
+所有容器日志使用 `Asia/Shanghai`，保留策略为单文件 `10m`、最多 `3` 个文件；敏感 URL、Token、IP 和短码不进入日志。
 
-## 前端边界
+## 网络与权限
 
-- 转换 URL 构造保持为纯函数。
-- `ShortLinkClient` 独占 MyUrls Rust HTTP 契约，并兼容旧版错误响应以支持完整 Subweb release 回滚。
-- `ShortLinkWorkflow` 负责 UTF-8 长度预检、挑战、重试、复制和 stale-result。
-- Vue 组件只绑定状态和用户动作。
+- Gateway 连接默认网络、`myurls-edge`、`redis-policy` 和内部 `subconverter-egress`。
+- Redis 连接 `myurls-data` 与 `redis-policy`；MyUrls 连接 `myurls-data` 与 `myurls-edge`。
+- SubConverter 只连接内部 `subconverter-egress`，不能绕过 Gateway 直接访问公网。
+- 所有长驻服务使用只读 root filesystem、丢弃 Linux capabilities 和 `no-new-privileges`。
+- SubConverter 需要极小的 root-only volume bootstrap，完成后 PID 1 以 UID `101` 运行且 effective capabilities 为零；其他服务直接以非 root 用户运行。
+- Redis 密码不进入宿主机命令参数；恢复时通过容器内 `REDISCLI_AUTH` 传递。
 
-本地开发由 Vite 提供页面，并把同源 `/short-api/*` 代理到 Compose 中的 MyUrls Rust 服务。转换请求通过本地 loopback `subweb` 端口进入合并容器。当前 Rust 端点为 `/api/links`；跨回旧 Node `/api/v1/links` 时，必须一并回退路由、前端与镜像，而不能只替换 MyUrls 镜像。
+## 数据边界
 
-所有服务默认使用 `Asia/Shanghai` 时区。
+当前锁定的 MyUrls Rust v2.0.6 通过 `/api/links` 兼容合同提供短链映射；短链映射和 TTL 数据只保存在 Redis DB `0`。Gateway 限流 key 使用 HMAC-SHA256 处理后的客户端 IP，存放在 Redis DB `1`，不记录原始 IP。普通转换 URL、转换结果和 Token 不写入 Redis。短链是持有即可访问的数据，应按公开数据处理。

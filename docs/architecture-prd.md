@@ -1,6 +1,6 @@
 # Subweb 统一整合架构 PRD
 
-**文档状态：** 已确认，待实施  
+**文档状态：** 已确认并已实施；本文保留决策依据，执行合同以当前 Compose、配置和验证脚本为准
 **目标版本：** v1.0 统一网关架构  
 **目标读者：** 项目维护者、实现代理、发布审核者、生产运维人员  
 **决策范围：** 产品定位、技术栈、运行拓扑、功能开关、迁移路线与生产验收  
@@ -15,19 +15,15 @@
 
 Subweb 最初是 Vue 前端，后续接入了 SubConverter-Extended、MyUrls 和 Redis，并增加了 Nginx Gateway、Request Policy、运行时配置、Docker Compose、镜像锁定和发布验证。
 
-当前代码库存在两种主要运行方式：
+当前实现已经收敛为一个生产合同：Go Gateway 与 Request Policy 是同一个 Go 1.25 单二进制，前端仍是 Vue 3 + Vite，SubConverter、两个 MyUrls Rust v2.0.6 实例和 Redis 保持独立。短链启用时是五服务 Compose profile；关闭短链时使用明确的两服务 Compose profile。
 
-1. 默认简化拓扑将 Vue、Nginx 和 SubConverter 合并到一个镜像，再运行 MyUrls 和 Redis。该模式容器数量较少，但 SubConverter 可以直接访问远程订阅源，不提供完整的 SSRF、DNS rebinding、匿名限流和受控 egress 防护。
-2. Hardened 拓扑将 Gateway、Request Policy、SubConverter、两个 MyUrls 实例和 Redis 分开运行。该模式具备完整安全边界，但项目自有逻辑分散在 Nginx 配置、Node.js 服务和 Shell 脚本中，运行和维护成本较高。
+该决策解决了以下问题：
 
-由此产生的核心问题不是前端框架能力不足，而是：
-
-- 项目缺少单一、明确的生产运行合同。
-- Gateway 与 Request Policy 分散在多种语言和配置模板中。
-- 简化模式和 hardened 模式形成两套生产语义与验证矩阵。
-- 「一个命令部署」和「单容器运行」被混为一谈。
-- 功能开关、安全基线和上游镜像职责没有形成稳定产品接口。
-- 上游镜像、项目自有代码和外部反向代理之间的职责不够清晰。
+- 生产部署只有一个默认合同，不再在简化和 hardened 语义之间选择。
+- Gateway、URL/DNS 策略、限流和 CONNECT egress 由一个可测试的 Go 服务统一承担。
+- 「一个部署入口」与「单容器运行」明确区分；项目使用 Compose，不把独立生命周期强行合并到一个容器。
+- 功能开关、安全基线和上游镜像职责形成稳定接口。
+- 外部 TLS 反向代理、项目自有 Gateway、上游服务和数据存储的责任边界清晰。
 
 ## 3. 产品定义
 
@@ -69,12 +65,12 @@ Subweb 为浏览器提供统一界面，为上游 SubConverter-Extended 和 MyUr
 - 使用 Go 1.25 重写并统一项目自有 Gateway 与 Request Policy。
 - 继续使用 Vue 3 + Vite 构建静态 SPA。
 - 继续消费 SubConverter-Extended、MyUrls 和 Redis 的固定版本镜像。
-- 短链开启时使用 4 个容器，关闭时使用 2 个容器。
+- 短链开启时使用 5 个容器，关闭时使用 2 个容器。
 - 所有公网转换请求强制经过 URL、DNS、IP、大小、超时、并发和限流策略。
 - 使用一个安装或启动命令执行 Docker Compose 编排。
 - 所有服务只发布一个宿主机 loopback 入口。
 - TLS、证书和公网 DNS 继续由外部反向代理负责。
-- 功能关闭时同步移除前端入口、公开路由、配置要求和不必要容器。
+- `SHORT_LINKS_ENABLED=false` 时同步移除前端入口、公开路由、配置要求和 MyUrls/Redis 容器。
 - 保持现有短链 HTTP 合同和 Redis 数据兼容性。
 - 为迁移、回滚、备份、恢复和升级提供可验证流程。
 
@@ -102,7 +98,7 @@ Subweb 为浏览器提供统一界面，为上游 SubConverter-Extended 和 MyUr
 - 不内置 ACME、TLS 证书或公网反向代理。
 - 不建设用户账户、管理后台、计费、团队空间或多租户权限。
 - 不提供关闭 SSRF、DNS、限流、超时或网络隔离的开关。
-- 不在首个版本同时支持 simple 与 hardened 两套生产合同。
+- 不恢复已删除的 simple/hardened 两套历史生产合同；当前执行合同只有五服务 profile 与明确的 disabled profile。
 - 不以减少容器数量为由合并 Redis、MyUrls 或 SubConverter 的生命周期。
 
 ## 5. 成功标准
@@ -172,7 +168,7 @@ Subweb 为浏览器提供统一界面，为上游 SubConverter-Extended 和 MyUr
 | --- | --- | --- |
 | 语言 | Go 1.25 | HTTP、并发、代理和单二进制部署能力成熟。 |
 | HTTP 服务 | `net/http` | 标准库足以提供 Host 路由、静态文件、反向代理和健康检查。 |
-| 反向代理 | `httputil.ReverseProxy` 配合自定义 Transport | 支持流式代理、请求取消、响应改写和受控拨号。 |
+| 依赖转发 | 项目内 HTTP client 与固定地址 Transport | 支持请求取消、完整响应缓冲、响应改写和受控拨号；不承诺 streaming 或 protocol upgrade。 |
 | 配置 | 标准库环境变量解析与项目内校验 | 配置合同需要 fail closed，不引入大型配置框架。 |
 | DNS/IP | `net.Resolver`、`net/netip` | 支持解析、CIDR 和地址分类。 |
 | 并发限制 | channel semaphore | 需求固定且简单，不引入额外库。 |
@@ -198,21 +194,22 @@ APP_DOMAIN ─────┐
 API_DOMAIN ─────┼── external TLS proxy ── 127.0.0.1:18080
 SHORT_DOMAIN ───┘                              │
                                                ▼
-                                      subweb-gateway (Go)
-                                      │       │        │
-                                      │       │        └── Vue static assets
-                                      │       └── MyUrls ── Redis DB 0
-                                      └── SubConverter
-                                               ▲
-                                               │
-                                   controlled HTTPS CONNECT
+                                      gateway (Go)
+                                      │       │       │
+                                      │       │       └── Vue static assets
+                                      │       ├── myurls-app ──┐
+                                      │       └── myurls-short ─┤
+                                      │                          ▼
+                                      │                     Redis DB 0
+                                      └── subconverter ── internal CONNECT egress
 ```
 
 容器集合：
 
 - `gateway`
 - `subconverter`
-- `myurls`
+- `myurls-app`
+- `myurls-short`
 - `redis`
 
 ### 7.2 短链关闭拓扑
@@ -222,7 +219,7 @@ APP_DOMAIN ─────┐
 API_DOMAIN ─────┼── external TLS proxy ── 127.0.0.1:18080
 SHORT_DOMAIN ───┘                              │
                                                ▼
-                                      subweb-gateway (Go)
+                                      gateway (Go)
                                       │                 │
                                       │                 └── Vue static assets
                                       └── SubConverter
@@ -240,19 +237,20 @@ SHORT_DOMAIN ───┘                              │
 
 ### 7.3 网络模型
 
-生产 Compose 至少定义：
+生产 Compose 定义以下网络：
 
-- `gateway-upstream`：Gateway 与 SubConverter 通信。
+- 默认网络：Gateway 与其本地依赖的基础通信。
 - `subconverter-egress`：Gateway 的 CONNECT 代理与 SubConverter 通信，设置为 `internal: true`。
-- `myurls-edge`：Gateway 与 MyUrls 通信，设置为 `internal: true`。
-- `myurls-data`：MyUrls 与 Redis 通信，设置为 `internal: true`。
+- `myurls-edge`：Gateway 与两个 MyUrls 实例通信，设置为 `internal: true`。
+- `myurls-data`：两个 MyUrls 实例与 Redis 通信，设置为 `internal: true`。
+- `redis-policy`：Redis 与 Gateway 限流客户端通信，设置为 `internal: true`。
 
 规则：
 
-- Gateway 只通过宿主机 loopback 发布 `8080`。
+- Gateway 容器监听 `8080`，宿主机只通过 loopback 发布一个映射端口。
 - SubConverter 仅加入其必需的内部网络，不加入具有默认公网路由的网络。
 - MyUrls 不能直接访问 Gateway 之外的公开入口。
-- Redis 只加入 `myurls-data`。
+- Redis 只加入 `myurls-data` 与 `redis-policy`；Gateway 不加入 `myurls-data`。
 - Docker DNS 能解析名称不代表网络可达性，验证必须检查实际网络成员和连接结果。
 
 ## 8. 模块设计
@@ -433,7 +431,7 @@ Gateway 对浏览器和调用者返回统一 problem details：
 {
   "type": "about:blank",
   "title": "Request rejected",
-  "status": 422,
+  "status": 403,
   "code": "url_not_allowed",
   "requestId": "req_..."
 }
@@ -457,7 +455,7 @@ Gateway 对浏览器和调用者返回统一 problem details：
 - `requestId` 在 Gateway 生成并贯穿内部日志。
 - 不向客户端返回内部容器地址、解析 IP、Redis 错误或 Go stack trace。
 - 上游断开、超时、响应过大和策略拒绝必须使用不同稳定错误码。
-- HTTP 状态码与当前 MyUrls Rust 合同保持兼容，其中 `url_not_allowed` 使用 422。
+- HTTP 状态码与当前 MyUrls Rust 合同保持兼容，其中 Gateway 的 `url_not_allowed` 保持 HTTP `403`；Rust MyUrls 自身的 `url_not_allowed` 才使用 HTTP `422`。
 
 ## 11. 功能开关
 
@@ -622,15 +620,17 @@ Gateway 对浏览器和调用者返回统一 problem details：
 
 ### 14.2 建议命令
 
-首个版本可由 Shell CLI 实现：
+正式 Shell CLI 先生成配置，再选择已验证的 Compose profile：
 
 ```sh
-./scripts/subweb.sh install \
-  --app-domain sub.example.com \
+./scripts/configure.sh \
+  --app-domain app.example.com \
   --api-domain api.example.com \
   --short-domain short.example.com \
   --turnstile-site-key SITE_KEY \
   --turnstile-secret-key SECRET_KEY
+./scripts/validate-compose.sh
+./scripts/subweb.sh up
 ```
 
 日常命令：
@@ -677,7 +677,7 @@ CLI 只是 Compose 的薄封装，不重新实现容器编排。
 - 只从明确可信来源接收客户端 IP 头。
 - TLS 终止发生在外部反向代理。
 - 不将 Redis、MyUrls 或 SubConverter 暴露到公网。
-- 项目提供 Nginx、Caddy 和 Traefik 的最小示例，但不维护其证书生命周期。
+- 项目提供外部 TLS 反向代理示例，但不维护证书生命周期；示例不能访问内部服务端口。
 
 ## 15. 容器要求
 
@@ -703,7 +703,7 @@ CLI 只是 Compose 的薄封装，不重新实现容器编排。
 ### 15.2 上游容器
 
 - SubConverter 保持上游运行目录和相对资源语义。
-- MyUrls 使用已验证 Rust v2 镜像和 UID `10001:10001`。
+- 两个 MyUrls 实例使用已验证 Rust v2.0.6 镜像和 UID `10001:10001`，各自保持独立的 PUBLIC_BASE_URL。
 - Redis 使用固定镜像、named volume、密码和只读配置模板。
 - 不通过复制部分上游文件到无关基础镜像的方式破坏其运行时合同。
 

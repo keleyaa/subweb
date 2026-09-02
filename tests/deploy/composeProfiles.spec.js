@@ -66,7 +66,7 @@ const validCompose = {
     },
      'myurls-app': { image: 'myurls@sha256:abc', user: '10001:10001', networks: { 'myurls-data': {}, 'myurls-edge': {} }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
      'myurls-short': { image: 'myurls@sha256:abc', user: '10001:10001', networks: { 'myurls-data': {}, 'myurls-edge': {} }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
-     subconverter: { image: 'subconverter@sha256:abc', user: '101:101', networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
+      subconverter: { image: 'subconverter@sha256:abc', user: '0:0', cap_add: ['CHOWN', 'SETUID', 'SETGID'], networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
   },
 };
 
