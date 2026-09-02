@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 const digestPattern = /^sha256:[0-9a-f]{64}$/;
 const commitPattern = /^[0-9a-f]{40}$/;
 const tagPattern = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
+const sourceTagPattern = /^[A-Za-z0-9_][A-Za-z0-9_./-]{0,127}$/;
 const registryPattern =
   /^(?:localhost|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*)(?::[1-9][0-9]{0,4})?$/;
 const repositoryComponentPattern = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/;
@@ -20,6 +21,9 @@ const requiredPlatforms = ['linux/amd64', 'linux/arm64'];
 const myurlsSourceRepository = 'keleyaa/MyUrls';
 const myurlsImageRepository = 'ghcr.io/keleyaa/myurls';
 const myurlsReleaseTagPattern = /^v2\.\d+\.\d+$/u;
+const gatewayBaseSourceRepository = 'docker-library/golang';
+const gatewayBaseImageReference = 'docker.io/library/golang:1.25-alpine';
+const gatewayRuntimeImageNames = ['distroless', 'frontend'];
 
 const isRecord = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -42,7 +46,7 @@ const isCompleteHttpsUrl = (value) => {
 
 const isValidSourceTag = (tag) =>
   typeof tag === 'string' &&
-  tagPattern.test(tag) &&
+  sourceTagPattern.test(tag) &&
   tag.toLowerCase() !== 'latest';
 
 const isValidWorkflowRelease = (release) =>
@@ -115,6 +119,42 @@ const isCanonicalUtcTimestamp = (value) => {
   );
 };
 
+const validateImageDescriptor = (prefix, image, errors) => {
+  if (!isRecord(image)) {
+    errors.push(`${prefix} must be an object`);
+    return null;
+  }
+
+  const parsedReference = parseTaggedImageReference(image.reference);
+  if (!parsedReference) {
+    errors.push(`${prefix}.reference must be a valid tagged OCI/Docker reference`);
+  } else if (parsedReference.tag.toLowerCase() === 'latest') {
+    errors.push(`${prefix}.reference must not use latest`);
+  }
+  if (!digestPattern.test(image.digest ?? '')) {
+    errors.push(`${prefix}.digest must be a sha256 digest`);
+  }
+  if (!isRecord(image.platforms)) {
+    errors.push(`${prefix}.platforms must be an object`);
+  } else {
+    for (const platform of requiredPlatforms) {
+      if (!Object.hasOwn(image.platforms, platform)) {
+        errors.push(`${prefix}.platforms.${platform} must be a sha256 digest`);
+      }
+    }
+    for (const [platform, digest] of Object.entries(image.platforms)) {
+      if (!platformPattern.test(platform)) {
+        errors.push(`${prefix}.platforms key ${JSON.stringify(platform)} must be a valid platform name`);
+      }
+      if (!digestPattern.test(digest ?? '')) {
+        errors.push(`${prefix}.platforms.${platform} must be a sha256 digest`);
+      }
+    }
+  }
+
+  return parsedReference;
+};
+
 export function validateVersionLocks(lock) {
   const errors = [];
 
@@ -181,53 +221,35 @@ export function validateVersionLocks(lock) {
       }
     }
 
-    const image = service.image;
-    if (!isRecord(image)) {
-      errors.push(`${prefix}.image must be an object`);
-    } else {
-      const parsedReference = parseTaggedImageReference(image.reference);
-      if (!parsedReference) {
+    const parsedReference = validateImageDescriptor(`${prefix}.image`, service.image, errors);
+    if (name === 'myurls' && parsedReference) {
+      const imageRepository = `${parsedReference.registry}/${parsedReference.repository}`;
+      if (imageRepository !== myurlsImageRepository) {
+        errors.push(`${prefix}.image.reference must use ${myurlsImageRepository}`);
+      }
+      if (parsedReference.tag !== service.source?.tag) {
+        errors.push(`${prefix}.image.reference tag must match source.tag`);
+      }
+    }
+    if (name === 'gatewayBase') {
+      if (service.source?.repository !== gatewayBaseSourceRepository) {
         errors.push(
-          `${prefix}.image.reference must be a valid tagged OCI/Docker reference`,
+          `${prefix}.source.repository must equal ${gatewayBaseSourceRepository}`,
         );
-      } else if (parsedReference.tag.toLowerCase() === 'latest') {
-        errors.push(`${prefix}.image.reference must not use latest`);
       }
-      if (!digestPattern.test(image.digest ?? '')) {
-        errors.push(`${prefix}.image.digest must be a sha256 digest`);
+      if (service.image?.reference !== gatewayBaseImageReference) {
+        errors.push(`${prefix}.image.reference must use ${gatewayBaseImageReference}`);
       }
-      if (name === 'myurls' && parsedReference) {
-        const imageRepository = `${parsedReference.registry}/${parsedReference.repository}`;
-        if (imageRepository !== myurlsImageRepository) {
-          errors.push(
-            `${prefix}.image.reference must use ${myurlsImageRepository}`,
-          );
-        }
-        if (parsedReference.tag !== service.source?.tag) {
-          errors.push(`${prefix}.image.reference tag must match source.tag`);
-        }
-      }
-      if (!isRecord(image.platforms)) {
-        errors.push(`${prefix}.image.platforms must be an object`);
+
+      const runtimeImages = service.runtimeImages;
+      if (!isRecord(runtimeImages) ||
+        JSON.stringify(Object.keys(runtimeImages ?? {}).sort()) !== JSON.stringify(gatewayRuntimeImageNames)) {
+        errors.push(
+          `${prefix}.runtimeImages must contain exactly: ${gatewayRuntimeImageNames.join(', ')}`,
+        );
       } else {
-        for (const platform of requiredPlatforms) {
-          if (!Object.hasOwn(image.platforms, platform)) {
-            errors.push(
-              `${prefix}.image.platforms.${platform} must be a sha256 digest`,
-            );
-          }
-        }
-        for (const [platform, digest] of Object.entries(image.platforms)) {
-          if (!platformPattern.test(platform)) {
-            errors.push(
-              `${prefix}.image.platforms key ${JSON.stringify(platform)} must be a valid platform name`,
-            );
-          }
-          if (!digestPattern.test(digest ?? '')) {
-            errors.push(
-              `${prefix}.image.platforms.${platform} must be a sha256 digest`,
-            );
-          }
+        for (const [runtimeName, runtimeImage] of Object.entries(runtimeImages)) {
+          validateImageDescriptor(`${prefix}.runtimeImages.${runtimeName}`, runtimeImage, errors);
         }
       }
     }
@@ -243,6 +265,12 @@ export function validateVersionLocks(lock) {
           );
         }
       });
+      if (
+        name === 'gatewayBase' &&
+        JSON.stringify(internalPorts) !== JSON.stringify([8080, 25502])
+      ) {
+        errors.push(`${prefix}.container.internalPorts must equal 8080, 25502`);
+      }
     }
   }
 

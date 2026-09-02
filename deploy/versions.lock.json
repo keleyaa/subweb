@@ -4,22 +4,40 @@
   "services": {
     "gatewayBase": {
       "source": {
-        "url": "https://github.com/nginx/nginx",
-        "repository": "nginx/nginx",
-        "tag": "release-1.30.4",
-        "commit": "017cf98dcce217946572a896f0992370475e189f",
+        "url": "https://github.com/docker-library/golang",
+        "repository": "docker-library/golang",
+        "tag": "1.25/alpine3.24",
+        "commit": "3c304fa74ea9f8c7fa4c87742834823d2bb19e12",
         "prerelease": false
       },
       "image": {
-        "reference": "docker.io/nginxinc/nginx-unprivileged:1.30.4-alpine",
-        "digest": "sha256:93722936b82ec8a1178d48448e619226680d2de3706a1640800e186cd5fa7fd3",
+        "reference": "docker.io/library/golang:1.25-alpine",
+        "digest": "sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59",
         "platforms": {
-          "linux/amd64": "sha256:0ae19f15f7aac55c1c6d3019009d7d5a83ad1ee2af90ad9f04a89aaab0baf85b",
-          "linux/arm64": "sha256:881a8cf72ae0cad709c7f5fd7b209f1a2c1986aa2edaf148dfd0b229ed33e489"
+          "linux/amd64": "sha256:885bacfe14521a812c3ff39a907e5a52b2963eaefacef6840ef7310280943273",
+          "linux/arm64": "sha256:0152bc2bd2a8582fee54effb05929da44eefe7efa2f584019a2e52df9872aa90"
+        }
+      },
+      "runtimeImages": {
+        "frontend": {
+          "reference": "docker.io/library/node:24-alpine",
+          "digest": "sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf",
+          "platforms": {
+            "linux/amd64": "sha256:4caa4500bc746d58d5f9c667bd923055339ac0eb62d2a9da0f4203decc3a5e0e",
+            "linux/arm64": "sha256:d372eb8c1adce4bf46b0f9aec2ffae081606a4109b1d04a6f34a12fd1d3dfc5f"
+          }
+        },
+        "distroless": {
+          "reference": "gcr.io/distroless/static-debian12:nonroot",
+          "digest": "sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab",
+          "platforms": {
+            "linux/amd64": "sha256:500fe3f5b63e05587a909c8bc0b73f2125b4230fcbbd33a73a8185562d82aba3",
+            "linux/arm64": "sha256:a51c57fb3d3a2a1c5032c9e8a3dd9e8142bc8ad5a55577d399a6aabdf66b1110"
+          }
         }
       },
       "container": {
-        "internalPorts": [8080]
+        "internalPorts": [8080, 25502]
       }
     },
     "myurls": {

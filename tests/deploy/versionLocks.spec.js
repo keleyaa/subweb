@@ -20,6 +20,12 @@ const commitPattern = /^[0-9a-f]{40}$/;
 const requiredPlatforms = ['linux/amd64', 'linux/arm64'];
 const inventoryError =
   'services must contain exactly: gatewayBase, myurls, redis, subconverter';
+const gatewayBaseSourceError =
+  'services.gatewayBase.source.repository must equal docker-library/golang';
+const gatewayBaseImageError =
+  'services.gatewayBase.image.reference must use docker.io/library/golang:1.25-alpine';
+const runtimeImageError =
+  'services.gatewayBase.runtimeImages must contain exactly: distroless, frontend';
 const imageReferenceError =
   'services.myurls.image.reference must be a valid tagged OCI/Docker reference';
 const sourceTagError =
@@ -110,8 +116,43 @@ describe('integrated service artifact locks', () => {
     );
   });
 
+  it('pins the Go gateway builder and runtime image inputs used by Dockerfile', () => {
+    expect(lock.services.gatewayBase.source).toMatchObject({
+      repository: 'docker-library/golang', tag: '1.25/alpine3.24',
+    });
+    expect(lock.services.gatewayBase.image.reference).toBe('docker.io/library/golang:1.25-alpine');
+    expect(lock.services.gatewayBase.runtimeImages).toMatchObject({
+      frontend: expect.objectContaining({ reference: 'docker.io/library/node:24-alpine' }),
+      distroless: expect.objectContaining({ reference: 'gcr.io/distroless/static-debian12:nonroot' }),
+    });
+    for (const image of Object.values(lock.services.gatewayBase.runtimeImages)) {
+      expect(image.digest).toMatch(digestPattern);
+      expect(image.platforms).toEqual(
+        expect.objectContaining(
+          Object.fromEntries(
+            requiredPlatforms.map((platform) => [
+              platform,
+              expect.stringMatching(digestPattern),
+            ]),
+          ),
+        ),
+      );
+    }
+  });
+
   it('passes the reusable production lock validator', () => {
     expect(validateVersionLocks(lock)).toEqual([]);
+  });
+
+  it('rejects a Gateway base image or runtime input that differs from Dockerfile', () => {
+    const candidate = structuredClone(lock);
+    candidate.services.gatewayBase.source.repository = 'nginx/nginx';
+    candidate.services.gatewayBase.image.reference = 'docker.io/nginxinc/nginx-unprivileged:1.30.4-alpine';
+    delete candidate.services.gatewayBase.runtimeImages;
+
+    expect(validateVersionLocks(candidate)).toEqual(expect.arrayContaining([
+      gatewayBaseSourceError, gatewayBaseImageError, runtimeImageError,
+    ]));
   });
 
   it.each([

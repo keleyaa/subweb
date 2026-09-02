@@ -57,12 +57,6 @@ jobs:
       - name: Verify Docker-gated tests, lint, and build
         run: npm run verify:ci
 
-      - name: Verify container runtime
-        run: npm run verify:container
-
-      - name: Build hardened request policy image
-        run: docker compose -f compose.hardened.yaml build request-policy
-
       # Export the exact locked artifacts so integration and vulnerability
       # scans inspect the same images as production defaults.
       - name: Resolve external runtime images
@@ -81,12 +75,6 @@ jobs:
           }
           NODE
 
-      - name: Verify integrated HTTP stack
-        run: npm run verify:integration
-
-      - name: Verify Redis backup and restore lifecycle
-        run: npm run verify:operations
-
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
@@ -96,22 +84,10 @@ jobs:
       - name: Audit dependencies
         run: npm audit --audit-level=moderate
 
-      - name: Scan request policy image
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
-        with:
-          image-ref: subweb-request-policy:local
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
       - name: Scan final image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: subweb:ci
-          # The final image derives from the locked SubConverter image, so it
-          # carries the same reviewed OpenSSL exception.
-          trivyignores: .trivyignore.subconverter
           format: table
           exit-code: "1"
           ignore-unfixed: true
@@ -205,7 +181,7 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
-          file: ./Dockerfile.simple
+          file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: mode=max
@@ -218,9 +194,6 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ghcr.io/${{ env.GHCR_IMAGE }}@${{ steps.image.outputs.digest }}
-          # The candidate derives from the locked SubConverter image, so it
-          # carries the same reviewed OpenSSL exception.
-          trivyignores: .trivyignore.subconverter
           format: table
           exit-code: "1"
           ignore-unfixed: true

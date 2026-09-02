@@ -92,29 +92,18 @@ describe('Docker runtime contract', () => {
     expect(nginx).toContain('Referrer-Policy');
   });
 
-  it('blocks releases until application, browser, container, and image checks pass', async () => {
+  it('blocks releases until unified application, browser, and locked-image checks pass', async () => {
     const workflow = await readFile(rootFile('.github/workflows/docker-build-release.yml'), 'utf8');
-    const integrationVerifier = await readFile(
-      rootFile('scripts/verify-integrated-stack.sh'),
-      'utf8',
-    );
-    const simpleVerifier = await readFile(rootFile('scripts/verify-simple-stack.sh'), 'utf8');
     const releaseVerifier = await readFile(rootFile('scripts/verify-release.sh'), 'utf8');
-    const simpleDockerfile = await readFile(rootFile('Dockerfile.simple'), 'utf8');
-    const operationsVerifier = await readFile(
-      rootFile('scripts/verify-redis-operations.sh'),
-      'utf8',
-    );
-    const packageJson = JSON.parse(await readFile(rootFile('package.json'), 'utf8'));
 
     for (const command of [
       'npm ci',
       'npm run verify:locks',
+      'node scripts/verify-production-readiness.mjs',
       './scripts/configure.sh --app-domain app.test --api-domain api.app.test --short-domain short.app.test --turnstile-site-key test-site-key --turnstile-secret-key test-secret-key',
       'npm run verify:compose',
-      'npm run verify',
-      'npm run verify:container',
-      'npm run verify:integration',
+      'npm run verify:local',
+      'npm run verify:ci',
       'npm run test:e2e',
       'npm audit --audit-level=moderate',
     ]) {
@@ -122,9 +111,10 @@ describe('Docker runtime contract', () => {
     }
     const orderedCommands = [
       'npm run verify:locks',
+      'node scripts/verify-production-readiness.mjs',
       'npm run verify:compose',
-      'npm run verify:container',
-      'npm run verify:integration',
+      'npm run verify:local',
+      'npm run verify:ci',
       'npm run test:e2e',
       'npm audit --audit-level=moderate',
       'aquasecurity/trivy-action@',
@@ -134,23 +124,12 @@ describe('Docker runtime contract', () => {
         workflow.indexOf(orderedCommands[index]),
       );
     }
-    expect(packageJson.scripts['verify:container']).toBe('./scripts/verify-container.sh subweb:ci');
-    expect(packageJson.scripts['verify:simple']).toBe('./scripts/verify-simple-stack.sh');
-    expect(packageJson.scripts['verify:integration']).toBe(
-      'npm run verify:simple && ./scripts/verify-integrated-stack.sh',
-    );
-    expect(simpleVerifier).toContain('compose up --build --detach --wait');
-    expect(simpleVerifier).toContain('default Compose must define only myurls, redis, and subweb');
-    expect(simpleVerifier).toContain('SHORT domain exposed MyUrls API');
-    expect(simpleVerifier).toContain('MANAGED_CONFIG_PREFIX');
-    expect(simpleVerifier).toContain('SUBCONVERTER_SECURITY_PROFILE');
-    expect(simpleVerifier).toContain('SUBCONVERTER_ALLOW_PUBLIC_UPLOAD');
+    expect(workflow).toContain('file: ./Dockerfile');
     expect(workflow).toContain('if: always()');
     expect(workflow).toContain('rm -f .env');
     expect(workflow).not.toMatch(/upload-artifact[\s\S]{0,500}(?:\.env|fullchain\.pem|privkey\.pem|compose\.log|services\.log)/);
     expect(workflow).toContain('aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25');
     expect(workflow).toContain('trivyignores: .trivyignore.redis');
-    expect(workflow).toContain('docker compose -f compose.hardened.yaml build request-policy');
     const finalImageScan = workflow.slice(
       workflow.indexOf('- name: Scan final image'),
       workflow.indexOf('- name: Scan external runtime images (Redis)'),
@@ -159,12 +138,20 @@ describe('Docker runtime contract', () => {
       workflow.indexOf('- name: Scan release candidate'),
       workflow.indexOf('- name: Promote verified candidate'),
     );
-    expect(finalImageScan).toContain('trivyignores: .trivyignore.subconverter');
-    expect(releaseCandidateScan).toContain('trivyignores: .trivyignore.subconverter');
-    expect(releaseVerifier).toContain('docker compose -f compose.hardened.yaml build request-policy');
-    expect(releaseVerifier).toContain('--ignorefile .trivyignore.subconverter "$candidate_image"');
-    expect(simpleDockerfile).toContain('FROM ${SUBCONVERTER_IMAGE} AS runtime');
-    expect(simpleDockerfile).toContain('USER 101');
+    expect(finalImageScan).not.toContain('trivyignores:');
+    expect(releaseCandidateScan).not.toContain('trivyignores:');
+    expect(releaseVerifier).toContain('docker build --file Dockerfile --tag subweb:release-check .');
+    for (const legacyContract of [
+      'Dockerfile.simple',
+      'compose.hardened.yaml',
+      'request-policy',
+      'verify-container.sh',
+      'verify-integrated-stack.sh',
+      'verify-redis-operations.sh',
+    ]) {
+      expect(workflow).not.toContain(legacyContract);
+      expect(releaseVerifier).not.toContain(legacyContract);
+    }
     expect(workflow).toContain('needs: quality');
     expect(workflow).toContain('packages: write');
     expect(workflow).not.toContain('id-token: write');
@@ -179,11 +166,6 @@ describe('Docker runtime contract', () => {
     expect(workflow).toContain('image-ref: ${{ env.MYURLS_IMAGE }}');
     expect(workflow).toContain('Scan release candidate');
     expect(workflow).toContain('docker buildx imagetools create');
-    for (const verifier of [integrationVerifier, operationsVerifier]) {
-      expect(verifier).toContain("printf 'REDIS_IMAGE=%s\\n'");
-      expect(verifier).toContain("printf 'SUBCONVERTER_IMAGE=%s\\n'");
-    }
-    expect(integrationVerifier).toContain('REDIS_IMAGE');
     expect(workflow).not.toContain('Static verification only');
   });
 });

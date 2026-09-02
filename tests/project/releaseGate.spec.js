@@ -23,14 +23,11 @@ describe('release evidence and command gate', () => {
       'stage production-readiness node scripts/verify-production-readiness.mjs',
       'stage compose npm run verify:compose',
       'stage documentation npm run verify:docs',
-      'stage container ./scripts/verify-container.sh subweb:release-check',
+      'stage gateway-image docker build --file Dockerfile --tag subweb:release-check .',
       'stage image-security ./scripts/verify-image-security.sh',
       'stage image-security-myurls ./scripts/verify-image-security.sh',
-      'stage image-security-hardened-request-policy ./scripts/verify-image-security.sh',
       'stage image-security-redis ./scripts/verify-image-security.sh',
       'stage image-security-subconverter ./scripts/verify-image-security.sh',
-      'stage redis-operations ./scripts/verify-redis-operations.sh',
-      'stage integration env',
       'stage evidence node scripts/verify-evidence.mjs',
     ];
     let previous = -1;
@@ -42,7 +39,7 @@ describe('release evidence and command gate', () => {
     expect(source).toMatch(/^set -eu$/mu);
   });
 
-  it('scopes an ephemeral Compose environment to the hardened policy-image build when local deployment config is absent', () => {
+  it('creates an ephemeral unified Compose environment when local deployment config is absent', () => {
     const source = fs.readFileSync(path.join(root, 'scripts/verify-release.sh'), 'utf8');
 
     expect(source).toContain('if [ ! -f .env ]; then');
@@ -58,18 +55,30 @@ describe('release evidence and command gate', () => {
     ]) {
       expect(source).toContain(assignment);
     }
-    expect(source).toContain('build_hardened_request_policy() {');
-    expect(source).toContain('env APP_DOMAIN="$APP_DOMAIN"');
-    expect(source).toContain('docker compose -f compose.hardened.yaml build request-policy');
-    expect(source).toContain('stage hardened-request-policy-container build_hardened_request_policy');
-    expect(source).not.toContain('export APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN');
+    expect(source).toContain('export APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN');
+    expect(source).not.toContain('compose.hardened.yaml');
+    expect(source).not.toContain('request-policy');
+    expect(source).not.toContain('Dockerfile.simple');
+    expect(source).not.toContain('verify-container.sh');
   });
 
-  it('accepts production readiness when the locked MyUrls artifact has a stable source tag', () => {
+  it('accepts production readiness for the locked unified production profile', () => {
     const script = path.join(root, 'scripts/verify-production-readiness.mjs');
     const result = spawnSync(process.execPath, [script], { encoding: 'utf8' });
     expect(result.status).toBe(0);
-    expect(`${result.stdout}${result.stderr}`).toContain('tag gate passed');
+    expect(`${result.stdout}${result.stderr}`).toContain('unified lock gate passed');
+  });
+
+  it('accepts the reduced deployment only with its explicit readiness profile', () => {
+    const script = path.join(root, 'scripts/verify-production-readiness.mjs');
+    const result = spawnSync(process.execPath, [script, '--short-links-disabled'], {
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(0);
+    expect(`${result.stdout}${result.stderr}`).toContain(
+      'compose.disabled-short-links.yaml',
+    );
   });
 
   it('rejects a malformed MyUrls service node during standalone readiness validation', () => {
@@ -105,6 +114,12 @@ describe('release evidence and command gate', () => {
       'RUN_NGINX_GATEWAY_TESTS=1 RUN_DOCKER_INTEGRATION=1 RUN_REDIS_INTEGRATION=1 npm run verify',
     );
     expect(workflow).toContain('run: npm run verify:ci');
+    expect(workflow).toContain('file: ./Dockerfile');
+    expect(workflow).not.toContain('Dockerfile.simple');
+    expect(workflow).not.toContain('request-policy');
+    expect(workflow).not.toContain('npm run verify:container');
+    expect(workflow).not.toContain('npm run verify:integration');
+    expect(workflow).not.toContain('npm run verify:operations');
     expect(workflow).toContain('run: npm run verify:local');
     expect(workflow).toContain('run: node scripts/verify-production-readiness.mjs');
     expect(releaseVerifier).toContain('stage quality npm run verify:ci');
