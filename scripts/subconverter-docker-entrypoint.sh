@@ -2,6 +2,18 @@
 set -eu
 
 base_path=${SUBCONVERTER_BASE_PATH:-/base}
+
+# Docker copies the image's root-owned /base tree into a new named volume.
+# Bootstrap its directory once, then run the actual converter process as UID 101.
+if [ "${SUBWEB_PRIVILEGE_DROPPED:-}" != "1" ]; then
+  [ "$(id -u)" = "0" ] || {
+    printf '%s\n' 'SubConverter bootstrap requires root before dropping privileges.' >&2
+    exit 1
+  }
+  chown 101:101 "$base_path"
+  exec su -s /bin/sh -c 'exec env SUBWEB_PRIVILEGE_DROPPED=1 /bin/sh /usr/local/bin/subweb-subconverter-entrypoint' subweb
+fi
+
 pref_path=${PREF_PATH:-$base_path/pref.subweb.toml}
 temporary_pref="$pref_path.tmp.$$"
 trap 'rm -f "$temporary_pref"' EXIT HUP INT TERM

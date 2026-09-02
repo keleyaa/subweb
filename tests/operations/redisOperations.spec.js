@@ -42,9 +42,13 @@ describe('Redis operations safety contracts', () => {
     expect(backup).toContain('REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning --raw SAVE');
     expect(backup).not.toContain('-a "$REDIS_PASSWORD"');
     expect(backup).not.toMatch(/docker compose exec[^\n]*REDIS_PASSWORD/u);
-    expect(verifier).toContain('inventory-myurls-v1.sh');
-    expect(verifier).toContain('migrate-myurls-v1.sh');
+    expect(verifier).not.toContain('inventory-myurls-v1.sh');
+    expect(verifier).not.toContain('migrate-myurls-v1.sh');
+    expect(verifier).toContain('compose.yaml:$project_root/compose.test.yaml');
     expect(verifier).toContain('REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning FLUSHDB');
+    expect(verifier).toContain('docker compose restart redis');
+    expect(verifier).toContain('docker compose restart gateway');
+    expect(verifier).toContain('docker compose restart subconverter');
     expect(verifier).not.toContain('-a "$REDIS_PASSWORD"');
     expect(restore).toContain('--confirm-stop-writes');
     expect(restore).toContain('Pre-restore backup retained');
@@ -69,11 +73,13 @@ describe('Redis operations safety contracts', () => {
     expect(verify).toContain('readonly');
   });
 
-  it('pins the MyUrls image from the version lock for the temporary operations stack', () => {
+  it('pins the MyUrls, Redis, and SubConverter images from the version lock for the temporary operations stack', () => {
     const verifier = fs.readFileSync(operationsVerifier, 'utf8');
 
     expect(verifier).toContain('scripts/verify-version-locks.mjs');
     expect(verifier).toContain('deploy/versions.lock.json');
-    expect(verifier).toContain('"MYURLS_IMAGE=$myurls_test_image"');
+    expect(verifier).toContain("['myurls', 'redis', 'subconverter']");
+    expect(verifier).toContain('image.reference}@${image.digest}');
+    expect(verifier).toContain('printf \'%s\\n\' "$myurls_image"');
   });
 });

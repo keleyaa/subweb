@@ -61,7 +61,7 @@ describe('integrated Compose stack', () => {
     }
     for (const name of ['myurls-app', 'myurls-short']) {
       expect(config.services[name].healthcheck.test).toEqual([
-        'CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:3000/health/live',
+        'CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:3000/health/live',
       ]);
     }
     expectHealthBounds(config.services.gateway);
@@ -104,13 +104,21 @@ describe('integrated Compose stack', () => {
     expect(config.services.subconverter.image).toContain('@sha256:');
     expect(config.volumes['redis-data']).toBeTruthy();
     expect(config.services.redis.volumes).toContainEqual(expect.objectContaining({ source: 'redis-data', target: '/data', type: 'volume' }));
-    for (const service of Object.values(config.services)) {
+    for (const [name, service] of Object.entries(config.services)) {
       expect(service.environment.TZ).toBe('Asia/Shanghai');
       expect(service.cap_drop).toContain('ALL');
       expect(service.security_opt).toContain('no-new-privileges:true');
       expect(service.read_only).toBe(true);
-      expect(service.user).toMatch(/^[1-9][0-9]*:[1-9][0-9]*$/);
+      if (name !== 'subconverter') expect(service.user).toMatch(/^[1-9][0-9]*:[1-9][0-9]*$/);
     }
+    expect(config.services.subconverter.user).toBe('0:0');
+    expect(config.services.subconverter.cap_add).toEqual(['CHOWN', 'SETUID', 'SETGID']);
+    expect(config.services.subconverter.volumes).toContainEqual(expect.objectContaining({ target: '/etc/passwd', read_only: true }));
+    expect(config.services.subconverter.volumes).toContainEqual(expect.objectContaining({ target: '/etc/group', read_only: true }));
+    const entrypoint = await readFile(new URL('scripts/subconverter-docker-entrypoint.sh', root), 'utf8');
+    expect(entrypoint).toContain('chown 101:101 "$base_path"');
+    expect(entrypoint).toContain('exec su -s /bin/sh -c');
+    expect(entrypoint).toContain('subweb');
     expect(config.services['myurls-app'].environment).toMatchObject({
       REDIS_URL: 'redis://redis:6379/0', TURNSTILE_HOSTNAME: 'app.example.com',
       TURNSTILE_SECRET_KEY: 'test-secret-key',

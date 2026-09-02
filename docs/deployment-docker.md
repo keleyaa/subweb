@@ -1,8 +1,10 @@
 # Docker 部署
 
-默认 Compose 只启动 3 个服务：`subweb`、`myurls` 和 `redis`。`subweb` 在同一容器内运行 Nginx Gateway 与 SubConverter；只有它的 `8080` 端口绑定到 loopback 的 `SUBWEB_PORT`。MyUrls 处理 APP 域的同源短链创建和 SHORT 域的短码跳转，Redis 保存短链数据。HTTPS、证书和三个域名的路由由外部反向代理负责。
+Subweb 通过一个统一 Go Gateway 运行。TLS、证书和域名路由由外层反向代理管理；Gateway 是唯一发布端口，默认只绑定 `127.0.0.1:${SUBWEB_PORT}`。APP、API 和启用后的 SHORT 域都保留原始 Host 转发到该端口。
 
-默认模式适合可信维护者自用或受控的小规模部署。它没有 Request Policy Service 的输入级 SSRF/DNS 防护、匿名限流和 HTTPS CONNECT egress 约束；对公网、多用户或不可信订阅输入，改用本文末尾的 hardened Compose。
+短链启用时，`compose.yaml` 运行五个服务：`gateway`、`subconverter`、`myurls-app`、`myurls-short` 和 `redis`。Gateway 同时提供请求策略、匿名限流、受控 HTTPS CONNECT egress、静态 SPA、转换和短链路由。SubConverter 只连接内部 egress 网络，不能直接访问外网。
+
+短链关闭时，`compose.disabled-short-links.yaml` 只运行 `gateway` 与 `subconverter`；Redis、MyUrls 和 Turnstile 私密变量都不会被读取。
 
 ## 从源码部署
 
@@ -15,14 +17,26 @@ cd subweb
   --short-domain short.example.com \
   --turnstile-site-key YOUR_SITE_KEY \
   --turnstile-secret-key YOUR_SECRET_KEY
-./scripts/validate-compose.sh
-docker compose up -d --build --wait
+./scripts/subweb.sh verify
+./scripts/subweb.sh up
 ```
 
-`configure.sh` 自动生成 Redis 密码和独立的 IP 哈希秘密，无需手动填写。默认模式的短链数据使用 Redis DB `0`；不要直接执行 `cat .env`。只检查非秘密项时使用明确的白名单：
+`configure.sh` 自动生成 Redis 密码和独立的 IP 哈希秘密。不要执行 `cat .env`；只检查非秘密项时使用明确白名单：
 
 ```sh
-grep -E '^(APP_DOMAIN|API_DOMAIN|SHORT_DOMAIN|API_URL|SUBWEB_IMAGE)=' .env
+grep -E '^(APP_DOMAIN|API_DOMAIN|SHORT_DOMAIN|API_URL|SHORT_LINKS_ENABLED|CUSTOM_BACKEND_ENABLED|SUBWEB_IMAGE)=' .env
+```
+
+关闭短链的部署无需 SHORT 域或 Turnstile 私密配置：
+
+```sh
+./scripts/configure.sh \
+  --app-domain app.example.com \
+  --api-domain api.example.com \
+  --short-links-enabled false \
+  --custom-backend-enabled false
+./scripts/subweb.sh verify
+./scripts/subweb.sh up
 ```
 
 ## 使用预构建镜像
@@ -37,30 +51,42 @@ grep -E '^(APP_DOMAIN|API_DOMAIN|SHORT_DOMAIN|API_URL|SUBWEB_IMAGE)=' .env
   --image ghcr.io/keleyaa/subweb:sha-REPLACE_WITH_COMMIT
 ```
 
-Docker Hub 的 `docker.io/keleyaa/subweb:sha-...` 与 `ghcr.io/keleyaa/subweb:sha-...` 是等价的发布来源。`--image` 是必填项，只接受 `sha-*` 标签或完整 `@sha256` 摘要，脚本拒绝 `latest` 和无版本引用。脚本拉取 `subweb`、Redis 和 MyUrls 镜像，再执行 `docker compose up -d --no-build --pull never --wait`。MyUrls 默认使用 `deploy/versions.lock.json` 中的 Rust v2.0.6 版本。
+Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 是等价的 Gateway 发布来源。`--image` 是必填项，只接受 `sha-*` 标签或完整 `@sha256` digest，脚本拒绝 `latest` 和无版本引用。它选择当前 feature profile，拉取 Gateway 与版本锁锁定的 Redis、SubConverter、MyUrls 镜像，再执行：
+
+```sh
+docker compose -f compose.yaml up -d --no-build --pull never --wait
+```
+
+关闭短链时改用：
+
+```sh
+./scripts/docker-deploy.sh \
+  --app-domain app.example.com \
+  --api-domain api.example.com \
+  --short-links-enabled false \
+  --custom-backend-enabled false \
+  --image ghcr.io/keleyaa/subweb:sha-REPLACE_WITH_COMMIT
+```
+
+该命令选择 `compose.disabled-short-links.yaml`，因此不会拉取或要求 MyUrls、Redis、`SHORT_DOMAIN` 或 Turnstile 秘密。
 
 ## 外部反向代理
 
-`APP_DOMAIN`、`API_DOMAIN`、`SHORT_DOMAIN` 都转发到 `127.0.0.1:18080`，并保留原始 Host。不要把 Redis 或 MyUrls 端口暴露到公网。默认模式不消费 `TRUSTED_PROXY_CIDR`；该配置仅在 hardened Compose 中用于 Request Policy 的来源地址边界。
-
-## 可选 Hardened Compose
-
-公开部署、多用户使用或不可信的订阅 URL 需要完整的安全边界：
-
-```sh
-docker compose -f compose.hardened.yaml up -d --build --wait
-```
-
-该模式运行 Gateway、Request Policy Service、SubConverter、两个 MyUrls 实例和 Redis。Request Policy Service 执行 URL、DNS、大小、超时、并发和匿名频率限制，并为 SubConverter 提供受控 HTTPS CONNECT egress。两个 MyUrls 实例分别校验 APP/SHORT hostname，保留管理页面和完整短链 API 的原有契约。
+将 `APP_DOMAIN`、`API_DOMAIN` 以及启用的 `SHORT_DOMAIN` 反向代理到 `127.0.0.1:${SUBWEB_PORT}`，保留 `Host` 并传递可信 `X-Forwarded-*` 信息。不要把 Redis、MyUrls、SubConverter 或 Gateway 内部 CONNECT listener 暴露到公网。`TRUSTED_PROXY_CIDR` 只应包含实际反向代理地址范围，不能使用任意来源。
 
 ## 运维
 
+使用 feature-aware CLI 管理 Compose，而不是手动选择文件：
+
 ```sh
-docker compose ps
-docker compose logs --tail 100 subweb myurls redis
-docker compose stop
-docker compose start
-docker compose down
+./scripts/subweb.sh status
+./scripts/subweb.sh logs
+./scripts/subweb.sh down
+./scripts/subweb.sh up
+./scripts/subweb.sh backup --output "$PWD/.runtime/redis-backups/manual.rdb"
+./scripts/subweb.sh restore \
+  --backup "$PWD/.runtime/redis-backups/manual.rdb" \
+  --confirm-stop-writes
 ```
 
-Hardened 模式的日志服务列表为 `gateway request-policy myurls-app myurls-short subconverter redis`。从历史 MyUrls v1 升级到当前 Rust v2.0.6 前，先按 [`operations.md`](operations.md) 完成 Redis 盘点、备份和已批准 TTL 策略的迁移。
+升级前验证版本锁和 Compose，记录已解析镜像 digest 并演练 Redis 备份。详细的恢复、回滚、日志和安全运行步骤见 [运维手册](operations.md)。

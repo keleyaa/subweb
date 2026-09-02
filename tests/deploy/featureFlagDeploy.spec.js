@@ -69,4 +69,48 @@ describe('feature-flag deployment entrypoint', () => {
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain('compose version\n');
     expect(await readFile(join(root, 'docker.log'), 'utf8')).not.toContain('compose.disabled-short-links.yaml');
   });
+
+  it('refuses restore for disabled short links or without explicit stop-write confirmation', async () => {
+    const disabledRoot = await makeFixture('false');
+    const disabledResult = runCLI(disabledRoot, ['restore', '--backup', '/tmp/verified.rdb', '--confirm-stop-writes']);
+    expect(disabledResult.status).not.toBe(0);
+    expect(disabledResult.stderr).toContain('restore requires SHORT_LINKS_ENABLED=true');
+
+    const enabledRoot = await makeFixture('true');
+    const missingConfirmation = runCLI(enabledRoot, ['restore', '--backup', '/tmp/verified.rdb']);
+    expect(missingConfirmation.status).not.toBe(0);
+    expect(missingConfirmation.stderr).toContain('--confirm-stop-writes');
+  });
+
+  it('forwards an explicitly confirmed absolute backup to the enabled-profile restore command', async () => {
+    const root = await makeFixture('true');
+    await mkdir(join(root, 'scripts', 'operations'));
+    await writeFile(
+      join(root, 'scripts', 'operations', 'restore-redis.sh'),
+      '#!/bin/sh\nprintf "compose=%s args=%s\\n" "$COMPOSE_FILE" "$*" >> "$RESTORE_LOG"\n',
+    );
+    await chmod(join(root, 'scripts', 'operations', 'restore-redis.sh'), 0o755);
+
+    const backup = join(root, 'verified.rdb');
+    await writeFile(backup, 'verified backup');
+    const result = spawnSync(
+      'sh',
+      [join(root, 'scripts/subweb.sh'), 'restore', '--backup', backup, '--confirm-stop-writes'],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${join(root, 'bin')}:${process.env.PATH}`,
+          DOCKER_LOG: join(root, 'docker.log'),
+          RESTORE_LOG: join(root, 'restore.log'),
+        },
+      },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(await readFile(join(root, 'restore.log'), 'utf8')).toBe(
+      `compose=compose.yaml args=--backup ${backup} --confirm-stop-writes\n`,
+    );
+  });
 });

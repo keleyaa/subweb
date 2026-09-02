@@ -95,14 +95,22 @@ describe('unified Compose deployment', () => {
     expect(config.networks['redis-policy']).toBeUndefined();
   });
 
-  it('applies non-root read-only security defaults to every service', () => {
+  it('uses read-only security defaults and constrains the SubConverter bootstrap', () => {
     const config = renderCompose();
     for (const [name, service] of Object.entries(config.services)) {
-      expect(service.user, name).toMatch(/^[1-9][0-9]*:[1-9][0-9]*$/);
       expect(service.read_only, name).toBe(true);
       expect(service.cap_drop, name).toContain('ALL');
       expect(service.security_opt, name).toContain('no-new-privileges:true');
+      if (name !== 'subconverter') expect(service.user, name).toMatch(/^[1-9][0-9]*:[1-9][0-9]*$/);
     }
+
+    const subconverter = config.services.subconverter;
+    expect(subconverter.user).toBe('0:0');
+    expect(subconverter.cap_add).toEqual(['CHOWN', 'SETUID', 'SETGID']);
+    expect(subconverter.volumes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ target: '/etc/passwd', read_only: true }),
+      expect.objectContaining({ target: '/etc/group', read_only: true }),
+    ]));
   });
 
   it('uses the Go Gateway Dockerfile and preserves the runtime contract', async () => {

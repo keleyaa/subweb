@@ -17,7 +17,7 @@ read_env_value() {
 }
 
 command_name=${1-}
-[ -n "$command_name" ] || fail 'usage: subweb.sh install|up|down|status|logs|verify|backup|upgrade ...'
+[ -n "$command_name" ] || fail 'usage: subweb.sh install|up|down|status|logs|verify|backup|restore|upgrade ...'
 shift
 
 if [ "$command_name" = install ]; then
@@ -68,9 +68,23 @@ case "$command_name" in
     compose ps
     ;;
   backup)
-    compose ps --services --filter status=running >/dev/null || fail 'unable to inspect running services.'
+    [ "$short_links_enabled" = true ] || fail 'backup requires SHORT_LINKS_ENABLED=true.'
+    compose ps --services --filter status=running | grep -qx redis \
+      || fail 'Redis must be running before backup.'
     export COMPOSE_FILE=$compose_file
     exec "$SCRIPT_DIRECTORY/operations/backup-redis.sh" "$@"
+    ;;
+  restore)
+    [ "$short_links_enabled" = true ] || fail 'restore requires SHORT_LINKS_ENABLED=true.'
+    [ "$#" -eq 3 ] && [ "$1" = --backup ] && [ "$3" = --confirm-stop-writes ] \
+      || fail 'usage: subweb.sh restore --backup /absolute/path.rdb --confirm-stop-writes'
+    case "$2" in
+      /*) ;;
+      *) fail 'restore backup must be an absolute path.' ;;
+    esac
+    [ -f "$2" ] && [ ! -L "$2" ] || fail 'restore backup must be a regular file and not a symlink.'
+    export COMPOSE_FILE=$compose_file
+    exec "$SCRIPT_DIRECTORY/operations/restore-redis.sh" --backup "$2" --confirm-stop-writes
     ;;
   upgrade)
     [ "$#" -eq 0 ] || fail 'upgrade does not accept extra arguments.'

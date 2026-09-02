@@ -29,7 +29,7 @@ x-myurls-common: &myurls-common
   tmpfs:
     - /tmp:uid=10001,gid=10001,mode=0700,noexec,nosuid,size=16m
   healthcheck:
-    test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:3000/health/live"]
+    test: [CMD, curl, --fail, --silent, "http://127.0.0.1:3000/health/live"]
     interval: 30s
     timeout: 5s
     retries: 3
@@ -203,7 +203,12 @@ services:
   subconverter:
     <<: *runtime-security
     image: "${SUBCONVERTER_IMAGE:-ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475}"
-    user: "101:101"
+    # Bootstrap the copied named volume, then the entrypoint execs as UID 101.
+    user: "0:0"
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
     environment:
       <<: *runtime-environment
       MANAGED_CONFIG_PREFIX: "${API_URL:?Set API_URL with scripts/configure.sh}"
@@ -220,6 +225,18 @@ services:
       - type: bind
         source: ./deploy/subconverter/gai.conf
         target: /etc/gai.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./deploy/subconverter/passwd
+        target: /etc/passwd
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./deploy/subconverter/group
+        target: /etc/group
         read_only: true
         bind:
           create_host_path: false

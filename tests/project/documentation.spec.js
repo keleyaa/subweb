@@ -125,18 +125,18 @@ describe('documentation contract', () => {
     for (const command of [
       'docker-deploy.sh',
       'configure.sh',
-      'validate-compose.sh',
-        'docker compose up -d --build --wait',
-        'compose.hardened.yaml',
-        'docker compose up -d --no-build --pull never --wait',
+      'subweb.sh verify',
+      'subweb.sh up',
+      'compose.yaml up -d --no-build --pull never --wait',
+      'compose.disabled-short-links.yaml',
     ]) {
       expect(docker).toContain(command);
     }
-    for (const command of ['docker compose ps', 'docker compose logs', 'docker compose stop', 'docker compose start', 'docker compose down']) {
+    for (const command of ['subweb.sh status', 'subweb.sh logs', 'subweb.sh down', 'subweb.sh backup', 'subweb.sh restore']) {
       expect(docker).toContain(command);
     }
-    expect(docker).toContain('不要直接执行 `cat .env`');
-    expect(docker).toContain('无需手动填写');
+    expect(docker).toContain('不要执行 `cat .env`');
+    expect(docker).toContain('自动生成');
     expect(local).toContain('http://127.0.0.1:5173/');
     expect(local).toContain('合并容器');
     expect(local).toContain('hardened Compose 的 Request Policy');
@@ -166,7 +166,7 @@ describe('documentation contract', () => {
       expect(document).toContain('Asia/Shanghai');
       expect(document).toContain('短码');
     }
-    for (const text of ['路由模板', '成功的 `/healthz`', '10 MB', '3 个']) {
+    for (const text of ['路由模板', '成功的 `/readyz`', '10 MB', '3 个']) {
       expect(operations).toContain(text);
     }
     expect(security).toContain('print_debug_info = false');
