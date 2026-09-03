@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
   <title id="title">Subconverter Web request paths</title>
-  <desc id="desc">The browser reaches APP_DOMAIN and API_DOMAIN through one gateway. Subscription conversion routes to SubConverter. Short-link creation and redirects route to MyUrls, which persists mappings in Redis. Credentials stay on the server.</desc>
+  <desc id="desc">The browser reaches APP_DOMAIN, API_DOMAIN, and SHORT_DOMAIN through one Go Gateway. Conversion routes to SubConverter, while short-link creation and redirects use separate MyUrls APP and SHORT services backed by Redis.</desc>
   <defs>
     <linearGradient id="ground" x1="0" y1="0" x2="1200" y2="520" gradientUnits="userSpaceOnUse">
       <stop stop-color="#F4F7FF"/>
@@ -25,7 +25,7 @@
     <text x="1146" y="68" text-anchor="end" fill="#1769FF" font-size="19" font-weight="700" letter-spacing="1.5">TOKEN STAYS SERVER-SIDE</text>
   </g>
 
-  <path d="M205 239H325M475 204H590M475 274H590M756 204H846M756 274H846M1012 274H1090" fill="none" stroke="url(#flow)" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow)"/>
+  <path d="M205 239H325M475 190H590M475 239H590M475 288H590M756 190H846M756 239H846M756 288H846M1012 288H1090" fill="none" stroke="url(#flow)" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow)"/>
 
   <g transform="translate(54 171)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
     <rect width="150" height="136" rx="18" fill="#FFFFFF" stroke="#A9BBDD" stroke-width="2"/>
@@ -33,49 +33,56 @@
     <text x="75" y="106" text-anchor="middle" fill="#12192A" font-size="23" font-weight="700">Browser</text>
   </g>
 
-  <g transform="translate(326 158)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
-    <rect width="150" height="162" rx="18" fill="#FFFFFF" stroke="#86A8E8" stroke-width="2"/>
-    <text x="75" y="50" text-anchor="middle" fill="#1769FF" font-size="19" font-weight="700">APP_DOMAIN</text>
-    <path d="M24 75H126" stroke="#CFD9EA" stroke-width="2"/>
-    <text x="75" y="111" text-anchor="middle" fill="#7257D6" font-size="19" font-weight="700">API_DOMAIN</text>
-    <text x="75" y="143" text-anchor="middle" fill="#657087" font-size="16">PUBLIC</text>
+  <g transform="translate(326 140)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+    <rect width="150" height="198" rx="18" fill="#FFFFFF" stroke="#86A8E8" stroke-width="2"/>
+    <text x="75" y="45" text-anchor="middle" fill="#1769FF" font-size="17" font-weight="700">APP_DOMAIN</text>
+    <path d="M24 66H126" stroke="#CFD9EA" stroke-width="2"/>
+    <text x="75" y="98" text-anchor="middle" fill="#417DDB" font-size="17" font-weight="700">API_DOMAIN</text>
+    <path d="M24 119H126" stroke="#CFD9EA" stroke-width="2"/>
+    <text x="75" y="151" text-anchor="middle" fill="#7257D6" font-size="17" font-weight="700">SHORT_DOMAIN</text>
+    <text x="75" y="181" text-anchor="middle" fill="#657087" font-size="16">PUBLIC</text>
   </g>
 
   <g transform="translate(590 158)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
     <rect width="166" height="162" rx="18" fill="#152037" stroke="#6F9FFF" stroke-width="2"/>
-    <path d="M83 37V99M55 68H111" stroke="#6F9FFF" stroke-width="5" stroke-linecap="round"/>
-    <text x="83" y="132" text-anchor="middle" fill="#F2F5FF" font-size="24" font-weight="700">Gateway</text>
+    <path d="M83 37V99M55 68H111M83 99V125" stroke="#6F9FFF" stroke-width="5" stroke-linecap="round"/>
+    <text x="83" y="146" text-anchor="middle" fill="#F2F5FF" font-size="24" font-weight="700">Gateway</text>
   </g>
 
-  <g transform="translate(846 143)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
-    <rect width="166" height="76" rx="14" fill="#E8F7FA" stroke="#55AEB9" stroke-width="2"/>
-    <text x="83" y="35" text-anchor="middle" fill="#174C55" font-size="19" font-weight="700">SubConverter</text>
-    <text x="83" y="58" text-anchor="middle" fill="#477078" font-size="15">CONVERT</text>
-    <rect y="115" width="166" height="76" rx="14" fill="#F0EBFF" stroke="#8E76D8" stroke-width="2"/>
-    <text x="83" y="149" text-anchor="middle" fill="#3C2C70" font-size="20" font-weight="700">MyUrls</text>
-    <text x="83" y="173" text-anchor="middle" fill="#67558F" font-size="15">SHORTEN · REDIRECT</text>
+  <g transform="translate(846 124)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+    <rect width="166" height="60" rx="14" fill="#E8F7FA" stroke="#55AEB9" stroke-width="2"/>
+    <text x="83" y="29" text-anchor="middle" fill="#174C55" font-size="17" font-weight="700">SubConverter</text>
+    <text x="83" y="48" text-anchor="middle" fill="#477078" font-size="14">CONVERT</text>
+    <rect y="75" width="166" height="60" rx="14" fill="#F0EBFF" stroke="#8E76D8" stroke-width="2"/>
+    <text x="83" y="101" text-anchor="middle" fill="#3C2C70" font-size="18" font-weight="700">MyUrls APP</text>
+    <text x="83" y="120" text-anchor="middle" fill="#67558F" font-size="14">CREATE · MANAGE</text>
+    <rect y="150" width="166" height="60" rx="14" fill="#F0EBFF" stroke="#8E76D8" stroke-width="2"/>
+    <text x="83" y="176" text-anchor="middle" fill="#3C2C70" font-size="18" font-weight="700">MyUrls SHORT</text>
+    <text x="83" y="195" text-anchor="middle" fill="#67558F" font-size="14">REDIRECT</text>
   </g>
 
-  <g transform="translate(1090 258)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+  <g transform="translate(1090 286)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
     <rect width="76" height="76" rx="38" fill="#E9F0FF" stroke="#7095D9" stroke-width="2"/>
     <path d="M20 29C20 21 56 21 56 29V49C56 57 20 57 20 49ZM20 29C20 37 56 37 56 29M20 39C20 47 56 47 56 39" fill="none" stroke="#356CCB" stroke-width="3"/>
     <text x="38" y="101" text-anchor="middle" fill="#39465B" font-size="17" font-weight="700">Redis</text>
   </g>
 
   <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="650">
-    <text x="532" y="187" text-anchor="middle" fill="#4A70B5">HOST ROUTING</text>
-    <text x="532" y="303" text-anchor="middle" fill="#7257D6">TOKEN INJECTION</text>
-    <text x="800" y="187" text-anchor="middle" fill="#337A84">/sub</text>
-    <text x="800" y="303" text-anchor="middle" fill="#7257D6">/short</text>
+    <text x="532" y="173" text-anchor="middle" fill="#4A70B5">HOST ROUTING</text>
+    <text x="532" y="222" text-anchor="middle" fill="#4A70B5">POLICY + LIMITS</text>
+    <text x="532" y="271" text-anchor="middle" fill="#7257D6">ONE-TIME EGRESS</text>
+    <text x="800" y="107" text-anchor="middle" fill="#337A84">/sub</text>
+    <text x="800" y="205" text-anchor="middle" fill="#7257D6">/short-api/links</text>
+    <text x="800" y="280" text-anchor="middle" fill="#7257D6">/:shortKey</text>
   </g>
 
-  <rect x="54" y="374" width="1092" height="62" rx="14" fill="#FFFFFF" fill-opacity="0.74" stroke="#A9BBDD" stroke-opacity="0.6"/>
+  <rect x="54" y="404" width="1092" height="62" rx="14" fill="#FFFFFF" fill-opacity="0.74" stroke="#A9BBDD" stroke-opacity="0.6"/>
   <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="650">
-    <text x="80" y="412" fill="#1769FF">APP</text>
-    <text x="134" y="412" fill="#59667D">UI · /short-api/links · /:shortKey</text>
-    <text x="566" y="412" fill="#7257D6">API</text>
-    <text x="620" y="412" fill="#59667D">/sub · /healthz</text>
-    <text x="924" y="412" fill="#1F7A35">PRIVATE</text>
-    <text x="1012" y="412" fill="#59667D">no ports</text>
+    <text x="80" y="442" fill="#1769FF">APP</text>
+    <text x="134" y="442" fill="#59667D">UI · /short-api/links · public pages</text>
+    <text x="566" y="442" fill="#7257D6">API</text>
+    <text x="620" y="442" fill="#59667D">/sub · health endpoints</text>
+    <text x="924" y="442" fill="#1F7A35">PRIVATE</text>
+    <text x="1012" y="442" fill="#59667D">dependencies</text>
   </g>
 </svg>

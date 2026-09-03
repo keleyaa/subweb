@@ -2,6 +2,8 @@
 
 > 面向自托管维护者的在线订阅转换与短链服务。统一 Go Gateway、受控 HTTPS CONNECT egress，以及可审计的五服务 Docker 部署。
 
+[![Docker build and release](https://github.com/keleyaa/subweb/actions/workflows/docker-build-release.yml/badge.svg?branch=main)](https://github.com/keleyaa/subweb/actions/workflows/docker-build-release.yml) [![Local development contract](https://github.com/keleyaa/subweb/actions/workflows/local-dev.yml/badge.svg?branch=main)](https://github.com/keleyaa/subweb/actions/workflows/local-dev.yml)
+
 <p align="center">
   <img src="./assets/readme/command-interface.png" alt="Subconverter Web 固定黑色命令界面：订阅输入、客户端选择、订阅后端、高级参数与转换并复制操作" width="100%">
 </p>
@@ -56,13 +58,13 @@ Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 
 
 生产短链 profile 的五个服务和网络边界见 [架构](docs/architecture.md)。短链关闭时使用显式两服务 profile。外部 TLS 入口属于部署者，不是 Compose 服务。
 
-| 服务 | 职责 |
-| --- | --- |
-| `gateway` | 唯一公开 loopback 端口；统一 Host 路由、静态资源、策略、限流、短链适配和 CONNECT egress |
-| `subconverter` | 订阅转换执行器，只能通过内部 egress 网络访问 |
-| `myurls-app` | MyUrls Rust v2.0.6 的 APP 域名短链创建和管理 API |
-| `myurls-short` | SHORT 域名的短码跳转 |
-| `redis` | DB `0` 保存短链，DB `1` 保存 Gateway HMAC IP 限流状态 |
+| 服务           | 职责                                                                                    |
+| -------------- | --------------------------------------------------------------------------------------- |
+| `gateway`      | 唯一公开 loopback 端口；统一 Host 路由、静态资源、策略、限流、短链适配和 CONNECT egress |
+| `subconverter` | 订阅转换执行器，只能通过内部 egress 网络访问                                            |
+| `myurls-app`   | MyUrls Rust v2.0.6 的 APP 域名短链创建和管理 API                                        |
+| `myurls-short` | SHORT 域名的短码跳转                                                                    |
+| `redis`        | DB `0` 保存短链，DB `1` 保存 Gateway HMAC IP 限流状态                                   |
 
 ## 界面操作
 

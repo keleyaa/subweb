@@ -4,7 +4,7 @@
 
 Subweb 不管理公网 TLS。部署者的外层反向代理负责证书、TLS、HSTS、DNS 和 80/443 端口，并将保留 Host 的请求转发到 Gateway loopback 端口。Gateway 是唯一发布宿主机端口的 Compose 服务；Redis、两个 MyUrls 实例和 SubConverter 不发布端口。
 
-生产短链 profile 固定为五个服务；外部镜像和运行时版本均由版本锁定合同约束。MYURLS 依赖只通过固定的 APP/SHORT adapter 边界访问。关闭短链时使用显式的两服务 profile。不要恢复已删除的 Node Request Policy、Nginx 业务路由、合并容器或旧 Compose 文件来获得“加固”效果：策略和 egress 已在 Go Gateway 中统一实现。
+生产短链 profile 固定为五个服务；外部镜像和运行时版本均由版本锁定合同约束。MYURLS 依赖只通过固定的 APP/SHORT adapter 边界访问。关闭短链时使用显式的两服务 profile。不要引入第二套生产部署拓扑来获得“加固”效果：策略和 egress 已在 Go Gateway 中统一实现。
 
 ## 外部订阅
 

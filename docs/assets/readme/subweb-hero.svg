@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
   <title id="title">Subconverter Web</title>
-  <desc id="desc">A self-hosted subscription delivery stack. APP_DOMAIN and API_DOMAIN enter one gateway, then route privately to SubConverter, MyUrls, and Redis.</desc>
+  <desc id="desc">A self-hosted subscription delivery stack. APP_DOMAIN, API_DOMAIN, and SHORT_DOMAIN enter one Go Gateway, which connects privately to SubConverter, two MyUrls services, and Redis.</desc>
   <defs>
     <linearGradient id="ground" x1="0" y1="0" x2="1200" y2="360" gradientUnits="userSpaceOnUse">
       <stop stop-color="#080B14"/>
@@ -22,7 +22,7 @@
     </filter>
   </defs>
 
-    <rect width="1200" height="360" rx="26" fill="url(#ground)"/>
+  <rect width="1200" height="360" rx="26" fill="url(#ground)"/>
   <rect x="1" y="1" width="1198" height="358" rx="25" fill="none" stroke="#DCE7FF" stroke-opacity="0.14" stroke-width="2"/>
   <rect width="1200" height="360" rx="26" fill="url(#glow)"/>
 
@@ -32,7 +32,7 @@
     <text x="0" y="151" fill="#DCE5F7" font-size="32" font-weight="620">Convert. Shorten. Deliver.</text>
     <text x="0" y="198" fill="#AAB8D0" font-size="28" font-weight="560">自托管订阅转换与短链发行栈</text>
     <path d="M0 238H462" stroke="#DCE7FF" stroke-opacity="0.16" stroke-width="2"/>
-    <text x="0" y="279" fill="#8290A9" font-size="20" font-weight="560">ONE PUBLIC GATEWAY  /  THREE PRIVATE SERVICES</text>
+    <text x="0" y="279" fill="#8290A9" font-size="20" font-weight="560">ONE PUBLIC GATEWAY  /  FIVE SERVICES</text>
   </g>
 
   <g transform="translate(620 57)">
@@ -42,33 +42,34 @@
     <circle cx="56" cy="24" r="4" fill="#BC92FF"/>
     <text x="486" y="29" text-anchor="end" fill="#75839C" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">PRIVATE BY DEFAULT</text>
 
-    <path d="M30 91H179" stroke="#6F9FFF" stroke-opacity="0.24" stroke-width="14" stroke-linecap="round" filter="url(#soft-glow)"/>
-    <path d="M30 199H179" stroke="#BC92FF" stroke-opacity="0.22" stroke-width="14" stroke-linecap="round" filter="url(#soft-glow)"/>
-    <path d="M30 91H179M30 199H179" stroke="url(#trace)" stroke-width="3" stroke-linecap="round"/>
-
-    <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="21" font-weight="650">
-      <text x="30" y="78" fill="#B8CAEA">APP_DOMAIN</text>
-      <text x="30" y="186" fill="#D4C3F5">API_DOMAIN</text>
+    <path d="M30 74H179M30 128H179M30 182H179" stroke="#6F9FFF" stroke-opacity="0.22" stroke-width="14" stroke-linecap="round" filter="url(#soft-glow)"/>
+    <path d="M30 74H179M30 128H179M30 182H179" stroke="url(#trace)" stroke-width="3" stroke-linecap="round"/>
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="650">
+      <text x="30" y="62" fill="#B8CAEA">APP_DOMAIN</text>
+      <text x="30" y="116" fill="#B8CAEA">API_DOMAIN</text>
+      <text x="30" y="170" fill="#D4C3F5">SHORT_DOMAIN</text>
     </g>
 
-    <g transform="translate(179 58)">
+    <g transform="translate(179 42)">
       <rect width="132" height="174" rx="18" fill="#18243A" stroke="#6F9FFF" stroke-opacity="0.68" stroke-width="2"/>
-      <path d="M66 35V139M39 62H66M39 112H66M66 87H94" fill="none" stroke="#6F9FFF" stroke-width="4" stroke-linecap="round"/>
-      <circle cx="39" cy="62" r="6" fill="#6F9FFF"/>
-      <circle cx="39" cy="112" r="6" fill="#BC92FF"/>
+      <path d="M66 35V139M39 52H66M39 87H66M39 122H66M66 87H94" fill="none" stroke="#6F9FFF" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="39" cy="52" r="6" fill="#6F9FFF"/>
+      <circle cx="39" cy="87" r="6" fill="#6EDAE6"/>
+      <circle cx="39" cy="122" r="6" fill="#BC92FF"/>
       <circle cx="94" cy="87" r="6" fill="#6EDAE6"/>
       <text x="66" y="158" text-anchor="middle" fill="#F2F5FF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">Gateway</text>
     </g>
 
-    <path d="M311 103H346M311 145H346M311 187H346" stroke="url(#trace)" stroke-width="3" stroke-linecap="round"/>
-
-    <g transform="translate(346 67)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
-      <rect width="140" height="44" rx="10" fill="#152B38" stroke="#6EDAE6" stroke-opacity="0.52"/>
-      <text x="70" y="29" text-anchor="middle" fill="#C8F6FA" font-size="18" font-weight="650">SubConverter</text>
-      <rect y="55" width="140" height="44" rx="10" fill="#211E3C" stroke="#BC92FF" stroke-opacity="0.52"/>
-      <text x="70" y="84" text-anchor="middle" fill="#E4D9FA" font-size="18" font-weight="650">MyUrls</text>
-      <rect y="110" width="140" height="44" rx="10" fill="#18243A" stroke="#6F9FFF" stroke-opacity="0.52"/>
-      <text x="70" y="139" text-anchor="middle" fill="#D5E3FF" font-size="18" font-weight="650">Redis</text>
+    <path d="M311 65H346M311 101H346M311 137H346M311 173H346" stroke="url(#trace)" stroke-width="3" stroke-linecap="round"/>
+    <g transform="translate(346 43)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+      <rect width="140" height="36" rx="9" fill="#152B38" stroke="#6EDAE6" stroke-opacity="0.52"/>
+      <text x="70" y="24" text-anchor="middle" fill="#C8F6FA" font-size="16" font-weight="650">SubConverter</text>
+      <rect y="36" width="140" height="36" rx="9" fill="#211E3C" stroke="#BC92FF" stroke-opacity="0.52"/>
+      <text x="70" y="60" text-anchor="middle" fill="#E4D9FA" font-size="16" font-weight="650">MyUrls APP</text>
+      <rect y="72" width="140" height="36" rx="9" fill="#211E3C" stroke="#BC92FF" stroke-opacity="0.52"/>
+      <text x="70" y="96" text-anchor="middle" fill="#E4D9FA" font-size="16" font-weight="650">MyUrls SHORT</text>
+      <rect y="108" width="140" height="36" rx="9" fill="#18243A" stroke="#6F9FFF" stroke-opacity="0.52"/>
+      <text x="70" y="132" text-anchor="middle" fill="#D5E3FF" font-size="16" font-weight="650">Redis</text>
     </g>
   </g>
 </svg>
