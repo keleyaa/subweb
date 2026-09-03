@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -9,6 +11,8 @@ import (
 	"time"
 
 	"github.com/keleyaa/subweb/services/gateway/internal/config"
+	"github.com/keleyaa/subweb/services/gateway/internal/myurls"
+	"github.com/keleyaa/subweb/services/gateway/internal/ratelimit"
 )
 
 func TestBuildServersRoutesAppAndShortLinksToSeparateUpstreams(t *testing.T) {
@@ -89,6 +93,117 @@ func TestBuildServersRoutesAppAndShortLinksToSeparateUpstreams(t *testing.T) {
 	}
 }
 
+func TestReadinessRequiresBothMyURLsInstancesWhenShortLinksAreEnabled(t *testing.T) {
+	for name, testCase := range map[string]struct {
+		appStatus   int
+		shortStatus int
+	}{
+		"healthy":           {appStatus: http.StatusOK, shortStatus: http.StatusOK},
+		"app unavailable":   {appStatus: http.StatusServiceUnavailable, shortStatus: http.StatusOK},
+		"short unavailable": {appStatus: http.StatusOK, shortStatus: http.StatusServiceUnavailable},
+	} {
+		t.Run(name, func(t *testing.T) {
+			app := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				if request.URL.Path != "/health/live" {
+					t.Fatalf("app path = %q, want /health/live", request.URL.Path)
+				}
+				writer.WriteHeader(testCase.appStatus)
+			}))
+			defer app.Close()
+			short := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				if request.URL.Path != "/health/live" {
+					t.Fatalf("short path = %q, want /health/live", request.URL.Path)
+				}
+				writer.WriteHeader(testCase.shortStatus)
+			}))
+			defer short.Close()
+
+			cfg := testGatewayConfig(t, app.URL, short.URL, true)
+			readiness := readinessFunc(
+				cfg,
+				pingableCounterStore{CounterStore: ratelimit.NewMemoryStore()},
+				myurls.NewHTTPClient(mustParseURL(t, app.URL), nil),
+				myurls.NewHTTPClient(mustParseURL(t, short.URL), nil),
+			)
+			err := readiness(context.Background())
+			if testCase.appStatus == http.StatusOK && testCase.shortStatus == http.StatusOK {
+				if err != nil {
+					t.Fatalf("readiness error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("readiness error = nil, want unavailable dependency error")
+			}
+		})
+	}
+}
+
+func TestReadinessRejectsNilContextWhenShortLinksAreEnabled(t *testing.T) {
+	cfg := testGatewayConfig(t, "", "", true)
+	if err := readinessFunc(cfg, ratelimit.NewMemoryStore(), nil, nil)(nil); err == nil {
+		t.Fatal("readiness error = nil, want unavailable error")
+	}
+}
+
+func TestReadinessFailsClosedWhenMyURLsDependenciesAreMissing(t *testing.T) {
+	cfg := testGatewayConfig(t, "", "", true)
+	readiness := readinessFunc(cfg, pingableCounterStore{CounterStore: ratelimit.NewMemoryStore()})
+	if err := readiness(context.Background()); err == nil {
+		t.Fatal("readiness error = nil, want unavailable error")
+	}
+}
+
+func TestReadinessFailsClosedWhenRedisPingIsUnavailable(t *testing.T) {
+	cfg := testGatewayConfig(t, "", "", true)
+	readiness := readinessFunc(
+		cfg,
+		ratelimit.NewMemoryStore(),
+		testReadinessClient{},
+		testReadinessClient{},
+	)
+	if err := readiness(context.Background()); err == nil {
+		t.Fatal("readiness error = nil, want unavailable error")
+	}
+}
+
+func TestReadinessReturnsRedisFailure(t *testing.T) {
+	cfg := testGatewayConfig(t, "", "", true)
+	wantErr := errors.New("redis unavailable")
+	readiness := readinessFunc(
+		cfg,
+		pingableCounterStore{CounterStore: ratelimit.NewMemoryStore(), pingErr: wantErr},
+		testReadinessClient{},
+		testReadinessClient{},
+	)
+	if err := readiness(context.Background()); !errors.Is(err, wantErr) {
+		t.Fatalf("readiness error = %v, want %v", err, wantErr)
+	}
+}
+
+type pingableCounterStore struct {
+	ratelimit.CounterStore
+	pingErr error
+}
+
+func (store pingableCounterStore) Ping(context.Context) error {
+	return store.pingErr
+}
+
+type testReadinessClient struct{}
+
+func (testReadinessClient) Create(context.Context, []byte, http.Header) (*http.Response, error) {
+	return nil, nil
+}
+
+func (testReadinessClient) Resolve(context.Context, string, http.Header) (*http.Response, error) {
+	return nil, nil
+}
+
+func (testReadinessClient) Health(context.Context) error {
+	return nil
+}
+
 func TestBuildServersDisablesShortLinkDependencies(t *testing.T) {
 	cfg := testGatewayConfig(t, "", "", false)
 	cfg.RedisURL = "not a Redis URL"
@@ -114,17 +229,22 @@ func TestBuildServersDisablesShortLinkDependencies(t *testing.T) {
 	}
 }
 
+func mustParseURL(t *testing.T, value string) *url.URL {
+	t.Helper()
+	parsed, err := url.Parse(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return parsed
+}
+
 func testGatewayConfig(t *testing.T, appUpstream, shortUpstream string, shortLinksEnabled bool) config.Config {
 	t.Helper()
 	parseURL := func(value string) *url.URL {
 		if value == "" {
 			return nil
 		}
-		parsed, err := url.Parse(value)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return parsed
+		return mustParseURL(t, value)
 	}
 	return config.Config{
 		ListenAddr:                 "127.0.0.1:0",

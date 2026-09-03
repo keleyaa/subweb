@@ -1,8 +1,15 @@
 import { isValidHttpUrl } from '@/features/url/httpUrl';
 import { getGithubRepositoryLabel } from '@/features/site/github';
 
+function localDevelopmentApiUrl(value = import.meta.env.VITE_LOCAL_SUBCONVERTER_URL) {
+  if (!import.meta.env.DEV || !isValidHttpUrl(value)) return undefined;
+  const url = new URL(value);
+  if (url.protocol !== 'http:' || (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost')) return undefined;
+  return value;
+}
+
 export const DEFAULT_RUNTIME_CONFIG = {
-  apiUrl: import.meta.env.DEV ? (import.meta.env.VITE_LOCAL_SUBCONVERTER_URL ?? 'https://api.ml1.one') : 'https://api.ml1.one',
+  apiUrl: localDevelopmentApiUrl() ?? 'https://api.ml1.one',
   shortLinksEnabled: true,
   customBackendEnabled: true,
   turnstileSiteKey: '',
@@ -80,9 +87,16 @@ export function normalizeRuntimeConfig(config) {
   };
 }
 
-export function installRuntimeConfig(globalObject) {
+export function resolveRuntimeConfig(globalObject, localApiUrl) {
   const source = globalObject.__SUBWEB_CONFIG__ ?? globalObject.config;
   const config = normalizeRuntimeConfig(source);
+  const localUrl = localDevelopmentApiUrl(localApiUrl);
+  if (localUrl) config.apiUrl = localUrl;
+  return config;
+}
+
+export function installRuntimeConfig(globalObject) {
+  const config = resolveRuntimeConfig(globalObject);
 
   globalObject.__SUBWEB_CONFIG__ = config;
   globalObject.config = config;

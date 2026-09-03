@@ -1,7 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_RUNTIME_CONFIG, installRuntimeConfig, normalizeRuntimeConfig } from '../../src/runtime/config';
+import {
+  DEFAULT_RUNTIME_CONFIG,
+  installRuntimeConfig,
+  normalizeRuntimeConfig,
+  resolveRuntimeConfig,
+} from '../../src/runtime/config';
 
 describe('normalizeRuntimeConfig', () => {
   it('keeps only the public converter and curated option fields', () => {
@@ -44,6 +49,16 @@ describe('normalizeRuntimeConfig', () => {
     const config = installRuntimeConfig(globalObject);
     expect(globalObject.config).toBe(config);
     expect(config).not.toHaveProperty('uxMode');
+  });
+
+  it('keeps local development conversion traffic on the loopback Gateway', () => {
+    const config = resolveRuntimeConfig(
+      { __SUBWEB_CONFIG__: { apiUrl: 'https://api.ml1.one', shortLinksEnabled: true } },
+      'http://127.0.0.1:18081',
+    );
+
+    expect(config.apiUrl).toBe('http://127.0.0.1:18081');
+    expect(config.shortLinksEnabled).toBe(true);
   });
 
   it('keeps the public template secret-free', async () => {

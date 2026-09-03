@@ -193,6 +193,16 @@ func TestClientRejectsNilContext(t *testing.T) {
 	}
 }
 
+func TestClientHealthRejectsOversizedResponse(t *testing.T) {
+	client := newTestClient(t, roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return response(http.StatusOK, strings.Repeat("x", defaultBodyLimit+1)), nil
+	}))
+
+	if err := client.Health(context.Background()); err != ErrUnavailable {
+		t.Fatalf("health error = %v, want ErrUnavailable", err)
+	}
+}
+
 func TestClientHealthUsesLiveEndpointAndClosesResponse(t *testing.T) {
 	closed := false
 	client := newTestClient(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {

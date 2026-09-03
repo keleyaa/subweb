@@ -6,7 +6,10 @@ fail() {
   exit 1
 }
 
+script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 compose_file=${COMPOSE_VALIDATION_FILE:-compose.yaml}
+version_lock_file=${VERSION_LOCK_FILE:-$script_directory/../deploy/versions.lock.json}
+[ -f "$version_lock_file" ] || fail "version lock file is missing: $version_lock_file"
 validation_env_file=""
 if [ ! -f .env ]; then
   validation_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-compose-validation.XXXXXX")
@@ -37,14 +40,21 @@ compose_config() {
 
 compose_config config --quiet
 compose_json=$(compose_config config --format json)
-short_links_enabled=${SHORT_LINKS_ENABLED:-true}
 
-COMPOSE_JSON=$compose_json node - "$short_links_enabled" <<'NODE'
+COMPOSE_JSON=$compose_json VERSION_LOCK_FILE=$version_lock_file node <<'NODE'
+const fs = require("node:fs");
 let config;
+let lock;
 try { config = JSON.parse(process.env.COMPOSE_JSON ?? ""); } catch { console.error("Compose validation error: invalid JSON."); process.exit(1); }
+try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8")); } catch { console.error("Compose validation error: invalid version lock file."); process.exit(1); }
 {
-  const enabled = process.argv[2] !== "false";
   const services = config.services ?? {};
+  const shortLinksEnabled = services.gateway?.environment?.SHORT_LINKS_ENABLED;
+  if (shortLinksEnabled !== "true" && shortLinksEnabled !== "false") {
+    console.error("Compose validation error: gateway must set SHORT_LINKS_ENABLED to true or false.");
+    process.exit(1);
+  }
+  const enabled = shortLinksEnabled === "true";
   const expected = enabled
     ? ["gateway", "myurls-app", "myurls-short", "redis", "subconverter"]
     : ["gateway", "subconverter"];
@@ -54,6 +64,16 @@ try { config = JSON.parse(process.env.COMPOSE_JSON ?? ""); } catch { console.err
     process.exitCode = 1;
   }
   const hasPorts = (service) => Array.isArray(service?.ports) && service.ports.length > 0;
+  const expectedImage = (name) => {
+    const image = lock.services?.[name]?.image;
+    return image?.reference && image?.digest ? `${image.reference}@${image.digest}` : null;
+  };
+  for (const name of (enabled ? ["redis", "myurls-app", "myurls-short", "subconverter"] : ["subconverter"])) {
+    if (services[name]?.image !== expectedImage(name === "myurls-app" || name === "myurls-short" ? "myurls" : name)) {
+      console.error(`Compose validation error: service ${name} must use its locked image.`);
+      process.exitCode = 1;
+    }
+  }
   const published = Object.entries(services).filter(([, service]) => hasPorts(service));
   if (published.length !== 1 || published[0][0] !== "gateway") {
     console.error("Compose validation error: only gateway may publish ports.");

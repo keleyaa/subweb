@@ -139,6 +139,61 @@ test('loads Turnstile only after challenge_required and retries the same convers
   expect(attempts).toBe(2);
 });
 
+test('retries a failed Turnstile script load without reloading the page', async ({ page }) => {
+  let scriptAttempts = 0;
+  let shortLinkAttempts = 0;
+  await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit', async (route) => {
+    scriptAttempts += 1;
+    if (scriptAttempts === 1) {
+      await route.abort('failed');
+      return;
+    }
+    await route.fulfill({
+      contentType: 'application/javascript',
+      body: "window.turnstile={render:(_host,options)=>{setTimeout(()=>options.callback('recovered-token'),0);return 1},remove:()=>{}};",
+    });
+  });
+  await page.route('**/short-api/links', async (route) => {
+    shortLinkAttempts += 1;
+    const request = route.request().postDataJSON();
+    if (shortLinkAttempts < 3) {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/problem+json',
+        body: JSON.stringify({
+          type: 'https://myurls.invalid/problems/challenge-required',
+          title: 'Challenge required',
+          status: 403,
+          code: 'challenge_required',
+          requestId: `req-retry-${shortLinkAttempts}`,
+          challenge: { provider: 'turnstile', siteKey: 'site-e2e' },
+        }),
+      });
+      return;
+    }
+    expect(request.challengeToken).toBe('recovered-token');
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 'challenge-recovered',
+        shortUrl: 'https://short.example.test/challenge-recovered',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.getByLabel('订阅链接').fill('https://subscription.example.test/challenge-retry');
+  await page.getByRole('button', { name: '转换并复制' }).click();
+  await page.getByRole('button', { name: '生成并复制短链' }).click();
+  await expect(page.getByText('验证服务暂时不可用，请稍后重试。')).toBeVisible();
+  await page.getByRole('button', { name: '生成并复制短链' }).click();
+  await expect(page.getByLabel('短链')).toHaveValue('https://short.example.test/challenge-recovered');
+  expect(scriptAttempts).toBe(2);
+  expect(shortLinkAttempts).toBe(3);
+});
+
 test('keeps the complete workflow within a 390px mobile viewport', async ({ page }) => {
   const browserErrors = recordBrowserErrors(page);
   await page.setViewportSize({ width: 390, height: 844 });

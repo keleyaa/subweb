@@ -63,6 +63,8 @@ describe('single HTTP deployment configuration', () => {
     ['invalid Subweb port', [...baseArgs, '--subweb-port', '65536']],
     ['non-loopback HTTP API URL', [...baseArgs, '--api-url', 'http://example.com']],
     ['API URL userinfo', [...baseArgs, '--api-url', 'https://user@example.com']],
+    ['trusted proxy CIDR with host bits', [...baseArgs, '--trusted-proxy-cidr', '192.168.1.1/24']],
+    ['trusted proxy CIDR with leading-zero octet', [...baseArgs, '--trusted-proxy-cidr', '192.168.001.0/24']],
   ])('rejects %s without creating an environment file', async (_name, args) => {
     const cwd = await makeDirectory();
     const result = runConfigure(cwd, args);
@@ -117,6 +119,14 @@ describe('single HTTP deployment configuration', () => {
     expect((await stat(envPath)).mode & 0o777).toBe(0o600);
     expect(`${result.stdout}${result.stderr}`).not.toContain(env.IP_HASH_SECRET);
     expect(`${result.stdout}${result.stderr}`).not.toContain(env.TURNSTILE_SECRET_KEY);
+  });
+
+  it('accepts a network-aligned trusted proxy CIDR', async () => {
+    const cwd = await makeDirectory();
+    const result = runConfigure(cwd, [...baseArgs, '--trusted-proxy-cidr', '172.16.16.0/20']);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(parseEnv(await readFile(join(cwd, '.env'), 'utf8')).TRUSTED_PROXY_CIDR).toBe('172.16.16.0/20');
   });
 
   it('preserves image overrides, valid secrets, and explicit image selection', async () => {

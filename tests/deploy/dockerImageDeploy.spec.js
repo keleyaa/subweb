@@ -7,6 +7,69 @@ import { afterEach, describe, expect, it } from 'vitest';
 const repositoryRoot = new URL('../../', import.meta.url);
 const temporaryDirectories = [];
 
+const lockedImages = {
+  redis: 'docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5',
+  myurls: 'ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3',
+  subconverter: 'ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475',
+};
+
+const enabledCompose = {
+  networks: {
+    default: {},
+    'myurls-data': { internal: true },
+    'myurls-edge': { internal: true },
+    'redis-policy': { internal: true },
+    'subconverter-egress': { internal: true },
+  },
+  services: {
+    gateway: {
+      ports: [{ host_ip: '127.0.0.1', published: '18080', target: 8080 }],
+      networks: { default: {}, 'myurls-edge': {}, 'redis-policy': {}, 'subconverter-egress': {} },
+      user: '65532:65532', read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
+      environment: {
+        EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
+        SHORT_LINKS_ENABLED: 'true',
+      },
+    },
+    'myurls-app': {
+      image: lockedImages.myurls, networks: { 'myurls-data': {}, 'myurls-edge': {} }, user: '10001:10001',
+      read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
+    },
+    'myurls-short': {
+      image: lockedImages.myurls, networks: { 'myurls-data': {}, 'myurls-edge': {} }, user: '10001:10001',
+      read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
+    },
+    redis: {
+      image: lockedImages.redis, networks: { 'myurls-data': {}, 'redis-policy': {} }, user: '999:999',
+      read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
+    },
+    subconverter: {
+      image: lockedImages.subconverter, networks: { 'subconverter-egress': {} }, user: '101:101',
+      read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
+      environment: { HTTPS_PROXY: 'http://gateway:25502' },
+    },
+  },
+};
+
+const disabledCompose = {
+  networks: { default: {}, 'subconverter-egress': { internal: true } },
+  services: {
+    gateway: {
+      ports: [{ host_ip: '127.0.0.1', published: '18080', target: 8080 }],
+      networks: { default: {}, 'subconverter-egress': {} }, user: '65532:65532',
+      read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
+      environment: {
+        EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
+        SHORT_LINKS_ENABLED: 'false',
+      },
+    },
+    subconverter: {
+      image: lockedImages.subconverter, networks: { 'subconverter-egress': {} }, user: '101:101',
+      read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
+    },
+  },
+};
+
 const makeFixture = async () => {
   const root = await mkdtemp(join(tmpdir(), 'subweb-image-deploy-'));
   temporaryDirectories.push(root);
@@ -19,10 +82,17 @@ const makeFixture = async () => {
     'scripts/validate-compose.sh',
     'scripts/lib/config.sh',
     'compose.yaml',
+    'deploy/versions.lock.json',
     'deploy/redis/redis.conf.template',
   ]) {
     await cp(new URL(file, repositoryRoot), join(root, file));
   }
+  const enabledJSON = join(root, 'compose-enabled.json');
+  const disabledJSON = join(root, 'compose-disabled.json');
+  await Promise.all([
+    writeFile(enabledJSON, JSON.stringify(enabledCompose)),
+    writeFile(disabledJSON, JSON.stringify(disabledCompose)),
+  ]);
   const docker = join(root, 'bin/docker');
   await writeFile(docker, `#!/bin/sh
 set -eu
@@ -30,14 +100,10 @@ printf '%s\\n' "$*" >> "$DOCKER_LOG"
 case "$*" in
   'compose version') exit 0 ;;
   'compose -f compose.yaml config --quiet') exit 0 ;;
-  'compose -f compose.yaml config --format json')
-      printf '%s\n' '{"networks":{"default":{},"myurls-data":{"internal":true},"myurls-edge":{"internal":true},"redis-policy":{"internal":true},"subconverter-egress":{"internal":true}},"services":{"gateway":{"ports":[{"host_ip":"127.0.0.1","published":"18080","target":8080}],"networks":{"default":{},"myurls-edge":{},"redis-policy":{},"subconverter-egress":{}},"user":"65532:65532","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"],"environment":{"EGRESS_LISTEN_ADDR":"0.0.0.0:25502"}},"myurls-app":{"networks":{"myurls-data":{},"myurls-edge":{}},"user":"10001:10001","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"]},"myurls-short":{"networks":{"myurls-data":{},"myurls-edge":{}},"user":"10001:10001","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"]},"redis":{"networks":{"myurls-data":{},"redis-policy":{}},"user":"999:999","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"]},"subconverter":{"networks":{"subconverter-egress":{}},"user":"101:101","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"],"environment":{"HTTPS_PROXY":"http://gateway:25502"}}}}'
-    ;;
+  'compose -f compose.yaml config --format json') cat "$COMPOSE_JSON_ENABLED" ;;
   'compose -f compose.yaml pull gateway subconverter myurls-app myurls-short redis') exit "\${DOCKER_PULL_STATUS:-0}" ;;
   'compose -f compose.disabled-short-links.yaml config --quiet') exit 0 ;;
-  'compose -f compose.disabled-short-links.yaml config --format json')
-      printf '%s\n' '{"networks":{"default":{},"subconverter-egress":{"internal":true}},"services":{"gateway":{"ports":[{"host_ip":"127.0.0.1","published":"18080","target":8080}],"networks":{"default":{},"subconverter-egress":{}},"user":"65532:65532","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"],"environment":{"EGRESS_LISTEN_ADDR":"0.0.0.0:25502"}},"subconverter":{"networks":{"subconverter-egress":{}},"user":"101:101","read_only":true,"cap_drop":["ALL"],"security_opt":["no-new-privileges:true"]}}}'
-    ;;
+  'compose -f compose.disabled-short-links.yaml config --format json') cat "$COMPOSE_JSON_DISABLED" ;;
   'compose -f compose.disabled-short-links.yaml pull gateway subconverter') exit "\${DOCKER_PULL_STATUS:-0}" ;;
   'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --wait') exit 0 ;;
   'compose -f compose.disabled-short-links.yaml ps') exit 0 ;;
@@ -65,6 +131,8 @@ const runDeploy = (root, extraArgs = [], env = {}) =>
       ...process.env,
       PATH: `${join(root, 'bin')}:${process.env.PATH}`,
       DOCKER_LOG: join(root, 'docker.log'),
+      COMPOSE_JSON_ENABLED: join(root, 'compose-enabled.json'),
+      COMPOSE_JSON_DISABLED: join(root, 'compose-disabled.json'),
       ...env,
     },
   });

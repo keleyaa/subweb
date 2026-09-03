@@ -44,6 +44,9 @@ func (err PolicyError) Error() string {
 
 // ValidateRemoteURL validates a remote HTTPS URL and resolves its public connection addresses.
 func ValidateRemoteURL(ctx context.Context, value string, resolver Resolver, opts Options) (DialTarget, error) {
+	if ctx == nil {
+		return DialTarget{}, context.Canceled
+	}
 	maxURLLength := opts.MaxURLLength
 	if maxURLLength <= 0 {
 		maxURLLength = defaultMaxURLLength

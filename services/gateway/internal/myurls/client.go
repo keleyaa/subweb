@@ -96,7 +96,8 @@ func (client *HTTPClient) Health(ctx context.Context) error {
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return ErrUnavailable
 	}
-	if _, err := io.Copy(io.Discard, io.LimitReader(response.Body, defaultBodyLimit+1)); err != nil {
+	bytesRead, err := io.Copy(io.Discard, io.LimitReader(response.Body, defaultBodyLimit+1))
+	if err != nil || bytesRead > defaultBodyLimit {
 		return ErrUnavailable
 	}
 	return nil

@@ -13,21 +13,38 @@ function loadTurnstileScript() {
   if (scriptPromise) return scriptPromise;
 
   scriptPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[data-turnstile]');
-    if (existing) {
-      existing.addEventListener('load', resolve, { once: true });
-      existing.addEventListener('error', reject, { once: true });
-      return;
+    let script = document.querySelector('script[data-turnstile]');
+    if (script && script.dataset.turnstileState !== 'loading') {
+      script.remove();
+      script = null;
     }
 
-    const script = document.createElement('script');
-    script.dataset.turnstile = 'true';
-    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-    script.async = true;
-    script.defer = true;
-    script.addEventListener('load', resolve, { once: true });
-    script.addEventListener('error', reject, { once: true });
-    document.head.appendChild(script);
+    if (!script) {
+      script = document.createElement('script');
+      script.dataset.turnstile = 'true';
+      script.dataset.turnstileState = 'loading';
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.defer = true;
+    }
+
+    script.addEventListener(
+      'load',
+      () => {
+        script.dataset.turnstileState = 'loaded';
+        resolve();
+      },
+      { once: true },
+    );
+    script.addEventListener(
+      'error',
+      () => {
+        script.remove();
+        reject(new Error('Turnstile script failed to load'));
+      },
+      { once: true },
+    );
+    if (!script.isConnected) document.head.appendChild(script);
   }).catch((error) => {
     scriptPromise = undefined;
     throw error;

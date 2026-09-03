@@ -9,17 +9,28 @@ import (
 	"time"
 )
 
+const (
+	proxyReadHeaderTimeout = 5 * time.Second
+	proxyIdleTimeout       = 5 * time.Minute
+	proxyMaxHeaderBytes    = 16 * 1024
+)
+
 // Proxy is the internal HTTP CONNECT proxy used by SubConverter. It performs
 // authorization before dialing and never exposes the destination or lower-level
 // network error in its response body.
 type Proxy struct {
-	authorizer Authorizer
-	dialer     *Dialer
+	authorizer  Authorizer
+	dialer      *Dialer
+	idleTimeout time.Duration
 }
 
 // NewProxy constructs a CONNECT-only proxy from the shared policy components.
 func NewProxy(authorizer Authorizer, dialer *Dialer) *Proxy {
-	return &Proxy{authorizer: authorizer, dialer: dialer}
+	return &Proxy{
+		authorizer:  authorizer,
+		dialer:      dialer,
+		idleTimeout: proxyIdleTimeout,
+	}
 }
 
 func (proxy *Proxy) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -68,19 +79,54 @@ func (proxy *Proxy) ServeHTTP(response http.ResponseWriter, request *http.Reques
 		return
 	}
 
+	proxy.relay(client, remote, buffered.Reader)
+}
+
+func (proxy *Proxy) relay(client, remote net.Conn, buffered io.Reader) {
 	copyDone := make(chan struct{}, 2)
-	go proxy.copyHalf(copyDone, remote, io.MultiReader(buffered.Reader, client))
-	go proxy.copyHalf(copyDone, client, remote)
+	go proxy.copyHalf(copyDone, remote, client, io.MultiReader(buffered, client))
+	go proxy.copyHalf(copyDone, client, remote, remote)
 	<-copyDone
-	_ = client.SetDeadline(time.Now())
-	_ = remote.SetDeadline(time.Now())
 	<-copyDone
 }
 
-func (proxy *Proxy) copyHalf(done chan<- struct{}, destination net.Conn, source io.Reader) {
-	_, _ = io.Copy(destination, source)
+func (proxy *Proxy) copyHalf(done chan<- struct{}, destination, sourceConnection net.Conn, source io.Reader) {
+	reader := &idleReader{connection: sourceConnection, reader: source, timeout: proxy.idleTimeout}
+	writer := &idleWriter{connection: destination, timeout: proxy.idleTimeout}
+	_, _ = io.Copy(writer, reader)
 	closeWrite(destination)
 	done <- struct{}{}
+}
+
+type idleReader struct {
+	connection net.Conn
+	reader     io.Reader
+	timeout    time.Duration
+}
+
+func (reader *idleReader) Read(buffer []byte) (int, error) {
+	if reader.timeout <= 0 {
+		return reader.reader.Read(buffer)
+	}
+	if err := reader.connection.SetReadDeadline(time.Now().Add(reader.timeout)); err != nil {
+		return 0, err
+	}
+	return reader.reader.Read(buffer)
+}
+
+type idleWriter struct {
+	connection net.Conn
+	timeout    time.Duration
+}
+
+func (writer *idleWriter) Write(buffer []byte) (int, error) {
+	if writer.timeout <= 0 {
+		return writer.connection.Write(buffer)
+	}
+	if err := writer.connection.SetWriteDeadline(time.Now().Add(writer.timeout)); err != nil {
+		return 0, err
+	}
+	return writer.connection.Write(buffer)
 }
 
 func closeWrite(connection net.Conn) {
@@ -101,6 +147,15 @@ func proxyStatus(err error) int {
 		return egressError.Status
 	}
 	return http.StatusBadGateway
+}
+
+func NewProxyServer(addr string, proxy *Proxy) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           proxy,
+		ReadHeaderTimeout: proxyReadHeaderTimeout,
+		MaxHeaderBytes:    proxyMaxHeaderBytes,
+	}
 }
 
 func writeProxyError(response http.ResponseWriter, status int) {

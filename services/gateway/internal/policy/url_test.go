@@ -29,6 +29,13 @@ func (resolver *fakeResolver) LookupNetIP(ctx context.Context, network, host str
 	return resolver.addresses, resolver.err
 }
 
+func TestValidateRejectsNilContext(t *testing.T) {
+	_, err := ValidateRemoteURL(nil, "https://example.com/path", &fakeResolver{}, Options{})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("ValidateRemoteURL() error = %v, want context.Canceled", err)
+	}
+}
+
 func TestValidateAcceptsPublicHTTPSHostnameAndRetainsDialAddresses(t *testing.T) {
 	publicAddress := netip.MustParseAddr("93.184.216.34")
 	resolver := &fakeResolver{addresses: []netip.Addr{publicAddress}}

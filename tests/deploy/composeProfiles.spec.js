@@ -58,21 +58,42 @@ const validCompose = {
       ports: [{ target: 8080, published: '18080', host_ip: '127.0.0.1' }],
       networks: { default: {}, 'myurls-edge': {}, 'redis-policy': {}, 'subconverter-egress': {} },
       read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
-      environment: { TZ: 'Asia/Shanghai', EGRESS_LISTEN_ADDR: '0.0.0.0:25502' },
+      environment: {
+        TZ: 'Asia/Shanghai',
+        EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
+        SHORT_LINKS_ENABLED: 'true',
+      },
     },
     redis: {
-      image: 'redis@sha256:abc', user: '999:1000', networks: { 'myurls-data': {}, 'redis-policy': {} },
+      image: 'docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5', user: '999:1000', networks: { 'myurls-data': {}, 'redis-policy': {} },
       read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
     },
-     'myurls-app': { image: 'myurls@sha256:abc', user: '10001:10001', networks: { 'myurls-data': {}, 'myurls-edge': {} }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
-     'myurls-short': { image: 'myurls@sha256:abc', user: '10001:10001', networks: { 'myurls-data': {}, 'myurls-edge': {} }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
-      subconverter: { image: 'subconverter@sha256:abc', user: '0:0', cap_add: ['CHOWN', 'SETUID', 'SETGID'], networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
+     'myurls-app': { image: 'ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3', user: '10001:10001', networks: { 'myurls-data': {}, 'myurls-edge': {} }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
+     'myurls-short': { image: 'ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3', user: '10001:10001', networks: { 'myurls-data': {}, 'myurls-edge': {} }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
+      subconverter: { image: 'ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475', user: '0:0', cap_add: ['CHOWN', 'SETUID', 'SETGID'], networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
   },
 };
 
-const validateFixture = async (composeJson, shortLinksEnabled = 'true') => {
+const disabledCompose = () => {
+  const disabled = structuredClone(validCompose);
+  delete disabled.services.redis;
+  delete disabled.services['myurls-app'];
+  delete disabled.services['myurls-short'];
+  disabled.services.gateway.environment.SHORT_LINKS_ENABLED = 'false';
+  disabled.services.gateway.networks = { default: {}, 'subconverter-egress': {} };
+  delete disabled.networks['myurls-data'];
+  delete disabled.networks['myurls-edge'];
+  delete disabled.networks['redis-policy'];
+  return disabled;
+};
+
+const validateFixture = async (composeJson, shortLinksEnabled = 'true', environment = {}) => {
   const fixture = await createFixture(composeJson, shortLinksEnabled);
-  const result = spawnSync('sh', [validatorPath], { cwd: fixture.directory, encoding: 'utf8', env: fixture.env });
+  const result = spawnSync('sh', [validatorPath], {
+    cwd: fixture.directory,
+    encoding: 'utf8',
+    env: { ...fixture.env, ...environment },
+  });
   return { fixture, result };
 };
 
@@ -87,16 +108,20 @@ describe('unified Compose validation', () => {
   });
 
   it('validates the two-service short-links-disabled topology', async () => {
-    const disabled = structuredClone(validCompose);
-    delete disabled.services.redis;
-    delete disabled.services['myurls-app'];
-    delete disabled.services['myurls-short'];
-    disabled.services.gateway.networks = { default: {}, 'subconverter-egress': {} };
-    delete disabled.networks['myurls-data'];
-    delete disabled.networks['myurls-edge'];
-    delete disabled.networks['redis-policy'];
-    const { result } = await validateFixture(disabled, 'false');
+    const { result } = await validateFixture(disabledCompose(), 'false');
     expect(result.status).toBe(0);
+  });
+
+  it('derives the disabled profile from rendered Gateway configuration, not its parent shell', async () => {
+    const { result } = await validateFixture(disabledCompose(), 'false', { SHORT_LINKS_ENABLED: 'true' });
+    expect(result.status).toBe(0);
+  });
+
+  it('rejects a five-service topology whose rendered Gateway disables short links', async () => {
+    const composeJson = structuredClone(validCompose);
+    composeJson.services.gateway.environment.SHORT_LINKS_ENABLED = 'false';
+    const { result } = await validateFixture(composeJson);
+    expect(result.status).not.toBe(0);
   });
 
   it.each([
@@ -105,6 +130,13 @@ describe('unified Compose validation', () => {
     ['a second published service', { ...validCompose, services: { ...validCompose.services, debug: { ports: [{ target: 9000, published: '9000' }], networks: { default: {} } } } }],
     ['a published internal service', { ...validCompose, services: { ...validCompose.services, redis: { ...validCompose.services.redis, ports: [{ target: 6379, published: '6379' }] } } }],
   ])('rejects rendered Compose JSON with %s', async (_name, composeJson) => {
+    const { result } = await validateFixture(composeJson);
+    expect(result.status).not.toBe(0);
+  });
+
+  it('rejects an external image that is not from the version lock', async () => {
+    const composeJson = structuredClone(validCompose);
+    composeJson.services.redis.image = 'docker.io/library/redis:latest@sha256:abc';
     const { result } = await validateFixture(composeJson);
     expect(result.status).not.toBe(0);
   });

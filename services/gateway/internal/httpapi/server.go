@@ -46,8 +46,13 @@ func NewServer(cfg config.Config, deps Dependencies) *http.Server {
 		logger: logger,
 	}
 	return &http.Server{
-		Addr:    cfg.ListenAddr,
-		Handler: http.HandlerFunc(handler.serveHTTP),
+		Addr:              cfg.ListenAddr,
+		Handler:           http.HandlerFunc(handler.serveHTTP),
+		ReadHeaderTimeout: publicReadHeaderTimeout,
+		ReadTimeout:       publicReadTimeout,
+		WriteTimeout:      publicWriteTimeout,
+		IdleTimeout:       publicIdleTimeout,
+		MaxHeaderBytes:    publicMaxHeaderBytes,
 	}
 }
 
@@ -60,6 +65,12 @@ type gatewayHandler struct {
 type hostKind int
 
 const (
+	publicReadHeaderTimeout = 5 * time.Second
+	publicReadTimeout       = 30 * time.Second
+	publicWriteTimeout      = 30 * time.Second
+	publicIdleTimeout       = 60 * time.Second
+	publicMaxHeaderBytes    = 32 * 1024
+
 	unknownHost hostKind = iota
 	appHost
 	apiHost

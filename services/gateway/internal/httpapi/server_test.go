@@ -445,6 +445,20 @@ func TestPanicReturnsInternalProblem(t *testing.T) {
 	}
 }
 
+func TestNewServerUsesBoundedHTTPTimeouts(t *testing.T) {
+	server := NewServer(testConfig(), Dependencies{})
+
+	if server.ReadHeaderTimeout <= 0 {
+		t.Fatal("ReadHeaderTimeout must be positive")
+	}
+	if server.IdleTimeout <= 0 {
+		t.Fatal("IdleTimeout must be positive")
+	}
+	if server.MaxHeaderBytes <= 0 {
+		t.Fatal("MaxHeaderBytes must be positive")
+	}
+}
+
 func TestNewServerUsesConfiguredListenAddr(t *testing.T) {
 	cfg := testConfig()
 	cfg.ListenAddr = "127.0.0.1:9090"

@@ -150,13 +150,14 @@ func buildServers(cfg config.Config, logger *slog.Logger) (*http.Server, *http.S
 		closeStore()
 		return nil, nil, func() {}, err
 	}
-	egressServer := &http.Server{Addr: cfg.EgressListenAddr, Handler: egress.NewProxy(authorizer, dialer)}
+	egressServer := egress.NewProxyServer(cfg.EgressListenAddr, egress.NewProxy(authorizer, dialer))
 
 	if cfg.ShortLinksEnabled {
 		appClient := myurls.NewHTTPClient(cfg.MyURLsAppUpstream, internalTransport)
 		shortClient := myurls.NewHTTPClient(cfg.MyURLsShortUpstream, internalTransport)
 		dependencies.AppShortLinks = myurls.NewHandler(appClient, cfg.ConversionMaxRequestBytes)
 		dependencies.ShortLinks = myurls.NewHandler(shortClient, cfg.ConversionMaxRequestBytes)
+		dependencies.Readiness = readinessFunc(cfg, counterStore, appClient, shortClient)
 	}
 	server := httpapi.NewServer(cfg, dependencies)
 	return server, egressServer, closeStore, nil
@@ -198,13 +199,31 @@ func newCounterStore(cfg config.Config) (ratelimit.CounterStore, func(), error) 
 	return store, func() { _ = store.Close() }, nil
 }
 
-func readinessFunc(cfg config.Config, store ratelimit.CounterStore) func(context.Context) error {
+const readinessTimeout = 5 * time.Second
+
+type readinessStore interface {
+	Ping(context.Context) error
+}
+
+func readinessFunc(cfg config.Config, store ratelimit.CounterStore, myURLsClients ...myurls.Client) func(context.Context) error {
 	return func(ctx context.Context) error {
 		if !cfg.ShortLinksEnabled {
 			return nil
 		}
-		if redisStore, ok := store.(*ratelimit.RedisStore); ok {
-			if err := redisStore.Ping(ctx); err != nil {
+		redisStore, ok := store.(readinessStore)
+		if ctx == nil || !ok || len(myURLsClients) != 2 {
+			return myurls.ErrUnavailable
+		}
+		checkContext, cancel := context.WithTimeout(ctx, readinessTimeout)
+		defer cancel()
+		if err := redisStore.Ping(checkContext); err != nil {
+			return err
+		}
+		for _, client := range myURLsClients {
+			if client == nil {
+				return myurls.ErrUnavailable
+			}
+			if err := client.Health(checkContext); err != nil {
 				return err
 			}
 		}

@@ -35,6 +35,10 @@ validate_ipv4() {
   [ "$#" -eq 4 ] || return 1
 
   for octet do
+    case "$octet" in
+      0) ;;
+      0*) return 1 ;;
+    esac
     [ -n "$octet" ] && [ "$octet" -ge 0 ] 2>/dev/null && [ "$octet" -le 255 ] \
       || return 1
   done
@@ -46,7 +50,24 @@ validate_ipv4_cidr() {
   printf '%s\n' "$cidr" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[12][0-9]|3[0-2])$' \
     || return 1
   [ "$cidr" != '0.0.0.0/0' ] || return 1
-  validate_ipv4 "${cidr%/*}"
+  validate_ipv4 "${cidr%/*}" || return 1
+
+  # Keep the deployment CLI aligned with Gateway's network-CIDR parser.
+  printf '%s\n' "$cidr" | awk -F'[./]' '
+    {
+      prefix = $5
+      for (octet = 1; octet <= 4; octet += 1) {
+        if (prefix >= octet * 8) continue
+        if (prefix <= (octet - 1) * 8) {
+          expected = 0
+        } else {
+          block = 2 ^ (8 - (prefix - (octet - 1) * 8))
+          expected = int($octet / block) * block
+        }
+        if ($octet != expected) exit 1
+      }
+    }
+  '
 }
 
 validate_container_image() {
