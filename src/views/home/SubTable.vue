@@ -209,6 +209,7 @@ export default {
       isShowManualApiUrl: false,
       isShowRemoteConfig: false,
       isGeneratingShortUrl: false,
+      shortLinkAbortController: null,
       shortChallenge: null,
       shortChallengeKey: 0,
       shortStatusMessage: '',
@@ -289,12 +290,16 @@ export default {
     conversionInput: {
       deep: true,
       handler() {
+        this.shortLinkAbortController?.abort();
         if (this.shortChallenge) {
           this.shortChallenge = null;
           this.shortStatusMessage = '';
         }
       },
     },
+  },
+  beforeUnmount() {
+    this.shortLinkAbortController?.abort();
   },
   methods: {
     showServiceSettings() {
@@ -449,6 +454,9 @@ export default {
       if (!this.hasCurrentSubscriptionResult && !this.getConverter()) return;
       const requestConversionKey = this.result.conversionKey;
       const requestSubUrl = this.result.subUrl;
+      const abortController = new AbortController();
+      this.shortLinkAbortController?.abort();
+      this.shortLinkAbortController = abortController;
       this.isGeneratingShortUrl = true;
       this.result.shortCopyStatus = COPY_STATUS.IDLE;
       this.shortStatusMessage = '';
@@ -458,6 +466,7 @@ export default {
           conversionKey: requestConversionKey,
           challengeToken,
           isCurrent: (conversionKey) => matchesConversionInput(conversionKey, this.conversionInput),
+          signal: abortController.signal,
         });
         if (outcome.kind === 'stale') return;
         if (outcome.kind === 'challenge') {
@@ -478,7 +487,10 @@ export default {
         this.result.shortUrlConversionKey = requestConversionKey;
         this.result.shortCopyStatus = outcome.copied ? COPY_STATUS.COPIED : COPY_STATUS.MANUAL;
       } finally {
-        this.isGeneratingShortUrl = false;
+        if (this.shortLinkAbortController === abortController) {
+          this.shortLinkAbortController = null;
+          this.isGeneratingShortUrl = false;
+        }
       }
     },
     retryShortLink(token) {

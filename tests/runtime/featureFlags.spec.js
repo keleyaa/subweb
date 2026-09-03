@@ -67,6 +67,14 @@ describe('runtime business feature flags', () => {
     expect(source).toContain('const runtimeConfig = resolveRuntimeConfig(window);');
   });
 
+  it('cancels an active short-link request when conversion input changes or the component unmounts', async () => {
+    const source = await readFile(subTableUrl, 'utf8');
+    expect(source).toContain('shortLinkAbortController: null');
+    expect(source).toContain('this.shortLinkAbortController?.abort();');
+    expect(source).toContain('signal: abortController.signal');
+    expect(source).toContain('beforeUnmount()');
+  });
+
   it('publishes the feature flags through the public config namespace', async () => {
     const source = await readFile(publicConfigUrl, 'utf8');
     expect(source).toContain('window.__SUBWEB_CONFIG__');

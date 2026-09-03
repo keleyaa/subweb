@@ -78,6 +78,23 @@ describe('ShortLinkClient HTTP adapter', () => {
     expect(outcome).toMatchObject({ code: 'dependency_unavailable', status: 503 });
   });
 
+  it('aborts an in-flight request when the caller cancels it', async () => {
+    const externalController = new AbortController();
+    let requestSignal;
+    const fetchImpl = vi.fn((_url, options) => new Promise((_resolve, reject) => {
+      requestSignal = options.signal;
+      requestSignal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+    }));
+    const client = createShortLinkClient({ fetchImpl });
+    const request = client.create({ url: 'https://example.com' }, { signal: externalController.signal });
+
+    externalController.abort();
+
+    await expect(request).rejects.toMatchObject({ code: 'dependency_unavailable', status: 503 });
+    expect(requestSignal).not.toBe(externalController.signal);
+    expect(requestSignal.aborted).toBe(true);
+  });
+
   it('preserves the upstream request_timeout problem code', async () => {
     const fetchImpl = async () => new Response(JSON.stringify({
       type: 'https://short.example.test/problems/request_timeout',

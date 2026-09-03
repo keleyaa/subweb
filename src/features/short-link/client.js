@@ -118,9 +118,15 @@ export function createShortLinkClient({
   }
 
   return Object.freeze({
-    async create(input) {
+    async create(input, { signal } = {}) {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      const abort = () => controller.abort();
+      if (signal?.aborted) {
+        abort();
+      } else {
+        signal?.addEventListener('abort', abort, { once: true });
+      }
+      const timeout = setTimeout(abort, timeoutMs);
       let response;
 
       try {
@@ -137,6 +143,7 @@ export function createShortLinkClient({
         });
       } catch {
         clearTimeout(timeout);
+        signal?.removeEventListener('abort', abort);
         throw dependencyError();
       }
 
@@ -162,6 +169,7 @@ export function createShortLinkClient({
         return payload;
       } finally {
         clearTimeout(timeout);
+        signal?.removeEventListener('abort', abort);
       }
     },
   });

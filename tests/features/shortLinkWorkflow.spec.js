@@ -65,6 +65,47 @@ describe('ShortLinkWorkflow interface', () => {
     expect(copy).not.toHaveBeenCalled();
   });
 
+  it('does not call the client for an already-cancelled conversion', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const client = { create: vi.fn() };
+    const workflow = createShortLinkWorkflow({ client, copy: vi.fn() });
+
+    await expect(workflow.execute({
+      url: 'https://example.com/sub',
+      conversionKey: 'current',
+      isCurrent: () => true,
+      signal: controller.signal,
+    })).resolves.toEqual({ kind: 'stale' });
+    expect(client.create).not.toHaveBeenCalled();
+  });
+
+  it('cancels an in-flight request when the conversion becomes stale', async () => {
+    let current = true;
+    const controller = new AbortController();
+    const client = {
+      create: vi.fn((_input, { signal }) => new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      })),
+    };
+    const workflow = createShortLinkWorkflow({ client, copy: vi.fn() });
+    const request = workflow.execute({
+      url: 'https://example.com/sub',
+      conversionKey: 'current',
+      isCurrent: () => current,
+      signal: controller.signal,
+    });
+
+    current = false;
+    controller.abort();
+
+    await expect(request).resolves.toEqual({ kind: 'stale' });
+    expect(client.create).toHaveBeenCalledWith(
+      { url: 'https://example.com/sub' },
+      { signal: controller.signal },
+    );
+  });
+
   it('returns challenge information and forwards a challenge token on retry', async () => {
     const challenge = { provider: 'turnstile', siteKey: 'site-key' };
     const client = {

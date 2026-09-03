@@ -29,7 +29,7 @@ export function createShortLinkWorkflow({ client, copy }) {
   }
 
   return Object.freeze({
-    async execute({ url, conversionKey, challengeToken, isCurrent }) {
+    async execute({ url, conversionKey, challengeToken, isCurrent, signal }) {
       const byteLength = utf8ByteLength(url);
       if (byteLength > MAX_SHORT_LINK_URL_BYTES) {
         return {
@@ -42,8 +42,11 @@ export function createShortLinkWorkflow({ client, copy }) {
       }
 
       const input = challengeToken ? { url, challengeToken } : { url };
+      if (signal?.aborted) {
+        return { kind: 'stale' };
+      }
       try {
-        const result = await client.create(input);
+        const result = signal ? await client.create(input, { signal }) : await client.create(input);
         if (!isCurrent(conversionKey)) {
           return { kind: 'stale' };
         }
@@ -60,7 +63,7 @@ export function createShortLinkWorkflow({ client, copy }) {
         }
         return { kind: 'success', result, copied };
       } catch (error) {
-        if (!isCurrent(conversionKey)) {
+        if (signal?.aborted || !isCurrent(conversionKey)) {
           return { kind: 'stale' };
         }
         if (!(error instanceof ShortLinkError)) {
