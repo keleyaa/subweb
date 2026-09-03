@@ -125,8 +125,14 @@ func (service *Service) ServeHTTP(response http.ResponseWriter, request *http.Re
 		service.writeProblem(response, requestID, http.StatusInternalServerError, "internal_error", 0)
 		return
 	}
-	if _, err := service.RateLimiter.Allow(requestContext, conversionRateKey(ipHash)); err != nil {
+	rateLimit, err := service.RateLimiter.Allow(requestContext, conversionRateKey(ipHash))
+	if err != nil {
 		if request.Context().Err() != nil {
+			return
+		}
+		var policyErr policy.PolicyError
+		if errors.As(err, &policyErr) && policyErr.Code == "rate_limited" {
+			service.writeProblem(response, requestID, policyErr.Status, policyErr.Code, retryAfterSeconds(rateLimit.RetryAfter))
 			return
 		}
 		service.writeError(response, requestID, err)
@@ -339,7 +345,7 @@ func safeRequestID(value string) bool {
 func (service *Service) writeError(response http.ResponseWriter, requestID string, err error) {
 	var policyErr policy.PolicyError
 	if errors.As(err, &policyErr) {
-		service.writeProblem(response, requestID, policyErr.Status, policyErr.Code, retryAfter(err))
+		service.writeProblem(response, requestID, policyErr.Status, policyErr.Code, 0)
 		return
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
@@ -349,12 +355,11 @@ func (service *Service) writeError(response http.ResponseWriter, requestID strin
 	service.writeProblem(response, requestID, http.StatusBadGateway, "upstream_error", 0)
 }
 
-func retryAfter(err error) int {
-	var rateErr policy.PolicyError
-	if errors.As(err, &rateErr) && rateErr.Code == "rate_limited" {
-		return 60
+func retryAfterSeconds(duration time.Duration) int {
+	if duration <= 0 {
+		return 0
 	}
-	return 0
+	return int((duration + time.Second - 1) / time.Second)
 }
 
 func (service *Service) writeProblem(response http.ResponseWriter, requestID string, status int, code string, retryAfterSeconds int) {

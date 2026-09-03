@@ -73,6 +73,34 @@ func TestServiceForwardsValidatedConversionQueryOnly(t *testing.T) {
 	}
 }
 
+func TestServiceReportsConfiguredRateLimitRetryWindow(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.Header().Set("Content-Type", "text/plain")
+		_, _ = io.WriteString(response, "converted")
+	}))
+	defer upstream.Close()
+
+	service := newTestService(t, upstream.URL, acceptingPolicy())
+	limiter, err := ratelimit.NewRateLimiter(ratelimit.NewMemoryStore(), 1, 5*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.RateLimiter = limiter
+
+	if response := serveConversionRequest(service, "https://public.example/feed"); response.Code != http.StatusOK {
+		t.Fatalf("first response status = %d, want 200", response.Code)
+	}
+	limited := serveConversionRequest(service, "https://public.example/feed")
+
+	assertProblem(t, limited, http.StatusTooManyRequests, "rate_limited")
+	if got := limited.Header().Get("Retry-After"); got != "300" {
+		t.Fatalf("Retry-After = %q, want 300", got)
+	}
+	if !strings.Contains(limited.Body.String(), `"retryAfterSeconds":300`) {
+		t.Fatalf("body = %q, want retryAfterSeconds 300", limited.Body.String())
+	}
+}
+
 func TestServiceRateLimitsByTrustedProxyClientIP(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
 		response.Header().Set("Content-Type", "text/plain")

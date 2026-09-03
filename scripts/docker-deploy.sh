@@ -131,6 +131,9 @@ run_configure() {
 }
 run_configure
 
+# The generated .env is the authoritative deployment configuration.
+unset SUBWEB_IMAGE
+
 if short_links_enabled=$(awk -F= '$1 == "SHORT_LINKS_ENABLED" { count += 1; value = $2 } END { if (count == 1) print value; else exit (count > 1 ? 2 : 1) }' .env); then
   :
 else

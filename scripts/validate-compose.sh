@@ -7,7 +7,22 @@ fail() {
 }
 
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-compose_file=${COMPOSE_VALIDATION_FILE:-compose.yaml}
+compose_file=${COMPOSE_VALIDATION_FILE:-}
+if [ -z "$compose_file" ]; then
+  compose_file=compose.yaml
+  if [ -f .env ]; then
+    if short_links_enabled=$(awk -F= '$1 == "SHORT_LINKS_ENABLED" { count += 1; value = $2 } END { if (count == 1) print value; else exit (count > 1 ? 2 : 1) }' .env); then
+      :
+    else
+      fail '.env must contain exactly one SHORT_LINKS_ENABLED value.'
+    fi
+    case "$short_links_enabled" in
+      true) ;;
+      false) compose_file=compose.disabled-short-links.yaml ;;
+      *) fail 'SHORT_LINKS_ENABLED must be true or false.' ;;
+    esac
+  fi
+fi
 version_lock_file=${VERSION_LOCK_FILE:-$script_directory/../deploy/versions.lock.json}
 [ -f "$version_lock_file" ] || fail "version lock file is missing: $version_lock_file"
 validation_env_file=""

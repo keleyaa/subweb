@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -115,6 +115,21 @@ describe('unified Compose validation', () => {
   it('derives the disabled profile from rendered Gateway configuration, not its parent shell', async () => {
     const { result } = await validateFixture(disabledCompose(), 'false', { SHORT_LINKS_ENABLED: 'true' });
     expect(result.status).toBe(0);
+  });
+
+  it('selects the disabled Compose file from generated configuration without an entrypoint wrapper', async () => {
+    const fixture = await createFixture(disabledCompose(), 'false');
+    delete fixture.env.COMPOSE_VALIDATION_FILE;
+    const result = spawnSync('sh', [validatorPath], {
+      cwd: fixture.directory,
+      encoding: 'utf8',
+      env: fixture.env,
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(await readFile(fixture.env.DOCKER_CALL_LOG, 'utf8')).toContain(
+      'compose -f compose.disabled-short-links.yaml config --format json',
+    );
   });
 
   it('rejects a five-service topology whose rendered Gateway disables short links', async () => {

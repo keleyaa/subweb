@@ -98,6 +98,13 @@ const makeFixture = async () => {
 set -eu
 printf '%s\\n' "$*" >> "$DOCKER_LOG"
 case "$*" in
+  'compose -f '*)
+    if [ "\${CAPTURE_SUBWEB_IMAGE-}" = 1 ]; then
+      printf 'SUBWEB_IMAGE=%s\\n' "\${SUBWEB_IMAGE-unset}" >> "$DOCKER_LOG"
+    fi
+    ;;
+esac
+case "$*" in
   'compose version') exit 0 ;;
   'compose -f compose.yaml config --quiet') exit 0 ;;
   'compose -f compose.yaml config --format json') cat "$COMPOSE_JSON_ENABLED" ;;
@@ -169,6 +176,21 @@ describe('Docker image quick deployment', () => {
       'compose -f compose.yaml ps',
       '',
     ].join('\n'));
+  });
+
+  it('does not let an inherited Gateway image override the selected deployment image', async () => {
+    const root = await makeFixture();
+    const selectedImage = 'docker.io/keleyaa/subweb:sha-2bf1a9f';
+    const result = runDeploy(root, ['--image', selectedImage], {
+      CAPTURE_SUBWEB_IMAGE: '1',
+      SUBWEB_IMAGE: 'docker.io/attacker/subweb:sha-deadbee',
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(await readFile(join(root, '.env'), 'utf8')).toContain(`SUBWEB_IMAGE=${selectedImage}\n`);
+    const log = await readFile(join(root, 'docker.log'), 'utf8');
+    expect(log).toContain('SUBWEB_IMAGE=unset');
+    expect(log).not.toContain('SUBWEB_IMAGE=docker.io/attacker/subweb:sha-deadbee');
   });
 
   it('requires an immutable Gateway image instead of silently deploying latest', async () => {
