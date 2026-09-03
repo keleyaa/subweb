@@ -57,6 +57,9 @@ jobs:
       - name: Verify Docker-gated tests, lint, and build
         run: npm run verify:ci
 
+      - name: Verify unified production stack
+        run: npm run verify:integration
+
       # Export the exact locked artifacts so integration and vulnerability
       # scans inspect the same images as production defaults.
       - name: Resolve external runtime images

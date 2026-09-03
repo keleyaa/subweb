@@ -18,6 +18,7 @@ describe('release evidence and command gate', () => {
       'stage install npm ci',
       'stage audit npm audit --audit-level=moderate',
       'stage quality npm run verify:ci',
+      'stage integration npm run verify:integration',
       'stage browser npm run test:e2e',
       'stage locks npm run verify:locks',
       'stage production-readiness node scripts/verify-production-readiness.mjs',
@@ -118,11 +119,12 @@ describe('release evidence and command gate', () => {
     expect(workflow).not.toContain('Dockerfile.simple');
     expect(workflow).not.toContain('request-policy');
     expect(workflow).not.toContain('npm run verify:container');
-    expect(workflow).not.toContain('npm run verify:integration');
+    expect(workflow).toContain('run: npm run verify:integration');
     expect(workflow).not.toContain('npm run verify:operations');
     expect(workflow).toContain('run: npm run verify:local');
     expect(workflow).toContain('run: node scripts/verify-production-readiness.mjs');
     expect(releaseVerifier).toContain('stage quality npm run verify:ci');
+    expect(releaseVerifier).toContain('stage integration npm run verify:integration');
     expect(releaseVerifier).toContain('stage local npm run verify:local');
     expect(workflow).not.toContain('RUN_NGINX_GATEWAY_TESTS: "1"');
     expect(workflow).not.toContain('RUN_DOCKER_INTEGRATION: "1"');
