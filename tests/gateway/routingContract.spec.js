@@ -50,6 +50,7 @@ describe('unified Gateway routing contract', () => {
       'nginx/snippets/proxy-headers.conf.template',
       'nginx/snippets/short-routes.conf.template',
       'scripts/render-gateway-config.sh',
+      'tests/gateway/contentTypeNginx.spec.js',
       'start.sh',
     ]) {
       await expect(access(rootFile(path))).rejects.toThrow();
