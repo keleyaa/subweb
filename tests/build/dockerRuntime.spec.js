@@ -96,6 +96,7 @@ describe('Docker runtime contract', () => {
       'npm run verify:ci',
       'npm run test:e2e',
       'npm audit --audit-level=moderate',
+      'docker build --file Dockerfile --tag subweb:ci .',
     ]) {
       expect(workflow).toContain(command);
     }
@@ -107,6 +108,7 @@ describe('Docker runtime contract', () => {
       'npm run verify:ci',
       'npm run test:e2e',
       'npm audit --audit-level=moderate',
+      'docker build --file Dockerfile --tag subweb:ci .',
       'aquasecurity/trivy-action@',
     ];
     for (let index = 1; index < orderedCommands.length; index += 1) {
