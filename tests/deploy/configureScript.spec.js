@@ -38,6 +38,18 @@ describe('single HTTP deployment configuration', () => {
     for (const ignoredPath of ['.runtime/', 'runtime-config/', '*.pem', '*.key', 'redis-data/']) expect(gitignore.split('\n')).toContain(ignoredPath);
   });
 
+  it('prints its supported options without writing an environment file', async () => {
+    const cwd = await makeDirectory();
+    const result = runConfigure(cwd, ['--help']);
+
+    expect(result.status, result.stderr).toBe(0);
+    for (const option of [
+      '--app-domain', '--api-domain', '--short-links-enabled',
+      '--trusted-proxy-cidr IPv4_CIDR', '--turnstile-secret-key', '--subweb-image',
+    ]) expect(result.stdout).toContain(option);
+    await expect(readFile(join(cwd, '.env'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it.each([
     ['missing APP domain', ['--api-domain', 'api.example.com', '--short-domain', 'short.example.com']],
     ['missing API domain', ['--app-domain', 'example.com', '--short-domain', 'short.example.com']],

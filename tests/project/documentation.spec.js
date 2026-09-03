@@ -184,7 +184,7 @@ describe("documentation contract", () => {
     ])
       expect(local).toContain(command);
     for (const command of [
-      "docker-deploy.sh",
+      "subweb.sh install",
       "configure.sh",
       "subweb.sh verify",
       "subweb.sh up",
@@ -202,6 +202,7 @@ describe("documentation contract", () => {
     ]) {
       expect(docker).toContain(command);
     }
+    expect(docker).not.toContain("docker-deploy.sh install");
     expect(docker).toContain("不要执行 `cat .env`");
     expect(docker).toContain("自动生成");
     expect(local).toContain("http://127.0.0.1:5173/");

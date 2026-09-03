@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -652,6 +653,78 @@ func TestDependencyRequestHeadersAreGatewayControlled(t *testing.T) {
 			}
 			if got := receivedHeaders.Get("X-Request-ID"); got != requestID {
 				t.Fatalf("dependency X-Request-ID = %q, want %q", got, requestID)
+			}
+		})
+	}
+}
+
+func TestDependencyClientIdentityHonorsTrustedProxyBoundary(t *testing.T) {
+	_, trustedProxyCIDR, err := net.ParseCIDR("127.0.0.0/8")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name         string
+		remoteAddr   string
+		forwardedFor string
+		realIP       string
+		wantClientIP string
+	}{
+		{
+			name:         "trusted nginx skips trusted forwarding hops",
+			remoteAddr:   "127.0.0.1:4321",
+			forwardedFor: "203.0.113.1, 127.0.0.2",
+			realIP:       "203.0.113.1",
+			wantClientIP: "203.0.113.1",
+		},
+		{
+			name:         "trusted nginx falls back to X real IP",
+			remoteAddr:   "127.0.0.1:4321",
+			forwardedFor: "invalid",
+			realIP:       "198.51.100.10",
+			wantClientIP: "198.51.100.10",
+		},
+		{
+			name:         "untrusted peer cannot spoof forwarded identity",
+			remoteAddr:   "203.0.113.11:4321",
+			forwardedFor: "198.51.100.11",
+			realIP:       "198.51.100.11",
+			wantClientIP: "203.0.113.11",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var received *http.Request
+			cfg := testConfig()
+			cfg.TrustedProxyCIDR = trustedProxyCIDR
+			server := NewServer(cfg, Dependencies{
+				Converter: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+					received = request
+					writer.WriteHeader(http.StatusNoContent)
+				}),
+			})
+			request := httptest.NewRequest(http.MethodGet, "http://gateway.test/sub", nil)
+			request.Host = "api.example.test"
+			request.RemoteAddr = test.remoteAddr
+			request.Header.Set("X-Forwarded-For", test.forwardedFor)
+			request.Header.Set("X-Real-IP", test.realIP)
+			response := httptest.NewRecorder()
+
+			server.Handler.ServeHTTP(response, request)
+
+			if response.Code != http.StatusNoContent {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
+			}
+			if received == nil {
+				t.Fatal("dependency did not receive request")
+			}
+			if got := socketClientIP(received.RemoteAddr); got != test.wantClientIP {
+				t.Fatalf("dependency RemoteAddr client IP = %q, want %q", got, test.wantClientIP)
+			}
+			for _, name := range []string{"X-Forwarded-For", "X-Real-IP"} {
+				if got := received.Header.Get(name); got != test.wantClientIP {
+					t.Fatalf("dependency %s = %q, want %q", name, got, test.wantClientIP)
+				}
 			}
 		})
 	}

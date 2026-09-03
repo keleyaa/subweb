@@ -25,6 +25,26 @@ fail() {
   exit 1
 }
 
+usage() {
+  cat <<'EOF'
+Usage: configure.sh --app-domain HOST --api-domain HOST [options]
+
+Options:
+  --short-domain HOST
+  --api-url URL
+  --subweb-port PORT
+  --trusted-proxy-cidr IPv4_CIDR
+  --short-links-enabled true|false
+  --disable-short-links
+  --custom-backend-enabled true|false
+  --turnstile-site-key KEY
+  --turnstile-secret-key KEY
+  --rotate-secrets
+  --subweb-image IMAGE
+  --help
+EOF
+}
+
 validate_boolean() {
   case "$1" in
     true|false) ;;
@@ -126,6 +146,12 @@ turnstile_secret_key=
 turnstile_secret_key_seen=0
 
 env_file=$PWD/.env
+
+if [ "${1-}" = --help ] || [ "${1-}" = -h ]; then
+  [ "$#" -eq 1 ] || fail '--help does not accept other arguments.'
+  usage
+  exit 0
+fi
 
 while [ "$#" -gt 0 ]; do
   case "$1" in

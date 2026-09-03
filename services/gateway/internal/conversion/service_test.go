@@ -3,6 +3,7 @@ package conversion
 import (
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -69,6 +70,55 @@ func TestServiceForwardsValidatedConversionQueryOnly(t *testing.T) {
 	}
 	if upstreamQuery.Get("evil") != "" {
 		t.Fatalf("unknown query parameter was forwarded: %v", upstreamQuery)
+	}
+}
+
+func TestServiceRateLimitsByTrustedProxyClientIP(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.Header().Set("Content-Type", "text/plain")
+		_, _ = io.WriteString(response, "converted")
+	}))
+	defer upstream.Close()
+
+	service := newTestService(t, upstream.URL, acceptingPolicy())
+	limiter, err := ratelimit.NewRateLimiter(ratelimit.NewMemoryStore(), 1, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.RateLimiter = limiter
+	_, trustedProxyCIDR, err := net.ParseCIDR("127.0.0.1/32")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httpapi.NewServer(config.Config{
+		AppDomain:        "app.example.test",
+		APIDomain:        "api.example.test",
+		ShortDomain:      "short.example.test",
+		TrustedProxyCIDR: trustedProxyCIDR,
+	}, httpapi.Dependencies{Converter: service})
+
+	for _, test := range []struct {
+		name     string
+		clientIP string
+		wantCode int
+	}{
+		{name: "first client", clientIP: "198.51.100.1", wantCode: http.StatusOK},
+		{name: "second client", clientIP: "198.51.100.2", wantCode: http.StatusOK},
+		{name: "same client is limited", clientIP: "198.51.100.1", wantCode: http.StatusTooManyRequests},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "http://gateway.test/sub?target=clash&url=ss%3A%2F%2Fexample", nil)
+			request.Host = "api.example.test"
+			request.RemoteAddr = "127.0.0.1:3456"
+			request.Header.Set("X-Forwarded-For", test.clientIP)
+			response := httptest.NewRecorder()
+
+			server.Handler.ServeHTTP(response, request)
+
+			if response.Code != test.wantCode {
+				t.Fatalf("status = %d, want %d", response.Code, test.wantCode)
+			}
+		})
 	}
 }
 

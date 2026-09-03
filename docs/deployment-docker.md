@@ -37,14 +37,15 @@ cd subweb
 - `API_DOMAIN`：转换 API
 - `SHORT_DOMAIN`：短码跳转
 
-外层代理负责证书、TLS、HSTS 和公网 DNS。必须保留 Host，并按部署者实际代理地址配置 `TRUSTED_PROXY_CIDR`；不要把任意公网 CIDR 配置为可信代理。可参考 [外部 TLS 反向代理示例](deployment-nginx.md)，但示例不是项目运行时。
+外层代理负责证书、TLS、HSTS 和公网 DNS。必须保留 Host，并按部署者实际代理地址配置 `TRUSTED_PROXY_CIDR`；`configure.sh` 的部署入口接受精确 IPv4 CIDR，不要把任意公网 IPv4 网段配置为可信代理。Gateway 仅在 TCP peer 命中该 CIDR 时信任 `X-Forwarded-For`/`X-Real-IP`，并使用代理链中最右侧的非可信地址作为客户端身份；否则只使用 socket peer。可参考 [外部 TLS 反向代理示例](deployment-nginx.md)，但示例不是项目运行时。
 
 ## 4. 关闭短链
 
 短链关闭不是通过删除环境变量实现，而是选择显式 Compose 文件：
 
 ```sh
-SHORT_LINKS_ENABLED=false ./scripts/configure.sh \
+./scripts/configure.sh \
+  --short-links-enabled false \
   --app-domain app.example.com \
   --api-domain api.example.com
 ./scripts/subweb.sh verify
@@ -58,12 +59,16 @@ SHORT_LINKS_ENABLED=false ./scripts/configure.sh \
 使用预构建 Gateway 时必须显式传入不可变引用：
 
 ```sh
-./scripts/docker-deploy.sh install \
+./scripts/subweb.sh install \
+  --app-domain app.example.com \
+  --api-domain api.example.com \
+  --short-domain short.example.com \
+  --turnstile-site-key "YOUR_TURNSTILE_SITE_KEY" \
+  --turnstile-secret-key "YOUR_TURNSTILE_SECRET_KEY" \
   --image ghcr.io/keleyaa/subweb:sha-<commit>
-./scripts/subweb.sh up
 ```
 
-`--image` 只接受 `sha-*` 标签或 `@sha256:<digest>`，拒绝 `latest` 和未经验证的 CLI 参数。Docker Hub `docker.io/keleyaa/subweb` 与 GHCR `ghcr.io/keleyaa/subweb` 是等价发布来源。完整版本、平台 digest 和外部镜像来源以 [版本锁](../deploy/versions.lock.json) 为准；生产镜像必须使用锁定引用。版本锁是发布和回滚的唯一来源。不要执行 `cat .env`。
+该命令会写入 `.env`、拉取锁定镜像并启动服务。`--image` 只接受 `sha-*` 标签或 `@sha256:<digest>`，拒绝 `latest` 和未经验证的 CLI 参数。Docker Hub `docker.io/keleyaa/subweb` 与 GHCR `ghcr.io/keleyaa/subweb` 是等价发布来源。完整版本、平台 digest 和外部镜像来源以 [版本锁](../deploy/versions.lock.json) 为准；生产镜像必须使用锁定引用。版本锁是发布和回滚的唯一来源。不要执行 `cat .env`。
 
 ## 6. 常用运维命令
 

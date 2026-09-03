@@ -75,6 +75,15 @@ afterEach(async () => {
 });
 
 describe('Docker image quick deployment', () => {
+  it('documents a runnable prebuilt-image installation command', async () => {
+    const documentation = await readFile(new URL('docs/deployment-docker.md', repositoryRoot), 'utf8');
+
+    expect(documentation).toContain('./scripts/subweb.sh install \\\n');
+    expect(documentation).not.toContain('./scripts/docker-deploy.sh install');
+    expect(documentation).toContain('./scripts/configure.sh \\\n  --short-links-enabled false');
+    expect(documentation).not.toContain('SHORT_LINKS_ENABLED=false ./scripts/configure.sh');
+  });
+
   it('persists the selected image and pulls the three default services', async () => {
     const root = await makeFixture();
     const image = 'docker.io/keleyaa/subweb:sha-2bf1a9f';

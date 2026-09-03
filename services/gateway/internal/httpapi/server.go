@@ -243,7 +243,8 @@ func (handler gatewayHandler) serveDependency(dependency http.Handler, writer ht
 	dependencyRequest.Header.Set("X-Forwarded-Host", publicDomain)
 	dependencyRequest.Header.Set("X-Forwarded-Proto", "https")
 	dependencyRequest.Header.Set("X-Request-ID", requestID)
-	if clientIP := socketClientIP(request.RemoteAddr); clientIP != "" {
+	if clientIP := handler.clientIP(request); clientIP != "" {
+		dependencyRequest.RemoteAddr = net.JoinHostPort(clientIP, "0")
 		dependencyRequest.Header.Set("X-Forwarded-For", clientIP)
 		dependencyRequest.Header.Set("X-Real-IP", clientIP)
 	}
@@ -335,6 +336,51 @@ func isValidAuthorityPort(value string) bool {
 	}
 	port, err := strconv.Atoi(value)
 	return err == nil && port >= 1 && port <= 65535
+}
+
+func (handler gatewayHandler) clientIP(request *http.Request) string {
+	peerIP := socketClientIP(request.RemoteAddr)
+	if peerIP == "" || handler.cfg.TrustedProxyCIDR == nil {
+		return peerIP
+	}
+	peerAddress := net.ParseIP(peerIP)
+	if peerAddress == nil || !handler.cfg.TrustedProxyCIDR.Contains(peerAddress) {
+		return peerIP
+	}
+	if forwardedIP := clientIPFromForwardedFor(request.Header.Values("X-Forwarded-For"), handler.cfg.TrustedProxyCIDR); forwardedIP != "" {
+		return forwardedIP
+	}
+	if realIP := clientIPFromRealIP(request.Header.Values("X-Real-IP")); realIP != "" {
+		return realIP
+	}
+	return peerIP
+}
+
+func clientIPFromForwardedFor(values []string, trustedProxyCIDR *net.IPNet) string {
+	for valueIndex := len(values) - 1; valueIndex >= 0; valueIndex-- {
+		addresses := strings.Split(values[valueIndex], ",")
+		for addressIndex := len(addresses) - 1; addressIndex >= 0; addressIndex-- {
+			address := net.ParseIP(strings.TrimSpace(addresses[addressIndex]))
+			if address == nil {
+				return ""
+			}
+			if !trustedProxyCIDR.Contains(address) {
+				return address.String()
+			}
+		}
+	}
+	return ""
+}
+
+func clientIPFromRealIP(values []string) string {
+	if len(values) != 1 {
+		return ""
+	}
+	address := net.ParseIP(strings.TrimSpace(values[0]))
+	if address == nil {
+		return ""
+	}
+	return address.String()
 }
 
 func socketClientIP(remoteAddr string) string {
