@@ -21,6 +21,8 @@ set -eu
 printf '%s\\n' "$*" >> "$DOCKER_LOG"
 case "$*" in
   'compose version') exit 0 ;;
+  'compose -f compose.yaml up -d --build --pull missing --wait') exit 0 ;;
+  'compose -f compose.disabled-short-links.yaml up -d --build --pull missing --wait') exit 0 ;;
   'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --wait') exit 0 ;;
   'compose -f compose.disabled-short-links.yaml down') exit 0 ;;
   'compose -f compose.disabled-short-links.yaml ps') exit 0 ;;
@@ -32,11 +34,20 @@ esac
   return root;
 };
 
-const runCLI = (root, args) => spawnSync('sh', [join(root, 'scripts/subweb.sh'), ...args], {
-  cwd: root,
-  encoding: 'utf8',
-  env: { ...process.env, PATH: `${join(root, 'bin')}:${process.env.PATH}`, DOCKER_LOG: join(root, 'docker.log') },
-});
+const runCLI = (root, args, environment = {}) => {
+  const env = {
+    ...process.env,
+    PATH: `${join(root, 'bin')}:${process.env.PATH}`,
+    DOCKER_LOG: join(root, 'docker.log'),
+    ...environment,
+  };
+  if (!Object.hasOwn(environment, 'SUBWEB_IMAGE')) delete env.SUBWEB_IMAGE;
+  return spawnSync('sh', [join(root, 'scripts/subweb.sh'), ...args], {
+    cwd: root,
+    encoding: 'utf8',
+    env,
+  });
+};
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -51,7 +62,7 @@ describe('feature-flag deployment entrypoint', () => {
     }
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toBe([
       'compose version',
-      'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --wait',
+      'compose -f compose.disabled-short-links.yaml up -d --build --pull missing --wait',
       'compose version',
       'compose -f compose.disabled-short-links.yaml down',
       'compose version',
@@ -62,12 +73,33 @@ describe('feature-flag deployment entrypoint', () => {
     ].join('\n'));
   });
 
-  it('uses the production Compose file when short links are enabled', async () => {
+  it('builds the local Gateway and pulls missing images on a fresh source checkout', async () => {
     const root = await makeFixture('true');
     const result = runCLI(root, ['up']);
-    expect(result.status).not.toBe(0);
-    expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain('compose version\n');
-    expect(await readFile(join(root, 'docker.log'), 'utf8')).not.toContain('compose.disabled-short-links.yaml');
+    expect(result.status, result.stderr).toBe(0);
+    expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain(
+      'compose -f compose.yaml up -d --build --pull missing --wait\n',
+    );
+  });
+
+  it('does not rebuild an explicitly selected prebuilt Gateway image', async () => {
+    const root = await makeFixture('false');
+    await writeFile(join(root, '.env'), 'SHORT_LINKS_ENABLED=false\nSUBWEB_IMAGE=ghcr.io/example/subweb:sha-abcdef1\n');
+    const result = runCLI(root, ['up'], { SUBWEB_IMAGE: 'ghcr.io/example/subweb:sha-abcdef1' });
+    expect(result.status, result.stderr).toBe(0);
+    expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain(
+      'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --wait\n',
+    );
+  });
+
+  it('treats an empty exported Gateway image as Compose does', async () => {
+    const root = await makeFixture('false');
+    await writeFile(join(root, '.env'), 'SHORT_LINKS_ENABLED=false\nSUBWEB_IMAGE=ghcr.io/example/subweb:sha-abcdef1\n');
+    const result = runCLI(root, ['up'], { SUBWEB_IMAGE: '' });
+    expect(result.status, result.stderr).toBe(0);
+    expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain(
+      'compose -f compose.disabled-short-links.yaml up -d --build --pull missing --wait\n',
+    );
   });
 
   it('refuses restore for disabled short links or without explicit stop-write confirmation', async () => {

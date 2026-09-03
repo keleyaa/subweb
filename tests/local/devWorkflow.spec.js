@@ -50,4 +50,16 @@ describe('Compose-first local development workflow', () => {
     expect(dependencies).not.toContain('down --volumes');
     expect(dependencies).not.toContain('volume rm');
   });
+
+  it('removes verifier-owned Compose resources without deleting data volumes', async () => {
+    const [dependencies, verifier] = await Promise.all([
+      read('scripts/local/deps.sh'),
+      read('scripts/verify-local-dev.sh'),
+    ]);
+
+    expect(verifier).toContain('"$script_directory/local/deps.sh" remove');
+    expect(dependencies).toContain('remove)');
+    expect(dependencies).toContain('docker compose down --remove-orphans');
+    expect(dependencies).not.toContain('docker compose down --volumes');
+  });
 });

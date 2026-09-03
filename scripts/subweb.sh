@@ -48,7 +48,20 @@ compose() {
 case "$command_name" in
   up)
     [ "$#" -eq 0 ] || fail 'up does not accept extra arguments.'
-    compose up -d --no-build --pull never --wait
+    if [ "${SUBWEB_IMAGE+x}" = x ]; then
+      gateway_image=$SUBWEB_IMAGE
+    elif gateway_image=$(read_env_value SUBWEB_IMAGE); then
+      :
+    else
+      status=$?
+      [ "$status" -eq 1 ] || fail 'SUBWEB_IMAGE is duplicated in .env.'
+      gateway_image=subweb:local
+    fi
+    if [ -z "$gateway_image" ] || [ "$gateway_image" = 'subweb:local' ]; then
+      compose up -d --build --pull missing --wait
+    else
+      compose up -d --no-build --pull never --wait
+    fi
     ;;
   down)
     [ "$#" -eq 0 ] || fail 'down does not accept extra arguments.'

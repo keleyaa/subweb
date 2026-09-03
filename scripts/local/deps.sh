@@ -4,13 +4,16 @@ set -eu
 # shellcheck source=common.sh
 . "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)/common.sh"
 
-[ "$#" -eq 1 ] || local_fail 'usage: deps.sh up|status|down'
+[ "$#" -eq 1 ] || local_fail 'usage: deps.sh up|status|down|remove'
 prepare_local_environment
 cd "$local_project_root"
 
 case "$1" in
   up)
     docker compose up -d --build --remove-orphans --wait gateway subconverter myurls-app myurls-short redis
+    ;;
+  remove)
+    docker compose down --remove-orphans
     ;;
   status)
     docker compose ps gateway subconverter myurls-app myurls-short redis
@@ -24,5 +27,5 @@ case "$1" in
   down)
     docker compose stop gateway subconverter myurls-app myurls-short redis
     ;;
-  *) local_fail 'usage: deps.sh up|status|down' ;;
+  *) local_fail 'usage: deps.sh up|status|down|remove' ;;
 esac

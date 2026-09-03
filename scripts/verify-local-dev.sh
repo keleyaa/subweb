@@ -15,7 +15,7 @@ cleanup() {
     kill "$vite_pid" >/dev/null 2>&1 || true
     wait "$vite_pid" >/dev/null 2>&1 || true
   fi
-  "$script_directory/local/deps.sh" down >/dev/null 2>&1 || true
+  "$script_directory/local/deps.sh" remove >/dev/null 2>&1 || true
 }
 trap cleanup EXIT HUP INT TERM
 
