@@ -216,6 +216,14 @@ describe("documentation contract", () => {
       expect(maintenance).toContain(ignored);
   });
 
+  it("applies the security header snippet in the external TLS proxy example", () => {
+    const documentation = read("docs/deployment-nginx.md");
+    expect(documentation).toContain("nginx/snippets/security-headers.conf");
+    expect(documentation).toContain(
+      "include /etc/nginx/snippets/security-headers.conf",
+    );
+  });
+
   it("documents Docker Hub and GHCR as equivalent release sources", () => {
     const readme = read("README.md");
     const docker = read("docs/deployment-docker.md");

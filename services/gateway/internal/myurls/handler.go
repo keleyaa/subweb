@@ -10,12 +10,10 @@ import (
 	"strings"
 
 	"github.com/keleyaa/subweb/services/gateway/internal/httpapi"
+	"github.com/keleyaa/subweb/services/gateway/internal/shortcode"
 )
 
-const (
-	createPath       = "/short-api/links"
-	defaultBodyLimit = 16 * 1024
-)
+const createPath = "/short-api/links"
 
 // Handler adapts the public Gateway short-link routes to Rust MyUrls.
 type Handler struct {
@@ -24,10 +22,7 @@ type Handler struct {
 }
 
 func NewHandler(client Client, maxBodyBytes int64) *Handler {
-	if maxBodyBytes < 1 || maxBodyBytes > defaultBodyLimit {
-		maxBodyBytes = defaultBodyLimit
-	}
-	return &Handler{client: client, maxBodyBytes: maxBodyBytes}
+	return &Handler{client: client, maxBodyBytes: normalizeBodyLimit(maxBodyBytes)}
 }
 
 func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -44,7 +39,7 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 	switch {
 	case request.URL.Path == createPath:
 		handler.create(writer, request, requestID)
-	case strings.HasPrefix(request.URL.Path, "/") && shortCodePattern.MatchString(code):
+	case strings.HasPrefix(request.URL.Path, "/") && shortcode.ValidCode(code):
 		handler.resolve(writer, request, requestID)
 	default:
 		writeProblem(writer, requestID, http.StatusNotFound, "not_found", nil, 0)

@@ -6,10 +6,11 @@ const rootFile = (path) => new URL(path, root);
 
 describe('unified Gateway routing contract', () => {
   it('keeps app, API, and short-link routes in the Go Gateway', async () => {
-    const [server, client, handler, staticFiles] = await Promise.all([
+    const [server, client, handler, shortcode, staticFiles] = await Promise.all([
       readFile(rootFile('services/gateway/internal/httpapi/server.go'), 'utf8'),
       readFile(rootFile('services/gateway/internal/myurls/client.go'), 'utf8'),
       readFile(rootFile('services/gateway/internal/myurls/handler.go'), 'utf8'),
+      readFile(rootFile('services/gateway/internal/shortcode/shortcode.go'), 'utf8'),
       readFile(rootFile('services/gateway/internal/staticfiles/handler.go'), 'utf8'),
     ]);
 
@@ -21,9 +22,11 @@ describe('unified Gateway routing contract', () => {
     expect(client).toContain('target.Path = requestPath');
     expect(client).toContain('"/api/links"');
     expect(client).not.toContain('/api/v1/links');
-    expect(handler).toContain('createPath       = "/short-api/links"');
-    expect(handler).toContain('shortCodePattern');
+    expect(handler).toContain('const createPath = "/short-api/links"');
+    expect(handler).toContain('shortcode.ValidCode');
     expect(handler).toContain('writeMyURLsError');
+    expect(shortcode).toContain('const maxLength = 64');
+    expect(shortcode).toContain('func ValidCode');
     expect(staticFiles).toContain('serveDynamicPath');
     expect(staticFiles).toContain('"/conf/config.js"');
     expect(staticFiles).toContain('configCacheControl');

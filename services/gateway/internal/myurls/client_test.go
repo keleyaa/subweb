@@ -203,6 +203,16 @@ func TestClientHealthRejectsOversizedResponse(t *testing.T) {
 	}
 }
 
+func TestClientHealthUsesConfiguredBodyLimit(t *testing.T) {
+	client := NewHTTPClientWithBodyLimit(mustURL(t, "http://myurls.test:3000"), roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return response(http.StatusOK, strings.Repeat("x", 33)), nil
+	}), 32)
+
+	if err := client.Health(context.Background()); err != ErrUnavailable {
+		t.Fatalf("health error = %v, want %v", err, ErrUnavailable)
+	}
+}
+
 func TestClientHealthUsesLiveEndpointAndClosesResponse(t *testing.T) {
 	closed := false
 	client := newTestClient(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {

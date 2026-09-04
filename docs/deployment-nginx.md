@@ -2,7 +2,7 @@
 
 该文件只描述项目外的 TLS 入口，不是 Subweb 的 Compose 服务，也不负责启动或更新任何容器。生产部署仍以 [`compose.yaml`](../compose.yaml) 和 [`deployment-docker.md`](deployment-docker.md) 为准。
 
-下面的 Nginx 配置将 APP、API 和 SHORT 三个 HTTPS 主机转发到 Gateway 唯一的 loopback 端口。请将域名、证书路径和端口替换为实际值；证书续期、80/443 端口、防火墙和公网 DNS 由部署者负责。
+下面的 Nginx 配置将 APP、API 和 SHORT 三个 HTTPS 主机转发到 Gateway 唯一的 loopback 端口。请将域名、证书路径和端口替换为实际值；证书续期、80/443 端口、防火墙和公网 DNS 由部署者负责。启用配置前，请将仓库的 `nginx/snippets/security-headers.conf` 安装到外部 Nginx 的 `/etc/nginx/snippets/security-headers.conf`，或相应修改 `include` 路径。
 
 ```nginx
 map $http_upgrade $connection_upgrade {
@@ -20,6 +20,7 @@ server {
 
     ssl_certificate /etc/letsencrypt/live/app.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/app.example.com/privkey.pem;
+    include /etc/nginx/snippets/security-headers.conf;
 
     location / {
         proxy_pass http://subweb_gateway;

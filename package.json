@@ -19,7 +19,7 @@
     "serve": "vite",
     "preview": "vite preview",
     "build": "vite build",
-    "lint": "eslint src tests scripts services vite.config.mjs eslint.config.js playwright.config.js",
+    "lint": "eslint src tests scripts vite.config.mjs eslint.config.js playwright.config.js",
     "test": "vitest run --maxWorkers=1",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/keleyaa/subweb/services/gateway/internal/config"
+	"github.com/keleyaa/subweb/services/gateway/internal/shortcode"
 )
 
 // Dependencies are the handlers and readiness check used by the HTTP server.
@@ -181,7 +182,7 @@ func (handler gatewayHandler) serveApp(writer http.ResponseWriter, request *http
 		return
 	}
 
-	if isShortCodePath(request.URL.Path) {
+	if shortcode.ValidPath(request.URL.Path) {
 		if request.Method != http.MethodGet && request.Method != http.MethodHead {
 			writeMethodNotAllowed(writer, requestID, "GET, HEAD")
 			return
@@ -214,7 +215,7 @@ func (handler gatewayHandler) serveApp(writer http.ResponseWriter, request *http
 }
 
 func (handler gatewayHandler) serveShort(writer http.ResponseWriter, request *http.Request, requestID string) {
-	if !isShortCodePath(request.URL.Path) {
+	if !shortcode.ValidPath(request.URL.Path) {
 		writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
 		return
 	}
@@ -404,21 +405,6 @@ func socketClientIP(remoteAddr string) string {
 		return ""
 	}
 	return address.String()
-}
-
-func isShortCodePath(path string) bool {
-	if len(path) < 2 || len(path) > 65 || path[0] != '/' {
-		return false
-	}
-	for _, character := range path[1:] {
-		if (character < 'a' || character > 'z') &&
-			(character < 'A' || character > 'Z') &&
-			(character < '0' || character > '9') &&
-			character != '_' && character != '-' {
-			return false
-		}
-	}
-	return true
 }
 
 func writeOK(writer http.ResponseWriter) {

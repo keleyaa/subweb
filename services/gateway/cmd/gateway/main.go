@@ -153,8 +153,8 @@ func buildServers(cfg config.Config, logger *slog.Logger) (*http.Server, *http.S
 	egressServer := egress.NewProxyServer(cfg.EgressListenAddr, egress.NewProxy(authorizer, dialer))
 
 	if cfg.ShortLinksEnabled {
-		appClient := myurls.NewHTTPClient(cfg.MyURLsAppUpstream, internalTransport)
-		shortClient := myurls.NewHTTPClient(cfg.MyURLsShortUpstream, internalTransport)
+		appClient := myurls.NewHTTPClientWithBodyLimit(cfg.MyURLsAppUpstream, internalTransport, cfg.ConversionMaxRequestBytes)
+		shortClient := myurls.NewHTTPClientWithBodyLimit(cfg.MyURLsShortUpstream, internalTransport, cfg.ConversionMaxRequestBytes)
 		dependencies.AppShortLinks = myurls.NewHandler(appClient, cfg.ConversionMaxRequestBytes)
 		dependencies.ShortLinks = myurls.NewHandler(shortClient, cfg.ConversionMaxRequestBytes)
 		dependencies.Readiness = readinessFunc(cfg, counterStore, appClient, shortClient)

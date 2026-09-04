@@ -8,43 +8,51 @@ import (
 
 var testHashSecret = []byte("01234567890123456789012345678901")
 
-func TestHashIPIsStableFixedLowercaseHex(t *testing.T) {
-	first, err := HashIP("203.0.113.10", testHashSecret)
+func hashIPForTest(ip string, secret []byte) (string, error) {
+	hasher, err := NewIPHasher(secret)
 	if err != nil {
-		t.Fatalf("HashIP() error = %v", err)
+		return "", err
 	}
-	second, err := HashIP("203.0.113.10", testHashSecret)
+	return hasher.Hash(ip)
+}
+
+func TestHashIPIsStableFixedLowercaseHex(t *testing.T) {
+	first, err := hashIPForTest("203.0.113.10", testHashSecret)
 	if err != nil {
-		t.Fatalf("HashIP() second error = %v", err)
+		t.Fatalf("hashIPForTest() error = %v", err)
+	}
+	second, err := hashIPForTest("203.0.113.10", testHashSecret)
+	if err != nil {
+		t.Fatalf("hashIPForTest() second error = %v", err)
 	}
 	if first != second {
-		t.Fatalf("HashIP() values differ: %q and %q", first, second)
+		t.Fatalf("hashIPForTest() values differ: %q and %q", first, second)
 	}
 	if len(first) != 64 {
-		t.Fatalf("HashIP() length = %d, want 64", len(first))
+		t.Fatalf("hashIPForTest() length = %d, want 64", len(first))
 	}
 	for _, character := range first {
 		if !strings.ContainsRune("0123456789abcdef", character) {
-			t.Fatalf("HashIP() = %q, want lowercase hexadecimal", first)
+			t.Fatalf("hashIPForTest() = %q, want lowercase hexadecimal", first)
 		}
 	}
 	if strings.Contains(first, "203.0.113.10") {
-		t.Fatalf("HashIP() exposed the raw IP: %q", first)
+		t.Fatalf("hashIPForTest() exposed the raw IP: %q", first)
 	}
 }
 
 func TestHashIPDiffersForDifferentSecrets(t *testing.T) {
 	otherSecret := []byte("abcdefghijklmnopqrstuvwxyz123456")
-	first, err := HashIP("203.0.113.10", testHashSecret)
+	first, err := hashIPForTest("203.0.113.10", testHashSecret)
 	if err != nil {
-		t.Fatalf("HashIP() error = %v", err)
+		t.Fatalf("hashIPForTest() error = %v", err)
 	}
-	second, err := HashIP("203.0.113.10", otherSecret)
+	second, err := hashIPForTest("203.0.113.10", otherSecret)
 	if err != nil {
-		t.Fatalf("HashIP() with another secret error = %v", err)
+		t.Fatalf("hashIPForTest() with another secret error = %v", err)
 	}
 	if first == second {
-		t.Fatalf("HashIP() values are equal for different secrets: %q", first)
+		t.Fatalf("hashIPForTest() values are equal for different secrets: %q", first)
 	}
 }
 
@@ -61,8 +69,8 @@ func TestHashIPRejectsInvalidOrUnboundedInputs(t *testing.T) {
 		"overlong secret": {ip: "203.0.113.10", secret: make([]byte, maxIPHashSecretBytes+1)},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := HashIP(test.ip, test.secret); err == nil {
-				t.Fatal("HashIP() error = nil, want validation error")
+			if _, err := hashIPForTest(test.ip, test.secret); err == nil {
+				t.Fatal("hashIPForTest() error = nil, want validation error")
 			}
 		})
 	}
@@ -80,9 +88,9 @@ func TestNewIPHasherCopiesAndValidatesSecret(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IPHasher.Hash() error = %v", err)
 	}
-	want, err := HashIP("203.0.113.10", testHashSecret)
+	want, err := hashIPForTest("203.0.113.10", testHashSecret)
 	if err != nil {
-		t.Fatalf("HashIP() error = %v", err)
+		t.Fatalf("hashIPForTest() error = %v", err)
 	}
 	if got != want {
 		t.Fatalf("IPHasher.Hash() = %q, want %q", got, want)

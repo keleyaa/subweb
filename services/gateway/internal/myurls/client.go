@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"regexp"
 	"time"
+
+	"github.com/keleyaa/subweb/services/gateway/internal/shortcode"
 )
 
 var ErrUnavailable = errors.New("myurls unavailable")
@@ -26,15 +28,25 @@ const defaultUpstreamTimeout = 10 * time.Second
 
 // HTTPClient is the bounded HTTP client for the MyUrls service.
 type HTTPClient struct {
-	baseURL    *url.URL
-	httpClient *http.Client
+	baseURL      *url.URL
+	httpClient   *http.Client
+	maxBodyBytes int64
 }
 
 func NewHTTPClient(baseURL *url.URL, transport http.RoundTripper) *HTTPClient {
-	return NewHTTPClientWithTimeout(baseURL, transport, defaultUpstreamTimeout)
+	return NewHTTPClientWithBodyLimit(baseURL, transport, defaultBodyLimit)
 }
 
 func NewHTTPClientWithTimeout(baseURL *url.URL, transport http.RoundTripper, timeout time.Duration) *HTTPClient {
+	return newHTTPClient(baseURL, transport, timeout, defaultBodyLimit)
+}
+
+// NewHTTPClientWithBodyLimit creates a client with a shared upstream body limit.
+func NewHTTPClientWithBodyLimit(baseURL *url.URL, transport http.RoundTripper, maxBodyBytes int64) *HTTPClient {
+	return newHTTPClient(baseURL, transport, defaultUpstreamTimeout, maxBodyBytes)
+}
+
+func newHTTPClient(baseURL *url.URL, transport http.RoundTripper, timeout time.Duration, maxBodyBytes int64) *HTTPClient {
 	var baseCopy *url.URL
 	if baseURL != nil {
 		copy := *baseURL
@@ -50,8 +62,10 @@ func NewHTTPClientWithTimeout(baseURL *url.URL, transport http.RoundTripper, tim
 	if timeout <= 0 {
 		timeout = defaultUpstreamTimeout
 	}
+	maxBodyBytes = normalizeBodyLimit(maxBodyBytes)
 	return &HTTPClient{
-		baseURL: baseCopy,
+		baseURL:      baseCopy,
+		maxBodyBytes: maxBodyBytes,
 		httpClient: &http.Client{
 			Transport: transport,
 			Timeout:   timeout,
@@ -74,7 +88,7 @@ func (client *HTTPClient) Create(ctx context.Context, body []byte, headers http.
 }
 
 func (client *HTTPClient) Resolve(ctx context.Context, code string, headers http.Header) (*http.Response, error) {
-	if !shortCodePattern.MatchString(code) {
+	if !shortcode.ValidCode(code) {
 		return nil, ErrUnavailable
 	}
 	requestID := ""
@@ -96,8 +110,8 @@ func (client *HTTPClient) Health(ctx context.Context) error {
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return ErrUnavailable
 	}
-	bytesRead, err := io.Copy(io.Discard, io.LimitReader(response.Body, defaultBodyLimit+1))
-	if err != nil || bytesRead > defaultBodyLimit {
+	bytesRead, err := io.Copy(io.Discard, io.LimitReader(response.Body, client.maxBodyBytes+1))
+	if err != nil || bytesRead > client.maxBodyBytes {
 		return ErrUnavailable
 	}
 	return nil
@@ -155,7 +169,6 @@ func copyForwardedHeaders(destination, source http.Header) {
 	}
 }
 
-var shortCodePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
 
 func validRequestID(value string) bool {

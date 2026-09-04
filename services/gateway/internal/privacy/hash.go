@@ -32,15 +32,6 @@ func NewIPHasher(secret []byte) (*IPHasher, error) {
 	return &IPHasher{secret: append([]byte(nil), secret...)}, nil
 }
 
-// HashIP returns a fixed-length lowercase HMAC-SHA256 digest for an IP address.
-func HashIP(ip string, secret []byte) (string, error) {
-	hasher, err := NewIPHasher(secret)
-	if err != nil {
-		return "", err
-	}
-	return hasher.Hash(ip)
-}
-
 // Hash returns a fixed-length lowercase HMAC-SHA256 digest for an IP address.
 func (hasher *IPHasher) Hash(ip string) (string, error) {
 	if hasher == nil || len(hasher.secret) < minIPHashSecretBytes || len(hasher.secret) > maxIPHashSecretBytes {
