@@ -28,6 +28,7 @@
     "verify:integration": "./scripts/verify-integrated-stack.sh",
     "verify:operations": "./scripts/verify-redis-operations.sh",
     "verify:local": "./scripts/verify-local-dev.sh",
+    "verify:production-readiness": "node scripts/verify-production-readiness.mjs",
     "verify:locks": "node scripts/verify-version-locks.mjs",
     "verify:docs": "node scripts/verify-docs.mjs",
     "verify:evidence": "node scripts/verify-evidence.mjs",

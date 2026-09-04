@@ -14,6 +14,8 @@ const makeFixture = async (shortLinksEnabled) => {
   await writeFile(join(root, '.env'), `SHORT_LINKS_ENABLED=${shortLinksEnabled}\n`, { mode: 0o600 });
   await writeFile(join(root, 'scripts/subweb.sh'), await readFile(new URL('scripts/subweb.sh', repositoryRoot), 'utf8'));
   await chmod(join(root, 'scripts/subweb.sh'), 0o755);
+  await writeFile(join(root, 'scripts/validate-compose.sh'), '#!/bin/sh\nprintf "validate\\n" >> "$DOCKER_LOG"\n');
+  await chmod(join(root, 'scripts/validate-compose.sh'), 0o755);
   const docker = join(root, 'bin');
   await mkdir(docker);
   await writeFile(join(docker, 'docker'), `#!/bin/sh
@@ -62,6 +64,7 @@ describe('feature-flag deployment entrypoint', () => {
     }
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toBe([
       'compose version',
+      'validate',
       'compose -f compose.disabled-short-links.yaml up -d --build --pull missing --wait',
       'compose version',
       'compose -f compose.disabled-short-links.yaml down',
@@ -80,6 +83,7 @@ describe('feature-flag deployment entrypoint', () => {
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain(
       'compose -f compose.yaml up -d --build --pull missing --wait\n',
     );
+    expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain('validate\n');
   });
 
   it('does not rebuild an explicitly selected prebuilt Gateway image', async () => {
@@ -90,6 +94,19 @@ describe('feature-flag deployment entrypoint', () => {
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain(
       'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --wait\n',
     );
+    expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain('validate\n');
+  });
+
+  it('blocks a mutable Gateway image before starting Compose', async () => {
+    const root = await makeFixture('false');
+    await writeFile(join(root, '.env'), 'SHORT_LINKS_ENABLED=false\nSUBWEB_IMAGE=ghcr.io/example/subweb:latest\n');
+    await writeFile(join(root, 'scripts/validate-compose.sh'), '#!/bin/sh\nprintf blocked >> "$DOCKER_LOG"\nexit 1\n');
+    await chmod(join(root, 'scripts/validate-compose.sh'), 0o755);
+
+    const result = runCLI(root, ['up']);
+
+    expect(result.status).not.toBe(0);
+    expect(await readFile(join(root, 'docker.log'), 'utf8')).toBe('compose version\nblocked');
   });
 
   it('treats an empty exported Gateway image as Compose does', async () => {

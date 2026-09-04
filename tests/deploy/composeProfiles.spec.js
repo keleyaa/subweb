@@ -156,6 +156,13 @@ describe('unified Compose validation', () => {
     expect(result.status).not.toBe(0);
   });
 
+  it('rejects a mutable Gateway image', async () => {
+    const composeJson = structuredClone(validCompose);
+    composeJson.services.gateway.image = 'ghcr.io/example/subweb:latest';
+    const { result } = await validateFixture(composeJson);
+    expect(result.status).not.toBe(0);
+  });
+
   it('rejects a gateway binding that is not loopback port 8080', async () => {
     const composeJson = structuredClone(validCompose);
     composeJson.services.gateway.ports[0].host_ip = '0.0.0.0';

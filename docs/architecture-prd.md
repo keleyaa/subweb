@@ -153,6 +153,7 @@ npm run verify:ci
 npm run verify:local
 npm run verify:integration
 npm run verify:operations
+npm run verify:production-readiness
 npm run verify:compose
 npm run verify:locks
 npm run verify:docs

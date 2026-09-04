@@ -23,6 +23,7 @@ const enabledCompose = {
   },
   services: {
     gateway: {
+      image: 'docker.io/keleyaa/subweb:sha-2bf1a9f',
       ports: [{ host_ip: '127.0.0.1', published: '18080', target: 8080 }],
       networks: { default: {}, 'myurls-edge': {}, 'redis-policy': {}, 'subconverter-egress': {} },
       user: '65532:65532', read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
@@ -55,6 +56,7 @@ const disabledCompose = {
   networks: { default: {}, 'subconverter-egress': { internal: true } },
   services: {
     gateway: {
+      image: 'docker.io/keleyaa/subweb:sha-2bf1a9f',
       ports: [{ host_ip: '127.0.0.1', published: '18080', target: 8080 }],
       networks: { default: {}, 'subconverter-egress': {} }, user: '65532:65532',
       read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],

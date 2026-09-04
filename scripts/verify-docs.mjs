@@ -76,6 +76,8 @@ export function verifyDocs({ root }) {
     ['docs/validation/local-dev.md', '自动契约验证使用独立的终端和运行时'],
     ['docs/deployment-docker.md', 'Turnstile Site Key 与 Secret Key 必须由部署者提供'],
     ['docs/configuration.md', '不可变的 `*_IMAGE` 环境覆盖本身不等于与版本锁兼容'],
+    ['docs/architecture-prd.md', 'npm run verify:production-readiness'],
+    ['docs/maintenance.md', 'npm run verify:production-readiness'],
     ['docs/validation/docker-integration.md', '仅替换 SubConverter'],
     ['docs/maintenance.md', 'Go race、Go vet、构建和 `git diff --check` 是需要另行执行'],
     ['docs/third-party-sources.md', '不提供已维护的镜像 digest 或 rollback manifest'],

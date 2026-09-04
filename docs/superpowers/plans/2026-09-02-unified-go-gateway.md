@@ -75,7 +75,7 @@ npm run verify:release
 release verification=passed
 ```
 
-已完成的最终验证包括 `verify:ci`、完整 Playwright、local development、unified business smoke、Redis operations recovery、版本锁、生产 readiness、Compose、文档、证据、Go race/vet/build、Gateway 和外部依赖镜像扫描。最终提交 `fdbcfd0` 的 release preflight 已输出上述成功标记。
+已完成的最终验证包括 `verify:ci`、完整 Playwright、local development、unified business smoke、Redis operations recovery、版本锁、生产 readiness、Compose、文档、证据、Go race/vet/build、Gateway 和外部依赖镜像扫描。实施阶段收尾提交 `fdbcfd0` 的 release preflight 已输出上述成功标记；后续提交继续修复并同步部署与验证合同。
 
 ## 维护规则
 

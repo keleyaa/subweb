@@ -12,6 +12,7 @@
 npm ci
 npm run verify:ci
 npm run verify:release
+npm run verify:production-readiness
 npm run verify:locks
 npm run verify:docs
 git diff --check

@@ -70,6 +70,15 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
     process.exit(1);
   }
   const enabled = shortLinksEnabled === "true";
+  const gatewayImage = services.gateway?.image;
+  const immutableGatewayImage = (image) =>
+    image === "subweb:local" ||
+    /:sha-[0-9a-f]{7,64}$/u.test(String(image)) ||
+    /@sha256:[0-9a-f]{64}$/u.test(String(image));
+  if (!immutableGatewayImage(gatewayImage)) {
+    console.error("Compose validation error: gateway must use subweb:local or an immutable sha-* / sha256 image.");
+    process.exitCode = 1;
+  }
   const expected = enabled
     ? ["gateway", "myurls-app", "myurls-short", "redis", "subconverter"]
     : ["gateway", "subconverter"];

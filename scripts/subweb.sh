@@ -48,6 +48,8 @@ compose() {
 case "$command_name" in
   up)
     [ "$#" -eq 0 ] || fail 'up does not accept extra arguments.'
+    SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
+      "$SCRIPT_DIRECTORY/validate-compose.sh"
     if [ "${SUBWEB_IMAGE+x}" = x ]; then
       gateway_image=$SUBWEB_IMAGE
     elif gateway_image=$(read_env_value SUBWEB_IMAGE); then
