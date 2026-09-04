@@ -130,7 +130,7 @@ func buildServers(cfg config.Config, logger *slog.Logger) (*http.Server, *http.S
 	if staticRoot == "" {
 		staticRoot = "/app/dist"
 	}
-	static := staticfiles.New(staticRoot)
+	static := staticfiles.New(staticRoot, cfg.AppDomain)
 	runtime := runtimeconfig.New(cfg.APIURL.String(), cfg.ShortLinksEnabled, cfg.CustomBackendEnabled, cfg.TurnstileSiteKey)
 	dependencies := httpapi.Dependencies{
 		Converter:     converter,
@@ -174,7 +174,11 @@ func (gatewayURLPolicy gatewayURLPolicy) AuthorizeURL(ctx context.Context, value
 	}
 	lookupContext, cancel := context.WithTimeout(ctx, gatewayURLPolicy.timeout)
 	defer cancel()
-	return policy.ValidateRemoteURL(lookupContext, value, gatewayURLPolicy.resolver, policy.Options{})
+	target, err := policy.ValidateRemoteURL(lookupContext, value, gatewayURLPolicy.resolver, policy.Options{})
+	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return policy.DialTarget{}, context.DeadlineExceeded
+	}
+	return target, err
 }
 
 func newIPHasher(cfg config.Config) (*privacy.IPHasher, error) {

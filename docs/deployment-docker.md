@@ -13,7 +13,9 @@ cd subweb
   --api-domain api.example.com \
   --short-domain short.example.com \
   --turnstile-site-key YOUR_SITE_KEY \
-  --turnstile-secret-key YOUR_SECRET_KEY
+  --turnstile-secret-key-stdin <<'EOF'
+YOUR_SECRET_KEY
+EOF
 ```
 
 `configure.sh` 会验证域名、API URL、端口和 feature flags，并以 `0600` 原子自动生成 `.env`。默认值为 `SHORT_LINKS_ENABLED=true` 与 `CUSTOM_BACKEND_ENABLED=true`。密钥由脚本生成或保留已有值；除非显式要求轮换，不要在部署过程中更换 Redis 密码或 IP 哈希密钥。
@@ -64,8 +66,10 @@ cd subweb
   --api-domain api.example.com \
   --short-domain short.example.com \
   --turnstile-site-key "YOUR_TURNSTILE_SITE_KEY" \
-  --turnstile-secret-key "YOUR_TURNSTILE_SECRET_KEY" \
-  --image ghcr.io/keleyaa/subweb:sha-<commit>
+  --turnstile-secret-key-stdin \
+  --image ghcr.io/keleyaa/subweb:sha-<commit> <<'EOF'
+YOUR_TURNSTILE_SECRET_KEY
+EOF
 ```
 
 该命令会写入 `.env`、拉取锁定镜像并启动服务。`--image` 只接受 `sha-*` 标签或 `@sha256:<digest>`，拒绝 `latest` 和未经验证的 CLI 参数。Docker Hub `docker.io/keleyaa/subweb` 与 GHCR `ghcr.io/keleyaa/subweb` 是等价发布来源。完整版本、平台 digest 和外部镜像来源以 [版本锁](../deploy/versions.lock.json) 为准；生产镜像必须使用锁定引用。版本锁是发布和回滚的唯一来源。不要执行 `cat .env`。

@@ -14,8 +14,8 @@ describe('application mount markup', () => {
     expect(indexHtml).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />');
     expect(indexHtml).toContain('<title>Subconverter Web</title>');
     expect(indexHtml).toContain('<meta name="description" content="自托管订阅转换与短链服务，提供受控请求策略、隐私边界和 Docker 部署。" />');
-    expect(indexHtml).toContain('<link rel="canonical" href="https://sub.ml1.one/" />');
-    expect(indexHtml).toContain('<meta property="og:url" content="https://sub.ml1.one/" />');
+    expect(indexHtml).toContain('<link rel="canonical" href="__SUBWEB_PUBLIC_ORIGIN__/" />');
+    expect(indexHtml).toContain('<meta property="og:url" content="__SUBWEB_PUBLIC_ORIGIN__/" />');
     expect(indexHtml).toContain('<script type="application/ld+json">');
     expect(indexHtml).toContain('"@type": "SoftwareApplication"');
     expect(indexHtml).toContain('<strong>Subconverter Web 需要启用 JavaScript 才能运行。</strong>');
@@ -29,10 +29,10 @@ describe('application mount markup', () => {
       readFile(new URL('../../public/sitemap.xml', import.meta.url), 'utf8'),
     ]);
 
-    expect(robots).toContain('Sitemap: https://sub.ml1.one/sitemap.xml');
+    expect(robots).toContain('Sitemap: __SUBWEB_PUBLIC_ORIGIN__/sitemap.xml');
     expect(robots).toContain('Disallow: /sub');
     expect(robots).toContain('Disallow: /short-api/');
-    expect(sitemap).toContain('<loc>https://sub.ml1.one/</loc>');
+    expect(sitemap).toContain('<loc>__SUBWEB_PUBLIC_ORIGIN__/</loc>');
     expect(sitemap).not.toContain('api.ml1.one');
     expect(sitemap).not.toMatch(/<loc>[^<]*\?[^<]*<\/loc>/u);
   });

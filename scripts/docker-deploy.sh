@@ -20,6 +20,7 @@ short_links_enabled_seen=0
 custom_backend_enabled=
 custom_backend_enabled_seen=0
 turnstile_site_key=
+turnstile_secret_key_stdin=0
 turnstile_secret_key=
 image=
 image_seen=0
@@ -81,10 +82,13 @@ while [ "$#" -gt 0 ]; do
       turnstile_site_key=$2
       shift 2
       ;;
+    --turnstile-secret-key-stdin)
+      [ "$turnstile_secret_key_stdin" -eq 0 ] || fail 'Turnstile secret key may be provided only once.'
+      turnstile_secret_key_stdin=1
+      shift
+      ;;
     --turnstile-secret-key)
-      [ "$#" -ge 2 ] || fail '--turnstile-secret-key requires a value.'
-      turnstile_secret_key=$2
-      shift 2
+      fail 'Turnstile secret keys must be provided through --turnstile-secret-key-stdin, not argv.'
       ;;
     --image)
       [ "$image_seen" -eq 0 ] || fail '--image may be provided only once.'
@@ -96,6 +100,16 @@ while [ "$#" -gt 0 ]; do
     *) fail "Unknown argument: $1" ;;
   esac
 done
+
+if [ "$short_links_enabled_seen" -eq 1 ] && [ "$short_links_enabled" = false ]; then
+  turnstile_secret_key_stdin=0
+elif [ "$turnstile_secret_key_stdin" -eq 1 ]; then
+  if IFS= read -r turnstile_secret_key || [ -n "$turnstile_secret_key" ]; then
+    :
+  else
+    fail 'Turnstile secret key must be provided on stdin.'
+  fi
+fi
 
 [ "$image_seen" -eq 1 ] || fail '--image is required and must use an immutable sha-* tag or sha256 digest.'
 case "$image" in
@@ -126,8 +140,12 @@ run_configure() {
   [ -n "$subweb_port" ] && set -- "$@" --subweb-port "$subweb_port"
   [ -n "$trusted_proxy_cidr" ] && set -- "$@" --trusted-proxy-cidr "$trusted_proxy_cidr"
   [ -n "$turnstile_site_key" ] && set -- "$@" --turnstile-site-key "$turnstile_site_key"
-  [ -n "$turnstile_secret_key" ] && set -- "$@" --turnstile-secret-key "$turnstile_secret_key"
-  "$@"
+  if [ "$turnstile_secret_key_stdin" -eq 1 ]; then
+    set -- "$@" --turnstile-secret-key-stdin
+    printf '%s\n' "$turnstile_secret_key" | "$@"
+  else
+    "$@"
+  fi
 }
 run_configure
 

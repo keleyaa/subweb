@@ -123,19 +123,20 @@ esac
   return root;
 };
 
-const runDeploy = (root, extraArgs = [], env = {}) =>
+const runDeploy = (root, extraArgs = [], env = {}, input = 'test-secret-key\n') =>
   spawnSync('sh', [join(root, 'scripts/docker-deploy.sh'),
     '--app-domain', 'example.com',
     '--api-domain', 'api.example.com',
     '--short-domain', 'short.example.com',
     '--turnstile-site-key', 'test-site-key',
-    '--turnstile-secret-key', 'test-secret-key',
+    '--turnstile-secret-key-stdin',
     ...extraArgs,
   ], {
     cwd: root,
     encoding: 'utf8',
+    input,
     env: {
-      ...process.env,
+        ...process.env,
       PATH: `${join(root, 'bin')}:${process.env.PATH}`,
       DOCKER_LOG: join(root, 'docker.log'),
       COMPOSE_JSON_ENABLED: join(root, 'compose-enabled.json'),
@@ -178,6 +179,40 @@ describe('Docker image quick deployment', () => {
     ].join('\n'));
   });
 
+  it('passes the Turnstile secret through stdin instead of configure argv', async () => {
+    const root = await makeFixture();
+    const argsLog = join(root, 'configure-args.log');
+    const stdinLog = join(root, 'configure-stdin.log');
+    await writeFile(join(root, 'scripts/configure.sh'), `#!/bin/sh
+set -eu
+printf '%s\\n' "$*" > "$CONFIGURE_ARGS_LOG"
+cat > "$CONFIGURE_STDIN_LOG"
+cat > .env <<'EOF'
+APP_DOMAIN=example.com
+API_DOMAIN=api.example.com
+SHORT_DOMAIN=short.example.com
+API_URL=https://api.example.com
+SHORT_LINKS_ENABLED=true
+CUSTOM_BACKEND_ENABLED=true
+TURNSTILE_SITE_KEY=test-site-key
+TURNSTILE_SECRET_KEY=test-secret-key
+IP_HASH_SECRET=${'a'.repeat(64)}
+REDIS_PASSWORD=${'b'.repeat(64)}
+EOF
+`);
+    await chmod(join(root, 'scripts/configure.sh'), 0o755);
+
+    const result = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f'], {
+      CONFIGURE_ARGS_LOG: argsLog,
+      CONFIGURE_STDIN_LOG: stdinLog,
+    });
+
+    expect(result.status, `${result.stdout}\\n${result.stderr}`).toBe(0);
+    expect(await readFile(argsLog, 'utf8')).toContain('--turnstile-secret-key-stdin');
+    expect(await readFile(argsLog, 'utf8')).not.toContain('test-secret-key');
+    expect(await readFile(stdinLog, 'utf8')).toBe('test-secret-key\n');
+  });
+
   it('does not let an inherited Gateway image override the selected deployment image', async () => {
     const root = await makeFixture();
     const selectedImage = 'docker.io/keleyaa/subweb:sha-2bf1a9f';
@@ -212,7 +247,7 @@ describe('Docker image quick deployment', () => {
 
   it('deploys only Gateway and SubConverter when short links are disabled', async () => {
     const root = await makeFixture();
-    const result = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f', '--disable-short-links']);
+    const result = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f', '--disable-short-links'], {}, '');
 
     expect(result.status, `${result.stdout}\\n${result.stderr}`).toBe(0);
     const env = await readFile(join(root, '.env'), 'utf8');

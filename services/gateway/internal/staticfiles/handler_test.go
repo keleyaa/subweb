@@ -155,3 +155,34 @@ func TestStaticHandlerAllowsOnlyGetAndHead(t *testing.T) {
 		t.Fatalf("Allow = %q, want GET, HEAD", got)
 	}
 }
+
+func TestHandlerRendersConfiguredPublicDomainInSEOResources(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"index.html":  "<link rel=\"canonical\" href=\"__SUBWEB_PUBLIC_ORIGIN__/\"><meta property=\"og:url\" content=\"__SUBWEB_PUBLIC_ORIGIN__/\"><script>{\"url\":\"__SUBWEB_PUBLIC_ORIGIN__/\"}</script>",
+		"robots.txt":  "Sitemap: __SUBWEB_PUBLIC_ORIGIN__/sitemap.xml\n",
+		"sitemap.xml": "<loc>__SUBWEB_PUBLIC_ORIGIN__/</loc>\n",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	handler := New(root, "selfhost.example.test")
+	for _, requestPath := range []string{"/", "/robots.txt", "/sitemap.xml"} {
+		t.Run(requestPath, func(t *testing.T) {
+			response := serveStatic(t, handler, http.MethodGet, requestPath)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200", response.Code)
+			}
+			body := response.Body.String()
+			if !strings.Contains(body, "https://selfhost.example.test") {
+				t.Fatalf("body = %q, want configured public domain", body)
+			}
+			if strings.Contains(body, "__SUBWEB_PUBLIC_ORIGIN__") {
+				t.Fatalf("body = %q, contains unresolved public-origin placeholder", body)
+			}
+		})
+	}
+}

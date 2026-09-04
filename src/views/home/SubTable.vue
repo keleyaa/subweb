@@ -143,7 +143,7 @@
           v-if="shortLinksEnabled"
           type="button"
           class="secondary-action-button result-action-button"
-          :disabled="isGeneratingShortUrl || isShortCopying"
+          :disabled="isGeneratingShortUrl || isShortCopying || shortRateLimitSeconds > 0"
           :aria-busy="isGeneratingShortUrl"
           @click="handleShortUrlAction"
         >
@@ -211,8 +211,10 @@ export default {
       isGeneratingShortUrl: false,
       shortLinkAbortController: null,
       shortChallenge: null,
-      shortChallengeKey: 0,
-      shortStatusMessage: '',
+       shortChallengeKey: 0,
+       shortStatusMessage: '',
+       shortRateLimitSeconds: 0,
+       shortRateLimitTimer: null,
       shortLinkWorkflow: runtimeConfig.shortLinksEnabled
         ? createShortLinkWorkflow({
             client: createShortLinkClient(),
@@ -265,8 +267,9 @@ export default {
         copyStatus: this.result.subscriptionCopyStatus,
       });
     },
-    shortActionLabel() {
-      return getShortActionLabel({
+     shortActionLabel() {
+       if (this.shortRateLimitSeconds > 0) return `请等待 ${this.shortRateLimitSeconds} 秒`;
+       return getShortActionLabel({
         hasShortUrl: this.hasCurrentShortUrl,
         copyStatus: this.result.shortCopyStatus,
         isGenerating: this.isGeneratingShortUrl,
@@ -291,16 +294,18 @@ export default {
       deep: true,
       handler() {
         this.shortLinkAbortController?.abort();
-        if (this.shortChallenge) {
-          this.shortChallenge = null;
-          this.shortStatusMessage = '';
-        }
+         if (this.shortChallenge) {
+           this.shortChallenge = null;
+           this.shortStatusMessage = '';
+         }
+         this.clearShortRateLimit();
       },
     },
   },
-  beforeUnmount() {
-    this.shortLinkAbortController?.abort();
-  },
+   beforeUnmount() {
+     this.shortLinkAbortController?.abort();
+     this.clearShortRateLimit();
+   },
   methods: {
     showServiceSettings() {
       if (!this.customBackendEnabled) return;
@@ -404,8 +409,14 @@ export default {
       }
       await this.getSubUrl();
     },
-    async handleShortUrlAction() {
-      if (!this.shortLinksEnabled || !this.shortLinkWorkflow || this.isGeneratingShortUrl || this.isShortCopying) return;
+     async handleShortUrlAction() {
+       if (
+         !this.shortLinksEnabled ||
+         !this.shortLinkWorkflow ||
+         this.isGeneratingShortUrl ||
+         this.isShortCopying ||
+         this.shortRateLimitSeconds > 0
+       ) return;
       if (this.hasCurrentShortUrl) {
         await this.copyResult(this.result.shortUrl, 'short');
         return;
@@ -438,9 +449,10 @@ export default {
         return false;
       }
       this.api = prepared.api;
-      this.result = createEmptyResultState();
-      this.shortChallenge = null;
-      this.shortStatusMessage = '';
+       this.result = createEmptyResultState();
+       this.shortChallenge = null;
+       this.shortStatusMessage = '';
+       this.clearShortRateLimit();
       this.result.subUrl = prepared.subUrl;
       this.result.conversionKey = createConversionInputKey(this.conversionInput);
       return true;
@@ -475,13 +487,19 @@ export default {
           this.shortChallengeKey += 1;
           return;
         }
-        if (outcome.kind === 'error') {
-          this.shortChallenge = null;
-          this.shortStatusMessage = outcome.message;
-          return;
-        }
+         if (outcome.kind === 'error') {
+           this.shortChallenge = null;
+           if (outcome.code === 'rate_limited' && Number.isInteger(outcome.retryAfterSeconds) && outcome.retryAfterSeconds > 0) {
+             this.startShortRateLimit(outcome.retryAfterSeconds);
+             this.shortStatusMessage = `短链请求过于频繁，请在 ${outcome.retryAfterSeconds} 秒后重试。`;
+           } else {
+             this.shortStatusMessage = outcome.message;
+           }
+           return;
+         }
 
-        this.shortChallenge = null;
+         this.clearShortRateLimit();
+         this.shortChallenge = null;
         this.result.shortUrl = outcome.result.shortUrl;
         this.result.shortUrlExpiresAt = outcome.result.expiresAt;
         this.result.shortUrlConversionKey = requestConversionKey;
@@ -493,10 +511,26 @@ export default {
         }
       }
     },
-    retryShortLink(token) {
-      if (!this.shortLinksEnabled) return;
-      void this.getShortUrl(token);
-    },
+     startShortRateLimit(seconds) {
+       this.clearShortRateLimit();
+       this.shortRateLimitSeconds = Math.ceil(seconds);
+       this.shortRateLimitTimer = setInterval(() => {
+         if (this.shortRateLimitSeconds <= 1) {
+           this.clearShortRateLimit();
+           return;
+         }
+         this.shortRateLimitSeconds -= 1;
+       }, 1000);
+     },
+     clearShortRateLimit() {
+       if (this.shortRateLimitTimer !== null) clearInterval(this.shortRateLimitTimer);
+       this.shortRateLimitTimer = null;
+       this.shortRateLimitSeconds = 0;
+     },
+     retryShortLink(token) {
+       if (!this.shortLinksEnabled) return;
+       void this.getShortUrl(token);
+     },
     handleChallengeError() {
       if (!this.shortLinksEnabled) return;
       this.shortStatusMessage = '验证服务暂时不可用，请稍后重试。';

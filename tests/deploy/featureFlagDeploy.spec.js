@@ -102,6 +102,17 @@ describe('feature-flag deployment entrypoint', () => {
     );
   });
 
+  it('validates the Compose lock before an upgrade pull', async () => {
+    const root = await makeFixture('true');
+    await writeFile(join(root, 'scripts/validate-compose.sh'), '#!/bin/sh\nprintf validate >> "$DOCKER_LOG"\nexit 1\n');
+    await chmod(join(root, 'scripts/validate-compose.sh'), 0o755);
+
+    const result = runCLI(root, ['upgrade']);
+
+    expect(result.status).not.toBe(0);
+    expect(await readFile(join(root, 'docker.log'), 'utf8')).toBe('compose version\nvalidate');
+  });
+
   it('refuses restore for disabled short links or without explicit stop-write confirmation', async () => {
     const disabledRoot = await makeFixture('false');
     const disabledResult = runCLI(disabledRoot, ['restore', '--backup', '/tmp/verified.rdb', '--confirm-stop-writes']);

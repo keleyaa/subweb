@@ -6,52 +6,7 @@
 </template>
 
 <script>
-let scriptPromise;
-
-function loadTurnstileScript() {
-  if (window.turnstile) return Promise.resolve();
-  if (scriptPromise) return scriptPromise;
-
-  scriptPromise = new Promise((resolve, reject) => {
-    let script = document.querySelector('script[data-turnstile]');
-    if (script && script.dataset.turnstileState !== 'loading') {
-      script.remove();
-      script = null;
-    }
-
-    if (!script) {
-      script = document.createElement('script');
-      script.dataset.turnstile = 'true';
-      script.dataset.turnstileState = 'loading';
-      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-      script.async = true;
-      script.defer = true;
-    }
-
-    script.addEventListener(
-      'load',
-      () => {
-        script.dataset.turnstileState = 'loaded';
-        resolve();
-      },
-      { once: true },
-    );
-    script.addEventListener(
-      'error',
-      () => {
-        script.remove();
-        reject(new Error('Turnstile script failed to load'));
-      },
-      { once: true },
-    );
-    if (!script.isConnected) document.head.appendChild(script);
-  }).catch((error) => {
-    scriptPromise = undefined;
-    throw error;
-  });
-
-  return scriptPromise;
-}
+import { loadTurnstileScript } from './loadTurnstileScript.js';
 
 export default {
   name: 'TurnstileChallenge',

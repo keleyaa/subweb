@@ -1,6 +1,7 @@
 package staticfiles
 
 import (
+	"bytes"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,16 +18,21 @@ const (
 // Handler serves the Vue build without exposing directory listings or masking
 // missing static resources with the SPA fallback.
 type Handler struct {
-	root string
+	root         string
+	publicDomain string
 }
 
 // New creates a static handler rooted at root.
-func New(root string) *Handler {
+func New(root string, publicDomain ...string) *Handler {
 	absoluteRoot, err := filepath.Abs(root)
 	if err != nil {
 		absoluteRoot = filepath.Clean(root)
 	}
-	return &Handler{root: filepath.Clean(absoluteRoot)}
+	domain := ""
+	if len(publicDomain) > 0 {
+		domain = strings.TrimSpace(publicDomain[0])
+	}
+	return &Handler{root: filepath.Clean(absoluteRoot), publicDomain: domain}
 }
 
 func (handler *Handler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -52,9 +58,9 @@ func (handler *Handler) ServeHTTP(response http.ResponseWriter, request *http.Re
 	case "/site.webmanifest":
 		handler.serveFile(response, request, requestPath, "application/manifest+json", "")
 	case "/robots.txt":
-		handler.serveFile(response, request, requestPath, "text/plain; charset=utf-8", "")
+		handler.servePublicResource(response, request, requestPath, "text/plain; charset=utf-8")
 	case "/sitemap.xml":
-		handler.serveFile(response, request, requestPath, "application/xml", "")
+		handler.servePublicResource(response, request, requestPath, "application/xml")
 	default:
 		handler.serveDynamicPath(response, request, requestPath)
 	}
@@ -70,7 +76,7 @@ func (handler *Handler) serveDynamicPath(response http.ResponseWriter, request *
 		return
 	}
 	if requestPath == "/" || requestPath == "/index.html" {
-		handler.serveFile(response, request, "/index.html", "text/html; charset=utf-8", "")
+		handler.servePublicResource(response, request, "/index.html", "text/html; charset=utf-8")
 		return
 	}
 	if path.Ext(requestPath) != "" {
@@ -80,7 +86,30 @@ func (handler *Handler) serveDynamicPath(response http.ResponseWriter, request *
 
 	// Only extensionless page URLs fall back to the Vue entrypoint. A real
 	// extension indicates a missing resource and must remain a 404.
-	handler.serveFile(response, request, "/index.html", "text/html; charset=utf-8", "")
+	handler.servePublicResource(response, request, "/index.html", "text/html; charset=utf-8")
+}
+
+func (handler *Handler) servePublicResource(response http.ResponseWriter, request *http.Request, requestPath, contentType string) {
+	filePath, ok := handler.filePath(requestPath)
+	if !ok {
+		http.NotFound(response, request)
+		return
+	}
+	body, err := os.ReadFile(filePath)
+	if err != nil {
+		http.NotFound(response, request)
+		return
+	}
+	if handler.publicDomain != "" {
+		body = bytes.ReplaceAll(body, []byte("__SUBWEB_PUBLIC_ORIGIN__"), []byte("https://"+handler.publicDomain))
+	}
+	info, err := os.Stat(filePath)
+	if err != nil || !info.Mode().IsRegular() {
+		http.NotFound(response, request)
+		return
+	}
+	response.Header().Set("Content-Type", contentType)
+	http.ServeContent(response, request, filepath.Base(filePath), info.ModTime(), bytes.NewReader(body))
 }
 
 func (handler *Handler) serveFile(response http.ResponseWriter, request *http.Request, requestPath, contentType, cacheControl string) {

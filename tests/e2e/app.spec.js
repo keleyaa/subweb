@@ -194,6 +194,51 @@ test('retries a failed Turnstile script load without reloading the page', async 
   expect(shortLinkAttempts).toBe(3);
 });
 
+test('shows and enforces the short-link rate-limit retry window', async ({ page }) => {
+  let attempts = 0;
+  await page.route('**/short-api/links', async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({
+        status: 429,
+        contentType: 'application/problem+json',
+        body: JSON.stringify({
+          type: 'https://myurls.invalid/problems/rate-limited',
+          title: 'Too many requests',
+          status: 429,
+          code: 'rate_limited',
+          requestId: 'req-rate-limit',
+          retryAfterSeconds: 2,
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 'rate-recovered',
+        shortUrl: 'https://short.example.test/rate-recovered',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.getByLabel('订阅链接').fill('https://subscription.example.test/rate-limit');
+  await page.getByRole('button', { name: '转换并复制' }).click();
+  const shortButton = page.locator('button.result-action-button');
+  await shortButton.click();
+  await expect(page.getByText('短链请求过于频繁，请在 2 秒后重试。')).toBeVisible();
+  await expect(shortButton).toBeDisabled();
+  await expect(page.getByRole('button', { name: /请等待 [12] 秒/ })).toBeDisabled();
+  await expect.poll(() => attempts).toBe(1);
+  await page.waitForTimeout(2_100);
+  await expect(shortButton).toBeEnabled();
+  await shortButton.click();
+  await expect(page.getByLabel('短链')).toHaveValue('https://short.example.test/rate-recovered');
+});
+
 test('keeps the complete workflow within a 390px mobile viewport', async ({ page }) => {
   const browserErrors = recordBrowserErrors(page);
   await page.setViewportSize({ width: 390, height: 844 });

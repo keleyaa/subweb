@@ -101,6 +101,9 @@ case "$command_name" in
     ;;
   upgrade)
     [ "$#" -eq 0 ] || fail 'upgrade does not accept extra arguments.'
+    unset SUBWEB_IMAGE MYURLS_IMAGE REDIS_IMAGE SUBCONVERTER_IMAGE
+    SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
+      "$SCRIPT_DIRECTORY/validate-compose.sh"
     if [ "$short_links_enabled" = true ]; then
       compose pull gateway subconverter myurls-app myurls-short redis
     else

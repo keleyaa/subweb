@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"strings"
 	"testing"
@@ -202,6 +203,26 @@ func (testReadinessClient) Resolve(context.Context, string, http.Header) (*http.
 
 func (testReadinessClient) Health(context.Context) error {
 	return nil
+}
+
+func TestGatewayURLPolicyPreservesTotalDeadline(t *testing.T) {
+	resolver := resolverFunc(func(ctx context.Context, _, _ string) ([]netip.Addr, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	})
+	requestContext, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err := (gatewayURLPolicy{resolver: resolver, timeout: time.Second}).AuthorizeURL(requestContext, "https://example.test/sub")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("AuthorizeURL error = %v, want context deadline exceeded", err)
+	}
+}
+
+type resolverFunc func(context.Context, string, string) ([]netip.Addr, error)
+
+func (resolver resolverFunc) LookupNetIP(ctx context.Context, network, host string) ([]netip.Addr, error) {
+	return resolver(ctx, network, host)
 }
 
 func TestBuildServersDisablesShortLinkDependencies(t *testing.T) {

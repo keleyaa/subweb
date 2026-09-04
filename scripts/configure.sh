@@ -38,7 +38,7 @@ Options:
   --disable-short-links
   --custom-backend-enabled true|false
   --turnstile-site-key KEY
-  --turnstile-secret-key KEY
+  --turnstile-secret-key-stdin
   --rotate-secrets
   --subweb-image IMAGE
   --help
@@ -144,6 +144,7 @@ turnstile_site_key=
 turnstile_site_key_seen=0
 turnstile_secret_key=
 turnstile_secret_key_seen=0
+turnstile_secret_key_stdin=0
 
 env_file=$PWD/.env
 
@@ -236,16 +237,26 @@ while [ "$#" -gt 0 ]; do
       turnstile_site_key_seen=1
       shift 2
       ;;
-    --turnstile-secret-key)
-      [ "$turnstile_secret_key_seen" -eq 0 ] || fail '--turnstile-secret-key may be provided only once.'
-      [ "$#" -ge 2 ] || fail '--turnstile-secret-key requires a value.'
-      turnstile_secret_key=$2
+    --turnstile-secret-key-stdin)
+      [ "$turnstile_secret_key_seen" -eq 0 ] || fail 'Turnstile secret key may be provided only once.'
       turnstile_secret_key_seen=1
-      shift 2
+      turnstile_secret_key_stdin=1
+      shift
+      ;;
+    --turnstile-secret-key)
+      fail 'Turnstile secret keys must be provided through --turnstile-secret-key-stdin, not argv.'
       ;;
     *) fail "Unknown argument: $1" ;;
   esac
 done
+
+if [ "$turnstile_secret_key_stdin" -eq 1 ]; then
+  if IFS= read -r turnstile_secret_key || [ -n "$turnstile_secret_key" ]; then
+    :
+  else
+    fail 'Turnstile secret key must be provided on stdin.'
+  fi
+fi
 
 if [ "$short_links_enabled_seen" -eq 0 ] && [ -f "$env_file" ]; then
   if existing_value=$(load_existing_optional_value "$env_file" SHORT_LINKS_ENABLED); then
@@ -389,7 +400,7 @@ if [ "$short_links_enabled" = true ]; then
   validate_turnstile_key "$turnstile_site_key" \
     || fail 'TURNSTILE_SITE_KEY is required; pass --turnstile-site-key with the Cloudflare site key.'
   validate_turnstile_key "$turnstile_secret_key" \
-    || fail 'TURNSTILE_SECRET_KEY is required; pass --turnstile-secret-key with the Cloudflare secret key.'
+    || fail 'TURNSTILE_SECRET_KEY is required; pass --turnstile-secret-key-stdin with the Cloudflare secret key.'
   turnstile_settings="TURNSTILE_SITE_KEY=$turnstile_site_key
 TURNSTILE_SECRET_KEY=$turnstile_secret_key
 "

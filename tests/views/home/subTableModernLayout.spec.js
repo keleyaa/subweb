@@ -132,7 +132,9 @@ describe('SubTable modern linear layout', () => {
     expect(source).toContain('@submit.prevent="handleSubscriptionAction"');
     expect(source).toContain('@click="handleShortUrlAction"');
     expect(source).toContain('{{ shortActionLabel }}');
-    expect(source).toContain(':disabled="isGeneratingShortUrl || isShortCopying"');
+    expect(source).toContain(':disabled="isGeneratingShortUrl || isShortCopying || shortRateLimitSeconds > 0"');
+    expect(source).toContain('请等待 ${this.shortRateLimitSeconds} 秒');
+    expect(source).toContain('clearShortRateLimit()');
     expect(source).not.toContain('shareSubscription');
     expect(source).not.toContain('import { shareUrl }');
     expect(source).toContain('createShortLinkWorkflow({');

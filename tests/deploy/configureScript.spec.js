@@ -14,10 +14,10 @@ const makeDirectory = async () => {
   temporaryDirectories.push(directory);
   return directory;
 };
-const runConfigure = (cwd, args) => spawnSync('sh', [configurePath, ...args], { cwd, encoding: 'utf8' });
+const runConfigure = (cwd, args, input = 'test-secret-key\n') => spawnSync('sh', [configurePath, ...args], { cwd, encoding: 'utf8', input });
 const baseArgs = [
   '--app-domain', 'example.com', '--api-domain', 'api.example.com', '--short-domain', 'short.example.com',
-  '--turnstile-site-key', 'test-site-key', '--turnstile-secret-key', 'test-secret-key',
+  '--turnstile-site-key', 'test-site-key', '--turnstile-secret-key-stdin',
 ];
 const parseEnv = (contents) => Object.fromEntries(contents.trim().split('\n').filter(Boolean).map((line) => {
   const separator = line.indexOf('=');
@@ -45,7 +45,7 @@ describe('single HTTP deployment configuration', () => {
     expect(result.status, result.stderr).toBe(0);
     for (const option of [
       '--app-domain', '--api-domain', '--short-links-enabled',
-      '--trusted-proxy-cidr IPv4_CIDR', '--turnstile-secret-key', '--subweb-image',
+      '--trusted-proxy-cidr IPv4_CIDR', '--turnstile-secret-key-stdin', '--subweb-image',
     ]) expect(result.stdout).toContain(option);
     await expect(readFile(join(cwd, '.env'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });

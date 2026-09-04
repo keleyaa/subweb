@@ -75,7 +75,7 @@ describe('ShortLinkClient HTTP adapter', () => {
       new Promise((resolve) => setTimeout(() => resolve('test timeout'), 250)),
     ]);
 
-    expect(outcome).toMatchObject({ code: 'dependency_unavailable', status: 503 });
+    expect(outcome).toMatchObject({ code: 'request_timeout', status: 408 });
   });
 
   it('aborts an in-flight request when the caller cancels it', async () => {

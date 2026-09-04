@@ -85,7 +85,8 @@ async function readJson(response, signal) {
       }
     });
     return await Promise.race([response.json(), aborted]);
-  } catch {
+  } catch (error) {
+    if (signal.aborted) throw error;
     return undefined;
   } finally {
     if (abortHandler) signal.removeEventListener('abort', abortHandler);
@@ -108,6 +109,10 @@ function dependencyError() {
   return new ShortLinkError({ status: 503, code: 'dependency_unavailable' });
 }
 
+function timeoutError() {
+  return new ShortLinkError({ status: 408, code: 'request_timeout' });
+}
+
 export function createShortLinkClient({
   fetchImpl = globalThis.fetch,
   endpoint = CREATE_LINK_ENDPOINT,
@@ -120,13 +125,17 @@ export function createShortLinkClient({
   return Object.freeze({
     async create(input, { signal } = {}) {
       const controller = new AbortController();
+      let timedOut = false;
       const abort = () => controller.abort();
       if (signal?.aborted) {
         abort();
       } else {
         signal?.addEventListener('abort', abort, { once: true });
       }
-      const timeout = setTimeout(abort, timeoutMs);
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        abort();
+      }, timeoutMs);
       let response;
 
       try {
@@ -144,7 +153,7 @@ export function createShortLinkClient({
       } catch {
         clearTimeout(timeout);
         signal?.removeEventListener('abort', abort);
-        throw dependencyError();
+        throw timedOut ? timeoutError() : dependencyError();
       }
 
       try {
@@ -167,6 +176,10 @@ export function createShortLinkClient({
           throw dependencyError();
         }
         return payload;
+      } catch (error) {
+        if (timedOut) throw timeoutError();
+        if (error instanceof ShortLinkError) throw error;
+        throw dependencyError();
       } finally {
         clearTimeout(timeout);
         signal?.removeEventListener('abort', abort);
