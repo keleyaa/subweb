@@ -130,6 +130,21 @@ describe("documentation contract", () => {
     expect(readme).not.toMatch(/docker\s+(?:pull|run)[^\n]*:latest/iu);
   });
 
+  it("does not document an unmaintained legacy image as a rollback artifact", () => {
+    const thirdPartySources = read("docs/third-party-sources.md");
+
+    expect(thirdPartySources).toContain("不提供已维护的镜像 digest 或 rollback manifest");
+    expect(thirdPartySources).not.toContain("v1.13.0 digest 只保留在回滚说明中");
+  });
+
+  it("documents the Gateway image boundary separately from locked dependencies", () => {
+    const deployment = read("docs/deployment.md");
+
+    expect(deployment).toContain("Gateway 发布镜像由 release workflow 独立构建");
+    expect(deployment).toContain("通过 `--image` 使用不可变 tag 或 digest");
+    expect(deployment).not.toContain("生产镜像、外部依赖版本和不可变 digest 由");
+  });
+
   it("does not present retired runtime paths as supported documentation", () => {
     const currentDocs = [
       "README.md",
@@ -406,6 +421,31 @@ describe("documentation contract", () => {
     expect(integration).toContain("v2.0.6");
     expect(integration).toContain("challenge/retry");
     expect(maintenance).not.toContain("/Users/li/Desktop/GitHub/MyUrls");
+  });
+
+  it("keeps generated deployment commands and lock boundaries current", () => {
+    const readme = read("README.md");
+    const workflow = read(".github/workflows/docker-build-release.yml");
+    const localDeployment = read("docs/deployment-local.md");
+    const dockerDeployment = read("docs/deployment-docker.md");
+    const configuration = read("docs/configuration.md");
+    const integration = read("docs/validation/docker-integration.md");
+    const maintenance = read("docs/maintenance.md");
+    const architecturePrd = read("docs/architecture-prd.md");
+
+    for (const document of [readme, workflow, dockerDeployment]) {
+      expect(document).toContain("--turnstile-secret-key-stdin");
+      expect(document).not.toMatch(/--turnstile-secret-key\s+[^-\s]/u);
+    }
+    expect(localDeployment).not.toContain("npm run dev\nnpm run verify:local");
+    expect(localDeployment).toContain("--env-file .runtime/local/compose.env");
+    expect(dockerDeployment).toContain("Turnstile Site Key 与 Secret Key 必须由部署者提供");
+    expect(configuration).not.toContain("仅接受与锁定合同兼容的不可变覆盖");
+    expect(integration).toContain("仅替换 SubConverter");
+    for (const document of [maintenance, architecturePrd]) {
+      expect(document).toContain("Go race、Go vet、构建和 `git diff --check` 是需要另行执行");
+      expect(document).not.toContain("发布 workflow 从同一版本锁构建 Gateway");
+    }
   });
 
   it("keeps the immutable release contract in deployment documentation", () => {

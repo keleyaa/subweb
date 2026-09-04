@@ -160,11 +160,11 @@ npm run verify:evidence
 npm run verify:release
 ```
 
-发布预检还会运行 Go race/vet/build、完整 Playwright、真实五服务 smoke、两服务 profile、测试 fixture、Redis backup/restore、锁定镜像扫描和 `git diff --check`。只有明确输出 `release verification=passed` 才能记录发布预检成功。
+`verify:release` 会运行浏览器、真实五服务 smoke、两服务 profile、测试 fixture、Redis backup/restore、锁定镜像扫描和 evidence 检查。Go race、Go vet、构建和 `git diff --check` 是需要另行执行或由 CI job 覆盖的独立检查；只有明确输出 `release verification=passed` 才能记录 release verifier 成功。
 
 ## 10. 发布、证据和回滚
 
-所有生产镜像来源、版本、平台 digest 和运行时端口写在 `deploy/versions.lock.json`。发布 workflow 从同一版本锁构建 Gateway，扫描 Gateway、MyUrls、Redis 和 SubConverter，并从锁生成完整 runtime rollback manifest。
+`deploy/versions.lock.json` 记录外部运行时依赖的来源、版本、平台 digest 和端口。Gateway 由 release workflow 从当前源码构建并发布为不可变 `sha-*` 引用；workflow 扫描 Gateway、MyUrls、Redis 和 SubConverter，并从版本锁生成外部 runtime rollback manifest。
 
 回滚使用上一 release manifest 中的完整镜像集合与对应配置，不逐项猜测版本。若 MyUrls HTTP 合同发生变化，回滚必须同时恢复 Gateway 路由、前端适配和 MyUrls 镜像。Redis 数据卷在升级失败时保留，并通过恢复演练验证可用。
 

@@ -37,7 +37,9 @@ cd subweb
   --api-domain api.example.com \
   --short-domain short.example.com \
   --turnstile-site-key YOUR_SITE_KEY \
-  --turnstile-secret-key YOUR_SECRET_KEY
+  --turnstile-secret-key-stdin <<'EOF'
+YOUR_SECRET_KEY
+EOF
 ./scripts/validate-compose.sh
 ./scripts/subweb.sh up
 ```

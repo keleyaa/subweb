@@ -54,6 +54,48 @@ export function verifyDocs({ root }) {
     }
   }
 
+  const commandContractFiles = [
+    'README.md',
+    'docs/deployment-docker.md',
+    '.github/workflows/docker-build-release.yml',
+  ];
+  for (const relativeFile of commandContractFiles) {
+    const absoluteFile = path.join(root, relativeFile);
+    if (!fs.existsSync(absoluteFile)) {
+      errors.push(`missing command-contract file: ${relativeFile}`);
+      continue;
+    }
+    const source = fs.readFileSync(absoluteFile, 'utf8');
+    if (/--turnstile-secret-key(?:\s|=)(?!-stdin\b)/u.test(source)) {
+      errors.push(`secret key is passed through argv: ${relativeFile}`);
+    }
+  }
+
+  const requiredContracts = [
+    ['docs/deployment-local.md', '--env-file .runtime/local/compose.env'],
+    ['docs/validation/local-dev.md', '自动契约验证使用独立的终端和运行时'],
+    ['docs/deployment-docker.md', 'Turnstile Site Key 与 Secret Key 必须由部署者提供'],
+    ['docs/configuration.md', '不可变的 `*_IMAGE` 环境覆盖本身不等于与版本锁兼容'],
+    ['docs/validation/docker-integration.md', '仅替换 SubConverter'],
+    ['docs/maintenance.md', 'Go race、Go vet、构建和 `git diff --check` 是需要另行执行'],
+    ['docs/third-party-sources.md', '不提供已维护的镜像 digest 或 rollback manifest'],
+    ['docs/deployment.md', 'Gateway 发布镜像由 release workflow 独立构建'],
+  ];
+  for (const [relativeFile, expectedText] of requiredContracts) {
+    const absoluteFile = path.join(root, relativeFile);
+    if (fs.existsSync(absoluteFile) && !fs.readFileSync(absoluteFile, 'utf8').includes(expectedText)) {
+      errors.push(`missing current deployment contract: ${relativeFile}`);
+    }
+  }
+
+  const architecturePrdPath = path.join(root, 'docs/architecture-prd.md');
+  if (fs.existsSync(architecturePrdPath)) {
+    const architecturePrd = fs.readFileSync(architecturePrdPath, 'utf8');
+    if (!architecturePrd.includes('Go race、Go vet、构建和 `git diff --check` 是需要另行执行')) {
+      errors.push('missing current release contract: docs/architecture-prd.md');
+    }
+  }
+
   const readmePath = path.join(root, 'README.md');
   if (fs.existsSync(readmePath)) {
     const readme = fs.readFileSync(readmePath, 'utf8');

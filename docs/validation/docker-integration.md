@@ -22,7 +22,7 @@ npm run verify:integration
 - Authorization、Cookie、Origin、Proxy-Authorization、客户端转发头、订阅 URL、Token 和 IP 的日志/依赖边界隐私；
 - `SHORT_LINKS_ENABLED=false` 的两服务 profile：不读取 Redis、MyUrls、SHORT 域名或 Turnstile 私钥，同时普通转换仍可用。
 
-超时、过大响应和依赖 header 清理使用脚本内的 test-only fixture overlay；该 overlay 不属于生产 Compose，不替换锁定的生产 image。
+超时、过大响应和依赖 header 清理使用脚本内的 test-only fixture overlay；该 overlay 仅替换 SubConverter，以确定性的本地上游覆盖边界行为，同时保留生产 Gateway、MyUrls、Redis 服务和网络拓扑。它不属于生产 Compose。
 
 ## 运行要求
 

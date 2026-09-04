@@ -18,7 +18,7 @@ YOUR_SECRET_KEY
 EOF
 ```
 
-`configure.sh` 会验证域名、API URL、端口和 feature flags，并以 `0600` 原子自动生成 `.env`。默认值为 `SHORT_LINKS_ENABLED=true` 与 `CUSTOM_BACKEND_ENABLED=true`。密钥由脚本生成或保留已有值；除非显式要求轮换，不要在部署过程中更换 Redis 密码或 IP 哈希密钥。
+`configure.sh` 会验证域名、API URL、端口和 feature flags，并以 `0600` 原子自动生成 `.env`。默认值为 `SHORT_LINKS_ENABLED=true` 与 `CUSTOM_BACKEND_ENABLED=true`。启用短链时，Turnstile Site Key 与 Secret Key 必须由部署者提供；后续运行配置会保留 `.env` 中经过验证的既有值。Redis 密码与 IP 哈希密钥由脚本生成或保留已有值；除非显式要求轮换，不要在部署过程中更换它们。
 
 ## 2. 验证并启动
 
@@ -72,7 +72,7 @@ YOUR_TURNSTILE_SECRET_KEY
 EOF
 ```
 
-该命令会写入 `.env`、拉取锁定镜像并启动服务。`--image` 只接受 `sha-*` 标签或 `@sha256:<digest>`，拒绝 `latest` 和未经验证的 CLI 参数。Docker Hub `docker.io/keleyaa/subweb` 与 GHCR `ghcr.io/keleyaa/subweb` 是等价发布来源。完整版本、平台 digest 和外部镜像来源以 [版本锁](../deploy/versions.lock.json) 为准；生产镜像必须使用锁定引用。版本锁是发布和回滚的唯一来源。不要执行 `cat .env`。
+该命令会写入 `.env`、拉取镜像并启动服务。`--image` 只接受 `sha-*` 标签或 `@sha256:<digest>`，拒绝 `latest` 和未经验证的 CLI 参数。Docker Hub `docker.io/keleyaa/subweb` 与 GHCR `ghcr.io/keleyaa/subweb` 是等价发布来源。SubConverter、MyUrls 和 Redis 的锁定版本、平台 digest 与来源以 [版本锁](../deploy/versions.lock.json) 为准；Gateway 使用当前 release 提供的不可变引用。`subweb.sh upgrade` 会先验证 Compose/版本锁合同，再拉取镜像。不要执行 `cat .env`。
 
 ## 6. 常用运维命令
 

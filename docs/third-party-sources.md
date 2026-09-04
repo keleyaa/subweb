@@ -11,5 +11,4 @@
 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 为准。MyUrls Rust 当前镜像来自
 上游 stable tag `v2.0.6`；锁文件同时记录源码 commit 和不可变的 manifest digest。
 
-生产 Compose 不使用外部服务的 `latest`。旧的 v1.13.0 digest 只保留在回滚说明中，不作为新部署
-默认值。MyUrls Rust v2.0.6 的稳定 tag 和 manifest digest 已与源码 commit 对齐；该发布包含 Redis 断线恢复、请求总超时、RFC 9457 `request_timeout` 错误体和静态资源 immutable 缓存策略。发布镜像不包含 Turnstile test adapter，Subweb 的集成 smoke 使用生产配置。
+生产 Compose 不使用外部服务的 `latest`。历史 Node v1.13.0 仅用于说明跨合同回滚风险；仓库不提供已维护的镜像 digest 或 rollback manifest，不能将其作为新部署或直接回滚来源。MyUrls Rust v2.0.6 的稳定 tag 和 manifest digest 已与源码 commit 对齐；该发布包含 Redis 断线恢复、请求总超时、RFC 9457 `request_timeout` 错误体和静态资源 immutable 缓存策略。发布镜像不包含 Turnstile test adapter，Subweb 的集成 smoke 使用生产配置。

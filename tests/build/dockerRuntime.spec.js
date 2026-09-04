@@ -90,7 +90,8 @@ describe('Docker runtime contract', () => {
       'npm ci',
       'npm run verify:locks',
       'node scripts/verify-production-readiness.mjs',
-      './scripts/configure.sh --app-domain app.test --api-domain api.app.test --short-domain short.app.test --turnstile-site-key test-site-key --turnstile-secret-key test-secret-key',
+      './scripts/configure.sh \\\n            --app-domain app.test',
+      "--turnstile-secret-key-stdin <<'EOF'",
       'npm run verify:compose',
       'npm run verify:local',
       'npm run verify:ci',
@@ -116,6 +117,7 @@ describe('Docker runtime contract', () => {
         workflow.indexOf(orderedCommands[index]),
       );
     }
+    expect(workflow).not.toMatch(/--turnstile-secret-key\s+test-secret-key/u);
     expect(workflow).toContain('file: ./Dockerfile');
     expect(workflow).toContain('if: always()');
     expect(workflow).toContain('rm -f .env');

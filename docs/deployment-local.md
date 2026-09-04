@@ -22,14 +22,30 @@ Compose 文件是 [`compose.yaml`](../compose.yaml) 与 [`compose.dev.yaml`](../
 
 ```sh
 npm ci
+
+# Terminal 1: starts dependencies and keeps Vite running.
 npm run dev
 ```
 
+另开一个终端运行 `npm run dev:status` 查看依赖状态。停止 Terminal 1 的 Vite 后，使用 `npm run dev:stop` 停止本地依赖；`npm run verify:local` 是独立的自动契约验证，不要与 `npm run dev` 同时运行。
+
 `npm run dev` 会先执行 Compose-first 依赖启动，再运行 Vite。依赖服务使用现行生产镜像和统一服务名：`gateway`、`subconverter`、`myurls-app`、`myurls-short`、`redis`。本地覆盖文件关闭 MyUrls Turnstile，避免本地开发依赖真实挑战服务；生产环境仍使用 `compose.yaml` 的 Cloudflare Turnstile 配置。
+
+在另一个终端查看依赖状态：
 
 ```sh
 npm run dev:status
+```
+
+自动契约验证使用独立运行时，不要与 `npm run dev` 同时运行：
+
+```sh
 npm run verify:local
+```
+
+停止 Terminal 1 的 Vite 后，停止本地依赖：
+
+```sh
 npm run dev:stop
 ```
 
@@ -52,7 +68,11 @@ npm run dev:stop
 
 ```sh
 npm run dev:status
-docker compose logs --tail=100 gateway subconverter myurls-app myurls-short redis
+docker compose \
+  --project-name "${SUBWEB_LOCAL_PROJECT_NAME:-subweb-local}" \
+  --env-file .runtime/local/compose.env \
+  -f compose.yaml -f compose.dev.yaml \
+  logs --tail=100 gateway subconverter myurls-app myurls-short redis
 ```
 
 若端口被占用，设置三个新的端口后重新运行 `npm run dev`。若镜像拉取失败，先确认 Docker registry 可用；不要把未锁定的镜像标签写入 `.runtime/local/compose.env`。

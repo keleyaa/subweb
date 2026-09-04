@@ -13,7 +13,7 @@ Subweb 的生产部署只有一个 Compose 合同。默认启用短链时运行�
 
 短链启用时需要 `APP_DOMAIN`、`API_DOMAIN`、`SHORT_DOMAIN` 三个不同域名，以及 Cloudflare Turnstile、Redis 和 IP 哈希密钥。短链关闭时不需要 `SHORT_DOMAIN`、MyUrls、Redis 或 Turnstile 私钥；API 和 APP 仍由 Gateway 提供，SubConverter 仍通过内部 egress 边界运行。
 
-生产镜像、外部依赖版本和不可变 digest 由 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 约束。不要用 `latest` 替换锁定引用，也不要将已删除的旧 Nginx、Node Request Policy 或历史 Compose 文件作为部署步骤。
+SubConverter、MyUrls 和 Redis 的生产版本与不可变 digest 由 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 约束；Gateway 发布镜像由 release workflow 独立构建，部署时必须通过 `--image` 使用不可变 tag 或 digest，且不作为该版本锁中的发布镜像清单。不要用 `latest` 替换锁定引用，也不要将已删除的旧 Nginx、Node Request Policy 或历史 Compose 文件作为部署步骤。
 
 ## 通用准备
 

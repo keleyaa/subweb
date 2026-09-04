@@ -1,11 +1,29 @@
 # Compose-first 本地验证
 
-本地验证先启动现行 Compose 依赖，再启动 Vite，不编译或 clone 外部服务源码。运行：
+本地验证先启动现行 Compose 依赖，再启动 Vite，不编译或 clone 外部服务源码。手动调试与自动验证是两条独立流程：
+
+手动调试时，在 Terminal 1 运行：
 
 ```sh
 npm run dev
-npm run verify:local
+```
+
+在 Terminal 2 查看依赖状态：
+
+```sh
+npm run dev:status
+```
+
+停止 Terminal 1 的 Vite 后，如需停止依赖：
+
+```sh
 npm run dev:stop
+```
+
+自动契约验证使用独立的终端和运行时；不要与 `npm run dev` 同时运行：
+
+```sh
+npm run verify:local
 ```
 
 ## 本地服务

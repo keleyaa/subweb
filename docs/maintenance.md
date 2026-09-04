@@ -4,7 +4,7 @@
 
 项目运行时由 Go Gateway、SubConverter、两个 MyUrls Rust v2.0.6 实例和 Redis 组成。生产部署只接受 [`compose.yaml`](../compose.yaml) 的五服务 profile；短链关闭时使用明确的 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml) 两服务 profile。外部 TLS 反向代理示例只描述项目外的入口，不属于 Compose 运行时。
 
-发布、回滚和升级必须使用 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 中的源 commit、OCI tag、manifest digest 和平台 digest。Gateway 发布同时推送 Docker Hub 与 GHCR；`docker.io/keleyaa/subweb` 和 `ghcr.io/keleyaa/subweb` 是等价来源。不要使用可变 tag 作为部署依据，也不要手工拼接外部镜像 digest。
+发布、回滚和升级必须使用 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 中记录的外部依赖源 commit、OCI tag、manifest digest 和平台 digest。Gateway 发布同时推送 Docker Hub 与 GHCR；`docker.io/keleyaa/subweb` 和 `ghcr.io/keleyaa/subweb` 是等价来源，部署时使用当前 release 提供的不可变 `sha-*` 引用。不要使用可变 tag 作为部署依据，也不要手工拼接外部镜像 digest。
 
 ## 发布前门禁
 
@@ -17,7 +17,7 @@ npm run verify:docs
 git diff --check
 ```
 
-`verify:ci` 是 CI 与本地发布共用的 Docker 门禁，启用真实 Docker integration 和 Redis integration。`verify:release` 还执行 npm audit、浏览器验证、版本锁、production-readiness、Compose、文档、Gateway 镜像安全、锁定 runtime image 安全检查和 evidence gate。只有看到 release verifier 的明确 `release verification=passed` marker 才能判定成功；截断的长日志不算通过。
+`verify:ci` 是 CI 与本地发布共用的 Docker 门禁，启用真实 Docker integration 和 Redis integration。`verify:release` 还执行 npm audit、浏览器验证、版本锁、production-readiness、Compose、文档、Gateway 镜像安全、锁定 runtime image 安全检查和 evidence gate；Go race、Go vet、构建和 `git diff --check` 是需要另行执行或由 CI job 覆盖的独立检查，不是该脚本自身的全部步骤。只有看到 release verifier 的明确 `release verification=passed` marker 才能判定成功；截断的长日志不算通过。
 
 GitHub package publish job 需要 `packages: write` 权限。发布工作流必须先通过 `npm run verify:ci`，再使用版本锁生成的镜像和 rollback manifest；不要把个人访问令牌写入工作流。
 
@@ -26,7 +26,7 @@ GitHub package publish job 需要 `packages: write` 权限。发布工作流必�
 1. 运行 `npm run verify:operations` 完成 RDB backup/restore 和独立重启恢复演练。
 2. 记录 `git status --short`、当前镜像 digest 和 `./scripts/subweb.sh status`。
 3. 使用 `./scripts/subweb.sh backup --output /absolute/path/backup.rdb` 保存短链数据。
-4. 通过 `./scripts/subweb.sh upgrade` 拉取锁定的 Gateway、SubConverter、MyUrls 和 Redis 镜像，然后等待健康检查。
+4. 通过 `./scripts/subweb.sh upgrade` 按当前 `.env` 的 release 镜像引用拉取 Gateway，并按版本锁拉取 SubConverter、MyUrls 和 Redis 镜像，然后等待健康检查。升级入口会先校验 Compose/版本锁合同。
 5. 运行 `npm run verify:integration`，确认业务 smoke 和重启路径。
 6. 失败时停止继续发布，保留当前 RDB 和日志，并按版本锁生成的 rollback manifest 回滚完整 runtime image 集合。
 

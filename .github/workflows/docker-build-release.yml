@@ -46,7 +46,15 @@ jobs:
         run: npm run verify:docs && npm run verify:evidence
 
       - name: Create temporary Compose configuration
-        run: ./scripts/configure.sh --app-domain app.test --api-domain api.app.test --short-domain short.app.test --turnstile-site-key test-site-key --turnstile-secret-key test-secret-key
+        run: |
+          ./scripts/configure.sh \
+            --app-domain app.test \
+            --api-domain api.app.test \
+            --short-domain short.app.test \
+            --turnstile-site-key test-site-key \
+            --turnstile-secret-key-stdin <<'EOF'
+          test-secret-key
+          EOF
 
       - name: Validate Compose
         run: npm run verify:compose
