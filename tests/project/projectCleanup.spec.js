@@ -24,6 +24,7 @@ const removedArtifacts = [
   'docs/superpowers/plans/2026-08-24-single-http-deployment.md',
   'docs/superpowers/specs/2026-08-24-myurls-frontend-gateway-design.md',
   'docs/superpowers/specs/2026-08-24-single-http-deployment-design.md',
+  'docs/superpowers/plans/2026-09-02-unified-go-gateway.md',
   'docs/three-domain-documentation-guide.md',
   'docs/prd-three-domain-separation.md',
   'docs/implementation-status-three-domain.md',

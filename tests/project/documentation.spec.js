@@ -160,7 +160,6 @@ describe("documentation contract", () => {
       "docs/security.md",
       "docs/validation/docker-integration.md",
       "docs/validation/local-dev.md",
-      "docs/superpowers/plans/2026-09-02-unified-go-gateway.md",
       "assets/readme/security-architecture.svg",
       "docs/assets/readme/subweb-architecture.svg",
       "docs/assets/readme/subweb-hero.svg",
