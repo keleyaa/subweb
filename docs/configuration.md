@@ -17,6 +17,12 @@
 | `TURNSTILE_SITE_KEY` | 必填 | 不需要 | MyUrls 公共 challenge key |
 | `TURNSTILE_SECRET_KEY` | 必填 | 不需要 | MyUrls 私有 challenge key |
 
+## 获取 Turnstile 密钥
+
+登录 [Cloudflare Dashboard 的 Turnstile 页面](https://developers.cloudflare.com/turnstile/get-started/widget-management/dashboard/)，选择 **Add widget** 创建 Widget。Hostname 至少填写 `APP_DOMAIN`；如果 SHORT 域名也承载验证组件，同时填写 `SHORT_DOMAIN`。创建后复制 Site Key 和 Secret Key。
+
+部署命令中的 `--turnstile-site-key` 接收 Site Key；交互式部署会隐藏提示输入 Secret Key，并将两者写入根目录 `.env`（权限 `0600`）。CI 或非交互环境使用 `--turnstile-secret-key-stdin` 通过标准输入传入 Secret Key。Site Key 会出现在前端运行时配置中，Secret Key 只能保留在服务端，不能提交到 Git、写入镜像或放入日志。
+
 启用短链时 APP 与 SHORT 使用不同的 `PUBLIC_BASE_URL`，因此需要两个 MyUrls 实例。不要把两个域名合并到一个实例，也不要给 SHORT Host 暴露管理 API。
 
 ## Gateway 策略
