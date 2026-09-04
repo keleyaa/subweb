@@ -32,17 +32,15 @@
 ```sh
 git clone https://github.com/keleyaa/subweb.git
 cd subweb
-./scripts/configure.sh \
+./scripts/subweb.sh install \
   --app-domain app.example.com \
   --api-domain api.example.com \
   --short-domain short.example.com \
   --turnstile-site-key YOUR_SITE_KEY \
-  --turnstile-secret-key-stdin <<'EOF'
-YOUR_SECRET_KEY
-EOF
-./scripts/validate-compose.sh
-./scripts/subweb.sh up
+  --image ghcr.io/keleyaa/subweb:sha-<commit>
 ```
+
+命令会在终端隐藏提示输入 Turnstile Secret Key，随后自动校验、拉取镜像并启动服务；CI 或非交互环境再使用 `--turnstile-secret-key-stdin`。
 
 默认启用短链时会运行 `gateway`、`subconverter`、`myurls-app`、`myurls-short` 和 `redis` 五个服务。所有 APP、API、SHORT 域名由外层 TLS 反向代理转发到 `127.0.0.1:<SUBWEB_PORT>`，并保留原始 Host。项目自身不管理 HTTPS 证书、80/443 端口或公网 DNS。
 

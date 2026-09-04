@@ -25,6 +25,28 @@ fail() {
   exit 1
 }
 
+prompt_turnstile_secret() {
+  tty_path=/dev/tty
+  [ -r "$tty_path" ] || fail 'TURNSTILE_SECRET_KEY is required; use --turnstile-secret-key-stdin in non-interactive environments.'
+
+  restore_tty() {
+    stty echo <"$tty_path" 2>/dev/null || true
+  }
+
+  printf 'Turnstile Secret Key (input hidden): ' >"$tty_path"
+  stty -echo <"$tty_path"
+  trap 'restore_tty; exit 1' HUP INT TERM
+  if IFS= read -r turnstile_secret_key <"$tty_path"; then
+    read_status=0
+  else
+    read_status=$?
+  fi
+  restore_tty
+  trap 'cleanup; exit 1' HUP INT TERM
+  printf '\n' >"$tty_path"
+  [ "$read_status" -eq 0 ] || fail 'Unable to read TURNSTILE_SECRET_KEY.'
+}
+
 usage() {
   cat <<'EOF'
 Usage: configure.sh --app-domain HOST --api-domain HOST [options]
@@ -396,6 +418,9 @@ if [ "$short_links_enabled" = true ]; then
       existing_value_status=$?
       [ "$existing_value_status" -eq 1 ] || fail 'Existing TURNSTILE_SECRET_KEY is duplicated or invalid.'
     fi
+  fi
+  if [ -z "$turnstile_secret_key" ] && [ "$turnstile_secret_key_stdin" -eq 0 ]; then
+    prompt_turnstile_secret
   fi
   validate_turnstile_key "$turnstile_site_key" \
     || fail 'TURNSTILE_SITE_KEY is required; pass --turnstile-site-key with the Cloudflare site key.'

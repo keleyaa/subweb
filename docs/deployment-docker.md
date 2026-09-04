@@ -2,25 +2,23 @@
 
 Docker 生产部署使用 [`compose.yaml`](../compose.yaml) 的唯一启用短链 profile。Gateway 是项目自有的 Go 单二进制，负责 Host 路由、静态资源、转换请求策略、Redis 限流、MyUrls 适配和内部 HTTPS CONNECT egress。SubConverter、两个 MyUrls Rust v2 实例和 Redis 作为独立服务运行。
 
-## 1. 获取源码并生成配置
+## 1. 获取源码并启动
 
 ```sh
 git clone https://github.com/keleyaa/subweb.git
 cd subweb
 
-./scripts/configure.sh \
+./scripts/subweb.sh install \
   --app-domain app.example.com \
   --api-domain api.example.com \
   --short-domain short.example.com \
   --turnstile-site-key YOUR_SITE_KEY \
-  --turnstile-secret-key-stdin <<'EOF'
-YOUR_SECRET_KEY
-EOF
+  --image ghcr.io/keleyaa/subweb:sha-<commit>
 ```
 
-`configure.sh` 会验证域名、API URL、端口和 feature flags，并以 `0600` 原子自动生成 `.env`。默认值为 `SHORT_LINKS_ENABLED=true` 与 `CUSTOM_BACKEND_ENABLED=true`。启用短链时，Turnstile Site Key 与 Secret Key 必须由部署者提供；后续运行配置会保留 `.env` 中经过验证的既有值。Redis 密码与 IP 哈希密钥由脚本生成或保留已有值；除非显式要求轮换，不要在部署过程中更换它们。
+命令会在终端隐藏提示输入 Turnstile Secret Key，然后自动生成权限为 `0600` 的 `.env`、校验 Compose、拉取镜像并等待服务健康。启用短链时，Turnstile Site Key 与 Secret Key 必须由部署者提供；CI 或非交互环境将私钥通过 `--turnstile-secret-key-stdin` 传入。默认值为 `SHORT_LINKS_ENABLED=true` 与 `CUSTOM_BACKEND_ENABLED=true`；Redis 密码与 IP 哈希密钥由脚本生成或保留已有值，除非显式要求轮换，不要在部署过程中更换它们。
 
-## 2. 验证并启动
+## 2. 手动验证与启动
 
 ```sh
 ./scripts/validate-compose.sh
@@ -56,23 +54,25 @@ EOF
 
 此 profile 使用 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml)，只运行 `gateway` 和 `subconverter`。它不读取 Redis、MyUrls、`SHORT_DOMAIN` 或 Turnstile 私钥。`/short-api/links` 和 APP 短码路径不可用，普通转换仍可用。
 
-## 5. 预构建镜像
+## 5. 预构建镜像与自动化
 
 使用预构建 Gateway 时必须显式传入不可变引用：
 
+`--image` 只接受 `sha-*` 标签或 `@sha256:<digest>`，拒绝 `latest` 和未经验证的 CLI 参数。Docker Hub `docker.io/keleyaa/subweb` 与 GHCR `ghcr.io/keleyaa/subweb` 是等价发布来源。SubConverter、MyUrls 和 Redis 的锁定版本、平台 digest 与来源以 [版本锁](../deploy/versions.lock.json) 为准；Gateway 使用当前 release 提供的不可变引用。
+
+CI 或其他非交互环境使用管道传入私钥，不需要 heredoc：
+
 ```sh
-./scripts/subweb.sh install \
+printf '%s\n' "$TURNSTILE_SECRET_KEY" | ./scripts/subweb.sh install \
   --app-domain app.example.com \
   --api-domain api.example.com \
   --short-domain short.example.com \
-  --turnstile-site-key "YOUR_TURNSTILE_SITE_KEY" \
+  --turnstile-site-key "$TURNSTILE_SITE_KEY" \
   --turnstile-secret-key-stdin \
-  --image ghcr.io/keleyaa/subweb:sha-<commit> <<'EOF'
-YOUR_TURNSTILE_SECRET_KEY
-EOF
+  --image ghcr.io/keleyaa/subweb:sha-<commit>
 ```
 
-该命令会写入 `.env`、拉取镜像并启动服务。`--image` 只接受 `sha-*` 标签或 `@sha256:<digest>`，拒绝 `latest` 和未经验证的 CLI 参数。Docker Hub `docker.io/keleyaa/subweb` 与 GHCR `ghcr.io/keleyaa/subweb` 是等价发布来源。SubConverter、MyUrls 和 Redis 的锁定版本、平台 digest 与来源以 [版本锁](../deploy/versions.lock.json) 为准；Gateway 使用当前 release 提供的不可变引用。`subweb.sh upgrade` 会先验证 Compose/版本锁合同，再拉取镜像。不要执行 `cat .env`。
+`subweb.sh upgrade` 会先验证 Compose/版本锁合同，再拉取镜像。不要执行 `cat .env`。
 
 ## 6. 常用运维命令
 
