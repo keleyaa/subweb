@@ -8,6 +8,10 @@ Subweb 不管理公网 TLS。部署者的外层反向代理负责证书、TLS、
 
 ## 外部订阅
 
+订阅 URL 是处理过程中的短暂敏感数据，不是可提供“绝对不泄露”保证的数据类型：SubConverter 必须在内存中读取它并访问远端。项目保证的是最小化暴露面：URL 不写入 Gateway 日志、SubConverter 过滤日志、配置文件或 Redis；但主机 root、容器管理员或已取得进程执行权限的攻击者仍可能读取运行时内存或系统调用信息。
+
+因此生产入口必须由部署者在 TLS 反向代理层启用认证或网络准入（Cloudflare Access、VPN、Basic Auth 等）。不要把一个共享访问令牌硬编码到前端：浏览器端令牌对访问者可见，不能解决匿名滥用或订阅保密问题。
+
 `/sub` 请求受到以下 SSRF 和请求策略约束：
 
 - 请求体上限 `16 KiB`，上游响应上限 `8 MiB`。
@@ -25,6 +29,8 @@ Subweb 不管理公网 TLS。部署者的外层反向代理负责证书、TLS、
 APP 与 SHORT 使用独立的 MyUrls Rust v2 实例：APP 只处理创建，SHORT 只处理短码跳转。管理 API 不通过 SHORT Host 暴露。MyUrls 使用 Redis DB `0`，Gateway 限流使用 DB `1`，两个用途不可混用。
 
 短链目标按 TTL 保存；短链属于持有即可访问的数据。短码、Token、订阅 URL 和完整 IP 不应进入日志、截图或 Issue。MyUrls 的 RFC 9457 problem-details 只在 Gateway adapter 中映射为允许的错误和 challenge/retry 元数据。
+
+高敏感订阅不应启用短链；关闭短链可避免目标地址持久化到 Redis，但不会改变转换器在处理期间必须读取原始订阅 URL 的事实。
 
 ## 容器与密钥
 

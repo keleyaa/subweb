@@ -4,6 +4,8 @@ Docker 生产部署使用 [`compose.yaml`](../compose.yaml) 的唯一启用短�
 
 如果必须只运行一个容器，可使用 [`compose.single.yaml`](../compose.single.yaml)。它把 Gateway、SubConverter、两个 MyUrls 实例和 Redis 放进同一个容器，仍使用 `redis-data` 与 `subconverter-runtime` 数据卷。单容器模式牺牲组件级隔离，适合个人部署或资源受限环境；生产环境默认仍建议使用上面的多容器 Compose。
 
+单容器不能阻止已获准访问服务的用户提交自己的订阅地址，也不能在服务器被完全入侵后保护进程内正在处理的 URL。公网部署必须在外层 HTTPS 代理启用认证（例如 Cloudflare Access、VPN 或 Basic Auth），并且不要直接把容器端口发布到公网。若不需要短链，应关闭短链；短链目标会按 TTL 写入 Redis，持有码即可访问。
+
 ```sh
 docker compose -f compose.single.yaml up -d --build --wait
 ```
