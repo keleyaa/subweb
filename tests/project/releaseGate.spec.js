@@ -164,24 +164,24 @@ describe('release evidence and command gate', () => {
     expect(source).toContain('registry: ghcr.io');
     expect(source).toContain('username: ${{ github.actor }}');
     expect(source).toContain('password: ${{ secrets.GITHUB_TOKEN }}');
+    expect(source).toContain('version:');
+    expect(source).toContain("if: github.event_name == 'workflow_dispatch'");
+    expect(source).toContain('git show-ref --tags --verify --quiet');
+    expect(source).toContain('source_sha=$(git rev-parse HEAD)');
 
     for (const suffix of [
       'latest',
       '${RELEASE_TAG}',
-      'sha-${SHORT_SHA}',
     ]) {
       expect(source).toContain('docker.io/${DOCKERHUB_IMAGE}:' + suffix);
     }
     for (const suffix of [
       'latest',
       '${RELEASE_TAG}',
-      'sha-${SHORT_SHA}',
     ]) {
       expect(source).toContain('ghcr.io/${GHCR_IMAGE}:' + suffix);
     }
-    expect(source).toContain(
-      'ghcr.io/${{ env.GHCR_IMAGE }}:sha-${{ steps.tag.outputs.short_sha }}',
-    );
+    expect(source).not.toContain('sha-${SHORT_SHA}');
 
     expect(source).toContain('Scan release candidate');
     expect(source).toContain('ghcr.io/${{ env.GHCR_IMAGE }}@${{ steps.image.outputs.digest }}');

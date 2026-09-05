@@ -187,6 +187,7 @@ jobs:
             exit 1
           }
           echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
@@ -261,6 +262,7 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
           RELEASE_TAG: ${{ steps.tag.outputs.version }}
+          SOURCE_SHA: ${{ steps.tag.outputs.source_sha }}
         shell: bash
         run: |
           [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
@@ -278,7 +280,7 @@ jobs:
           )
           manifest_path="$RUNNER_TEMP/rollback-manifest.json"
           jq -n \
-            --arg source_sha "$GITHUB_SHA" \
+            --arg source_sha "$SOURCE_SHA" \
             --arg run_id "$GITHUB_RUN_ID" \
             --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
             --arg release_tag "$RELEASE_TAG" \
@@ -324,7 +326,7 @@ jobs:
             echo "### Container release"
             echo "- Docker Hub: \`docker.io/${DOCKERHUB_IMAGE}@${IMAGE_DIGEST}\`"
             echo "- GHCR: \`ghcr.io/${GHCR_IMAGE}@${IMAGE_DIGEST}\`"
-            echo "- source: \`${GITHUB_SHA}\`"
+            echo "- source: \`${SOURCE_SHA}\`"
             echo "- tag: \`${RELEASE_TAG}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
