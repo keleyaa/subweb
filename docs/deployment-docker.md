@@ -70,7 +70,7 @@ cd subweb
 
 使用预构建 Gateway 时必须显式传入不可变引用：
 
-`--image` 只接受已有 Git tag 或 `@sha256:<digest>`，拒绝 `latest` 和未经验证的 CLI 参数。Docker Hub `docker.io/keleyaa/subweb` 与 GHCR `ghcr.io/keleyaa/subweb` 是等价发布来源。Docker release workflow 通过 `workflow_dispatch` 的 `version` 输入选择已有 Git tag，质量检查仍会在 push/PR 上运行，但不会发布镜像。SubConverter、MyUrls 和 Redis 的锁定版本、平台 digest 与来源以 [版本锁](../deploy/versions.lock.json) 为准；Gateway 使用当前 release 提供的不可变引用。
+`--image` 只接受已有 Git tag 或 `@sha256:<digest>`，拒绝 `latest` 和未经验证的 CLI 参数。Docker Hub `docker.io/keleyaa/subweb` 与 GHCR `ghcr.io/keleyaa/subweb` 是等价发布来源。推送匹配 `vX.Y.Z` 的 Git tag 会自动触发 Docker release workflow；也可以通过 `workflow_dispatch` 的 `version` 输入手动补跑已有 tag。普通分支推送和 Pull Request 不会触发该工作流。SubConverter、MyUrls 和 Redis 的锁定版本、平台 digest 与来源以 [版本锁](../deploy/versions.lock.json) 为准；Gateway 使用当前 release 提供的不可变引用。
 
 CI 或其他非交互环境使用管道传入私钥，不需要 heredoc：
 

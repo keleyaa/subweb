@@ -14,7 +14,7 @@ Subweb 默认生产部署使用多容器 Compose：短链启用时运行 Go Gate
 
 短链启用时需要 `APP_DOMAIN`、`API_DOMAIN`、`SHORT_DOMAIN` 三个不同域名，以及 Cloudflare Turnstile、Redis 和 IP 哈希密钥。短链关闭时不需要 `SHORT_DOMAIN`、MyUrls、Redis 或 Turnstile 私钥；API 和 APP 仍由 Gateway 提供，SubConverter 仍通过内部 egress 边界运行。
 
-SubConverter、MyUrls 和 Redis 的生产版本与不可变 digest 由 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 约束；Gateway 发布镜像由 release workflow 独立构建，工作流通过手动输入已有 Git tag 发布，部署时必须通过 `--image` 使用 Git tag 或 digest，且不作为该版本锁中的发布镜像清单。不要用 `latest` 替换锁定引用，也不要将已删除的旧 Nginx、Node Request Policy 或历史 Compose 文件作为部署步骤。
+SubConverter、MyUrls 和 Redis 的生产版本与不可变 digest 由 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 约束；Gateway 发布镜像由 release workflow 独立构建，推送 `vX.Y.Z` Git tag 会自动发布，也可手动输入已有 tag 补跑。部署时必须通过 `--image` 使用 Git tag 或 digest，且不作为该版本锁中的发布镜像清单。不要用 `latest` 替换锁定引用，也不要将已删除的旧 Nginx、Node Request Policy 或历史 Compose 文件作为部署步骤。
 
 ## 通用准备
 

@@ -1,6 +1,9 @@
 name: docker build release
 
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       version:
@@ -29,9 +32,8 @@ jobs:
           persist-credentials: false
 
       - name: Checkout requested release tag
-        if: github.event_name == 'workflow_dispatch'
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ inputs.version || github.ref_name }}
         shell: bash
         run: |
           [[ "$VERSION" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
@@ -171,9 +173,9 @@ jobs:
 
   release:
     needs: quality
-    # Publishing is deliberately manual and tag-based; this workflow has no
-    # push or pull_request trigger.
-    if: github.event_name == 'workflow_dispatch'
+    # Publishing only happens for semantic-version tag pushes or an explicit
+    # manual run; ordinary branch pushes and pull requests do not trigger this workflow.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -186,9 +188,11 @@ jobs:
 
       - name: Set release tags
         id: tag
+        env:
+          VERSION: ${{ inputs.version || github.ref_name }}
         shell: bash
         run: |
-          version='${{ inputs.version }}'
+          version="$VERSION"
           [[ "$version" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
             echo 'version must be a valid Docker tag' >&2
             exit 1

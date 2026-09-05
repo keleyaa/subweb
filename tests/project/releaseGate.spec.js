@@ -165,8 +165,8 @@ describe('release evidence and command gate', () => {
     expect(source).toContain('username: ${{ github.actor }}');
     expect(source).toContain('password: ${{ secrets.GITHUB_TOKEN }}');
     expect(source).toContain('version:');
-    expect(source).toContain("if: github.event_name == 'workflow_dispatch'");
-    expect(source).not.toMatch(/^  push:/mu);
+    expect(source).toContain("if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'");
+    expect(source).toContain("      - 'v*.*.*'");
     expect(source).not.toMatch(/^  pull_request:/mu);
     expect(source).toContain('git ls-remote --exit-code origin "refs/tags/$VERSION"');
     expect(source).toContain('source_sha=$(git rev-parse HEAD)');
