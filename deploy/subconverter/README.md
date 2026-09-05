@@ -20,4 +20,4 @@ Compose 以 root 启动只执行一次 volume bootstrap，临时只授予 `CHOWN
 docker compose ps subconverter
 ```
 
-健康检查请求容器内的 `/healthz`。若失败，先检查 `/base` volume 是否为新 volume、entrypoint 是否可执行、UID 是否为 `101`、`CapEff` 是否为零，以及 Gateway egress proxy 是否可达。不要通过给 SubConverter 发布端口或取消内部网络来绕过故障。
+健康检查请求容器内的 `/healthz`。若失败，先检查 `/base` volume 是否为新 volume、entrypoint 是否可执行、独立 Compose 服务是否以非 root UID 运行、`CapEff` 是否为零，以及 Gateway egress proxy 是否可达。不要通过给 SubConverter 发布端口或取消内部网络来绕过故障。单容器模式使用独立的 `subweb-app` UID 运行 SubConverter，但入口进程仍需以 root 启动并降权，组件隔离弱于多容器模式。

@@ -1,12 +1,12 @@
 # 部署索引
 
-Subweb 的生产部署只有一个 Compose 合同。默认启用短链时运行五个服务：Go Gateway、SubConverter、MyUrls APP、MyUrls SHORT 和 Redis。设置 `SHORT_LINKS_ENABLED=false` 时必须改用明确的 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml)，该 profile 只运行 Gateway 与 SubConverter。
+Subweb 默认生产部署使用多容器 Compose：短链启用时运行 Go Gateway、SubConverter、MyUrls APP、MyUrls SHORT 和 Redis 五个服务。设置 `SHORT_LINKS_ENABLED=false` 时必须改用明确的 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml)，该 profile 只运行 Gateway 与 SubConverter。资源受限的个人部署可选用一个容器封装全部组件的 [`compose.single.yaml`](../compose.single.yaml)，但其组件隔离较弱。
 
 项目公开一个由 Gateway 绑定到宿主机 loopback 的 HTTP 端口。公网 DNS、TLS 证书、80/443 端口和外层反向代理由部署者负责；外层代理必须保留原始 Host，并将 APP、API、SHORT 三个域名转发到同一个 Gateway 端口。
 
 | 方式 | 适用场景 | 入口 | 合同 |
 | --- | --- | --- | --- |
-| [Docker 部署](deployment-docker.md) | 生产与预构建镜像 | 外层 TLS 代理转发到 `127.0.0.1:<SUBWEB_PORT>` | 唯一生产部署方式 |
+| [Docker 部署](deployment-docker.md) | 默认生产与预构建镜像 | 外层 TLS 代理转发到 `127.0.0.1:<SUBWEB_PORT>` | 推荐的多容器部署方式 |
 | [单容器 Docker](deployment-docker.md#单容器模式) | 个人部署和资源受限环境 | 一个容器发布 `127.0.0.1:<SUBWEB_PORT>` | 牺牲组件级隔离 |
 | [本机源码](deployment-local.md) | 开发、调试和本地集成 | Vite、Gateway 与本地 SHORT loopback 端口 | Compose 加 Vite |
 

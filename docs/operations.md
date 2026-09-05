@@ -49,7 +49,7 @@ npm run verify:operations
 ## 资源与故障处理
 
 - Gateway unhealthy：先查看 `gateway` 日志，再确认 `.env` 中 API URL、域名和 feature flags，没有把外部代理变量误传给本地服务。
-- SubConverter unhealthy：检查 `/base` volume bootstrap、UID `101` 和 `CapEff=0`，不要给容器恢复全部 capabilities。
+- SubConverter unhealthy：检查 `/base` volume bootstrap、业务进程是否为非 root UID 和 `CapEff=0`，不要给容器恢复全部 capabilities。单容器模式还应检查入口进程是否仅保留启动所需的 `CHOWN`、`SETUID`、`SETGID`。
 - MyUrls unhealthy：确认 Redis DB `0`、两个 `PUBLIC_BASE_URL` 和 Cloudflare Turnstile 配置分别对应 APP/SHORT 域名。
 - Redis unhealthy：检查密码、只读配置模板和数据 volume；不要删除 volume 作为第一步排查。
 

@@ -4,7 +4,7 @@
 
 Subweb 不管理公网 TLS。部署者的外层反向代理负责证书、TLS、HSTS、DNS 和 80/443 端口，并将保留 Host 的请求转发到 Gateway loopback 端口。Gateway 是唯一发布宿主机端口的 Compose 服务；Redis、两个 MyUrls 实例和 SubConverter 不发布端口。
 
-生产短链 profile 固定为五个服务；外部镜像和运行时版本均由版本锁定合同约束。MYURLS 依赖只通过固定的 APP/SHORT adapter 边界访问。关闭短链时使用显式的两服务 profile。不要引入第二套生产部署拓扑来获得“加固”效果：策略和 egress 已在 Go Gateway 中统一实现。
+默认生产短链 profile 使用五个服务；外部镜像和运行时版本均由版本锁定合同约束。MYURLS 依赖只通过固定的 APP/SHORT adapter 边界访问。关闭短链时使用显式的两服务 profile。`compose.single.yaml` 是资源受限个人部署的受支持替代方案，不应被视作等同于多容器隔离的生产加固方案；策略和 egress 仍由 Go Gateway 统一实现。
 
 ## 外部订阅
 
@@ -34,7 +34,7 @@ APP 与 SHORT 使用独立的 MyUrls Rust v2 实例：APP 只处理创建，SHOR
 
 ## 容器与密钥
 
-所有服务启用只读 root filesystem、`cap_drop: ALL` 和 `no-new-privileges`。SubConverter 的启动 bootstrap 只暂时授予 `CHOWN`、`SETUID`、`SETGID`，并通过只读 passwd/group 映射降权；运行时 PID 1 必须是 UID `101` 且 `CapEff=0`。
+多容器生产 profile 的所有服务启用只读 root filesystem、`cap_drop: ALL` 和 `no-new-privileges`；SubConverter 仅在启动 bootstrap 阶段使用 `CHOWN`、`SETUID`、`SETGID`，随后以非 root 用户运行并清除有效 capability。单容器 profile 为了启动多个进程保留 root 入口进程，但 Gateway、MyUrls、Redis、SubConverter 分别降权到独立 UID，并使用同样的只读 root filesystem、能力限制和 `no-new-privileges`；其隔离能力仍弱于多容器 profile。
 
 `REDIS_PASSWORD` 和 `IP_HASH_SECRET` 应由配置脚本生成，长度和格式由脚本验证。Redis 命令使用容器内 `REDISCLI_AUTH`，不把密码放进宿主机 argv。不要执行 `cat .env`、在 CI 日志打印环境变量，或把 Turnstile secret 写入 public runtime config。
 

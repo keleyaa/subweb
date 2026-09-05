@@ -112,7 +112,7 @@ Go Gateway 是前端与 MyUrls 之间的唯一适配边界：
 - DNS 只解析一次，授权凭据一次性使用并短 TTL 过期。
 - 请求体上限为 `16 KiB`；上游响应超过配置上限时返回 `response_too_large`。
 - 请求总超时、DNS 超时、CONNECT 超时、并发和限流均有有限上限，并正确传播取消。
-- Gateway、MyUrls、Redis 和 SubConverter 使用只读根文件系统、最小权限和受限网络；SubConverter 只在初始化阶段使用明确的 root bootstrap，运行时切换到 UID `101` 且清除有效 capability。
+- Gateway、MyUrls、Redis 和 SubConverter 使用只读根文件系统、最小权限和受限网络；多容器 SubConverter 只在初始化阶段使用明确的 root bootstrap，随后以非 root 用户运行并清除有效 capability。单容器模式的 root 入口只负责启动和回收进程，四类业务进程分别使用独立 UID，但不提供多容器级别的故障隔离。
 - 日志不记录原始订阅 URL、完整 query、Authorization、Cookie、Redis 密码或完整客户端 IP。
 - 短链是持有即可访问的数据；用户应按公开资源处理短链。
 

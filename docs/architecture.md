@@ -36,7 +36,7 @@ Gateway 的依赖响应采用完整内存缓冲，不支持流式传输、协议
 - Redis 连接 `myurls-data` 与 `redis-policy`；MyUrls 连接 `myurls-data` 与 `myurls-edge`。
 - SubConverter 只连接内部 `subconverter-egress`，不能绕过 Gateway 直接访问公网。
 - 所有长驻服务使用只读 root filesystem、丢弃 Linux capabilities 和 `no-new-privileges`。
-- SubConverter 需要极小的 root-only volume bootstrap，完成后 PID 1 以 UID `101` 运行且 effective capabilities 为零；其他服务直接以非 root 用户运行。
+- 多容器 SubConverter 需要极小的 root-only volume bootstrap，完成后以非 root 用户运行且 effective capabilities 为零；其他服务直接以非 root 用户运行。单容器模式由 root 入口负责启动和回收，再将 Gateway、MyUrls、Redis、SubConverter 降权到独立 UID。
 - Redis 密码不进入宿主机命令参数；恢复时通过容器内 `REDISCLI_AUTH` 传递。
 
 ## 数据边界
