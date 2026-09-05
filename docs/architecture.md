@@ -16,6 +16,8 @@ Subweb 面向外置 TLS 的自托管部署。项目自己的 Go Gateway 与 Requ
 
 当 `SHORT_LINKS_ENABLED=false` 时选择 `compose.disabled-short-links.yaml`，只部署 `gateway` 和 `subconverter`，即受支持的两服务 profile。这是一个完整的受支持 profile，不是通过删改生产 Compose 服务临时拼出的状态。
 
+启动时 Gateway 先独立就绪，SubConverter 在 Gateway 的健康检查通过后再启动；这是因为 SubConverter 必须通过 Gateway 的内部 HTTPS CONNECT egress 访问外部订阅。
+
 ## 请求路径
 
 1. 外部 TLS 代理保留请求 Host，将请求转发到 Gateway。

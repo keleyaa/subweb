@@ -4,6 +4,7 @@ node_modules
 /shell
 /.worktrees
 /.claude
+/.pi
 /output
 /prototypes
 /docs/superpowers/

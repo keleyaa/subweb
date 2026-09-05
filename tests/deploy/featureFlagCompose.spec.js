@@ -45,8 +45,9 @@ describe('short-links-disabled Compose contract', () => {
     for (const name of ['REDIS_URL', 'REDIS_PASSWORD', 'IP_HASH_SECRET', 'TURNSTILE_SITE_KEY', 'MYURLS_APP_UPSTREAM', 'MYURLS_SHORT_UPSTREAM']) {
       expect(config.services.gateway.environment).not.toHaveProperty(name);
     }
-    expect(config.services.gateway.depends_on).toMatchObject({
-      subconverter: { condition: 'service_healthy', restart: true },
+    expect(config.services.gateway.depends_on).toBeUndefined();
+    expect(config.services.subconverter.depends_on).toMatchObject({
+      gateway: { condition: 'service_healthy', restart: true },
     });
     expect(config.services.gateway.networks).toEqual({ default: {}, 'subconverter-egress': {} });
     expect(config.networks['subconverter-egress'].internal).toBe(true);

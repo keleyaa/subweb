@@ -79,9 +79,6 @@ services:
       myurls-short:
         condition: service_healthy
         restart: true
-      subconverter:
-        condition: service_healthy
-        restart: true
     networks:
       default: {}
       redis-policy: {}
@@ -138,7 +135,7 @@ services:
     environment:
       <<: *runtime-environment
       NODE_ENV: production
-      LOG_LEVEL: "${MYURLS_LOG_LEVEL:-info}"
+      LOG_LEVEL: "${MYURLS_LOG_LEVEL:-warn}"
       APP_PORT: "3000"
       PUBLIC_BASE_URL: "https://${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
       REDIS_URL: redis://redis:6379/0
@@ -172,7 +169,7 @@ services:
     environment:
       <<: *runtime-environment
       NODE_ENV: production
-      LOG_LEVEL: "${MYURLS_LOG_LEVEL:-info}"
+      LOG_LEVEL: "${MYURLS_LOG_LEVEL:-warn}"
       APP_PORT: "3000"
       PUBLIC_BASE_URL: "https://${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
       REDIS_URL: redis://redis:6379/0
@@ -218,6 +215,10 @@ services:
       https_proxy: http://gateway:25502
       NO_PROXY: 127.0.0.1,localhost
       no_proxy: 127.0.0.1,localhost
+    depends_on:
+      gateway:
+        condition: service_healthy
+        restart: true
     networks:
       subconverter-egress: {}
     volumes:

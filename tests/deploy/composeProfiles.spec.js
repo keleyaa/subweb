@@ -63,6 +63,11 @@ const validCompose = {
         EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
         SHORT_LINKS_ENABLED: 'true',
       },
+      depends_on: {
+        redis: { condition: 'service_healthy', restart: true },
+        'myurls-app': { condition: 'service_healthy', restart: true },
+        'myurls-short': { condition: 'service_healthy', restart: true },
+      },
     },
     redis: {
       image: 'docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5', user: '999:1000', networks: { 'myurls-data': {}, 'redis-policy': {} },
@@ -70,7 +75,7 @@ const validCompose = {
     },
      'myurls-app': { image: 'ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3', user: '10001:10001', networks: { 'myurls-data': {}, 'myurls-edge': {} }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
      'myurls-short': { image: 'ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3', user: '10001:10001', networks: { 'myurls-data': {}, 'myurls-edge': {} }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
-      subconverter: { image: 'ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475', user: '0:0', cap_add: ['CHOWN', 'SETUID', 'SETGID'], networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
+      subconverter: { image: 'ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475', user: '0:0', cap_add: ['CHOWN', 'SETUID', 'SETGID'], networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' }, depends_on: { gateway: { condition: 'service_healthy', restart: true } }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
   },
 };
 
@@ -79,6 +84,7 @@ const disabledCompose = () => {
   delete disabled.services.redis;
   delete disabled.services['myurls-app'];
   delete disabled.services['myurls-short'];
+  delete disabled.services.gateway.depends_on;
   disabled.services.gateway.environment.SHORT_LINKS_ENABLED = 'false';
   disabled.services.gateway.networks = { default: {}, 'subconverter-egress': {} };
   delete disabled.networks['myurls-data'];
@@ -180,6 +186,16 @@ describe('unified Compose validation', () => {
   it('rejects a root runtime user', async () => {
     const composeJson = structuredClone(validCompose);
     composeJson.services.gateway.user = '0:0';
+    const { result } = await validateFixture(composeJson);
+    expect(result.status).not.toBe(0);
+  });
+
+  it('rejects a reverse Gateway/SubConverter startup dependency', async () => {
+    const composeJson = structuredClone(validCompose);
+    delete composeJson.services.subconverter.depends_on;
+    composeJson.services.gateway.depends_on = {
+      subconverter: { condition: 'service_healthy', restart: true },
+    };
     const { result } = await validateFixture(composeJson);
     expect(result.status).not.toBe(0);
   });

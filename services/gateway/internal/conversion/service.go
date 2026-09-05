@@ -252,13 +252,9 @@ func (service *Service) fetch(ctx context.Context, request *http.Request) (*http
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
-	client := &http.Client{
-		Transport: transport,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-	upstreamResponse, err := client.Do(upstreamRequest)
+	// RoundTripper never follows redirects, matching the previous client
+	// policy without allocating a new http.Client for every conversion.
+	upstreamResponse, err := transport.RoundTrip(upstreamRequest)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, nil, ctxErr

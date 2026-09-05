@@ -29,6 +29,8 @@ cd subweb
 
 启用短链时 Compose 应准确包含五个服务：`gateway`、`subconverter`、`myurls-app`、`myurls-short`、`redis`。只有 Gateway 发布宿主机端口，且端口绑定 `127.0.0.1`。MyUrls 使用 Redis DB `0`，Gateway 限流使用 Redis DB `1`；Redis、MyUrls 和 SubConverter 没有宿主机端口。
 
+启动依赖会先等待 Gateway（包括内部 `:25502` egress 监听）健康，再启动 SubConverter，以避免代理尚未就绪时产生启动告警。
+
 ## 3. 外层 TLS
 
 外层反向代理将以下三个 HTTPS 虚拟主机全部转发到 `http://127.0.0.1:<SUBWEB_PORT>`：

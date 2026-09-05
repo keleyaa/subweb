@@ -215,6 +215,29 @@ func TestServiceMapsUpstreamServerError(t *testing.T) {
 	assertProblem(t, response, http.StatusBadGateway, "upstream_error")
 }
 
+func TestServiceDoesNotFollowUpstreamRedirects(t *testing.T) {
+	var upstreamCalls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		upstreamCalls.Add(1)
+		if request.URL.Path == "/sub" {
+			response.Header().Set("Location", "/next")
+			response.WriteHeader(http.StatusFound)
+			return
+		}
+		response.Header().Set("Content-Type", "text/plain")
+		_, _ = io.WriteString(response, "must not follow")
+	}))
+	defer upstream.Close()
+
+	service := newTestService(t, upstream.URL, acceptingPolicy())
+	response := serveConversionRequest(service, "https://public.example/feed")
+
+	assertProblem(t, response, http.StatusBadRequest, "upstream_error")
+	if got := upstreamCalls.Load(); got != 1 {
+		t.Fatalf("upstream calls = %d, want one request without redirect follow-up", got)
+	}
+}
+
 func TestServiceClosesSuccessfulUpstreamBody(t *testing.T) {
 	bodyClosed := make(chan struct{})
 	transport := roundTripperFunc(func(request *http.Request) (*http.Response, error) {

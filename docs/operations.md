@@ -15,6 +15,8 @@
 
 日志使用 `Asia/Shanghai`，json-file 驱动单文件 `10m`、最多 `3` 个文件。日志不应包含原始 IP、订阅 URL、Query、Token、Redis 密码或完整短码。Gateway 的受控 egress 失败和 MyUrls 的 challenge/retry 元数据可以用于排查，但不要扩大日志级别到 `verbose` 后长期运行。
 
+SubConverter 日志会保留首条可恢复出站错误，并将连续、相同错误码的重复告警折叠为一条计数摘要；MyUrls 默认使用 `warn`，Redis 默认使用 `warning`，均保留警告和错误。其他日志仍逐条输出。
+
 ## 备份与恢复
 
 短链数据在 Redis DB `0`，Gateway 限流状态在 DB `1`。只备份 Redis RDB，不备份转换 URL 或转换结果。

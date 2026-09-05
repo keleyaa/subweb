@@ -40,6 +40,38 @@ describe('SubConverter log sanitization', () => {
     expect(result.stdout).toContain('Authorization: [redacted]');
   });
 
+  it('collapses contiguous retryable egress warning bursts without hiding the first warning', () => {
+    const result = spawnSync(
+      'sh',
+      [
+        supervisor,
+        'sh',
+        '-c',
+        'printf "%s\\n" "$LOG_LINES"',
+      ],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          LOG_LINES: [
+            '2026/09/05 01:21:49.418 [16 Thread-2][WARN] 出站请求遇到可恢复网络错误，正在分散退避后重试： attempt=1 delay_ms=200 code=5。',
+            '2026/09/05 01:21:49.419 [16 Thread-2][WARN] 出站请求遇到可恢复网络错误，正在分散退避后重试： attempt=1 delay_ms=200 code=5。',
+            '2026/09/05 01:21:49.420 [16 Thread-2][WARN] 出站请求遇到可恢复网络错误，正在分散退避后重试： attempt=1 delay_ms=200 code=5。',
+            '2026/09/05 01:21:50.000 [16 Thread-2][INFO] conversion ready',
+          ].join('\n'),
+        },
+      },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout.match(/出站请求遇到可恢复网络错误/g)).toHaveLength(1);
+    expect(result.stdout).toContain(
+      'SubConverter log filter: suppressed 2 repeated retryable egress warnings (code=5)',
+    );
+    expect(result.stdout).toContain('conversion ready');
+  });
+
   it('uses the sanitizer and a transient privacy configuration in both unified deployment profiles', async () => {
     await expect(access(rootFile('scripts/subconverter-docker-entrypoint.sh'))).resolves.toBeUndefined();
     await expect(access(rootFile('scripts/subconverter-log-filter.awk'))).resolves.toBeUndefined();

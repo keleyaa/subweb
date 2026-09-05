@@ -46,10 +46,6 @@ services:
       CONVERSION_DNS_TIMEOUT_MS: "${CONVERSION_DNS_TIMEOUT_MS:-2000}"
       CONVERSION_EGRESS_CONNECT_TIMEOUT_MS: "${CONVERSION_EGRESS_CONNECT_TIMEOUT_MS:-5000}"
       CONVERSION_MAX_CONCURRENCY: "${CONVERSION_MAX_CONCURRENCY:-2}"
-    depends_on:
-      subconverter:
-        condition: service_healthy
-        restart: true
     networks:
       default: {}
       subconverter-egress: {}
@@ -80,6 +76,10 @@ services:
       https_proxy: http://gateway:25502
       NO_PROXY: 127.0.0.1,localhost
       no_proxy: 127.0.0.1,localhost
+    depends_on:
+      gateway:
+        condition: service_healthy
+        restart: true
     networks:
       subconverter-egress: {}
     volumes:

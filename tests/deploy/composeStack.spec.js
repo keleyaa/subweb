@@ -80,6 +80,14 @@ describe('integrated Compose stack', () => {
     });
   });
 
+  it('starts the Gateway before SubConverter because SubConverter uses its egress proxy', async () => {
+    const config = await renderCompose();
+    expect(config.services.gateway.depends_on?.subconverter).toBeUndefined();
+    expect(config.services.subconverter.depends_on).toMatchObject({
+      gateway: { condition: 'service_healthy', restart: true },
+    });
+  });
+
   it('isolates service networks and does not publish the internal egress listener', async () => {
     const config = await renderCompose();
     expect(Object.keys(config.services.gateway.networks).sort()).toEqual(['default', 'myurls-edge', 'redis-policy', 'subconverter-egress']);
@@ -122,9 +130,27 @@ describe('integrated Compose stack', () => {
     expect(config.services['myurls-app'].environment).toMatchObject({
       REDIS_URL: 'redis://redis:6379/0', TURNSTILE_HOSTNAME: 'app.example.com',
       TURNSTILE_SECRET_KEY: 'test-secret-key',
+      LOG_LEVEL: 'warn',
     });
-    expect(config.services['myurls-short'].environment.TURNSTILE_HOSTNAME).toBe('short.example.com');
+    expect(config.services['myurls-short'].environment).toMatchObject({
+      TURNSTILE_HOSTNAME: 'short.example.com',
+      LOG_LEVEL: 'warn',
+    });
     expect(JSON.stringify(config.services.redis.command)).not.toContain(testSecret);
+  });
+
+  it('uses a quiet Redis log level while retaining warnings and errors', async () => {
+    const config = await renderCompose();
+    const redisTemplate = await readFile(new URL('../../deploy/redis/redis.conf.template', import.meta.url), 'utf8');
+    expect(redisTemplate).toContain('loglevel warning');
+    expect(config.services['myurls-app'].environment.LOG_LEVEL).toBe('warn');
+    expect(config.services['myurls-short'].environment.LOG_LEVEL).toBe('warn');
+  });
+
+  it('allows temporarily raising MyUrls verbosity through the environment', async () => {
+    const config = await renderCompose(['MYURLS_LOG_LEVEL=info']);
+    expect(config.services['myurls-app'].environment.LOG_LEVEL).toBe('info');
+    expect(config.services['myurls-short'].environment.LOG_LEVEL).toBe('info');
   });
 
   it('has no legacy hardened file, profiles, TLS mounts, or Nginx runtime entrypoint', async () => {

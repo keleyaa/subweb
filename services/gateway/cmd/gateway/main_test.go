@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -135,6 +136,52 @@ func TestReadinessRequiresBothMyURLsInstancesWhenShortLinksAreEnabled(t *testing
 			}
 			if err == nil {
 				t.Fatal("readiness error = nil, want unavailable dependency error")
+			}
+		})
+	}
+}
+
+func TestEgressHealthcheckRequiresListeningPort(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+
+	if err := checkEgressListener(listener.Addr().String()); err != nil {
+		t.Fatalf("checkEgressListener() error = %v, want nil", err)
+	}
+
+	listener.Close()
+	if err := checkEgressListener(listener.Addr().String()); err == nil {
+		t.Fatal("checkEgressListener() error = nil, want unavailable listener error")
+	}
+}
+
+func TestEgressHealthAddressUsesLoopbackAndConfiguredPort(t *testing.T) {
+	for _, testCase := range []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "default", want: "127.0.0.1:25502"},
+		{name: "configured", input: "0.0.0.0:3128", want: "127.0.0.1:3128"},
+		{name: "invalid", input: "not-an-address", wantErr: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := egressHealthAddress(testCase.input)
+			if testCase.wantErr {
+				if err == nil {
+					t.Fatal("egressHealthAddress() error = nil, want error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("egressHealthAddress() error = %v, want nil", err)
+			}
+			if got != testCase.want {
+				t.Fatalf("egressHealthAddress() = %q, want %q", got, testCase.want)
 			}
 		})
 	}

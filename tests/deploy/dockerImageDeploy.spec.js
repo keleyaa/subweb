@@ -31,6 +31,11 @@ const enabledCompose = {
         EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
         SHORT_LINKS_ENABLED: 'true',
       },
+      depends_on: {
+        redis: { condition: 'service_healthy', restart: true },
+        'myurls-app': { condition: 'service_healthy', restart: true },
+        'myurls-short': { condition: 'service_healthy', restart: true },
+      },
     },
     'myurls-app': {
       image: lockedImages.myurls, networks: { 'myurls-data': {}, 'myurls-edge': {} }, user: '10001:10001',
@@ -48,6 +53,7 @@ const enabledCompose = {
       image: lockedImages.subconverter, networks: { 'subconverter-egress': {} }, user: '101:101',
       read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
       environment: { HTTPS_PROXY: 'http://gateway:25502' },
+      depends_on: { gateway: { condition: 'service_healthy', restart: true } },
     },
   },
 };
@@ -68,6 +74,7 @@ const disabledCompose = {
     subconverter: {
       image: lockedImages.subconverter, networks: { 'subconverter-egress': {} }, user: '101:101',
       read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
+      depends_on: { gateway: { condition: 'service_healthy', restart: true } },
     },
   },
 };

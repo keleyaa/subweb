@@ -71,6 +71,11 @@ func serve(server *http.Server, errors chan<- error) {
 }
 
 func runHealthcheck() int {
+	egressAddress, err := egressHealthAddress(os.Getenv("EGRESS_LISTEN_ADDR"))
+	if err != nil || checkEgressListener(egressAddress) != nil {
+		return 1
+	}
+
 	request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8080/healthz", nil)
 	if err != nil {
 		return 1
@@ -86,6 +91,25 @@ func runHealthcheck() int {
 		return 1
 	}
 	return 0
+}
+
+func egressHealthAddress(listenAddress string) (string, error) {
+	if listenAddress == "" {
+		listenAddress = defaultEgressListenAddress
+	}
+	_, port, err := net.SplitHostPort(listenAddress)
+	if err != nil || port == "" {
+		return "", errors.New("invalid egress listen address")
+	}
+	return net.JoinHostPort("127.0.0.1", port), nil
+}
+
+func checkEgressListener(address string) error {
+	connection, err := net.DialTimeout("tcp", address, time.Second)
+	if err != nil {
+		return err
+	}
+	return connection.Close()
 }
 
 func buildServers(cfg config.Config, logger *slog.Logger) (*http.Server, *http.Server, func(), error) {
@@ -204,6 +228,7 @@ func newCounterStore(cfg config.Config) (ratelimit.CounterStore, func(), error) 
 }
 
 const readinessTimeout = 5 * time.Second
+const defaultEgressListenAddress = "0.0.0.0:25502"
 
 type readinessStore interface {
 	Ping(context.Context) error

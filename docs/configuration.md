@@ -42,6 +42,10 @@ CONVERSION_MAX_CONCURRENCY=2
 
 Gateway 对远程 URL 只允许 HTTPS，或 loopback host 上的 HTTP；解析结果必须是 public-unicast 地址，拒绝私网、特殊用途、scoped IPv6、DNS rebinding 和非 `443` CONNECT 目标。超时、响应大小、并发和限流限制必须是有限正整数，错误时 fail closed。
 
+## 日志级别
+
+生产环境的 MyUrls APP/SHORT 默认使用 `MYURLS_LOG_LEVEL=warn`，Redis 默认使用 `loglevel warning`，保留警告和错误并减少正常请求噪音。临时排查时可在 `.env` 设置 `MYURLS_LOG_LEVEL=info`，完成后恢复为 `warn`；不要长期启用 debug/trace 级别。
+
 ## 代理与镜像
 
 `TRUSTED_PROXY_CIDR` 只应配置外层反向代理的确切来源 CIDR。没有可信代理时不要填写；`configure.sh` 入口当前只接受 IPv4 CIDR。Gateway 仅在 socket peer 命中该 CIDR 时信任 `X-Forwarded-For`/`X-Real-IP`；可信链从右向左取首个非可信地址作为限流和上游身份，其他连接始终使用 socket peer。Compose 为 SubConverter、MyUrls Rust v2 和 Redis 内嵌 [版本锁](../deploy/versions.lock.json) 的默认引用，并由 `validate-compose.sh` 校验解析后的服务镜像；`SUBWEB_IMAGE` 是单独的 Gateway release 输入。不可变的 `*_IMAGE` 环境覆盖本身不等于与版本锁兼容，不能用它绕过 `validate-compose.sh` 或 `subweb.sh upgrade` 的合同校验。不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像；跨合同回滚必须同时恢复 Gateway 路由和前端行为。

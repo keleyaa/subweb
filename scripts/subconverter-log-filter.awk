@@ -31,6 +31,28 @@ function redact_request_sources(text, match_text, equals, prefix) {
   return text;
 }
 
+function retryable_egress_signature(text) {
+  if (text !~ /出站请求遇到可恢复网络错误/) return "";
+  if (!match(text, /code=[0-9]+/)) return "";
+  return substr(text, RSTART, RLENGTH);
+}
+
+function retryable_egress_prefix(text, marker_position) {
+  marker_position = index(text, "[WARN]");
+  if (marker_position <= 1) return "";
+  return substr(text, 1, marker_position - 1);
+}
+
+function flush_retryable_burst() {
+  if (retryable_count > 1) {
+    print retryable_prefix "[INFO] SubConverter log filter: suppressed " (retryable_count - 1) " repeated retryable egress warnings (" retryable_signature ")";
+    fflush();
+  }
+  retryable_signature = "";
+  retryable_prefix = "";
+  retryable_count = 0;
+}
+
 {
   line = redact_encoded_uris($0);
   line = redact_uris(line);
@@ -38,6 +60,22 @@ function redact_request_sources(text, match_text, equals, prefix) {
   gsub(/[Aa]uthorization:[[:space:]]*[^[:space:]]+([[:space:]]+[^[:space:]]+)?/, "Authorization: [redacted]", line);
   gsub(/[Pp]roxy-[Aa]uthorization:[[:space:]]*[^[:space:]]+([[:space:]]+[^[:space:]]+)?/, "Proxy-Authorization: [redacted]", line);
   gsub(/[Cc]ookie:[[:space:]]*[^[:space:]]+/, "Cookie: [redacted]", line);
+
+  signature = retryable_egress_signature(line);
+  if (signature != "" && signature == retryable_signature) {
+    retryable_count++;
+    next;
+  }
+  flush_retryable_burst();
   print line;
   fflush();
+  if (signature != "") {
+    retryable_signature = signature;
+    retryable_prefix = retryable_egress_prefix(line);
+    retryable_count = 1;
+  }
+}
+
+END {
+  flush_retryable_burst();
 }

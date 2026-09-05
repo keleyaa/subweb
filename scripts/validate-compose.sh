@@ -87,6 +87,14 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
     console.error(`Compose validation error: expected services ${expected.join(", ")}.`);
     process.exitCode = 1;
   }
+  if (services.gateway?.depends_on?.subconverter) {
+    console.error("Compose validation error: gateway must not wait for SubConverter; SubConverter uses the Gateway egress proxy.");
+    process.exitCode = 1;
+  }
+  if (services.subconverter?.depends_on?.gateway?.condition !== "service_healthy") {
+    console.error("Compose validation error: SubConverter must wait for a healthy Gateway egress proxy.");
+    process.exitCode = 1;
+  }
   const hasPorts = (service) => Array.isArray(service?.ports) && service.ports.length > 0;
   const expectedImage = (name) => {
     const image = lock.services?.[name]?.image;
