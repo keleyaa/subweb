@@ -30,8 +30,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.sha }}
           persist-credentials: false
+
+      - name: Checkout requested release tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          [[ "$VERSION" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
+            echo 'version must be a valid Docker tag' >&2
+            exit 1
+          }
+          [[ "$VERSION" != latest ]] || {
+            echo 'latest is not accepted as a release version' >&2
+            exit 1
+          }
+          git ls-remote --exit-code origin "refs/tags/$VERSION" >/dev/null || {
+            echo "Git tag $VERSION was not found in origin" >&2
+            exit 1
+          }
+          git fetch --depth=1 origin "refs/tags/$VERSION"
+          git checkout --detach FETCH_HEAD
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -166,7 +186,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ inputs.version }}
           persist-credentials: false
 
       - name: Set release tags
@@ -182,10 +201,12 @@ jobs:
             echo 'latest is not accepted as a release version' >&2
             exit 1
           }
-          git show-ref --tags --verify --quiet "refs/tags/$version" || {
-            echo "Git tag $version was not found" >&2
+          git ls-remote --exit-code origin "refs/tags/$version" >/dev/null || {
+            echo "Git tag $version was not found in origin" >&2
             exit 1
           }
+          git fetch --depth=1 origin "refs/tags/$version"
+          git checkout --detach FETCH_HEAD
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
