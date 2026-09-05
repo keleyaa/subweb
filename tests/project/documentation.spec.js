@@ -141,7 +141,7 @@ describe("documentation contract", () => {
     const deployment = read("docs/deployment.md");
 
     expect(deployment).toContain("Gateway 发布镜像由 release workflow 独立构建");
-    expect(deployment).toContain("通过 `--image` 使用不可变 tag 或 digest");
+    expect(deployment).toContain("通过 `--image` 使用 Git tag 或 digest");
     expect(deployment).not.toContain("生产镜像、外部依赖版本和不可变 digest 由");
   });
 
@@ -268,7 +268,7 @@ describe("documentation contract", () => {
     ]) {
       expect(operations).toContain(text);
     }
-    expect(security).toContain("CapEff=0");
+    expect(security).toContain("清除有效 capability");
     expect(security).toContain("Authorization");
     expect(security).toContain("持有即可访问");
     expect(security).toContain("SSRF");

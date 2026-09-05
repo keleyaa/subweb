@@ -153,7 +153,9 @@ describe('Docker runtime contract', () => {
     expect(workflow).toContain('cancel-in-progress: false');
     expect(workflow).toContain('provenance: mode=max');
     expect(workflow).toContain('sbom: true');
-    expect(workflow).toContain('sha-${{ steps.tag.outputs.short_sha }}');
+    expect(workflow).toContain("- 'v*.*.*'");
+    expect(workflow).toContain('tags: ghcr.io/${{ env.GHCR_IMAGE }}:${{ steps.tag.outputs.version }}');
+    expect(workflow).not.toContain('steps.tag.outputs.short_sha');
     expect(workflow).toContain('Resolve external runtime images');
     expect(workflow).toContain('image-ref: ${{ env.REDIS_IMAGE }}');
     expect(workflow).toContain('image-ref: ${{ env.SUBCONVERTER_IMAGE }}');
