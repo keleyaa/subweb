@@ -9,6 +9,7 @@ node_modules
 /prototypes
 /docs/superpowers/
 /docs/*-prd.md
+!/docs/architecture-prd.md
 /docs/*-plan.md
 /coverage
 /playwright-report
