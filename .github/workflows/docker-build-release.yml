@@ -269,7 +269,7 @@ jobs:
             "docker.io/${DOCKERHUB_IMAGE}:latest" \
             "docker.io/${DOCKERHUB_IMAGE}:${RELEASE_TAG}" \
             "ghcr.io/${GHCR_IMAGE}:latest" \
-            "ghcr.io/${GHCR_IMAGE}:${RELEASE_TAG}" \
+            "ghcr.io/${GHCR_IMAGE}:${RELEASE_TAG}"
           do
             published_digest="$(docker buildx imagetools inspect "$reference" --format '{{.Manifest.Digest}}')"
             [[ "$published_digest" == "$IMAGE_DIGEST" ]] || {

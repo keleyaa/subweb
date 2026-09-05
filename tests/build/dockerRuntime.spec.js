@@ -162,6 +162,7 @@ describe('Docker runtime contract', () => {
     expect(workflow).toContain('image-ref: ${{ env.MYURLS_IMAGE }}');
     expect(workflow).toContain('Scan release candidate');
     expect(workflow).toContain('docker buildx imagetools create');
+    expect(workflow).toContain('"ghcr.io/${GHCR_IMAGE}:${RELEASE_TAG}"\n          do');
     expect(workflow).not.toContain('Static verification only');
   });
 });
