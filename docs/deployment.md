@@ -7,6 +7,7 @@ Subweb 的生产部署只有一个 Compose 合同。默认启用短链时运行�
 | 方式 | 适用场景 | 入口 | 合同 |
 | --- | --- | --- | --- |
 | [Docker 部署](deployment-docker.md) | 生产与预构建镜像 | 外层 TLS 代理转发到 `127.0.0.1:<SUBWEB_PORT>` | 唯一生产部署方式 |
+| [单容器 Docker](deployment-docker.md#单容器模式) | 个人部署和资源受限环境 | 一个容器发布 `127.0.0.1:<SUBWEB_PORT>` | 牺牲组件级隔离 |
 | [本机源码](deployment-local.md) | 开发、调试和本地集成 | Vite、Gateway 与本地 SHORT loopback 端口 | Compose 加 Vite |
 
 ## 生产模式

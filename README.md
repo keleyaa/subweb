@@ -130,3 +130,5 @@ git diff --check
 本项目是对 [stilleshan/subweb](https://github.com/stilleshan/subweb) 的独立维护版本，保留订阅转换的前端基础，并以自托管 Go Gateway、受控请求策略、短链与部署验证作为当前运行边界。MyUrls 来自 [keleyaa/MyUrls](https://github.com/keleyaa/MyUrls) 与 [CareyWang/MyUrls](https://github.com/CareyWang/MyUrls)，转换引擎来自 [Aethersailor/SubConverter-Extended](https://github.com/Aethersailor/SubConverter-Extended)。
 
 完整的镜像来源、版本与许可证说明见 [第三方来源](docs/third-party-sources.md)。
+
+需要只运行一个容器时，可使用 [单容器 Docker 部署](docs/deployment-docker.md#单容器模式)。该模式将所有组件放入同一个容器，保留 Redis 数据卷，但组件级隔离能力较弱。

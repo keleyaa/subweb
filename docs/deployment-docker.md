@@ -2,6 +2,14 @@
 
 Docker 生产部署使用 [`compose.yaml`](../compose.yaml) 的唯一启用短链 profile。Gateway 是项目自有的 Go 单二进制，负责 Host 路由、静态资源、转换请求策略、Redis 限流、MyUrls 适配和内部 HTTPS CONNECT egress。SubConverter、两个 MyUrls Rust v2 实例和 Redis 作为独立服务运行。
 
+如果必须只运行一个容器，可使用 [`compose.single.yaml`](../compose.single.yaml)。它把 Gateway、SubConverter、两个 MyUrls 实例和 Redis 放进同一个容器，仍使用 `redis-data` 与 `subconverter-runtime` 数据卷。单容器模式牺牲组件级隔离，适合个人部署或资源受限环境；生产环境默认仍建议使用上面的多容器 Compose。
+
+```sh
+docker compose -f compose.single.yaml up -d --build --wait
+```
+
+单容器模式要求 `.env` 提供 `APP_DOMAIN`、`API_DOMAIN`、`SHORT_DOMAIN`、`API_URL`、`REDIS_PASSWORD`、`IP_HASH_SECRET`、`TURNSTILE_SITE_KEY` 和 `TURNSTILE_SECRET_KEY`。外部 TLS 代理仍只转发到 `127.0.0.1:<SUBWEB_PORT>`。
+
 ## 1. 获取源码并启动
 
 ```sh

@@ -1,0 +1,48 @@
+FROM node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS frontend-build
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM golang:1.25-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59 AS gateway-build
+
+RUN apk add --no-cache ca-certificates tzdata
+WORKDIR /src/services/gateway
+COPY services/gateway/go.mod services/gateway/go.sum ./
+RUN go mod download
+COPY services/gateway .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/gateway ./cmd/gateway
+
+FROM ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475 AS runtime
+COPY --from=docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5 /lib /lib
+COPY --from=docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5 /usr/lib /usr/lib
+COPY --from=ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3 /usr/local/bin/myurl-server /usr/local/bin/myurl-server
+COPY --from=ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3 /app/web /app/web
+COPY --from=docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5 /usr/local/bin/redis-server /usr/local/bin/redis-server
+COPY --from=docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5 /usr/local/bin/redis-cli /usr/local/bin/redis-cli
+COPY --from=ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475 /usr/bin/subconverter /usr/bin/subconverter
+COPY --from=frontend-build /app/dist /app/dist
+COPY --from=gateway-build /out/gateway /app/gateway
+COPY --from=gateway-build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=gateway-build /usr/share/zoneinfo /usr/share/zoneinfo
+COPY deploy/redis/redis.conf.template /etc/redis/redis.conf.template
+COPY deploy/subconverter/gai.conf /etc/gai.conf
+COPY scripts/subconverter-log-filter.awk /usr/local/bin/subweb-log-filter.awk
+COPY scripts/subconverter-log-supervisor.sh /usr/local/bin/subweb-log-supervisor
+COPY scripts/single-container-entrypoint.sh /usr/local/bin/subweb-single-entrypoint
+RUN addgroup -S -g 10001 subweb-app \
+ && adduser -S -D -H -u 10001 -G subweb-app subweb-app \
+ && addgroup -S -g 10002 subweb-gateway \
+ && adduser -S -D -H -u 10002 -G subweb-gateway subweb-gateway \
+ && addgroup -S -g 10003 subweb-redis \
+ && adduser -S -D -H -u 10003 -G subweb-redis subweb-redis \
+ && mkdir -p /run/subweb /data /base \
+ && chown 10001:10001 /app/web /run/subweb /base \
+ && chmod 0755 /usr/local/bin/subweb-single-entrypoint /usr/local/bin/subweb-log-supervisor /app/gateway /usr/local/bin/myurl-server /usr/local/bin/redis-server /usr/local/bin/redis-cli
+
+ENV STATIC_ROOT=/app/dist
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["/usr/local/bin/subweb-single-entrypoint", "--healthcheck"]
+ENTRYPOINT ["/usr/local/bin/subweb-single-entrypoint"]

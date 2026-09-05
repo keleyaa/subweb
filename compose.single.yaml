@@ -1,0 +1,63 @@
+name: subweb-single
+
+services:
+  subweb:
+    build:
+      context: .
+      dockerfile: Dockerfile.single
+    image: "${SUBWEB_SINGLE_IMAGE:-subweb:single-local}"
+    environment:
+      TZ: Asia/Shanghai
+      APP_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN}"
+      API_DOMAIN: "${API_DOMAIN:?Set API_DOMAIN}"
+      SHORT_DOMAIN: "${SHORT_DOMAIN:?Set SHORT_DOMAIN}"
+      API_URL: "${API_URL:?Set API_URL}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"
+      IP_HASH_SECRET: "${IP_HASH_SECRET:?Set IP_HASH_SECRET}"
+      TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY:?Set TURNSTILE_SITE_KEY}"
+      TURNSTILE_SECRET_KEY: "${TURNSTILE_SECRET_KEY:?Set TURNSTILE_SECRET_KEY}"
+      MYURLS_LOG_LEVEL: "${MYURLS_LOG_LEVEL:-warn}"
+      SHORT_LINKS_ENABLED: "true"
+      CUSTOM_BACKEND_ENABLED: "${CUSTOM_BACKEND_ENABLED:-true}"
+      TRUSTED_PROXY_CIDR: "${TRUSTED_PROXY_CIDR:-}"
+      CONVERSION_RATE_LIMIT: "${CONVERSION_RATE_LIMIT:-10}"
+      CONVERSION_RATE_WINDOW_SECONDS: "${CONVERSION_RATE_WINDOW_SECONDS:-60}"
+      CONVERSION_MAX_REQUEST_BYTES: "${CONVERSION_MAX_REQUEST_BYTES:-16384}"
+      CONVERSION_MAX_RESPONSE_BYTES: "${CONVERSION_MAX_RESPONSE_BYTES:-8388608}"
+      CONVERSION_REQUEST_TIMEOUT_MS: "${CONVERSION_REQUEST_TIMEOUT_MS:-10000}"
+      CONVERSION_DNS_TIMEOUT_MS: "${CONVERSION_DNS_TIMEOUT_MS:-2000}"
+      CONVERSION_EGRESS_CONNECT_TIMEOUT_MS: "${CONVERSION_EGRESS_CONNECT_TIMEOUT_MS:-5000}"
+      CONVERSION_MAX_CONCURRENCY: "${CONVERSION_MAX_CONCURRENCY:-2}"
+    ports:
+      - "127.0.0.1:${SUBWEB_PORT:-18080}:8080"
+    # PID 1 must launch/reap the isolated workers; workers drop to dedicated UIDs.
+    user: "0:0"
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    tmpfs:
+      - /run/subweb:uid=0,gid=0,mode=0700,noexec,nosuid,size=4m
+      - /tmp:uid=10001,gid=10001,mode=0700,noexec,nosuid,size=16m
+    volumes:
+      - redis-data:/data
+      - subconverter-runtime:/base
+    restart: unless-stopped
+    stop_grace_period: 15s
+    healthcheck:
+      test: [CMD, /usr/local/bin/subweb-single-entrypoint, --healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  redis-data:
+  subconverter-runtime:
