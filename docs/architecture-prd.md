@@ -165,7 +165,7 @@ npm run verify:release
 
 ## 10. 发布、证据和回滚
 
-`deploy/versions.lock.json` 记录外部运行时依赖的来源、版本、平台 digest 和端口。Gateway 由 release workflow 从当前源码构建并发布为不可变 `sha-*` 引用；workflow 扫描 Gateway、MyUrls、Redis 和 SubConverter，并从版本锁生成外部 runtime rollback manifest。
+`deploy/versions.lock.json` 记录外部运行时依赖的来源、版本、平台 digest 和端口。Gateway release workflow 通过手动输入已有 Git tag 从该 tag 检出源码并构建，随后以该 tag 和 digest 发布；workflow 扫描 Gateway、MyUrls、Redis 和 SubConverter，并从版本锁生成外部 runtime rollback manifest。
 
 回滚使用上一 release manifest 中的完整镜像集合与对应配置，不逐项猜测版本。若 MyUrls HTTP 合同发生变化，回滚必须同时恢复 Gateway 路由、前端适配和 MyUrls 镜像。Redis 数据卷在升级失败时保留，并通过恢复演练验证可用。
 

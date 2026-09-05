@@ -4,7 +4,7 @@
 
 项目运行时由 Go Gateway、SubConverter、两个 MyUrls Rust v2.0.6 实例和 Redis 组成。默认生产部署使用 [`compose.yaml`](../compose.yaml) 五服务 profile；短链关闭时使用明确的 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml) 两服务 profile。资源受限的个人部署可使用 [`compose.single.yaml`](../compose.single.yaml) 将所有组件运行在一个容器内，但发布和安全隔离应优先采用多容器 profile。外部 TLS 反向代理示例只描述项目外的入口，不属于 Compose 运行时。
 
-发布、回滚和升级必须使用 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 中记录的外部依赖源 commit、OCI tag、manifest digest 和平台 digest。Gateway 发布同时推送 Docker Hub 与 GHCR；`docker.io/keleyaa/subweb` 和 `ghcr.io/keleyaa/subweb` 是等价来源，部署时使用当前 release 提供的不可变 `sha-*` 引用。不要使用可变 tag 作为部署依据，也不要手工拼接外部镜像 digest。
+发布、回滚和升级必须使用 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 中记录的外部依赖源 commit、OCI tag、manifest digest 和平台 digest。Gateway 发布工作流通过手动输入已有 Git tag 触发，并同时推送 Docker Hub 与 GHCR；`docker.io/keleyaa/subweb` 和 `ghcr.io/keleyaa/subweb` 是等价来源，部署时使用该 Git tag 或发布后的 digest。不要使用 `latest` 或其他可变 tag 作为部署依据，也不要手工拼接外部镜像 digest。
 
 ## 发布前门禁
 

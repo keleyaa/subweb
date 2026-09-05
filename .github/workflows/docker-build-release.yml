@@ -6,6 +6,11 @@ on:
       - main
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Existing Git tag to build and publish (for example v1.2.3)
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -25,6 +30,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.sha }}
           persist-credentials: false
 
       - name: Set up Node.js
@@ -149,9 +155,9 @@ jobs:
 
   release:
     needs: quality
-    # PRs and manual runs on feature branches must not push images: quality
-    # gates run everywhere, but publishing stays reserved for main.
-    if: github.ref == 'refs/heads/main'
+    # Publishing is deliberately manual and tag-based. Pushes and PRs only run
+    # the quality job; they never move a registry tag.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -160,16 +166,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ inputs.version }}
           persist-credentials: false
 
       - name: Set release tags
         id: tag
         shell: bash
         run: |
-          short_sha="${GITHUB_SHA::12}"
-          date_tag="$(date -u +%Y-%m-%d)-${short_sha}"
-          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
-          echo "date_tag=${date_tag}" >> "$GITHUB_OUTPUT"
+          version='${{ inputs.version }}'
+          [[ "$version" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
+            echo 'version must be a valid Docker tag' >&2
+            exit 1
+          }
+          [[ "$version" != latest ]] || {
+            echo 'latest is not accepted as a release version' >&2
+            exit 1
+          }
+          git show-ref --tags --verify --quiet "refs/tags/$version" || {
+            echo "Git tag $version was not found" >&2
+            exit 1
+          }
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
@@ -200,10 +217,9 @@ jobs:
           push: true
           provenance: mode=max
           sbom: true
-          tags: ghcr.io/${{ env.GHCR_IMAGE }}:sha-${{ steps.tag.outputs.short_sha }}
+          tags: ghcr.io/${{ env.GHCR_IMAGE }}:${{ steps.tag.outputs.version }}
 
-      # The exact multi-platform artifact is scanned before any mutable release
-      # tag moves. The immutable GHCR sha tag doubles as the promotion source.
+      # The exact multi-platform artifact is scanned before any release tag moves.
       - name: Scan release candidate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
@@ -217,25 +233,21 @@ jobs:
       - name: Promote verified candidate
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
-          RELEASE_TAG: ${{ steps.tag.outputs.date_tag }}
-          SHORT_SHA: ${{ steps.tag.outputs.short_sha }}
+          RELEASE_TAG: ${{ steps.tag.outputs.version }}
         shell: bash
         run: |
           source="ghcr.io/${GHCR_IMAGE}@${IMAGE_DIGEST}"
           docker buildx imagetools create \
             --tag "docker.io/${DOCKERHUB_IMAGE}:latest" \
             --tag "docker.io/${DOCKERHUB_IMAGE}:${RELEASE_TAG}" \
-            --tag "docker.io/${DOCKERHUB_IMAGE}:sha-${SHORT_SHA}" \
             --tag "ghcr.io/${GHCR_IMAGE}:latest" \
             --tag "ghcr.io/${GHCR_IMAGE}:${RELEASE_TAG}" \
             "$source"
           for reference in \
             "docker.io/${DOCKERHUB_IMAGE}:latest" \
             "docker.io/${DOCKERHUB_IMAGE}:${RELEASE_TAG}" \
-            "docker.io/${DOCKERHUB_IMAGE}:sha-${SHORT_SHA}" \
             "ghcr.io/${GHCR_IMAGE}:latest" \
             "ghcr.io/${GHCR_IMAGE}:${RELEASE_TAG}" \
-            "ghcr.io/${GHCR_IMAGE}:sha-${SHORT_SHA}"
           do
             published_digest="$(docker buildx imagetools inspect "$reference" --format '{{.Manifest.Digest}}')"
             [[ "$published_digest" == "$IMAGE_DIGEST" ]] || {
@@ -248,7 +260,7 @@ jobs:
         id: rollback
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
-          RELEASE_TAG: ${{ steps.tag.outputs.date_tag }}
+          RELEASE_TAG: ${{ steps.tag.outputs.version }}
         shell: bash
         run: |
           [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {

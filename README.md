@@ -48,7 +48,7 @@ cd subweb
 
 ### 预构建镜像
 
-Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 是等价的 Gateway 发布来源。使用 [`scripts/docker-deploy.sh`](scripts/docker-deploy.sh) 时必须显式传入 `--image`，并只接受 `sha-*` 标签或 `@sha256` 摘要，拒绝可变的 `latest`。SubConverter、MyUrls Rust 和 Redis 的版本与 digest 由 [版本锁](deploy/versions.lock.json) 管理。
+Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 是等价的 Gateway 发布来源。使用 [`scripts/docker-deploy.sh`](scripts/docker-deploy.sh) 时必须显式传入 `--image`，并只接受 Git tag 或 `@sha256` 摘要，拒绝可变的 `latest`。SubConverter、MyUrls Rust 和 Redis 的版本与 digest 由 [版本锁](deploy/versions.lock.json) 管理。Docker release workflow 只接受手动输入的已有 Git tag。
 
 ## 架构
 
