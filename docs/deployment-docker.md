@@ -1,16 +1,8 @@
 # Docker 部署
 
-Docker 生产部署使用 [`compose.yaml`](../compose.yaml) 的唯一启用短链 profile。Gateway 是项目自有的 Go 单二进制，负责 Host 路由、静态资源、转换请求策略、Redis 限流、MyUrls 适配和内部 HTTPS CONNECT egress。SubConverter、两个 MyUrls Rust v2 实例和 Redis 作为独立服务运行。
+Docker 生产部署使用 [`compose.yaml`](../compose.yaml) 的唯一启用短链 profile。Gateway 是项目自有的 Go 单二进制，负责 Host 路由、静态资源、转换请求策略、Redis 限流、MyUrls 适配和内部 HTTPS CONNECT egress。SubConverter、一个 MyUrls Rust v2 实例和 Redis 作为独立服务运行。
 
-如果必须只运行一个容器，可使用 [`compose.single.yaml`](../compose.single.yaml)。它把 Gateway、SubConverter、两个 MyUrls 实例和 Redis 放进同一个容器，仍使用 `redis-data` 与 `subconverter-runtime` 数据卷。单容器模式牺牲组件级隔离，适合个人部署或资源受限环境；生产环境默认仍建议使用上面的多容器 Compose。
-
-单容器不能阻止已获准访问服务的用户提交自己的订阅地址，也不能在服务器被完全入侵后保护进程内正在处理的 URL。公网部署必须在外层 HTTPS 代理启用认证（例如 Cloudflare Access、VPN 或 Basic Auth），并且不要直接把容器端口发布到公网。若不需要短链，应关闭短链；短链目标会按 TTL 写入 Redis，持有码即可访问。
-
-```sh
-docker compose -f compose.single.yaml up -d --build --wait
-```
-
-单容器模式要求 `.env` 提供 `APP_DOMAIN`、`API_DOMAIN`、`SHORT_DOMAIN`、`API_URL`、`REDIS_PASSWORD`、`IP_HASH_SECRET`、`TURNSTILE_SITE_KEY` 和 `TURNSTILE_SECRET_KEY`。外部 TLS 代理仍只转发到 `127.0.0.1:<SUBWEB_PORT>`。
+公网部署必须在外层 HTTPS 代理启用认证（例如 Cloudflare Access、VPN 或 Basic Auth），并且不要直接把容器端口发布到公网。若不需要短链，应关闭短链；短链目标会按 TTL 写入 Redis，持有码即可访问。
 
 ## 1. 获取源码并启动
 
@@ -37,7 +29,7 @@ cd subweb
 ./scripts/subweb.sh status
 ```
 
-启用短链时 Compose 应准确包含五个服务：`gateway`、`subconverter`、`myurls-app`、`myurls-short`、`redis`。只有 Gateway 发布宿主机端口，且端口绑定 `127.0.0.1`。MyUrls 使用 Redis DB `0`，Gateway 限流使用 Redis DB `1`；Redis、MyUrls 和 SubConverter 没有宿主机端口。
+启用短链时 Compose 应准确包含四个服务：`gateway`、`subconverter`、`myurls`、`redis`。只有 Gateway 发布宿主机端口，且端口绑定 `127.0.0.1`。MyUrls 使用 Redis DB `0`，Gateway 限流使用 Redis DB `1`；Redis、MyUrls 和 SubConverter 没有宿主机端口。
 
 启动依赖会先等待 Gateway（包括内部 `:25502` egress 监听）健康，再启动 SubConverter，以避免代理尚未就绪时产生启动告警。
 
@@ -97,3 +89,14 @@ printf '%s\n' "$TURNSTILE_SECRET_KEY" | ./scripts/subweb.sh install \
 ```
 
 备份和恢复只在短链启用且显式确认停止写入时可用。不要将 `.env`、备份文件、Redis 密码、Turnstile 私钥或完整短码放入日志、Issue 或截图。
+
+## 从双 MyUrls 迁移
+
+本次变更需要新 Gateway 与新 Compose 配套使用；旧镜像读取两个上游变量，不能搭配新的 `MYURLS_UPSTREAM`。保留相同的 Compose project、`.env` 中的 Redis 密码/IP 哈希密钥及 `redis-data` volume，不需要迁移 Redis key。
+
+1. 在旧版本目录先执行 `./scripts/subweb.sh backup --output /absolute/path/pre-single-myurls.rdb`，并记录旧 Git commit 和 Gateway 镜像 digest。
+2. 仍使用旧 Compose，执行 `docker compose stop gateway myurls-app myurls-short` 停止写入，必要时再次备份；不要执行带 `--volumes` 的删除命令。
+3. 更新到四服务版本，并使用与该版本匹配的 Gateway 镜像，或清除旧 `SUBWEB_IMAGE` 配置后从当前源码构建。执行 `./scripts/subweb.sh verify` 和 `./scripts/subweb.sh up`；启动入口的 `--remove-orphans` 会移除旧的两个 MyUrls 容器，不删除数据卷。
+4. 确认只有四个服务，验证 APP 创建返回 SHORT 域名地址、SHORT 跳转、SHORT 创建接口被拒绝和创建挑战。
+
+回滚前停止新 Gateway 和 MyUrls，恢复旧 Git 版本、旧 Gateway 镜像配置和双上游 Compose，再启动并清理新 `myurls` 孤立容器；不能只改镜像。仅在数据确实需要恢复时使用备份，并明确接受备份之后写入的数据会丢失。

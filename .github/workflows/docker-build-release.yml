@@ -241,7 +241,7 @@ jobs:
           sbom: true
           tags: ghcr.io/${{ env.GHCR_IMAGE }}:${{ steps.tag.outputs.version }}
 
-      # The exact multi-platform artifact is scanned before any release tag moves.
+      # The exact multi-platform artifact is scanned before it is promoted to release tags.
       - name: Scan release candidate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
@@ -251,6 +251,23 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
+
+      - name: Remove failed release candidate package version
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_PACKAGE: subweb
+          RELEASE_TAG: ${{ steps.tag.outputs.version }}
+        shell: bash
+        run: |
+          version_ids=$(gh api --paginate \
+            "/user/packages/container/${GHCR_PACKAGE}/versions?per_page=100" \
+            --jq '.[] | select(.metadata.container.tags[]? == env.RELEASE_TAG) | .id')
+          while IFS= read -r version_id; do
+            [ -n "$version_id" ] || continue
+            gh api --method DELETE \
+              "/user/packages/container/${GHCR_PACKAGE}/versions/${version_id}"
+          done <<< "$version_ids"
 
       - name: Promote verified candidate
         env:

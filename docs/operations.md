@@ -8,10 +8,10 @@
 ./scripts/subweb.sh status
 ./scripts/subweb.sh logs gateway
 ./scripts/subweb.sh logs subconverter
-./scripts/subweb.sh logs myurls-app myurls-short redis
+./scripts/subweb.sh logs myurls redis
 ```
 
-`status` 通过 Compose 健康检查确认服务状态。启用短链时应看到 `gateway`、`subconverter`、`myurls-app`、`myurls-short` 和 `redis`；关闭短链时只应看到 `gateway` 与 `subconverter`。只有 Gateway 应有宿主机端口。
+`status` 通过 Compose 健康检查确认服务状态。启用短链时应看到 `gateway`、`subconverter`、`myurls` 和 `redis`；关闭短链时只应看到 `gateway` 与 `subconverter`。只有 Gateway 应有宿主机端口。
 
 日志使用 `Asia/Shanghai`，json-file 驱动单文件 `10m`、最多 `3` 个文件。日志不应包含原始 IP、订阅 URL、Query、Token、Redis 密码或完整短码。Gateway 的受控 egress 失败和 MyUrls 的 challenge/retry 元数据可以用于排查，但不要扩大日志级别到 `verbose` 后长期运行。
 
@@ -49,8 +49,8 @@ npm run verify:operations
 ## 资源与故障处理
 
 - Gateway unhealthy：先查看 `gateway` 日志，再确认 `.env` 中 API URL、域名和 feature flags，没有把外部代理变量误传给本地服务。
-- SubConverter unhealthy：检查 `/base` volume bootstrap、业务进程是否为非 root UID 和 `CapEff=0`，不要给容器恢复全部 capabilities。单容器模式还应检查入口进程是否仅保留启动所需的 `CHOWN`、`SETUID`、`SETGID`。
-- MyUrls unhealthy：确认 Redis DB `0`、两个 `PUBLIC_BASE_URL` 和 Cloudflare Turnstile 配置分别对应 APP/SHORT 域名。
+- SubConverter unhealthy：检查 `/base` volume bootstrap、业务进程是否为非 root UID 和 `CapEff=0`，不要给容器恢复全部 capabilities。
+- MyUrls unhealthy：确认 Redis DB `0`、`PUBLIC_BASE_URL=https://${SHORT_DOMAIN}` 和 `TURNSTILE_HOSTNAME=${APP_DOMAIN}`；创建挑战需要有效的 Cloudflare 配置。
 - Redis unhealthy：检查密码、只读配置模板和数据 volume；不要删除 volume 作为第一步排查。
 
 维护前先记录 `git status --short` 和 Compose 状态。升级与恢复的详细边界见 [维护与验证](maintenance.md) 和 [安全](security.md)。

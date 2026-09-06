@@ -49,8 +49,7 @@ type Config struct {
 	IPHashSecret               []byte
 	TurnstileSiteKey           string
 	SubConverterUpstream       *url.URL
-	MyURLsAppUpstream          *url.URL
-	MyURLsShortUpstream        *url.URL
+	MyURLsUpstream             *url.URL
 	ConversionRateLimit        int
 	ConversionRateWindow       time.Duration
 	ConversionMaxRequestBytes  int64
@@ -138,11 +137,7 @@ func Load(getenv func(string) string) (Config, error) {
 		if err != nil {
 			return Config{}, err
 		}
-		myURLsAppUpstream, err := loadHTTPURL("MYURLS_APP_UPSTREAM", getenv("MYURLS_APP_UPSTREAM"))
-		if err != nil {
-			return Config{}, err
-		}
-		myURLsShortUpstream, err := loadHTTPURL("MYURLS_SHORT_UPSTREAM", getenv("MYURLS_SHORT_UPSTREAM"))
+		myURLsUpstream, err := loadHTTPURL("MYURLS_UPSTREAM", getenv("MYURLS_UPSTREAM"))
 		if err != nil {
 			return Config{}, err
 		}
@@ -158,8 +153,7 @@ func Load(getenv func(string) string) (Config, error) {
 		cfg.RedisPassword = redisPassword
 		cfg.IPHashSecret = ipHashSecret
 		cfg.TurnstileSiteKey = turnstileSiteKey
-		cfg.MyURLsAppUpstream = myURLsAppUpstream
-		cfg.MyURLsShortUpstream = myURLsShortUpstream
+		cfg.MyURLsUpstream = myURLsUpstream
 	}
 
 	if cfg.ConversionRateLimit, err = loadPositiveInt(getenv, "CONVERSION_RATE_LIMIT", defaultConversionRateLimit, maxConversionRateLimit); err != nil {

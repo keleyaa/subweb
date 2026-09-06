@@ -40,7 +40,7 @@ backup_directory=${backup%/*}
 require_private_directory "$backup_directory"
 
 cd "$operations_project_root"
-docker compose stop gateway myurls-app myurls-short >/dev/null \
+docker compose stop gateway myurls >/dev/null \
   || operations_fail 'unable to stop short-link write entrypoints.'
 writes_stopped=1
 report_stopped() {

@@ -39,12 +39,11 @@ describe('Compose-first local workflow contract', () => {
     expect(common).toContain('LOCAL_MYURLS_PORT');
     expect(common).toContain('LOCAL_SUBWEB_PORT');
     expect(override).not.toMatch(/redis:[\s\S]*?ports:/u);
-    expect(override).toContain('myurls-app:');
-    expect(override).toContain('myurls-short:');
+    expect(override).toContain('myurls:');
     expect(override).toContain('subconverter:');
     expect(override).toContain('NODE_ENV: development');
     expect(override).toContain('TURNSTILE_ENABLED: "false"');
     expect(override).not.toContain('subweb:');
-    expect(override).not.toContain('myurls:');
+    expect(override.match(/^ {2}myurls:/gmu)).toHaveLength(1);
   });
 });

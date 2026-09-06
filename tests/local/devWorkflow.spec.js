@@ -22,7 +22,7 @@ describe('Compose-first local development workflow', () => {
     expect(common).toContain('export LOCAL_VITE_PORT="$local_vite_port"');
     expect(common).toContain('temporary_env=$local_env_file.tmp.$$');
     expect(common).toContain('API_URL=http://127.0.0.1:$local_subweb_port');
-    expect(dependencies).toContain('docker compose up -d --build --remove-orphans --wait gateway subconverter myurls-app myurls-short redis');
+    expect(dependencies).toContain('docker compose up -d --build --remove-orphans --wait gateway subconverter myurls redis');
     expect(override).toContain('NODE_ENV: development');
     expect(override).toContain('TURNSTILE_ENABLED: "false"');
     expect(override).toContain('PUBLIC_BASE_URL: "http://127.0.0.1:${LOCAL_MYURLS_PORT:-18082}"');
@@ -46,7 +46,7 @@ describe('Compose-first local development workflow', () => {
   it('stops dependencies without deleting development data volumes', async () => {
     const dependencies = await read('scripts/local/deps.sh');
 
-    expect(dependencies).toContain('docker compose stop gateway subconverter myurls-app myurls-short redis');
+    expect(dependencies).toContain('docker compose stop gateway subconverter myurls redis');
     expect(dependencies).not.toContain('down --volumes');
     expect(dependencies).not.toContain('volume rm');
   });

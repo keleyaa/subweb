@@ -17,30 +17,27 @@ import (
 	"github.com/keleyaa/subweb/services/gateway/internal/ratelimit"
 )
 
-func TestBuildServersRoutesAppAndShortLinksToSeparateUpstreams(t *testing.T) {
+func TestBuildServersRoutesAppAndShortLinksToOneUpstream(t *testing.T) {
 	var appHeaders, shortHeaders http.Header
-	app := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.Method != http.MethodPost || request.URL.Path != "/api/links" {
-			t.Fatalf("app request = %s %s", request.Method, request.URL.Path)
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodPost && request.URL.Path == "/api/links":
+			appHeaders = request.Header.Clone()
+			writer.Header().Set("Content-Type", "application/json")
+			writer.WriteHeader(http.StatusCreated)
+			_, _ = writer.Write([]byte(`{"code":"Ab3dE9_x","shortUrl":"https://short.example.test/Ab3dE9_x"}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/Ab3dE9_x":
+			shortHeaders = request.Header.Clone()
+			writer.Header().Set("Location", "https://destination.example.test/subscription")
+			writer.WriteHeader(http.StatusFound)
+		default:
+			t.Errorf("unexpected upstream request = %s %s", request.Method, request.URL.Path)
+			writer.WriteHeader(http.StatusNotFound)
 		}
-		appHeaders = request.Header.Clone()
-		writer.Header().Set("Content-Type", "application/json")
-		writer.WriteHeader(http.StatusCreated)
-		_, _ = writer.Write([]byte(`{"code":"Ab3dE9_x"}`))
 	}))
-	defer app.Close()
+	defer upstream.Close()
 
-	short := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.Method != http.MethodGet || request.URL.Path != "/Ab3dE9_x" {
-			t.Fatalf("short request = %s %s", request.Method, request.URL.Path)
-		}
-		shortHeaders = request.Header.Clone()
-		writer.Header().Set("Location", "https://destination.example.test/subscription")
-		writer.WriteHeader(http.StatusFound)
-	}))
-	defer short.Close()
-
-	cfg := testGatewayConfig(t, app.URL, short.URL, true)
+	cfg := testGatewayConfig(t, upstream.URL, true)
 	server, egressServer, closeResources, err := buildServers(cfg, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -88,6 +85,25 @@ func TestBuildServersRoutesAppAndShortLinksToSeparateUpstreams(t *testing.T) {
 	if got := shortHeaders.Get("X-Forwarded-Host"); got != cfg.ShortDomain {
 		t.Fatalf("short X-Forwarded-Host = %q, want %q", got, cfg.ShortDomain)
 	}
+	for _, testCase := range []struct {
+		host, method, path string
+		status             int
+	}{
+		{cfg.ShortDomain, http.MethodPost, "/short-api/links", http.StatusNotFound},
+		{cfg.ShortDomain, http.MethodPost, "/api/links", http.StatusNotFound},
+		{cfg.AppDomain, http.MethodPost, "/api/links", http.StatusMethodNotAllowed},
+		{cfg.APIDomain, http.MethodPost, "/short-api/links", http.StatusNotFound},
+		{"unknown.example.test", http.MethodPost, "/short-api/links", http.StatusMisdirectedRequest},
+		{cfg.ShortDomain, http.MethodPost, "/Ab3dE9_x", http.StatusMethodNotAllowed},
+	} {
+		request := httptest.NewRequest(testCase.method, "https://"+testCase.host+testCase.path, strings.NewReader(`{}`))
+		request.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		server.Handler.ServeHTTP(response, request)
+		if response.Code != testCase.status {
+			t.Fatalf("%s %s %s status = %d, want %d", testCase.host, testCase.method, testCase.path, response.Code, testCase.status)
+		}
+	}
 	for _, name := range []string{"Authorization", "Cookie", "Origin"} {
 		if got := appHeaders.Get(name); got != "" {
 			t.Fatalf("app %s = %q, want empty", name, got)
@@ -95,49 +111,21 @@ func TestBuildServersRoutesAppAndShortLinksToSeparateUpstreams(t *testing.T) {
 	}
 }
 
-func TestReadinessRequiresBothMyURLsInstancesWhenShortLinksAreEnabled(t *testing.T) {
-	for name, testCase := range map[string]struct {
-		appStatus   int
-		shortStatus int
-	}{
-		"healthy":           {appStatus: http.StatusOK, shortStatus: http.StatusOK},
-		"app unavailable":   {appStatus: http.StatusServiceUnavailable, shortStatus: http.StatusOK},
-		"short unavailable": {appStatus: http.StatusOK, shortStatus: http.StatusServiceUnavailable},
-	} {
-		t.Run(name, func(t *testing.T) {
-			app := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-				if request.URL.Path != "/health/live" {
-					t.Fatalf("app path = %q, want /health/live", request.URL.Path)
-				}
-				writer.WriteHeader(testCase.appStatus)
-			}))
-			defer app.Close()
-			short := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-				if request.URL.Path != "/health/live" {
-					t.Fatalf("short path = %q, want /health/live", request.URL.Path)
-				}
-				writer.WriteHeader(testCase.shortStatus)
-			}))
-			defer short.Close()
-
-			cfg := testGatewayConfig(t, app.URL, short.URL, true)
-			readiness := readinessFunc(
-				cfg,
-				pingableCounterStore{CounterStore: ratelimit.NewMemoryStore()},
-				myurls.NewHTTPClient(mustParseURL(t, app.URL), nil),
-				myurls.NewHTTPClient(mustParseURL(t, short.URL), nil),
-			)
-			err := readiness(context.Background())
-			if testCase.appStatus == http.StatusOK && testCase.shortStatus == http.StatusOK {
-				if err != nil {
-					t.Fatalf("readiness error = %v, want nil", err)
-				}
-				return
+func TestReadinessRequiresOneMyURLsInstanceWhenShortLinksAreEnabled(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusServiceUnavailable} {
+		upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			if request.URL.Path != "/health/live" {
+				t.Errorf("health path = %q", request.URL.Path)
 			}
-			if err == nil {
-				t.Fatal("readiness error = nil, want unavailable dependency error")
-			}
-		})
+			writer.WriteHeader(status)
+		}))
+		cfg := testGatewayConfig(t, upstream.URL, true)
+		readiness := readinessFunc(cfg, pingableCounterStore{CounterStore: ratelimit.NewMemoryStore()}, myurls.NewHTTPClient(mustParseURL(t, upstream.URL), nil))
+		err := readiness(context.Background())
+		upstream.Close()
+		if (err == nil) != (status == http.StatusOK) {
+			t.Fatalf("status %d readiness error = %v", status, err)
+		}
 	}
 }
 
@@ -188,14 +176,14 @@ func TestEgressHealthAddressUsesLoopbackAndConfiguredPort(t *testing.T) {
 }
 
 func TestReadinessRejectsNilContextWhenShortLinksAreEnabled(t *testing.T) {
-	cfg := testGatewayConfig(t, "", "", true)
-	if err := readinessFunc(cfg, ratelimit.NewMemoryStore(), nil, nil)(nil); err == nil {
+	cfg := testGatewayConfig(t, "", true)
+	if err := readinessFunc(cfg, pingableCounterStore{CounterStore: ratelimit.NewMemoryStore()}, testReadinessClient{})(nil); err == nil {
 		t.Fatal("readiness error = nil, want unavailable error")
 	}
 }
 
 func TestReadinessFailsClosedWhenMyURLsDependenciesAreMissing(t *testing.T) {
-	cfg := testGatewayConfig(t, "", "", true)
+	cfg := testGatewayConfig(t, "", true)
 	readiness := readinessFunc(cfg, pingableCounterStore{CounterStore: ratelimit.NewMemoryStore()})
 	if err := readiness(context.Background()); err == nil {
 		t.Fatal("readiness error = nil, want unavailable error")
@@ -203,11 +191,10 @@ func TestReadinessFailsClosedWhenMyURLsDependenciesAreMissing(t *testing.T) {
 }
 
 func TestReadinessFailsClosedWhenRedisPingIsUnavailable(t *testing.T) {
-	cfg := testGatewayConfig(t, "", "", true)
+	cfg := testGatewayConfig(t, "", true)
 	readiness := readinessFunc(
 		cfg,
 		ratelimit.NewMemoryStore(),
-		testReadinessClient{},
 		testReadinessClient{},
 	)
 	if err := readiness(context.Background()); err == nil {
@@ -216,12 +203,11 @@ func TestReadinessFailsClosedWhenRedisPingIsUnavailable(t *testing.T) {
 }
 
 func TestReadinessReturnsRedisFailure(t *testing.T) {
-	cfg := testGatewayConfig(t, "", "", true)
+	cfg := testGatewayConfig(t, "", true)
 	wantErr := errors.New("redis unavailable")
 	readiness := readinessFunc(
 		cfg,
 		pingableCounterStore{CounterStore: ratelimit.NewMemoryStore(), pingErr: wantErr},
-		testReadinessClient{},
 		testReadinessClient{},
 	)
 	if err := readiness(context.Background()); !errors.Is(err, wantErr) {
@@ -273,12 +259,11 @@ func (resolver resolverFunc) LookupNetIP(ctx context.Context, network, host stri
 }
 
 func TestBuildServersDisablesShortLinkDependencies(t *testing.T) {
-	cfg := testGatewayConfig(t, "", "", false)
+	cfg := testGatewayConfig(t, "", false)
 	cfg.RedisURL = "not a Redis URL"
 	cfg.RedisPassword = ""
 	cfg.IPHashSecret = nil
-	cfg.MyURLsAppUpstream = nil
-	cfg.MyURLsShortUpstream = nil
+	cfg.MyURLsUpstream = nil
 
 	server, egressServer, closeResources, err := buildServers(cfg, nil)
 	if err != nil {
@@ -306,7 +291,7 @@ func mustParseURL(t *testing.T, value string) *url.URL {
 	return parsed
 }
 
-func testGatewayConfig(t *testing.T, appUpstream, shortUpstream string, shortLinksEnabled bool) config.Config {
+func testGatewayConfig(t *testing.T, upstream string, shortLinksEnabled bool) config.Config {
 	t.Helper()
 	parseURL := func(value string) *url.URL {
 		if value == "" {
@@ -328,8 +313,7 @@ func testGatewayConfig(t *testing.T, appUpstream, shortUpstream string, shortLin
 		IPHashSecret:               []byte("0123456789abcdef0123456789abcdef"),
 		TurnstileSiteKey:           "site-key",
 		SubConverterUpstream:       parseURL("http://subconverter:25500"),
-		MyURLsAppUpstream:          parseURL(appUpstream),
-		MyURLsShortUpstream:        parseURL(shortUpstream),
+		MyURLsUpstream:             parseURL(upstream),
 		ConversionRateLimit:        10,
 		ConversionRateWindow:       time.Minute,
 		ConversionMaxRequestBytes:  16 * 1024,
@@ -338,5 +322,13 @@ func testGatewayConfig(t *testing.T, appUpstream, shortUpstream string, shortLin
 		ConversionDNSTimeout:       2 * time.Second,
 		EgressConnectTimeout:       5 * time.Second,
 		ConversionMaxConcurrency:   2,
+	}
+}
+
+func TestReadinessAcceptsOneHealthyMyURLsInstance(t *testing.T) {
+	cfg := testGatewayConfig(t, "", true)
+	readiness := readinessFunc(cfg, pingableCounterStore{CounterStore: ratelimit.NewMemoryStore()}, testReadinessClient{})
+	if err := readiness(context.Background()); err != nil {
+		t.Fatalf("single-instance readiness error = %v", err)
 	}
 }

@@ -17,7 +17,7 @@ unset \
   APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN \
   SHORT_LINKS_ENABLED CUSTOM_BACKEND_ENABLED \
   CONVERSION_RATE_LIMIT CONVERSION_RATE_WINDOW_SECONDS \
-  SUBWEB_PORT MYURLS_NETWORK_SUBNET MYURLS_GATEWAY_IP MYURLS_APP_IP MYURLS_SHORT_IP MYURLS_TRUST_PROXY_CIDR \
+  SUBWEB_PORT MYURLS_NETWORK_SUBNET MYURLS_GATEWAY_IP MYURLS_IP MYURLS_TRUST_PROXY_CIDR \
   REDIS_PASSWORD IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY \
   MYURLS_IMAGE REDIS_IMAGE SUBCONVERTER_IMAGE
 
@@ -34,8 +34,7 @@ ip_hash_secret=$(openssl rand -hex 32)
 test_network_subnet=$("$script_directory/select-test-network.sh")
 test_network_prefix=${test_network_subnet%.*}
 test_gateway_ip=$test_network_prefix.2
-test_app_ip=$test_network_prefix.3
-test_short_ip=$test_network_prefix.4
+test_myurls_ip=$test_network_prefix.3
 
 node "$project_root/scripts/verify-version-locks.mjs" >/dev/null
 myurls_image=$(node - "$project_root/deploy/versions.lock.json" <<'NODE'
@@ -70,8 +69,7 @@ trap cleanup EXIT HUP INT TERM
     "SUBWEB_PORT=$host_port" \
     "MYURLS_NETWORK_SUBNET=$test_network_subnet" \
     "MYURLS_GATEWAY_IP=$test_gateway_ip" \
-    "MYURLS_APP_IP=$test_app_ip" \
-    "MYURLS_SHORT_IP=$test_short_ip" \
+    "MYURLS_IP=$test_myurls_ip" \
     "MYURLS_TRUST_PROXY_CIDR=$test_gateway_ip/32" \
     "REDIS_PASSWORD=$password" \
     "IP_HASH_SECRET=$ip_hash_secret" \
@@ -120,7 +118,7 @@ short_resolves
 "$script_directory/operations/backup-redis.sh" --output "$backup_file" >/dev/null
 "$script_directory/operations/verify-redis-backup.sh" --backup "$backup_file" >/dev/null
 
-docker compose stop gateway myurls-app myurls-short >/dev/null
+docker compose stop gateway myurls >/dev/null
 docker compose exec -T redis sh -eu -c \
   'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning FLUSHDB >/dev/null'
 "$script_directory/operations/restore-redis.sh" --backup "$backup_file" --confirm-stop-writes >/dev/null

@@ -12,14 +12,13 @@ TLS、证书和公网 DNS 由部署者已有的外部反向代理负责。Subweb
 
 ### 2.1 短链开启
 
-`compose.yaml` 是唯一的短链开启生产 Compose 文件，准确运行五个服务：
+`compose.yaml` 是唯一的短链开启生产 Compose 文件，准确运行四个服务：
 
 | 服务 | 职责 |
 | --- | --- |
 | `gateway` | 唯一公开 loopback 端口；Host 路由、静态资源、转换策略、限流、MyUrls 适配和 egress |
 | `subconverter` | 执行订阅转换；只能通过内部 CONNECT egress 访问外部订阅 |
-| `myurls-app` | APP 域名的短链创建和管理 API |
-| `myurls-short` | SHORT 域名的短码解析和跳转 |
+| `myurls` | APP 短链创建及 APP/SHORT 短码解析的唯一实例 |
 | `redis` | DB `0` 保存 MyUrls 数据，DB `1` 保存 Gateway IP 限流状态 |
 
 只有 Gateway 发布宿主机端口，而且端口必须绑定 `127.0.0.1`。MyUrls、Redis 和 SubConverter 不发布宿主机端口。
@@ -37,8 +36,8 @@ TLS、证书和公网 DNS 由部署者已有的外部反向代理负责。Subweb
 
 生产 Compose 使用以下内部网络：
 
-- `myurls-data`：Redis 与两个 MyUrls 实例之间的数据网络。
-- `myurls-edge`：Gateway 与两个 MyUrls 实例之间的 HTTP 边界。
+- `myurls-data`：Redis 与一个 MyUrls 实例之间的数据网络。
+- `myurls-edge`：Gateway 与一个 MyUrls 实例之间的 HTTP 边界。
 - `redis-policy`：Gateway 与 Redis 限流 DB 之间的边界。
 - `subconverter-egress`：Gateway egress listener 与 SubConverter 之间的受控网络，标记为 internal。
 
@@ -54,7 +53,7 @@ Gateway 不加入 `myurls-data`；SubConverter 不加入 MyUrls 或 Redis 网络
 | `API_DOMAIN` | `/sub` 转换接口、健康检查和 API 资源 |
 | `SHORT_DOMAIN` | 短码解析和跳转 |
 
-短链开启时，APP 创建请求只访问 `myurls-app`，SHORT 解析请求只访问 `myurls-short`。Gateway 不向 SHORT 域公开 APP 管理接口。
+短链开启时，APP 创建与 APP/SHORT 解析都访问唯一的 `myurls` 上游。Gateway 不向 SHORT 域公开 APP 管理接口。
 
 Gateway 静态资源只服务文件和明确的 PWA/crawler 路径；缺少扩展名的页面请求才允许受限 SPA fallback。目录、路径遍历、未知资源和错误 Host 不会被 fallback 掩盖。
 
@@ -81,7 +80,7 @@ Go Gateway 是前端与 MyUrls 之间的唯一适配边界：
 - RFC 9457 problem details 只保留白名单错误、`requestId`、`retryAfterSeconds` 和 `challenge` 元数据。
 - MyUrls 客户端禁用上游重定向，只接受 HTTP(S) 解析结果，并使用 10 秒总超时。
 
-两个 MyUrls 实例共享同一个锁定的 Rust v2 镜像，但分别使用 APP 和 SHORT 的 `PUBLIC_BASE_URL`、Turnstile hostname 与路由职责。
+唯一的 MyUrls 实例使用锁定的 Rust v2.0.6 镜像，`PUBLIC_BASE_URL=https://${SHORT_DOMAIN}` 独立于 `TURNSTILE_HOSTNAME=${APP_DOMAIN}`。Gateway 仅使用 `MYURLS_UPSTREAM=http://myurls-edge:3000`。创建保留风险触发的 Turnstile hostname/action 校验；解析只有限流，没有解析挑战。
 
 ## 6. 配置和功能开关
 
@@ -112,7 +111,7 @@ Go Gateway 是前端与 MyUrls 之间的唯一适配边界：
 - DNS 只解析一次，授权凭据一次性使用并短 TTL 过期。
 - 请求体上限为 `16 KiB`；上游响应超过配置上限时返回 `response_too_large`。
 - 请求总超时、DNS 超时、CONNECT 超时、并发和限流均有有限上限，并正确传播取消。
-- Gateway、MyUrls、Redis 和 SubConverter 使用只读根文件系统、最小权限和受限网络；多容器 SubConverter 只在初始化阶段使用明确的 root bootstrap，随后以非 root 用户运行并清除有效 capability。单容器模式的 root 入口只负责启动和回收进程，四类业务进程分别使用独立 UID，但不提供多容器级别的故障隔离。
+- Gateway、MyUrls、Redis 和 SubConverter 使用只读根文件系统、最小权限和受限网络；SubConverter 只在初始化阶段使用明确的 root bootstrap，随后以非 root 用户运行并清除有效 capability。
 - 日志不记录原始订阅 URL、完整 query、Authorization、Cookie、Redis 密码或完整客户端 IP。
 - 短链是持有即可访问的数据；用户应按公开资源处理短链。
 
@@ -141,7 +140,7 @@ npm run verify:local
 ./scripts/subweb.sh down
 ```
 
-恢复只接受短链开启 profile、绝对路径普通备份文件和明确的停止写入确认。恢复流程保留现有 RDB，使用锁定镜像启动隔离栈，并验证 Redis、Gateway、SubConverter 与两个 MyUrls 实例的恢复。
+恢复只接受短链开启 profile、绝对路径普通备份文件和明确的停止写入确认。恢复流程保留现有 RDB，使用锁定镜像启动隔离栈，并验证 Redis、Gateway、SubConverter 与一个 MyUrls 实例的恢复。
 
 ## 9. 验证和发布
 
@@ -161,7 +160,7 @@ npm run verify:evidence
 npm run verify:release
 ```
 
-`verify:release` 会运行浏览器、真实五服务 smoke、两服务 profile、测试 fixture、Redis backup/restore、锁定镜像扫描和 evidence 检查。Go race、Go vet、构建和 `git diff --check` 是需要另行执行或由 CI job 覆盖的独立检查；只有明确输出 `release verification=passed` 才能记录 release verifier 成功。
+`verify:release` 会运行浏览器、真实四服务 smoke、两服务 profile、测试 fixture、Redis backup/restore、锁定镜像扫描和 evidence 检查。Go race、Go vet、构建和 `git diff --check` 是需要另行执行或由 CI job 覆盖的独立检查；只有明确输出 `release verification=passed` 才能记录 release verifier 成功。
 
 ## 10. 发布、证据和回滚
 
@@ -173,11 +172,11 @@ npm run verify:release
 
 当前实现已验证以下场景：
 
-- 五服务生产 profile 的 APP/API/SHORT Host 路由、静态/PWA MIME、转换和短链创建/解析。
+- 四服务生产 profile 的 APP/API/SHORT Host 路由、静态/PWA MIME、转换和短链创建/解析。
 - 私网目标、DNS 失败、超时、响应过大、限流、并发和依赖请求头清理。
-- Gateway、SubConverter、两个 MyUrls 实例和 Redis 的独立重启恢复。
+- Gateway、SubConverter、一个 MyUrls 实例和 Redis 的独立重启恢复。
 - 两服务短链关闭 profile 的启动、转换、功能开关和资源缺失行为。
-- 本地五依赖 Compose-first 生命周期、Vite `/short-api` 代理和 SHORT loopback `302`。
+- 本地四依赖 Compose-first 生命周期、Vite `/short-api` 代理和 SHORT loopback `302`。
 - 锁、Compose 网络/权限、文档、证据、镜像安全和 release preflight 合同。
 
 本文、`docs/architecture.md`、`docs/configuration.md`、部署/运维/安全文档、`README.md`、Compose 文件、版本锁和验证脚本共同构成当前合同；出现冲突时，以可执行验证脚本与生产 Compose 为准。

@@ -169,11 +169,11 @@ compose() {
 SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
   "$SCRIPT_DIRECTORY/validate-compose.sh"
 if [ "$short_links_enabled" = true ]; then
-  compose pull gateway subconverter myurls-app myurls-short redis
+  compose pull gateway subconverter myurls redis
 else
   compose pull gateway subconverter
 fi
-compose up -d --no-build --pull never --wait
+compose up -d --no-build --pull never --remove-orphans --wait
 compose ps
 
 printf 'Docker image deployment started for https://%s.\n' "$app_domain"

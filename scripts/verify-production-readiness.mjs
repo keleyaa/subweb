@@ -8,7 +8,7 @@ const defaultLockPath = fileURLToPath(
 );
 const fullProfile = {
   composeFile: 'compose.yaml',
-  services: ['gateway', 'myurls-app', 'myurls-short', 'redis', 'subconverter'],
+  services: ['gateway', 'myurls', 'redis', 'subconverter'],
 };
 const disabledProfile = {
   composeFile: 'compose.disabled-short-links.yaml',
@@ -159,8 +159,9 @@ const verifyCompose = (compose, profile, lock, errors) => {
   }
 
   for (const requiredSetting of [
-    'MYURLS_APP_UPSTREAM: http://myurls-app-edge:3000',
-    'MYURLS_SHORT_UPSTREAM: http://myurls-short-edge:3000',
+    'MYURLS_UPSTREAM: http://myurls-edge:3000',
+    'PUBLIC_BASE_URL: "https://${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"',
+    'TURNSTILE_HOSTNAME: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"',
     'REDIS_URL: redis://redis:6379/1',
     'SHORT_DOMAIN:',
   ]) {

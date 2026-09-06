@@ -10,7 +10,7 @@ describe('integrated stack privacy sentinel', () => {
   it('scans every service log without printing sensitive values', async () => {
     const source = await readFile(verifier, 'utf8');
 
-    for (const service of ['gateway', 'myurls-app', 'myurls-short', 'subconverter', 'redis']) {
+    for (const service of ['gateway', 'myurls', 'subconverter', 'redis']) {
       expect(source).toContain(service);
     }
     expect(source).toContain('umask 077');

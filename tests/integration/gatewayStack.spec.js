@@ -45,8 +45,7 @@ describe('unified Docker Gateway stack entrypoint', () => {
       'CUSTOM_BACKEND_ENABLED=false',
       'Authorization',
       'X-Forwarded-For',
-      'myurls-app',
-      'myurls-short',
+      'myurls',
       'subconverter',
       'gateway',
       'redis',
@@ -68,7 +67,7 @@ describe('unified Docker Gateway stack entrypoint', () => {
 
     expect(source).toContain('NODE_ENV: production');
     expect(source).toContain('TURNSTILE_MODE: cloudflare');
-    expect(source).toContain('CREATE_DIRECT_LIMIT_10M: "100"');
+    expect(source).toContain('CREATE_DIRECT_LIMIT_10M: "5"');
     expect(source).not.toContain('TURNSTILE_MODE: test');
     expect(source).not.toContain('TEST_STORE');
   });

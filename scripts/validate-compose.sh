@@ -80,8 +80,22 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
     process.exitCode = 1;
   }
   const expected = enabled
-    ? ["gateway", "myurls-app", "myurls-short", "redis", "subconverter"]
+    ? ["gateway", "myurls", "redis", "subconverter"]
     : ["gateway", "subconverter"];
+  if (enabled) {
+    const gateway = services.gateway?.environment ?? {};
+    const myurls = services.myurls?.environment ?? {};
+    if (!gateway.APP_DOMAIN || !gateway.SHORT_DOMAIN || gateway.APP_DOMAIN === gateway.SHORT_DOMAIN ||
+        gateway.MYURLS_UPSTREAM !== "http://myurls-edge:3000" ||
+        myurls.NODE_ENV !== "production" ||
+        myurls.PUBLIC_BASE_URL !== `https://${gateway.SHORT_DOMAIN}` ||
+        myurls.TURNSTILE_HOSTNAME !== gateway.APP_DOMAIN ||
+        myurls.TURNSTILE_ENABLED !== "true" || myurls.TURNSTILE_MODE !== "cloudflare" ||
+        !myurls.TURNSTILE_SITE_KEY || !myurls.TURNSTILE_SECRET_KEY) {
+      console.error("Compose validation error: single MyUrls must use the SHORT base URL and APP production Turnstile contract.");
+      process.exitCode = 1;
+    }
+  }
   const actual = Object.keys(services).sort();
   if (actual.join("\n") !== expected.slice().sort().join("\n")) {
     console.error(`Compose validation error: expected services ${expected.join(", ")}.`);
@@ -100,8 +114,8 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
     const image = lock.services?.[name]?.image;
     return image?.reference && image?.digest ? `${image.reference}@${image.digest}` : null;
   };
-  for (const name of (enabled ? ["redis", "myurls-app", "myurls-short", "subconverter"] : ["subconverter"])) {
-    if (services[name]?.image !== expectedImage(name === "myurls-app" || name === "myurls-short" ? "myurls" : name)) {
+  for (const name of (enabled ? ["redis", 'myurls', "subconverter"] : ["subconverter"])) {
+    if (services[name]?.image !== expectedImage(name)) {
       console.error(`Compose validation error: service ${name} must use its locked image.`);
       process.exitCode = 1;
     }
@@ -139,8 +153,7 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
     ? {
         gateway: ["default", "myurls-edge", "redis-policy", "subconverter-egress"],
         redis: ["myurls-data", "redis-policy"],
-        "myurls-app": ["myurls-data", "myurls-edge"],
-        "myurls-short": ["myurls-data", "myurls-edge"],
+        "myurls": ["myurls-data", "myurls-edge"],
         subconverter: ["subconverter-egress"],
       }
     : { gateway: ["default", "subconverter-egress"], subconverter: ["subconverter-egress"] };

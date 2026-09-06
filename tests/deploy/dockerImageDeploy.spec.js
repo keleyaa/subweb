@@ -30,18 +30,17 @@ const enabledCompose = {
       environment: {
         EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
         SHORT_LINKS_ENABLED: 'true',
+        APP_DOMAIN: 'app.example.com',
+        SHORT_DOMAIN: 'short.example.com',
+        MYURLS_UPSTREAM: 'http://myurls-edge:3000',
       },
       depends_on: {
         redis: { condition: 'service_healthy', restart: true },
-        'myurls-app': { condition: 'service_healthy', restart: true },
-        'myurls-short': { condition: 'service_healthy', restart: true },
+        'myurls': { condition: 'service_healthy', restart: true },
       },
     },
-    'myurls-app': {
-      image: lockedImages.myurls, networks: { 'myurls-data': {}, 'myurls-edge': {} }, user: '10001:10001',
-      read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
-    },
-    'myurls-short': {
+    'myurls': {
+      environment: { NODE_ENV: 'production', PUBLIC_BASE_URL: 'https://short.example.com', TURNSTILE_HOSTNAME: 'app.example.com', TURNSTILE_ENABLED: 'true', TURNSTILE_MODE: 'cloudflare', TURNSTILE_SITE_KEY: 'site-key', TURNSTILE_SECRET_KEY: 'secret-key' },
       image: lockedImages.myurls, networks: { 'myurls-data': {}, 'myurls-edge': {} }, user: '10001:10001',
       read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
     },
@@ -117,13 +116,13 @@ case "$*" in
   'compose version') exit 0 ;;
   'compose -f compose.yaml config --quiet') exit 0 ;;
   'compose -f compose.yaml config --format json') cat "$COMPOSE_JSON_ENABLED" ;;
-  'compose -f compose.yaml pull gateway subconverter myurls-app myurls-short redis') exit "\${DOCKER_PULL_STATUS:-0}" ;;
+  'compose -f compose.yaml pull gateway subconverter myurls redis') exit "\${DOCKER_PULL_STATUS:-0}" ;;
   'compose -f compose.disabled-short-links.yaml config --quiet') exit 0 ;;
   'compose -f compose.disabled-short-links.yaml config --format json') cat "$COMPOSE_JSON_DISABLED" ;;
   'compose -f compose.disabled-short-links.yaml pull gateway subconverter') exit "\${DOCKER_PULL_STATUS:-0}" ;;
-  'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --wait') exit 0 ;;
+  'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --remove-orphans --wait') exit 0 ;;
   'compose -f compose.disabled-short-links.yaml ps') exit 0 ;;
-  'compose -f compose.yaml up -d --no-build --pull never --wait') exit 0 ;;
+  'compose -f compose.yaml up -d --no-build --pull never --remove-orphans --wait') exit 0 ;;
   'compose -f compose.yaml ps') exit 0 ;;
   *) exit 64 ;;
 esac
@@ -181,8 +180,8 @@ describe('Docker image quick deployment', () => {
       'compose version',
       'compose -f compose.yaml config --quiet',
       'compose -f compose.yaml config --format json',
-      'compose -f compose.yaml pull gateway subconverter myurls-app myurls-short redis',
-      'compose -f compose.yaml up -d --no-build --pull never --wait',
+      'compose -f compose.yaml pull gateway subconverter myurls redis',
+      'compose -f compose.yaml up -d --no-build --pull never --remove-orphans --wait',
       'compose -f compose.yaml ps',
       '',
     ].join('\n'));
@@ -264,7 +263,7 @@ EOF
     expect(env).not.toMatch(/(?:SHORT_DOMAIN|TURNSTILE_|IP_HASH_SECRET|REDIS_PASSWORD)=/);
     const log = await readFile(join(root, 'docker.log'), 'utf8');
     expect(log).toContain('compose -f compose.disabled-short-links.yaml pull gateway subconverter');
-    expect(log).toContain('compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --wait');
+    expect(log).toContain('compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --remove-orphans --wait');
     expect(log).not.toContain('compose -f compose.yaml pull');
   });
 
@@ -275,7 +274,7 @@ EOF
 
     expect(result.status).not.toBe(0);
     const log = await readFile(join(root, 'docker.log'), 'utf8');
-    expect(log).toContain('compose -f compose.yaml pull gateway subconverter myurls-app myurls-short redis');
+    expect(log).toContain('compose -f compose.yaml pull gateway subconverter myurls redis');
     expect(log).not.toContain('compose up');
   });
 });

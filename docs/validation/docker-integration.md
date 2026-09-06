@@ -12,17 +12,19 @@ npm run verify:integration
 
 ## 覆盖范围
 
-启用短链的五服务 profile 使用锁定的 MyUrls Rust v2.0.6、SubConverter 和 Redis production 镜像，并检查：
+启用短链的四服务 profile 使用锁定的 MyUrls Rust v2.0.6、SubConverter 和 Redis production 镜像，并检查：
 
 - APP、API、SHORT 三个 Host 的路由隔离；
 - `config.js`、favicon、manifest、PWA 图标、robots 和 sitemap 的状态与 MIME；
 - `/sub` 的允许输入、inline conversion、私网 URL 拒绝、请求大小、响应大小、超时、并发和限流；
-- `/short-api/links` 创建、SHORT 短码解析、TTL 过期、Turnstile challenge/retry 和错误 problem-details；
-- Gateway、SubConverter、`myurls-app`、`myurls-short` 和 Redis 的独立重启恢复；
+- `/short-api/links` 创建、SHORT 短码解析、TTL 过期、达到生产阈值后无 token 返回 `challenge_required`、挑战不影响已有短链解析，以及错误 problem-details；
+- Gateway、SubConverter、`myurls` 和 Redis 的独立重启恢复；
 - Authorization、Cookie、Origin、Proxy-Authorization、客户端转发头、订阅 URL、Token 和 IP 的日志/依赖边界隐私；
 - `SHORT_LINKS_ENABLED=false` 的两服务 profile：不读取 Redis、MyUrls、SHORT 域名或 Turnstile 私钥，同时普通转换仍可用。
 
 超时、过大响应和依赖 header 清理使用脚本内的 test-only fixture overlay；该 overlay 仅替换 SubConverter，以确定性的本地上游覆盖边界行为，同时保留生产 Gateway、MyUrls、Redis 服务和网络拓扑。它不属于生产 Compose。
+
+该 Docker smoke 不使用真实 Cloudflare 凭据，不证明成功 token 的在线兑换。上线前须在 APP 域名实际完成一次挑战，并确认有效 token 创建成功、错误 hostname/action token 被拒绝；不能用开发环境关闭挑战的结果代替。
 
 ## 运行要求
 

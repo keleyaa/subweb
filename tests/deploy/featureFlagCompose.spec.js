@@ -42,7 +42,7 @@ describe('short-links-disabled Compose contract', () => {
       CUSTOM_BACKEND_ENABLED: 'false',
       SUBCONVERTER_UPSTREAM: 'http://subconverter:25500',
     });
-    for (const name of ['REDIS_URL', 'REDIS_PASSWORD', 'IP_HASH_SECRET', 'TURNSTILE_SITE_KEY', 'MYURLS_APP_UPSTREAM', 'MYURLS_SHORT_UPSTREAM']) {
+    for (const name of ['REDIS_URL', 'REDIS_PASSWORD', 'IP_HASH_SECRET', 'TURNSTILE_SITE_KEY', 'MYURLS_UPSTREAM']) {
       expect(config.services.gateway.environment).not.toHaveProperty(name);
     }
     expect(config.services.gateway.depends_on).toBeUndefined();

@@ -221,8 +221,7 @@ describe("documentation contract", () => {
     expect(docker).toContain("自动生成");
     expect(local).toContain("http://127.0.0.1:5173/");
     expect(local).toContain("compose.dev.yaml");
-    expect(local).toContain("myurls-app");
-    expect(local).toContain("myurls-short");
+    expect(local).toContain("myurls");
     expect(local).not.toContain("合并容器");
     expect(local).not.toContain("hardened Compose 的 Request Policy");
     expect(local).toContain("不要在其他项目目录执行");
@@ -274,7 +273,7 @@ describe("documentation contract", () => {
     expect(security).toContain("SSRF");
     expect(security).toContain("IP_HASH_SECRET");
     expect(security).toContain("MYURLS");
-    expect(read("docs/deployment.md")).toContain("五个服务");
+    expect(read("docs/deployment.md")).toContain("四个服务");
     expect(read("docs/deployment.md")).toContain("SHORT_LINKS_ENABLED=false");
     expect(read("docs/architecture.md")).toContain("Go Gateway");
     expect(read("docs/architecture.md")).not.toContain("独立 Request Policy");
@@ -418,7 +417,8 @@ describe("documentation contract", () => {
       "不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像",
     );
     expect(integration).toContain("v2.0.6");
-    expect(integration).toContain("challenge/retry");
+    expect(integration).toContain("challenge_required");
+    expect(integration).toContain("不证明成功 token 的在线兑换");
     expect(maintenance).not.toContain("/Users/li/Desktop/GitHub/MyUrls");
   });
 
@@ -464,7 +464,7 @@ describe("documentation contract", () => {
       expect(source, file).not.toMatch(/docker\s+(?:pull|run)[^\n]*:latest/iu);
     }
     expect(read("README.md")).toContain("SHORT_LINKS_ENABLED");
-    expect(read("docs/architecture.md")).toContain("五个服务");
+    expect(read("docs/architecture.md")).toContain("四个服务");
     expect(read("docs/architecture.md")).toContain("两服务");
     expect(read("docs/operations.md")).toContain("外部 TLS");
   });

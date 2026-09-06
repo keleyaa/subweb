@@ -19,11 +19,11 @@
 
 ## 获取 Turnstile 密钥
 
-登录 [Cloudflare Dashboard 的 Turnstile 页面](https://developers.cloudflare.com/turnstile/get-started/widget-management/dashboard/)，选择 **Add widget** 创建 Widget。Hostname 至少填写 `APP_DOMAIN`；如果 SHORT 域名也承载验证组件，同时填写 `SHORT_DOMAIN`。创建后复制 Site Key 和 Secret Key。
+登录 [Cloudflare Dashboard 的 Turnstile 页面](https://developers.cloudflare.com/turnstile/get-started/widget-management/dashboard/)，选择 **Add widget** 创建 Widget。Hostname 填写 `APP_DOMAIN`；当前 MyUrls v2.0.6 只在创建时触发挑战，SHORT 解析不承载验证组件。创建后复制 Site Key 和 Secret Key。
 
 部署命令中的 `--turnstile-site-key` 接收 Site Key；交互式部署会隐藏提示输入 Secret Key，并将两者写入根目录 `.env`（权限 `0600`）。CI 或非交互环境使用 `--turnstile-secret-key-stdin` 通过标准输入传入 Secret Key。Site Key 会出现在前端运行时配置中，Secret Key 只能保留在服务端，不能提交到 Git、写入镜像或放入日志。
 
-启用短链时 APP 与 SHORT 使用不同的 `PUBLIC_BASE_URL`，因此需要两个 MyUrls 实例。不要把两个域名合并到一个实例，也不要给 SHORT Host 暴露管理 API。
+启用短链时只运行一个 `myurls` 实例。Compose 将 `PUBLIC_BASE_URL` 固定为 `https://${SHORT_DOMAIN}`，将 `TURNSTILE_HOSTNAME` 固定为 `${APP_DOMAIN}`，分别控制返回的短链地址和创建挑战的 hostname 校验；两项可以独立配置。Gateway 使用唯一的 `MYURLS_UPSTREAM=http://myurls-edge:3000`，但仍按 Host 隔离路由，不给 SHORT Host 暴露创建或管理 API。
 
 ## Gateway 策略
 
@@ -44,7 +44,7 @@ Gateway 对远程 URL 只允许 HTTPS，或 loopback host 上的 HTTP；解析�
 
 ## 日志级别
 
-生产环境的 MyUrls APP/SHORT 默认使用 `MYURLS_LOG_LEVEL=warn`，Redis 默认使用 `loglevel warning`，保留警告和错误并减少正常请求噪音。临时排查时可在 `.env` 设置 `MYURLS_LOG_LEVEL=info`，完成后恢复为 `warn`；不要长期启用 debug/trace 级别。
+生产环境的 MyUrls 默认使用 `MYURLS_LOG_LEVEL=warn`，Redis 默认使用 `loglevel warning`，保留警告和错误并减少正常请求噪音。临时排查时可在 `.env` 设置 `MYURLS_LOG_LEVEL=info`，完成后恢复为 `warn`；不要长期启用 debug/trace 级别。
 
 ## 代理与镜像
 

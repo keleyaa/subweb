@@ -23,9 +23,9 @@ set -eu
 printf '%s\\n' "$*" >> "$DOCKER_LOG"
 case "$*" in
   'compose version') exit 0 ;;
-  'compose -f compose.yaml up -d --build --pull missing --wait') exit 0 ;;
-  'compose -f compose.disabled-short-links.yaml up -d --build --pull missing --wait') exit 0 ;;
-  'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --wait') exit 0 ;;
+  'compose -f compose.yaml up -d --build --pull missing --remove-orphans --wait') exit 0 ;;
+  'compose -f compose.disabled-short-links.yaml up -d --build --pull missing --remove-orphans --wait') exit 0 ;;
+  'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --remove-orphans --wait') exit 0 ;;
   'compose -f compose.disabled-short-links.yaml down') exit 0 ;;
   'compose -f compose.disabled-short-links.yaml ps') exit 0 ;;
   'compose -f compose.disabled-short-links.yaml logs') exit 0 ;;
@@ -65,7 +65,7 @@ describe('feature-flag deployment entrypoint', () => {
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toBe([
       'compose version',
       'validate',
-      'compose -f compose.disabled-short-links.yaml up -d --build --pull missing --wait',
+      'compose -f compose.disabled-short-links.yaml up -d --build --pull missing --remove-orphans --wait',
       'compose version',
       'compose -f compose.disabled-short-links.yaml down',
       'compose version',
@@ -81,7 +81,7 @@ describe('feature-flag deployment entrypoint', () => {
     const result = runCLI(root, ['up']);
     expect(result.status, result.stderr).toBe(0);
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain(
-      'compose -f compose.yaml up -d --build --pull missing --wait\n',
+      'compose -f compose.yaml up -d --build --pull missing --remove-orphans --wait\n',
     );
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain('validate\n');
   });
@@ -92,7 +92,7 @@ describe('feature-flag deployment entrypoint', () => {
     const result = runCLI(root, ['up'], { SUBWEB_IMAGE: 'ghcr.io/example/subweb:sha-abcdef1' });
     expect(result.status, result.stderr).toBe(0);
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain(
-      'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --wait\n',
+      'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --remove-orphans --wait\n',
     );
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain('validate\n');
   });
@@ -115,7 +115,7 @@ describe('feature-flag deployment entrypoint', () => {
     const result = runCLI(root, ['up'], { SUBWEB_IMAGE: '' });
     expect(result.status, result.stderr).toBe(0);
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain(
-      'compose -f compose.disabled-short-links.yaml up -d --build --pull missing --wait\n',
+      'compose -f compose.disabled-short-links.yaml up -d --build --pull missing --remove-orphans --wait\n',
     );
   });
 

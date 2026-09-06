@@ -39,19 +39,18 @@ const renderCompose = (file = composePath, values = {}) => {
 };
 
 describe('unified Compose deployment', () => {
-  it('renders the five-service production topology with one loopback entrypoint', () => {
+  it('renders the four-service production topology with one loopback entrypoint', () => {
     const config = renderCompose();
     expect(Object.keys(config.services).sort()).toEqual([
       'gateway',
-      'myurls-app',
-      'myurls-short',
+      'myurls',
       'redis',
       'subconverter',
     ]);
     expect(config.services.gateway.ports).toEqual([
       expect.objectContaining({ host_ip: '127.0.0.1', published: '18080', target: 8080 }),
     ]);
-    for (const name of ['myurls-app', 'myurls-short', 'redis', 'subconverter']) {
+    for (const name of ['myurls', 'redis', 'subconverter']) {
       expect(config.services[name].ports).toBeUndefined();
     }
     expect(config.services.gateway.environment).toMatchObject({
@@ -61,8 +60,7 @@ describe('unified Compose deployment', () => {
       SHORT_DOMAIN: 'short.example.com',
       EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
       SUBCONVERTER_UPSTREAM: 'http://subconverter:25500',
-      MYURLS_APP_UPSTREAM: 'http://myurls-app-edge:3000',
-      MYURLS_SHORT_UPSTREAM: 'http://myurls-short-edge:3000',
+      MYURLS_UPSTREAM: 'http://myurls-edge:3000',
       REDIS_URL: 'redis://redis:6379/1',
     });
   });
@@ -76,7 +74,7 @@ describe('unified Compose deployment', () => {
       'subconverter-egress',
     ]);
     expect(Object.keys(config.services.redis.networks).sort()).toEqual(['myurls-data', 'redis-policy']);
-    for (const name of ['myurls-app', 'myurls-short']) {
+    for (const name of ['myurls']) {
       expect(Object.keys(config.services[name].networks).sort()).toEqual(['myurls-data', 'myurls-edge']);
     }
     expect(Object.keys(config.services.subconverter.networks)).toEqual(['subconverter-egress']);

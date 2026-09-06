@@ -177,11 +177,9 @@ func buildServers(cfg config.Config, logger *slog.Logger) (*http.Server, *http.S
 	egressServer := egress.NewProxyServer(cfg.EgressListenAddr, egress.NewProxy(authorizer, dialer))
 
 	if cfg.ShortLinksEnabled {
-		appClient := myurls.NewHTTPClientWithBodyLimit(cfg.MyURLsAppUpstream, internalTransport, cfg.ConversionMaxRequestBytes)
-		shortClient := myurls.NewHTTPClientWithBodyLimit(cfg.MyURLsShortUpstream, internalTransport, cfg.ConversionMaxRequestBytes)
-		dependencies.AppShortLinks = myurls.NewHandler(appClient, cfg.ConversionMaxRequestBytes)
-		dependencies.ShortLinks = myurls.NewHandler(shortClient, cfg.ConversionMaxRequestBytes)
-		dependencies.Readiness = readinessFunc(cfg, counterStore, appClient, shortClient)
+		client := myurls.NewHTTPClientWithBodyLimit(cfg.MyURLsUpstream, internalTransport, cfg.ConversionMaxRequestBytes)
+		dependencies.ShortLinks = myurls.NewHandler(client, cfg.ConversionMaxRequestBytes)
+		dependencies.Readiness = readinessFunc(cfg, counterStore, client)
 	}
 	server := httpapi.NewServer(cfg, dependencies)
 	return server, egressServer, closeStore, nil
@@ -240,7 +238,7 @@ func readinessFunc(cfg config.Config, store ratelimit.CounterStore, myURLsClient
 			return nil
 		}
 		redisStore, ok := store.(readinessStore)
-		if ctx == nil || !ok || len(myURLsClients) != 2 {
+		if ctx == nil || !ok || len(myURLsClients) != 1 {
 			return myurls.ErrUnavailable
 		}
 		checkContext, cancel := context.WithTimeout(ctx, readinessTimeout)

@@ -60,9 +60,9 @@ case "$command_name" in
       gateway_image=subweb:local
     fi
     if [ -z "$gateway_image" ] || [ "$gateway_image" = 'subweb:local' ]; then
-      compose up -d --build --pull missing --wait
+      compose up -d --build --pull missing --remove-orphans --wait
     else
-      compose up -d --no-build --pull never --wait
+      compose up -d --no-build --pull never --remove-orphans --wait
     fi
     ;;
   down)
@@ -107,11 +107,11 @@ case "$command_name" in
     SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
       "$SCRIPT_DIRECTORY/validate-compose.sh"
     if [ "$short_links_enabled" = true ]; then
-      compose pull gateway subconverter myurls-app myurls-short redis
+      compose pull gateway subconverter myurls redis
     else
       compose pull gateway subconverter
     fi
-    compose up -d --no-build --pull never --wait
+    compose up -d --no-build --pull never --remove-orphans --wait
     ;;
   *)
     fail "unknown command: $command_name"

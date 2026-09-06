@@ -62,19 +62,20 @@ const validCompose = {
         TZ: 'Asia/Shanghai',
         EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
         SHORT_LINKS_ENABLED: 'true',
+        APP_DOMAIN: 'app.validation.test',
+        SHORT_DOMAIN: 'short.validation.test',
+        MYURLS_UPSTREAM: 'http://myurls-edge:3000',
       },
       depends_on: {
         redis: { condition: 'service_healthy', restart: true },
-        'myurls-app': { condition: 'service_healthy', restart: true },
-        'myurls-short': { condition: 'service_healthy', restart: true },
+        'myurls': { condition: 'service_healthy', restart: true },
       },
     },
     redis: {
       image: 'docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5', user: '999:1000', networks: { 'myurls-data': {}, 'redis-policy': {} },
       read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
     },
-     'myurls-app': { image: 'ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3', user: '10001:10001', networks: { 'myurls-data': {}, 'myurls-edge': {} }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
-     'myurls-short': { image: 'ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3', user: '10001:10001', networks: { 'myurls-data': {}, 'myurls-edge': {} }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
+     'myurls': { environment: { NODE_ENV: 'production', PUBLIC_BASE_URL: 'https://short.validation.test', TURNSTILE_HOSTNAME: 'app.validation.test', TURNSTILE_ENABLED: 'true', TURNSTILE_MODE: 'cloudflare', TURNSTILE_SITE_KEY: 'site-key', TURNSTILE_SECRET_KEY: 'secret-key' }, image: 'ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3', user: '10001:10001', networks: { 'myurls-data': {}, 'myurls-edge': {} }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
       subconverter: { image: 'ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475', user: '0:0', cap_add: ['CHOWN', 'SETUID', 'SETGID'], networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' }, depends_on: { gateway: { condition: 'service_healthy', restart: true } }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
   },
 };
@@ -82,8 +83,7 @@ const validCompose = {
 const disabledCompose = () => {
   const disabled = structuredClone(validCompose);
   delete disabled.services.redis;
-  delete disabled.services['myurls-app'];
-  delete disabled.services['myurls-short'];
+  delete disabled.services['myurls'];
   delete disabled.services.gateway.depends_on;
   disabled.services.gateway.environment.SHORT_LINKS_ENABLED = 'false';
   disabled.services.gateway.networks = { default: {}, 'subconverter-egress': {} };
@@ -108,7 +108,28 @@ afterEach(async () => {
 });
 
 describe('unified Compose validation', () => {
-  it('validates the five-container production topology', async () => {
+  it.each([
+    ['PUBLIC_BASE_URL', 'https://app.validation.test'],
+    ['TURNSTILE_HOSTNAME', 'short.validation.test'],
+    ['TURNSTILE_ENABLED', 'false'],
+    ['TURNSTILE_MODE', 'test'],
+    ['TURNSTILE_SECRET_KEY', ''],
+    ['NODE_ENV', 'development'],
+  ])('rejects invalid single-instance MyUrls %s', async (name, value) => {
+    const candidate = structuredClone(validCompose);
+    candidate.services.myurls.environment[name] = value;
+    const { result } = await validateFixture(candidate);
+    expect(result.status).not.toBe(0);
+  });
+
+  it('rejects a Gateway pointed outside the sole MyUrls service', async () => {
+    const candidate = structuredClone(validCompose);
+    candidate.services.gateway.environment.MYURLS_UPSTREAM = 'http://unexpected:3000';
+    const { result } = await validateFixture(candidate);
+    expect(result.status).not.toBe(0);
+  });
+
+  it('validates the four-container production topology', async () => {
     const { result } = await validateFixture(validCompose);
     expect(result.status).toBe(0);
   });
@@ -138,7 +159,7 @@ describe('unified Compose validation', () => {
     );
   });
 
-  it('rejects a five-service topology whose rendered Gateway disables short links', async () => {
+  it('rejects a four-service topology whose rendered Gateway disables short links', async () => {
     const composeJson = structuredClone(validCompose);
     composeJson.services.gateway.environment.SHORT_LINKS_ENABLED = 'false';
     const { result } = await validateFixture(composeJson);

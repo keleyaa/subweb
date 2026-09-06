@@ -26,14 +26,13 @@ describe('single HTTP deployment contract', () => {
     expect(compose).toContain('  gateway:');
     expect(compose).toContain('127.0.0.1:${SUBWEB_PORT:-18080}:8080');
     expect(compose).toContain('  subconverter:');
-    expect(compose).toContain('  myurls-app:');
-    expect(compose).toContain('  myurls-short:');
+    expect(compose).toContain('  myurls:');
     expect(compose).not.toContain('  request-policy:');
     expect(compose).not.toContain('gateway-tls:');
     expect(compose).not.toContain('profiles:');
     expect(compose).not.toContain('TLS_CERT_PATH');
     expect(compose).not.toContain('TLS_KEY_PATH');
-    expect(validator).toContain('"gateway", "myurls-app", "myurls-short", "redis", "subconverter"');
+    expect(validator).toContain('"gateway", "myurls", "redis", "subconverter"');
     expect(validator).not.toContain('COMPOSE_PROFILES');
   });
 

@@ -2,9 +2,9 @@
 
 ## 部署边界
 
-Subweb 不管理公网 TLS。部署者的外层反向代理负责证书、TLS、HSTS、DNS 和 80/443 端口，并将保留 Host 的请求转发到 Gateway loopback 端口。Gateway 是唯一发布宿主机端口的 Compose 服务；Redis、两个 MyUrls 实例和 SubConverter 不发布端口。
+Subweb 不管理公网 TLS。部署者的外层反向代理负责证书、TLS、HSTS、DNS 和 80/443 端口，并将保留 Host 的请求转发到 Gateway loopback 端口。Gateway 是唯一发布宿主机端口的 Compose 服务；Redis、一个 MyUrls 实例和 SubConverter 不发布端口。
 
-默认生产短链 profile 使用五个服务；外部镜像和运行时版本均由版本锁定合同约束。MYURLS 依赖只通过固定的 APP/SHORT adapter 边界访问。关闭短链时使用显式的两服务 profile。`compose.single.yaml` 是资源受限个人部署的受支持替代方案，不应被视作等同于多容器隔离的生产加固方案；策略和 egress 仍由 Go Gateway 统一实现。
+默认生产短链 profile 使用四个服务；外部镜像和运行时版本均由版本锁定合同约束。MYURLS 依赖只通过固定的 APP/SHORT adapter 边界访问。关闭短链时使用显式的两服务 profile。生产部署仅支持多容器 Compose；策略和 egress 由 Go Gateway 统一实现。
 
 ## 外部订阅
 
@@ -26,7 +26,7 @@ Subweb 不管理公网 TLS。部署者的外层反向代理负责证书、TLS、
 
 ## 短链与 MyUrls
 
-APP 与 SHORT 使用独立的 MyUrls Rust v2 实例：APP 只处理创建，SHORT 只处理短码跳转。管理 API 不通过 SHORT Host 暴露。MyUrls 使用 Redis DB `0`，Gateway 限流使用 DB `1`，两个用途不可混用。
+APP 与 SHORT 共用一个锁定的 MyUrls Rust v2.0.6 实例：APP 提供创建，APP/SHORT 均保留短码跳转；创建和管理 API 不通过 SHORT Host 暴露。MyUrls 不发布宿主机端口，只接受 Gateway 经内部网络转发的业务请求。`PUBLIC_BASE_URL` 为 SHORT 域名，创建挑战的 `TURNSTILE_HOSTNAME` 为 APP 域名，生产校验同时检查 `create_link` action。解析只有限流，没有解析挑战；合并不关闭安全校验，但创建和解析共享进程故障范围。MyUrls 使用 Redis DB `0`，Gateway 限流使用 DB `1`，两个用途不可混用。
 
 短链目标按 TTL 保存；短链属于持有即可访问的数据。短码、Token、订阅 URL 和完整 IP 不应进入日志、截图或 Issue。MyUrls 的 RFC 9457 problem-details 只在 Gateway adapter 中映射为允许的错误和 challenge/retry 元数据。
 
@@ -34,7 +34,7 @@ APP 与 SHORT 使用独立的 MyUrls Rust v2 实例：APP 只处理创建，SHOR
 
 ## 容器与密钥
 
-多容器生产 profile 的所有服务启用只读 root filesystem、`cap_drop: ALL` 和 `no-new-privileges`；SubConverter 仅在启动 bootstrap 阶段使用 `CHOWN`、`SETUID`、`SETGID`，随后以非 root 用户运行并清除有效 capability。单容器 profile 为了启动多个进程保留 root 入口进程，但 Gateway、MyUrls、Redis、SubConverter 分别降权到独立 UID，并使用同样的只读 root filesystem、能力限制和 `no-new-privileges`；其隔离能力仍弱于多容器 profile。
+多容器生产 profile 的所有服务启用只读 root filesystem、`cap_drop: ALL` 和 `no-new-privileges`；SubConverter 仅在启动 bootstrap 阶段使用 `CHOWN`、`SETUID`、`SETGID`，随后以非 root 用户运行并清除有效 capability。
 
 `REDIS_PASSWORD` 和 `IP_HASH_SECRET` 应由配置脚本生成，长度和格式由脚本验证。Redis 命令使用容器内 `REDISCLI_AUTH`，不把密码放进宿主机 argv。不要执行 `cat .env`、在 CI 日志打印环境变量，或把 Turnstile secret 写入 public runtime config。
 

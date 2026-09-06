@@ -11,9 +11,9 @@ const composeVariableNames = [
   'API_DOMAIN', 'API_URL', 'APP_DOMAIN', 'CONVERSION_DNS_TIMEOUT_MS',
   'CONVERSION_EGRESS_CONNECT_TIMEOUT_MS', 'CONVERSION_MAX_CONCURRENCY', 'CONVERSION_MAX_REQUEST_BYTES',
   'CONVERSION_MAX_RESPONSE_BYTES', 'CONVERSION_RATE_LIMIT', 'CONVERSION_RATE_WINDOW_SECONDS',
-  'CONVERSION_REQUEST_TIMEOUT_MS', 'CUSTOM_BACKEND_ENABLED', 'IP_HASH_SECRET', 'MYURLS_APP_IP',
+  'CONVERSION_REQUEST_TIMEOUT_MS', 'CUSTOM_BACKEND_ENABLED', 'IP_HASH_SECRET', 'MYURLS_IP',
   'MYURLS_GATEWAY_IP', 'MYURLS_IMAGE', 'MYURLS_LOG_LEVEL', 'MYURLS_NETWORK_SUBNET',
-  'MYURLS_SHORT_IP', 'MYURLS_TRUST_PROXY_CIDR', 'REDIS_IMAGE', 'REDIS_PASSWORD', 'SHORT_DOMAIN',
+  'MYURLS_TRUST_PROXY_CIDR', 'REDIS_IMAGE', 'REDIS_PASSWORD', 'SHORT_DOMAIN',
   'SHORT_LINKS_ENABLED', 'SUBCONVERTER_IMAGE', 'SUBWEB_IMAGE', 'SUBWEB_PORT', 'TRUSTED_PROXY_CIDR',
   'TURNSTILE_SECRET_KEY', 'TURNSTILE_SITE_KEY',
 ];
@@ -51,15 +51,15 @@ const expectHealthBounds = (service) => {
 };
 
 describe('integrated Compose stack', () => {
-  it('renders the sole five-container production topology', async () => {
+  it('renders the sole four-container production topology', async () => {
     const config = await renderCompose();
-    expect(Object.keys(config.services).sort()).toEqual(['gateway', 'myurls-app', 'myurls-short', 'redis', 'subconverter'].sort());
-    for (const name of ['redis', 'myurls-app', 'myurls-short', 'subconverter']) {
+    expect(Object.keys(config.services).sort()).toEqual(['gateway', 'myurls', 'redis', 'subconverter'].sort());
+    for (const name of ['redis', 'myurls', 'subconverter']) {
       expect(config.services[name].ports).toBeUndefined();
       expect(config.services[name].expose).toBeUndefined();
       expectHealthBounds(config.services[name]);
     }
-    for (const name of ['myurls-app', 'myurls-short']) {
+    for (const name of ['myurls']) {
       expect(config.services[name].healthcheck.test).toEqual([
         'CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:3000/health/live',
       ]);
@@ -68,8 +68,7 @@ describe('integrated Compose stack', () => {
     expect(config.services.gateway.ports).toEqual([expect.objectContaining({ host_ip: '127.0.0.1', published: '19080', target: 8080 })]);
     expect(config.services.gateway.environment).toMatchObject({
       SHORT_LINKS_ENABLED: 'true', CUSTOM_BACKEND_ENABLED: 'true',
-      MYURLS_APP_UPSTREAM: 'http://myurls-app-edge:3000',
-      MYURLS_SHORT_UPSTREAM: 'http://myurls-short-edge:3000',
+      MYURLS_UPSTREAM: 'http://myurls-edge:3000',
       SUBCONVERTER_UPSTREAM: 'http://subconverter:25500',
       EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
     });
@@ -93,7 +92,7 @@ describe('integrated Compose stack', () => {
     expect(Object.keys(config.services.gateway.networks).sort()).toEqual(['default', 'myurls-edge', 'redis-policy', 'subconverter-egress']);
     expect(Object.keys(config.services.subconverter.networks)).toEqual(['subconverter-egress']);
     expect(Object.keys(config.services.redis.networks).sort()).toEqual(['myurls-data', 'redis-policy']);
-    for (const service of ['myurls-app', 'myurls-short']) {
+    for (const service of ['myurls']) {
       expect(Object.keys(config.services[service].networks).sort()).toEqual(['myurls-data', 'myurls-edge']);
     }
     expect(config.networks['myurls-data'].internal).toBe(true);
@@ -107,8 +106,7 @@ describe('integrated Compose stack', () => {
   it('uses the locked external images, durable Redis, and non-root security defaults', async () => {
     const config = await renderCompose();
     expect(config.services.redis.image).toContain('@sha256:');
-    expect(config.services['myurls-app'].image).toContain('@sha256:');
-    expect(config.services['myurls-short'].image).toBe(config.services['myurls-app'].image);
+    expect(config.services['myurls'].image).toContain('@sha256:');
     expect(config.services.subconverter.image).toContain('@sha256:');
     expect(config.volumes['redis-data']).toBeTruthy();
     expect(config.services.redis.volumes).toContainEqual(expect.objectContaining({ source: 'redis-data', target: '/data', type: 'volume' }));
@@ -127,14 +125,15 @@ describe('integrated Compose stack', () => {
     expect(entrypoint).toContain('chown 101:101 "$base_path"');
     expect(entrypoint).toContain('exec su -s /bin/sh -c');
     expect(entrypoint).toContain('subweb');
-    expect(config.services['myurls-app'].environment).toMatchObject({
+    expect(config.services['myurls'].environment).toMatchObject({
       REDIS_URL: 'redis://redis:6379/0', TURNSTILE_HOSTNAME: 'app.example.com',
       TURNSTILE_SECRET_KEY: 'test-secret-key',
       LOG_LEVEL: 'warn',
     });
-    expect(config.services['myurls-short'].environment).toMatchObject({
-      TURNSTILE_HOSTNAME: 'short.example.com',
-      LOG_LEVEL: 'warn',
+    expect(config.services.myurls.environment).toMatchObject({
+      PUBLIC_BASE_URL: 'https://short.example.com',
+      TURNSTILE_HOSTNAME: 'app.example.com',
+      TURNSTILE_ENABLED: 'true',
     });
     expect(JSON.stringify(config.services.redis.command)).not.toContain(testSecret);
   });
@@ -143,14 +142,12 @@ describe('integrated Compose stack', () => {
     const config = await renderCompose();
     const redisTemplate = await readFile(new URL('../../deploy/redis/redis.conf.template', import.meta.url), 'utf8');
     expect(redisTemplate).toContain('loglevel warning');
-    expect(config.services['myurls-app'].environment.LOG_LEVEL).toBe('warn');
-    expect(config.services['myurls-short'].environment.LOG_LEVEL).toBe('warn');
+    expect(config.services['myurls'].environment.LOG_LEVEL).toBe('warn');
   });
 
   it('allows temporarily raising MyUrls verbosity through the environment', async () => {
     const config = await renderCompose(['MYURLS_LOG_LEVEL=info']);
-    expect(config.services['myurls-app'].environment.LOG_LEVEL).toBe('info');
-    expect(config.services['myurls-short'].environment.LOG_LEVEL).toBe('info');
+    expect(config.services['myurls'].environment.LOG_LEVEL).toBe('info');
   });
 
   it('has no legacy hardened file, profiles, TLS mounts, or Nginx runtime entrypoint', async () => {

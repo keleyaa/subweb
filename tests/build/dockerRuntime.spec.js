@@ -26,7 +26,7 @@ describe('Docker runtime contract', () => {
     await expect(access(rootFile('start.sh'))).rejects.toThrow();
   });
 
-  it('provides a five-service Compose deployment with one loopback entrypoint', async () => {
+  it('provides a four-service Compose deployment with one loopback entrypoint', async () => {
     const compose = await readFile(rootFile('compose.yaml'), 'utf8');
 
     expect(compose).toContain('x-runtime-environment: &runtime-environment');
@@ -36,8 +36,7 @@ describe('Docker runtime contract', () => {
     expect(compose).toContain('max-size: "10m"');
     expect(compose).toContain('max-file: "3"');
     expect(compose).toContain('gateway:');
-    expect(compose).toContain('myurls-app:');
-    expect(compose).toContain('myurls-short:');
+    expect(compose).toContain('myurls:');
     expect(compose).toContain('redis:');
     expect(compose).toContain('subconverter:');
     expect(compose).not.toContain('request-policy:');

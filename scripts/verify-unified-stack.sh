@@ -17,7 +17,7 @@ unset \
   APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN \
   SHORT_LINKS_ENABLED CUSTOM_BACKEND_ENABLED \
   CONVERSION_RATE_LIMIT CONVERSION_RATE_WINDOW_SECONDS \
-  SUBWEB_PORT MYURLS_NETWORK_SUBNET MYURLS_GATEWAY_IP MYURLS_APP_IP MYURLS_SHORT_IP MYURLS_TRUST_PROXY_CIDR \
+  SUBWEB_PORT MYURLS_NETWORK_SUBNET MYURLS_GATEWAY_IP MYURLS_IP MYURLS_TRUST_PROXY_CIDR \
   REDIS_PASSWORD IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY \
   MYURLS_IMAGE REDIS_IMAGE SUBCONVERTER_IMAGE
 
@@ -31,8 +31,7 @@ ip_hash_secret=$(openssl rand -hex 32)
 test_network_subnet=$("$script_directory/select-test-network.sh")
 test_network_prefix=${test_network_subnet%.*}
 test_gateway_ip=$test_network_prefix.2
-test_app_ip=$test_network_prefix.3
-test_short_ip=$test_network_prefix.4
+test_myurls_ip=$test_network_prefix.3
 request_headers=$temporary_directory/headers
 request_body=$temporary_directory/body
 
@@ -73,8 +72,7 @@ NODE
     "SUBWEB_PORT=$host_port" \
     "MYURLS_NETWORK_SUBNET=$test_network_subnet" \
     "MYURLS_GATEWAY_IP=$test_gateway_ip" \
-    "MYURLS_APP_IP=$test_app_ip" \
-    "MYURLS_SHORT_IP=$test_short_ip" \
+    "MYURLS_IP=$test_myurls_ip" \
     "MYURLS_TRUST_PROXY_CIDR=$test_gateway_ip/32" \
     "REDIS_PASSWORD=$password" \
     "IP_HASH_SECRET=$ip_hash_secret" \
@@ -191,7 +189,7 @@ assert_gateway_security() {
 }
 
 assert_services_healthy() {
-  for service in gateway redis myurls-app myurls-short subconverter; do
+  for service in gateway redis myurls subconverter; do
     id=$(docker compose ps -q "$service")
     [ -n "$id" ] || fail "$service container is missing."
     health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$id") \
@@ -217,7 +215,7 @@ assert_no_sensitive_logs() {
     -H "X-Forwarded-For: $marker" -H "X-Request-ID: $marker" \
     -w '%{http_code}' "http://127.0.0.1:$host_port/")
   assert_status "$status" 200 'privacy probe'
-  for service in gateway myurls-app myurls-short subconverter; do
+  for service in gateway myurls subconverter; do
     if docker compose logs --no-log-prefix "$service" | grep -Fq "$marker"; then
       fail "$service logged sensitive request data."
     fi
@@ -301,6 +299,7 @@ const fs = require('node:fs');
 try {
   const result = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
   const value = result.code ?? result.shortCode ?? result.slug;
+  if (result.shortUrl !== `https://short.test/${value}`) process.exit(1);
   if (typeof value !== 'string' || !/^[A-Za-z0-9_-]+$/u.test(value)) process.exit(1);
   process.stdout.write(value);
 } catch {
@@ -313,6 +312,21 @@ status=$(request short.test GET "/$short_code")
 assert_status "$status" 302 'short-link resolution'
 assert_header Location 'https://example.com/unified-stack'
 
+for route in /short-api/links /api/links; do
+  status=$(request short.test POST "$route" '{"url":"https://example.com/forbidden"}')
+  assert_status "$status" 404 'SHORT creation isolation'
+done
+for attempt in 2 3 4 5; do
+  status=$(request app.test POST /short-api/links '{"url":"https://example.com/challenge-probe"}')
+  assert_status "$status" 201 'creation below challenge threshold'
+done
+status=$(request app.test POST /short-api/links '{"url":"https://example.com/challenge-probe"}')
+assert_status "$status" 403 'production creation challenge'
+assert_problem_code challenge_required || fail 'creation challenge was bypassed.'
+status=$(request short.test GET "/$short_code")
+assert_status "$status" 302 'resolution remains independent of creation challenge'
+assert_header Location 'https://example.com/unified-stack'
+
 docker compose exec -T redis sh -eu -c \
   'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning SET "myurl:link:$1" "https://example.com/expired" EX 1 >/dev/null' \
   sh expired-probe
@@ -322,7 +336,7 @@ sleep 2
 status=$(request short.test GET /expired-probe)
 assert_status "$status" 404 'short-link expiry'
 
-for service in redis gateway subconverter myurls-app myurls-short; do
+for service in redis gateway subconverter myurls; do
   docker compose restart "$service" >/dev/null
   docker compose up -d --wait >/dev/null
   assert_services_healthy

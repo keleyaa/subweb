@@ -5,6 +5,10 @@ const root = new URL('../../', import.meta.url);
 const rootFile = (path) => new URL(path, root);
 
 const removedArtifacts = [
+  'Dockerfile.single',
+  'compose.single.yaml',
+  'scripts/single-container-entrypoint.sh',
+  'tests/deploy/singleContainer.spec.js',
   '.claude/plans/subweb-modernization-execution.plan.md',
   'docs/superpowers/plans/2026-07-29-apple-minimal-borderless-redesign.md',
   'docs/superpowers/plans/2026-07-29-frontend-only-modernization.md',

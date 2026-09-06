@@ -1,5 +1,5 @@
 services:
-  myurls-app:
+  myurls:
     environment:
       NODE_ENV: production
       TURNSTILE_ENABLED: "true"
@@ -7,22 +7,8 @@ services:
       TURNSTILE_SITE_KEY: test-site-key
       TURNSTILE_SECRET_KEY: test-secret-key
       TURNSTILE_HOSTNAME: app.test
-      # Keep ordinary smoke traffic below the production challenge threshold;
-      # the integration script uses a separate client to exercise challenge flow.
-      CREATE_DIRECT_LIMIT_10M: "100"
-      CREATE_HARD_LIMIT_10M: "200"
-      CREATE_HARD_LIMIT_1D: "300"
-      TEST_FORCE_CHALLENGE: "false"
-
-  myurls-short:
-    environment:
-      NODE_ENV: production
-      TURNSTILE_ENABLED: "true"
-      TURNSTILE_MODE: cloudflare
-      TURNSTILE_SITE_KEY: test-site-key
-      TURNSTILE_SECRET_KEY: test-secret-key
-      TURNSTILE_HOSTNAME: short.test
-      CREATE_DIRECT_LIMIT_10M: "100"
-      CREATE_HARD_LIMIT_10M: "200"
-      CREATE_HARD_LIMIT_1D: "300"
+      # Exercise the production creation challenge threshold in the smoke test.
+      CREATE_DIRECT_LIMIT_10M: "5"
+      CREATE_HARD_LIMIT_10M: "20"
+      CREATE_HARD_LIMIT_1D: "100"
       TEST_FORCE_CHALLENGE: "false"
