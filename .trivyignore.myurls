@@ -1,0 +1,6 @@
+# CVE-2026-58050 and CVE-2026-7598 affect libssh2, which is pulled in
+# by the runtime curl package. MyUrls does not use SSH/SFTP; curl is only
+# used against the local health endpoint. Recheck this exception whenever the
+# locked MyUrls image changes or its healthcheck/HTTP usage changes.
+CVE-2026-58050
+CVE-2026-7598

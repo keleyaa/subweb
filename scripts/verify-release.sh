@@ -49,7 +49,7 @@ redis_image=$2
 subconverter_image=$3
 myurls_image=$4
 stage image-security ./scripts/verify-image-security.sh "$candidate_image"
-stage image-security-myurls ./scripts/verify-image-security.sh "$myurls_image"
+stage image-security-myurls ./scripts/verify-image-security.sh --ignorefile .trivyignore.myurls "$myurls_image"
 stage image-security-redis ./scripts/verify-image-security.sh --ignorefile .trivyignore.redis "$redis_image"
 stage image-security-subconverter ./scripts/verify-image-security.sh --ignorefile .trivyignore.subconverter "$subconverter_image"
 stage evidence node scripts/verify-evidence.mjs
