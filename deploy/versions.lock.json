@@ -1,30 +1,30 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-31T08:05:33Z",
+  "verifiedAt": "2026-09-12T13:42:59Z",
   "services": {
     "gatewayBase": {
       "source": {
         "url": "https://github.com/docker-library/golang",
         "repository": "docker-library/golang",
-        "tag": "1.25/alpine3.24",
-        "commit": "3c304fa74ea9f8c7fa4c87742834823d2bb19e12",
+        "tag": "1.27/alpine3.24",
+        "commit": "c4664da1bd8d0cbc975460744d90c031b409c215",
         "prerelease": false
       },
       "image": {
-        "reference": "docker.io/library/golang:1.25-alpine",
-        "digest": "sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59",
+        "reference": "docker.io/library/golang:1.27-alpine",
+        "digest": "sha256:cf6fca6641884b8433441b2b0652976f975e1d0fdd26d177eaaf8596087f3125",
         "platforms": {
-          "linux/amd64": "sha256:885bacfe14521a812c3ff39a907e5a52b2963eaefacef6840ef7310280943273",
-          "linux/arm64": "sha256:0152bc2bd2a8582fee54effb05929da44eefe7efa2f584019a2e52df9872aa90"
+          "linux/amd64": "sha256:f86f1a6701e3dcc445fec097a42f78b758f15950ccf032c2d3e54e2754d32fdb",
+          "linux/arm64": "sha256:df4c4a0eeb85873e0122c6e2eb1b436f3131576f572505c1ea61954b00fa6460"
         }
       },
       "runtimeImages": {
         "frontend": {
           "reference": "docker.io/library/node:24-alpine",
-          "digest": "sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf",
+          "digest": "sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81",
           "platforms": {
-            "linux/amd64": "sha256:4caa4500bc746d58d5f9c667bd923055339ac0eb62d2a9da0f4203decc3a5e0e",
-            "linux/arm64": "sha256:d372eb8c1adce4bf46b0f9aec2ffae081606a4109b1d04a6f34a12fd1d3dfc5f"
+            "linux/amd64": "sha256:333f6b3eca25980d5682c26207665b93c9417786b21760b2764d5821d9704c8a",
+            "linux/arm64": "sha256:c90fbae51ca047f2fda9ea92fb85eb936c08e6df18df7462bb782bad7c6afa3d"
           }
         },
         "distroless": {
@@ -37,23 +37,27 @@
         }
       },
       "container": {
-        "internalPorts": [8080, 25502]
+        "internalPorts": [
+          8080,
+          25502,
+          25503
+        ]
       }
     },
     "myurls": {
       "source": {
         "url": "https://github.com/keleyaa/MyUrls",
         "repository": "keleyaa/MyUrls",
-        "tag": "v2.0.6",
-        "commit": "9a04a210c19f97178255ed1fe096c4de56922224",
+        "tag": "v2.0.8",
+        "commit": "42234e8d1085b6c1449d16f04cd61e34104037f5",
         "prerelease": false
       },
       "image": {
-        "reference": "ghcr.io/keleyaa/myurls:v2.0.6",
-        "digest": "sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3",
+        "reference": "ghcr.io/keleyaa/myurls:v2.0.8",
+        "digest": "sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36",
         "platforms": {
-          "linux/amd64": "sha256:0029651550c833d923359f0b105691c76b6dd96d48e2b775c51c6204d26fe4a0",
-          "linux/arm64": "sha256:a34b0bbeef548b17a1eee515fd9fba4243429a31c1de8d0539fb6177c635975e"
+          "linux/amd64": "sha256:a46f3edf00074b4cf9d576305a7fa1aea5b0dd64110cf2b402f5db7a041fdb3a",
+          "linux/arm64": "sha256:362d6d58fcecd7e6199c1d8ed2ca4f10c533a814c80655ceaf85d7a5ad250983"
         }
       },
       "container": {
@@ -84,16 +88,16 @@
       "source": {
         "url": "https://github.com/Aethersailor/SubConverter-Extended",
         "repository": "Aethersailor/SubConverter-Extended",
-        "tag": "v1.8.6",
-        "commit": "27d081bd8bb455d1581cd1f2afa8905921829b4f",
+        "tag": "v1.9.4",
+        "commit": "2a0fde45858e8503a2ec629781185ab9ebe7adbe",
         "prerelease": false
       },
       "image": {
-        "reference": "ghcr.io/aethersailor/subconverter-extended:v1.8.6",
-        "digest": "sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475",
+        "reference": "ghcr.io/aethersailor/subconverter-extended:v1.9.4",
+        "digest": "sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423",
         "platforms": {
-          "linux/amd64": "sha256:51f00f4e634e616cb7debac91dada37395fb28b29e166dd921673cfd283140ff",
-          "linux/arm64": "sha256:660f9a92aed68acf51da39d039c5b5a4931c0c7eecd863e1a0a62c9d76c9e9e4"
+          "linux/amd64": "sha256:b95e638f68f451c6012be9b4bec4b126b4cf4129972dcc1c06bbd9d4a4a554b3",
+          "linux/arm64": "sha256:c6a697203935c2109bdf75bc74e1af53f60884a5e7293bbef09844ecda1de458"
         }
       },
       "container": {

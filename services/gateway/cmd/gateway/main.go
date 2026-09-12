@@ -35,7 +35,16 @@ func main() {
 		log.Fatal(err)
 	}
 
-	server, egressServer, closeResources, err := buildServers(cfg, slog.Default())
+	logger := newLogger(cfg.LogLevel)
+	logger.Info("gateway starting",
+		"listen", cfg.ListenAddr,
+		"egress_listen", cfg.EgressListenAddr,
+		"restricted_egress_listen", cfg.EgressRestrictedListenAddr,
+		"short_links_enabled", cfg.ShortLinksEnabled,
+		"log_level", cfg.LogLevel,
+	)
+
+	servers, closeResources, err := buildServers(cfg, logger)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,26 +53,42 @@ func main() {
 	shutdownSignal, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	serverErrors := make(chan error, 2)
-	go serve(server, serverErrors)
-	go serve(egressServer, serverErrors)
+	serverErrors := make(chan error, len(servers))
+	for _, server := range servers {
+		go serve(server, serverErrors)
+	}
 
 	select {
 	case err := <-serverErrors:
 		if !errors.Is(err, http.ErrServerClosed) {
-			shutdownServers(server, egressServer)
+			shutdownServers(servers...)
 			log.Fatal(err)
 		}
 	case <-shutdownSignal.Done():
-		if err := shutdownServers(server, egressServer); err != nil {
+		if err := shutdownServers(servers...); err != nil {
 			log.Fatal(err)
 		}
-		for range 2 {
+		for range len(servers) {
 			if err := <-serverErrors; err != nil && !errors.Is(err, http.ErrServerClosed) {
 				log.Fatal(err)
 			}
 		}
 	}
+}
+
+// newLogger builds the Gateway's structured logger. The configured level also
+// gates the access log: warn or error keeps only failures and warnings.
+func newLogger(level string) *slog.Logger {
+	options := &slog.HandlerOptions{Level: slog.LevelInfo}
+	switch level {
+	case "debug":
+		options.Level = slog.LevelDebug
+	case "warn":
+		options.Level = slog.LevelWarn
+	case "error":
+		options.Level = slog.LevelError
+	}
+	return slog.New(slog.NewTextHandler(os.Stderr, options))
 }
 
 func serve(server *http.Server, errors chan<- error) {
@@ -74,6 +99,12 @@ func runHealthcheck() int {
 	egressAddress, err := egressHealthAddress(os.Getenv("EGRESS_LISTEN_ADDR"))
 	if err != nil || checkEgressListener(egressAddress) != nil {
 		return 1
+	}
+	if shortLinksEnabledForHealthcheck(os.Getenv("SHORT_LINKS_ENABLED")) {
+		restrictedAddress, err := egressHealthAddressNamed(os.Getenv("EGRESS_RESTRICTED_LISTEN_ADDR"), defaultEgressRestrictedListenAddress)
+		if err != nil || checkEgressListener(restrictedAddress) != nil {
+			return 1
+		}
 	}
 
 	request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8080/healthz", nil)
@@ -94,14 +125,24 @@ func runHealthcheck() int {
 }
 
 func egressHealthAddress(listenAddress string) (string, error) {
+	return egressHealthAddressNamed(listenAddress, defaultEgressListenAddress)
+}
+
+func egressHealthAddressNamed(listenAddress, fallback string) (string, error) {
 	if listenAddress == "" {
-		listenAddress = defaultEgressListenAddress
+		listenAddress = fallback
 	}
 	_, port, err := net.SplitHostPort(listenAddress)
 	if err != nil || port == "" {
 		return "", errors.New("invalid egress listen address")
 	}
 	return net.JoinHostPort("127.0.0.1", port), nil
+}
+
+// shortLinksEnabledForHealthcheck mirrors the Gateway default: only the
+// explicit "false" value runs the two-service profile without MyUrls.
+func shortLinksEnabledForHealthcheck(value string) bool {
+	return value != "false"
 }
 
 func checkEgressListener(address string) error {
@@ -112,27 +153,32 @@ func checkEgressListener(address string) error {
 	return connection.Close()
 }
 
-func buildServers(cfg config.Config, logger *slog.Logger) (*http.Server, *http.Server, func(), error) {
+func buildServers(cfg config.Config, logger *slog.Logger) ([]*http.Server, func(), error) {
 	resolver := net.DefaultResolver
 	urlPolicy := gatewayURLPolicy{resolver: resolver, timeout: cfg.ConversionDNSTimeout}
 
 	ipHasher, err := newIPHasher(cfg)
 	if err != nil {
-		return nil, nil, func() {}, err
+		return nil, func() {}, err
 	}
 	counterStore, closeStore, err := newCounterStore(cfg)
 	if err != nil {
-		return nil, nil, func() {}, err
+		return nil, func() {}, err
 	}
 	rateLimiter, err := ratelimit.NewRateLimiter(counterStore, int64(cfg.ConversionRateLimit), cfg.ConversionRateWindow)
 	if err != nil {
 		closeStore()
-		return nil, nil, func() {}, err
+		return nil, func() {}, err
 	}
 	semaphore, err := policy.NewSemaphore(cfg.ConversionMaxConcurrency)
 	if err != nil {
 		closeStore()
-		return nil, nil, func() {}, err
+		return nil, func() {}, err
+	}
+	ipGate, err := policy.NewInFlightGate(cfg.ConversionMaxConcurrencyPerIP)
+	if err != nil {
+		closeStore()
+		return nil, func() {}, err
 	}
 
 	internalTransport := http.DefaultTransport.(*http.Transport).Clone()
@@ -143,6 +189,7 @@ func buildServers(cfg config.Config, logger *slog.Logger) (*http.Server, *http.S
 		RateLimiter: rateLimiter,
 		IPHasher:    ipHasher,
 		Semaphore:   semaphore,
+		IPGate:      ipGate,
 		Upstream:    cfg.SubConverterUpstream,
 		Transport:   internalTransport,
 		MaxRequest:  cfg.ConversionMaxRequestBytes,
@@ -167,22 +214,31 @@ func buildServers(cfg config.Config, logger *slog.Logger) (*http.Server, *http.S
 	var authorizer *egress.TokenAuthorizer
 	if authorizer, err = egress.NewAuthorizer(resolver, cfg.ConversionDNSTimeout, 30*time.Second); err != nil {
 		closeStore()
-		return nil, nil, func() {}, err
+		return nil, func() {}, err
 	}
 	dialer, err := egress.NewDialer(cfg.EgressConnectTimeout)
 	if err != nil {
 		closeStore()
-		return nil, nil, func() {}, err
+		return nil, func() {}, err
 	}
-	egressServer := egress.NewProxyServer(cfg.EgressListenAddr, egress.NewProxy(authorizer, dialer))
+	servers := []*http.Server{
+		egress.NewProxyServer(cfg.EgressListenAddr, egress.NewProxy(authorizer, dialer)),
+	}
 
 	if cfg.ShortLinksEnabled {
 		client := myurls.NewHTTPClientWithBodyLimit(cfg.MyURLsUpstream, internalTransport, cfg.ConversionMaxRequestBytes)
 		dependencies.ShortLinks = myurls.NewHandler(client, cfg.ConversionMaxRequestBytes)
 		dependencies.Readiness = readinessFunc(cfg, counterStore, client)
+
+		restrictedProxy, err := egress.NewRestrictedProxy(authorizer, dialer, cfg.EgressAllowedHosts)
+		if err != nil {
+			closeStore()
+			return nil, func() {}, err
+		}
+		servers = append(servers, egress.NewProxyServer(cfg.EgressRestrictedListenAddr, restrictedProxy))
 	}
-	server := httpapi.NewServer(cfg, dependencies)
-	return server, egressServer, closeStore, nil
+	servers = append(servers, httpapi.NewServer(cfg, dependencies))
+	return servers, closeStore, nil
 }
 
 type gatewayURLPolicy struct {
@@ -227,6 +283,7 @@ func newCounterStore(cfg config.Config) (ratelimit.CounterStore, func(), error) 
 
 const readinessTimeout = 5 * time.Second
 const defaultEgressListenAddress = "0.0.0.0:25502"
+const defaultEgressRestrictedListenAddress = "0.0.0.0:25503"
 
 type readinessStore interface {
 	Ping(context.Context) error
@@ -258,12 +315,14 @@ func readinessFunc(cfg config.Config, store ratelimit.CounterStore, myURLsClient
 	}
 }
 
-func shutdownServers(server, egressServer *http.Server) error {
+func shutdownServers(servers ...*http.Server) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	firstErr := server.Shutdown(ctx)
-	if err := egressServer.Shutdown(ctx); firstErr == nil {
-		firstErr = err
+	var firstErr error
+	for _, server := range servers {
+		if err := server.Shutdown(ctx); firstErr == nil {
+			firstErr = err
+		}
 	}
 	return firstErr
 }

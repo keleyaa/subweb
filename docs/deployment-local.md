@@ -1,6 +1,6 @@
 # 本地开发
 
-本地开发使用 Docker Compose 启动真实的统一 Gateway、SubConverter、一个 MyUrls Rust v2.0.6 进程和 Redis，再由 Vite 提供前端开发服务器。首次使用时：
+本地开发使用 Docker Compose 启动真实的统一 Gateway、SubConverter、一个 MyUrls Rust v2.0.8 进程和 Redis，再由 Vite 提供前端开发服务器。首次使用时：
 
 ```sh
 git clone https://github.com/keleyaa/subweb.git

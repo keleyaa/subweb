@@ -2,7 +2,7 @@
 
 ## 维护边界
 
-项目运行时由 Go Gateway、SubConverter、一个 MyUrls Rust v2.0.6 实例和 Redis 组成。默认生产部署使用 [`compose.yaml`](../compose.yaml) 四服务 profile；短链关闭时使用明确的 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml) 两服务 profile。外部 TLS 反向代理示例只描述项目外的入口，不属于 Compose 运行时。
+项目运行时由 Go Gateway、SubConverter、一个 MyUrls Rust v2.0.8 实例和 Redis 组成。默认生产部署使用 [`compose.yaml`](../compose.yaml) 四服务 profile；短链关闭时使用明确的 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml) 两服务 profile。外部 TLS 反向代理示例只描述项目外的入口，不属于 Compose 运行时。
 
 发布、回滚和升级必须使用 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 中记录的外部依赖源 commit、OCI tag、manifest digest 和平台 digest。Gateway 发布工作流在推送 `vX.Y.Z` Git tag 时自动触发，也支持手动输入已有 tag 补跑，并同时推送 Docker Hub 与 GHCR；`docker.io/keleyaa/subweb` 和 `ghcr.io/keleyaa/subweb` 是等价来源，部署时使用该 Git tag 或发布后的 digest。不要使用 `latest` 或其他可变 tag 作为部署依据，也不要手工拼接外部镜像 digest。
 
@@ -27,7 +27,15 @@ GitHub package publish job 需要 `packages: write` 权限。发布工作流必�
 1. 运行 `npm run verify:operations` 完成 RDB backup/restore 和独立重启恢复演练。
 2. 记录 `git status --short`、当前镜像 digest 和 `./scripts/subweb.sh status`。
 3. 使用 `./scripts/subweb.sh backup --output /absolute/path/backup.rdb` 保存短链数据。
-4. 通过 `./scripts/subweb.sh upgrade` 按当前 `.env` 的 release 镜像引用拉取 Gateway，并按版本锁拉取 SubConverter、MyUrls 和 Redis 镜像，然后等待健康检查。升级入口会先校验 Compose/版本锁合同。
+4. 通过 `./scripts/subweb.sh upgrade` 按当前 `.env` 的 release 镜像引用拉取 Gateway，并按版本锁拉取 SubConverter、MyUrls 和 Redis 镜像，然后等待健康检查。升级入口会先校验 Compose/版本锁合同，并在启动后比对镜像自带与运行卷中的 `pref.example.toml`；Docker 只在命名卷为空时才从镜像播种 `/base`，因此 SubConverter 版本变化后必须删除 `subconverter-runtime` 卷再启动，否则容器会继续使用旧版本的偏好模板，脚本会以非零退出并打印该步骤。
+
+```sh
+docker compose -f compose.yaml down
+docker volume rm subweb_subconverter-runtime
+./scripts/subweb.sh up
+```
+
+任何一次 SubConverter 镜像变更后都可以单独执行 `npm run verify:subconverter-runtime` 复核运行卷与镜像是否一致。
 5. 运行 `npm run verify:integration`，确认业务 smoke 和重启路径。
 6. 失败时停止继续发布，保留当前 RDB 和日志，并按版本锁生成的 rollback manifest 回滚完整 runtime image 集合。
 
@@ -39,7 +47,7 @@ GitHub package publish job 需要 `packages: write` 权限。发布工作流必�
 
 ## 依赖来源
 
-第三方来源和锁定证据见 [第三方来源](third-party-sources.md)。SubConverter 的运行时权限、相对路径和本地 default config 要求见 [SubConverter 容器契约](../deploy/subconverter/README.md)。MyUrls Rust 的当前版本是 v2.0.6，升级必须同步源 commit、镜像 manifest 和 `/api/links` 兼容性验证。
+第三方来源和锁定证据见 [第三方来源](third-party-sources.md)。SubConverter 的运行时权限、相对路径和本地 default config 要求见 [SubConverter 容器契约](../deploy/subconverter/README.md)。MyUrls Rust 的当前版本是 v2.0.8，升级必须同步源 commit、镜像 manifest 和 `/api/links` 兼容性验证。
 
 ## 镜像发布
 

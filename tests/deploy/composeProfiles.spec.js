@@ -61,6 +61,8 @@ const validCompose = {
       environment: {
         TZ: 'Asia/Shanghai',
         EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
+        EGRESS_RESTRICTED_LISTEN_ADDR: '0.0.0.0:25503',
+        EGRESS_ALLOWED_HOSTS: 'challenges.cloudflare.com',
         SHORT_LINKS_ENABLED: 'true',
         APP_DOMAIN: 'app.validation.test',
         SHORT_DOMAIN: 'short.validation.test',
@@ -75,8 +77,8 @@ const validCompose = {
       image: 'docker.io/library/redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5', user: '999:1000', networks: { 'myurls-data': {}, 'redis-policy': {} },
       read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
     },
-     'myurls': { environment: { NODE_ENV: 'production', PUBLIC_BASE_URL: 'https://short.validation.test', TURNSTILE_HOSTNAME: 'app.validation.test', TURNSTILE_ENABLED: 'true', TURNSTILE_MODE: 'cloudflare', TURNSTILE_SITE_KEY: 'site-key', TURNSTILE_SECRET_KEY: 'secret-key' }, image: 'ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3', user: '10001:10001', networks: { 'myurls-data': {}, 'myurls-edge': {} }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
-      subconverter: { image: 'ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475', user: '0:0', cap_add: ['CHOWN', 'SETUID', 'SETGID'], networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' }, depends_on: { gateway: { condition: 'service_healthy', restart: true } }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
+     'myurls': { environment: { NODE_ENV: 'production', HTTPS_PROXY: 'http://gateway:25503', https_proxy: 'http://gateway:25503', NO_PROXY: '127.0.0.1,localhost', no_proxy: '127.0.0.1,localhost', PUBLIC_BASE_URL: 'https://short.validation.test', TURNSTILE_HOSTNAME: 'app.validation.test', TURNSTILE_ENABLED: 'true', TURNSTILE_MODE: 'cloudflare', TURNSTILE_SITE_KEY: 'site-key', TURNSTILE_SECRET_KEY: 'secret-key' }, image: 'ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36', user: '10001:10001', networks: { 'myurls-data': {}, 'myurls-edge': {} }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
+      subconverter: { image: 'ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423', user: '0:0', cap_add: ['CHOWN', 'SETUID', 'SETGID'], networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' }, depends_on: { gateway: { condition: 'service_healthy', restart: true } }, read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'] },
   },
 };
 

@@ -22,7 +22,7 @@ const myurlsSourceRepository = 'keleyaa/MyUrls';
 const myurlsImageRepository = 'ghcr.io/keleyaa/myurls';
 const myurlsReleaseTagPattern = /^v2\.\d+\.\d+$/u;
 const gatewayBaseSourceRepository = 'docker-library/golang';
-const gatewayBaseImageReference = 'docker.io/library/golang:1.25-alpine';
+const gatewayBaseImageReference = 'docker.io/library/golang:1.27-alpine';
 const gatewayRuntimeImageNames = ['distroless', 'frontend'];
 
 const isRecord = (value) =>
@@ -267,9 +267,9 @@ export function validateVersionLocks(lock) {
       });
       if (
         name === 'gatewayBase' &&
-        JSON.stringify(internalPorts) !== JSON.stringify([8080, 25502])
+        JSON.stringify(internalPorts) !== JSON.stringify([8080, 25502, 25503])
       ) {
-        errors.push(`${prefix}.container.internalPorts must equal 8080, 25502`);
+        errors.push(`${prefix}.container.internalPorts must equal 8080, 25502, 25503`);
       }
     }
   }

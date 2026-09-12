@@ -26,4 +26,14 @@ describe('SubConverter runtime drift detection', () => {
     expect(verifier).toContain('subconverter_runs_as_101');
     expect(verifier).toContain('Unified Redis backup, restore, and service recovery verification passed.');
   });
+
+  it('runs after an upgrade and fails the upgrade with remediation steps', async () => {
+    const entrypoint = await readFile(rootFile('scripts/subweb.sh'), 'utf8');
+    const manifest = JSON.parse(await readFile(rootFile('package.json'), 'utf8'));
+
+    expect(entrypoint).toContain('verify-subconverter-runtime.sh');
+    expect(entrypoint).toContain('COMPOSE_FILE=$compose_file');
+    expect(entrypoint).toContain('docker volume rm subweb_subconverter-runtime');
+    expect(manifest.scripts['verify:subconverter-runtime']).toBe('./scripts/verify-subconverter-runtime.sh');
+  });
 });

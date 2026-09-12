@@ -1,6 +1,9 @@
-# CVE-2026-58050 and CVE-2026-7598 affect libssh2, which is pulled in
-# by the runtime curl package. MyUrls does not use SSH/SFTP; curl is only
-# used against the local health endpoint. Recheck this exception whenever the
-# locked MyUrls image changes or its healthcheck/HTTP usage changes.
-CVE-2026-58050
-CVE-2026-7598
+# No active exceptions. Re-verified 2026-09-12 with trivy 0.74.0 against
+# ghcr.io/keleyaa/myurls:v2.0.8: the image now reports no CRITICAL or HIGH
+# findings, so the previous libssh2 exceptions (CVE-2026-58050, CVE-2026-7598)
+# and the libpcre2 findings (CVE-2026-86145, CVE-2026-89161) are all resolved
+# by the upstream rebuild that installs libpcre2-8-0 10.42-1+deb12u1.
+#
+# Keep this file in place for the next exception, and re-run
+# `trivy image --ignore-unfixed --severity CRITICAL,HIGH <locked image>`
+# without it whenever the locked MyUrls image changes.

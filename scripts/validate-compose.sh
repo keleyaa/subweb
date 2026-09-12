@@ -183,6 +183,22 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
     console.error("Compose validation error: SubConverter must use the Gateway egress proxy.");
     process.exitCode = 1;
   }
+  if (enabled && services.gateway?.environment?.EGRESS_RESTRICTED_LISTEN_ADDR !== "0.0.0.0:25503") {
+    console.error("Compose validation error: gateway restricted egress listener contract is missing.");
+    process.exitCode = 1;
+  }
+  const restrictedHosts = String(services.gateway?.environment?.EGRESS_ALLOWED_HOSTS ?? "")
+    .split(",")
+    .map((host) => host.trim())
+    .filter(Boolean);
+  if (enabled && !restrictedHosts.includes("challenges.cloudflare.com")) {
+    console.error("Compose validation error: the restricted egress allowlist must contain challenges.cloudflare.com for MyUrls Turnstile verification.");
+    process.exitCode = 1;
+  }
+  if (enabled && services.myurls?.environment?.HTTPS_PROXY !== "http://gateway:25503") {
+    console.error("Compose validation error: MyUrls must use the host-allowlisted Gateway egress proxy.");
+    process.exitCode = 1;
+  }
 }
 NODE
 

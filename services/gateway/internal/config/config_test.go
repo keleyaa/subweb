@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -208,6 +209,129 @@ func validEnvironment() map[string]string {
 		"TURNSTILE_SECRET_KEY":   "turnstile-secret-key",
 		"SUBCONVERTER_UPSTREAM":  "http://subconverter:25500",
 		"MYURLS_UPSTREAM":        "http://myurls:3000",
+	}
+}
+
+func TestLoadAppliesRestrictedEgressAndConcurrencyDefaults(t *testing.T) {
+	cfg, err := Load(getenv(validEnvironment()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.LogLevel != "info" {
+		t.Fatalf("LogLevel = %q, want the info default", cfg.LogLevel)
+	}
+	if cfg.EgressListenAddr != "0.0.0.0:25502" {
+		t.Fatalf("EgressListenAddr = %q, want the subscription egress listener", cfg.EgressListenAddr)
+	}
+	if cfg.EgressRestrictedListenAddr != "0.0.0.0:25503" {
+		t.Fatalf("EgressRestrictedListenAddr = %q, want the restricted egress listener", cfg.EgressRestrictedListenAddr)
+	}
+	if len(cfg.EgressAllowedHosts) != 1 || cfg.EgressAllowedHosts[0] != "challenges.cloudflare.com" {
+		t.Fatalf("EgressAllowedHosts = %v, want the Turnstile siteverify host", cfg.EgressAllowedHosts)
+	}
+	if cfg.ConversionMaxConcurrency != 4 {
+		t.Fatalf("ConversionMaxConcurrency = %d, want 4", cfg.ConversionMaxConcurrency)
+	}
+	if cfg.ConversionMaxConcurrencyPerIP != 2 {
+		t.Fatalf("ConversionMaxConcurrencyPerIP = %d, want 2", cfg.ConversionMaxConcurrencyPerIP)
+	}
+}
+
+func TestLoadLogLevel(t *testing.T) {
+	for _, level := range []string{"debug", "info", "warn", "error"} {
+		t.Run(level, func(t *testing.T) {
+			env := validEnvironment()
+			env["LOG_LEVEL"] = level
+
+			cfg, err := Load(getenv(env))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.LogLevel != level {
+				t.Fatalf("LogLevel = %q, want %q", cfg.LogLevel, level)
+			}
+		})
+	}
+
+	for _, value := range []string{"INFO", "verbose", "warning", "1"} {
+		t.Run("rejects "+value, func(t *testing.T) {
+			env := validEnvironment()
+			env["LOG_LEVEL"] = value
+
+			_, err := Load(getenv(env))
+			if err == nil || !strings.Contains(err.Error(), "LOG_LEVEL") {
+				t.Fatalf("Load() error = %v, want LOG_LEVEL validation error", err)
+			}
+		})
+	}
+}
+
+func TestLoadNormalizesEgressAllowedHosts(t *testing.T) {
+	env := validEnvironment()
+	env["EGRESS_ALLOWED_HOSTS"] = " Challenges.Cloudflare.com , ,challenges.cloudflare.com,cdn.example.test "
+
+	cfg, err := Load(getenv(env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"challenges.cloudflare.com", "cdn.example.test"}
+	if len(cfg.EgressAllowedHosts) != len(want) {
+		t.Fatalf("EgressAllowedHosts = %v, want %v", cfg.EgressAllowedHosts, want)
+	}
+	for index, host := range want {
+		if cfg.EgressAllowedHosts[index] != host {
+			t.Fatalf("EgressAllowedHosts[%d] = %q, want %q", index, cfg.EgressAllowedHosts[index], host)
+		}
+	}
+}
+
+func TestLoadRejectsInvalidEgressAllowedHosts(t *testing.T) {
+	tooMany := make([]string, 0, maxEgressAllowedHosts+1)
+	for index := range maxEgressAllowedHosts + 1 {
+		tooMany = append(tooMany, "host"+strconv.Itoa(index)+".example.test")
+	}
+
+	for name, value := range map[string]string{
+		"empty":          " , ",
+		"port":           "challenges.cloudflare.com:443",
+		"trailing dot":   "challenges.cloudflare.com.",
+		"underscore":     "challenges_cloudflare.com",
+		"scheme":         "https://challenges.cloudflare.com",
+		"empty label":    "challenges..cloudflare.com",
+		"too many hosts": strings.Join(tooMany, ","),
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := validEnvironment()
+			env["EGRESS_ALLOWED_HOSTS"] = value
+
+			_, err := Load(getenv(env))
+			if err == nil || !strings.Contains(err.Error(), "EGRESS_ALLOWED_HOSTS") {
+				t.Fatalf("Load() error = %v, want EGRESS_ALLOWED_HOSTS validation error", err)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsInvalidRestrictedEgressListenerAndPerClientLimit(t *testing.T) {
+	for name, mutate := range map[string]func(map[string]string){
+		"restricted listener": func(env map[string]string) {
+			env["EGRESS_RESTRICTED_LISTEN_ADDR"] = "not-an-address"
+		},
+		"per-client limit": func(env map[string]string) {
+			env["CONVERSION_MAX_CONCURRENCY_PER_IP"] = "101"
+		},
+		"zero per-client limit": func(env map[string]string) {
+			env["CONVERSION_MAX_CONCURRENCY_PER_IP"] = "0"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := validEnvironment()
+			mutate(env)
+
+			if _, err := Load(getenv(env)); err == nil {
+				t.Fatal("Load() error = nil, want validation error")
+			}
+		})
 	}
 }
 

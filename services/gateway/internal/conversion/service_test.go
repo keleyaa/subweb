@@ -460,16 +460,89 @@ func newTestService(t *testing.T, upstream string, urlPolicy URLPolicy) *Service
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The shared semaphore stays the subject of the concurrency tests, so the
+	// per-client gate is set above every case that uses this helper.
+	ipGate, err := policy.NewInFlightGate(8)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return &Service{
 		Policy:      urlPolicy,
 		RateLimiter: limiter,
 		IPHasher:    hasher,
 		Semaphore:   semaphore,
+		IPGate:      ipGate,
 		Upstream:    parsed,
 		MaxRequest:  16 * 1024,
 		MaxResponse: 8 * 1024 * 1024,
 		Timeout:     2 * time.Second,
 	}
+}
+
+func TestServiceLimitsConcurrencyPerClient(t *testing.T) {
+	upstreamStarted := make(chan struct{}, 2)
+	releaseUpstream := make(chan struct{})
+	upstream := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		upstreamStarted <- struct{}{}
+		<-releaseUpstream
+		response.Header().Set("Content-Type", "text/plain")
+		_, _ = io.WriteString(response, "ok")
+	}))
+	defer upstream.Close()
+
+	service := newTestService(t, upstream.URL, acceptingPolicy())
+	gate, err := policy.NewInFlightGate(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.IPGate = gate
+
+	firstDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		firstDone <- serveConversionRequestFrom(service, "https://public.example/feed", "198.51.100.9:1234")
+	}()
+	select {
+	case <-upstreamStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first conversion did not reach upstream")
+	}
+
+	sameClient := serveConversionRequestFrom(service, "https://public.example/feed", "198.51.100.9:1234")
+	assertProblem(t, sameClient, http.StatusTooManyRequests, "concurrency_limited")
+
+	// A different client still reaches the shared slot while one client is
+	// already converting, which is what the per-client gate protects.
+	otherClient := make(chan *httptest.ResponseRecorder, 1)
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(1)
+	go func() {
+		defer waitGroup.Done()
+		otherClient <- serveConversionRequestFrom(service, "https://public.example/feed", "203.0.113.7:1234")
+	}()
+	select {
+	case <-upstreamStarted:
+	case <-time.After(time.Second):
+		t.Fatal("a second client was blocked while another client converted")
+	}
+
+	close(releaseUpstream)
+	waitGroup.Wait()
+	first := <-firstDone
+	if first.Code != http.StatusOK {
+		t.Fatalf("first response status = %d, want 200", first.Code)
+	}
+	if response := <-otherClient; response.Code != http.StatusOK {
+		t.Fatalf("other client status = %d, want 200", response.Code)
+	}
+}
+
+func serveConversionRequestFrom(service *Service, subscriptionURL, remoteAddr string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodGet,
+		"/sub?target=clash&url="+url.QueryEscape(subscriptionURL), nil)
+	request.RemoteAddr = remoteAddr
+	response := httptest.NewRecorder()
+	service.ServeHTTP(response, request)
+	return response
 }
 
 func serveConversionRequest(service *Service, subscriptionURL string) *httptest.ResponseRecorder {

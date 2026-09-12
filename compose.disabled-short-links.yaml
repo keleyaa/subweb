@@ -31,6 +31,7 @@ services:
       <<: *runtime-environment
       LISTEN_ADDR: "0.0.0.0:8080"
       EGRESS_LISTEN_ADDR: "0.0.0.0:25502"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
       API_URL: "${API_URL:?Set API_URL with scripts/configure.sh}"
       APP_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
       API_DOMAIN: "${API_DOMAIN:?Set API_DOMAIN with scripts/configure.sh}"
@@ -45,7 +46,8 @@ services:
       CONVERSION_REQUEST_TIMEOUT_MS: "${CONVERSION_REQUEST_TIMEOUT_MS:-10000}"
       CONVERSION_DNS_TIMEOUT_MS: "${CONVERSION_DNS_TIMEOUT_MS:-2000}"
       CONVERSION_EGRESS_CONNECT_TIMEOUT_MS: "${CONVERSION_EGRESS_CONNECT_TIMEOUT_MS:-5000}"
-      CONVERSION_MAX_CONCURRENCY: "${CONVERSION_MAX_CONCURRENCY:-2}"
+      CONVERSION_MAX_CONCURRENCY: "${CONVERSION_MAX_CONCURRENCY:-4}"
+      CONVERSION_MAX_CONCURRENCY_PER_IP: "${CONVERSION_MAX_CONCURRENCY_PER_IP:-2}"
     networks:
       default: {}
       subconverter-egress: {}
@@ -60,7 +62,7 @@ services:
 
   subconverter:
     <<: *runtime-security
-    image: "${SUBCONVERTER_IMAGE:-ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475}"
+    image: "${SUBCONVERTER_IMAGE:-ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423}"
     # Bootstrap the copied named volume, then the entrypoint execs as UID 101.
     user: "0:0"
     cap_add:

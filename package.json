@@ -25,6 +25,7 @@
     "test:e2e": "playwright test",
     "verify:compose": "./scripts/validate-compose.sh",
     "verify:container": "./scripts/verify-container.sh subweb:ci",
+    "verify:subconverter-runtime": "./scripts/verify-subconverter-runtime.sh",
     "verify:integration": "./scripts/verify-integrated-stack.sh",
     "verify:operations": "./scripts/verify-redis-operations.sh",
     "verify:local": "./scripts/verify-local-dev.sh",
@@ -41,15 +42,15 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@playwright/test": "1.62.1",
+    "@playwright/test": "1.63.0",
     "@vitejs/plugin-vue": "6.0.8",
-    "eslint": "10.9.1",
-    "eslint-plugin-vue": "10.10.0",
-    "globals": "17.11.0",
-    "ipaddr.js": "2.2.0",
+    "eslint": "10.10.0",
+    "eslint-plugin-vue": "10.11.0",
+    "globals": "17.12.0",
+    "ipaddr.js": "2.5.0",
     "typescript": "7.0.2",
-    "vite": "8.2.2",
-    "vitest": "4.1.11",
+    "vite": "8.3.0",
+    "vitest": "5.0.0",
     "vue-eslint-parser": "10.4.1"
   }
 }

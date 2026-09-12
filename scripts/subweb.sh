@@ -112,6 +112,19 @@ case "$command_name" in
       compose pull gateway subconverter
     fi
     compose up -d --no-build --pull never --remove-orphans --wait
+    # Docker seeds a named volume from the image only while that volume is
+    # empty, so an upgraded SubConverter keeps the previous image's /base tree
+    # unless the operator removes the volume. Fail the upgrade instead of
+    # leaving a running container that silently uses stale preferences.
+    if ! COMPOSE_FILE=$compose_file "$SCRIPT_DIRECTORY/verify-subconverter-runtime.sh"; then
+      printf '\n%s\n' \
+        'SubConverter upgrade is incomplete: the running container still serves the previous image /base content.' \
+        'Stop the stack, remove the stale runtime volume, then start it again:' \
+        "  docker compose -f $compose_file down" \
+        '  docker volume rm subweb_subconverter-runtime   # <compose project>_subconverter-runtime' \
+        '  ./scripts/subweb.sh up' >&2
+      exit 1
+    fi
     ;;
   *)
     fail "unknown command: $command_name"

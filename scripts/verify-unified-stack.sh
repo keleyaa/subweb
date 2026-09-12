@@ -292,6 +292,23 @@ assert_problem_code rate_limited || fail 'rate limit returned the wrong problem 
 
 assert_no_sensitive_logs
 
+# 日志契约：真实请求要有记录，健康探测不能产生噪音。
+if ! docker compose logs --no-log-prefix gateway | grep -q 'route=sub'; then
+  fail 'gateway access log did not record the conversion request.'
+fi
+if docker compose logs --no-log-prefix gateway | grep -q -- '/healthz\|/readyz'; then
+  fail 'gateway access log recorded health or readiness probes.'
+fi
+if docker compose logs --no-log-prefix subconverter | grep -q 'path=/healthz'; then
+  fail 'subconverter logged health-check probes.'
+fi
+if ! docker compose logs --no-log-prefix subconverter | grep -q 'path=/sub'; then
+  fail 'subconverter did not record the conversion request.'
+fi
+if docker compose logs --no-log-prefix myurls | grep -q 'route=/health'; then
+  fail 'myurls recorded health-check probes at the default level.'
+fi
+
 short_response=$(request app.test POST /short-api/links '{"url":"https://example.com/unified-stack"}')
 assert_status "$short_response" 201 'short-link creation'
 short_code=$(node - "$request_body" <<'NODE'
@@ -316,6 +333,15 @@ for route in /short-api/links /api/links; do
   status=$(request short.test POST "$route" '{"url":"https://example.com/forbidden"}')
   assert_status "$status" 404 'SHORT creation isolation'
 done
+
+# The restricted CONNECT listener is the only egress MyUrls has: a host outside
+# EGRESS_ALLOWED_HOSTS must be refused before any DNS lookup or dial.
+# --noproxy would disable the explicit proxy, so the probe must not use it.
+restricted_probe=$(docker compose exec -T myurls curl -sS --max-time 15 \
+  -x http://gateway:25503 -o /dev/null https://example.com/ 2>&1 || true)
+printf '%s' "$restricted_probe" | grep -q '403' \
+  || fail 'restricted egress accepted a host outside EGRESS_ALLOWED_HOSTS.'
+
 for attempt in 2 3 4 5; do
   status=$(request app.test POST /short-api/links '{"url":"https://example.com/challenge-probe"}')
   assert_status "$status" 201 'creation below challenge threshold'

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -38,12 +39,13 @@ func TestBuildServersRoutesAppAndShortLinksToOneUpstream(t *testing.T) {
 	defer upstream.Close()
 
 	cfg := testGatewayConfig(t, upstream.URL, true)
-	server, egressServer, closeResources, err := buildServers(cfg, nil)
+	servers, closeResources, err := buildServers(cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer closeResources()
-	defer egressServer.Close()
+	defer closeAllServers(servers)
+	server := servers[len(servers)-1]
 
 	appRequest := httptest.NewRequest(http.MethodPost, "http://"+cfg.AppDomain+"/short-api/links", strings.NewReader(`{"url":"https://source.example.test/sub"}`))
 	appRequest.Host = cfg.AppDomain
@@ -265,12 +267,13 @@ func TestBuildServersDisablesShortLinkDependencies(t *testing.T) {
 	cfg.IPHashSecret = nil
 	cfg.MyURLsUpstream = nil
 
-	server, egressServer, closeResources, err := buildServers(cfg, nil)
+	servers, closeResources, err := buildServers(cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer closeResources()
-	defer egressServer.Close()
+	defer closeAllServers(servers)
+	server := servers[len(servers)-1]
 
 	request := httptest.NewRequest(http.MethodPost, "http://"+cfg.AppDomain+"/short-api/links", strings.NewReader(`{}`))
 	request.Host = cfg.AppDomain
@@ -300,28 +303,83 @@ func testGatewayConfig(t *testing.T, upstream string, shortLinksEnabled bool) co
 		return mustParseURL(t, value)
 	}
 	return config.Config{
-		ListenAddr:                 "127.0.0.1:0",
-		EgressListenAddr:           "127.0.0.1:0",
-		AppDomain:                  "app.example.test",
-		APIDomain:                  "api.example.test",
-		ShortDomain:                "short.example.test",
-		APIURL:                     parseURL("https://api.example.test"),
-		ShortLinksEnabled:          shortLinksEnabled,
-		CustomBackendEnabled:       true,
-		RedisURL:                   "redis://127.0.0.1:6379/1",
-		RedisPassword:              "test-password",
-		IPHashSecret:               []byte("0123456789abcdef0123456789abcdef"),
-		TurnstileSiteKey:           "site-key",
-		SubConverterUpstream:       parseURL("http://subconverter:25500"),
-		MyURLsUpstream:             parseURL(upstream),
-		ConversionRateLimit:        10,
-		ConversionRateWindow:       time.Minute,
-		ConversionMaxRequestBytes:  16 * 1024,
-		ConversionMaxResponseBytes: 8 * 1024 * 1024,
-		ConversionRequestTimeout:   10 * time.Second,
-		ConversionDNSTimeout:       2 * time.Second,
-		EgressConnectTimeout:       5 * time.Second,
-		ConversionMaxConcurrency:   2,
+		ListenAddr:                    "127.0.0.1:0",
+		EgressListenAddr:              "127.0.0.1:0",
+		EgressRestrictedListenAddr:    "127.0.0.1:0",
+		EgressAllowedHosts:            []string{"challenges.cloudflare.com"},
+		AppDomain:                     "app.example.test",
+		APIDomain:                     "api.example.test",
+		ShortDomain:                   "short.example.test",
+		APIURL:                        parseURL("https://api.example.test"),
+		ShortLinksEnabled:             shortLinksEnabled,
+		CustomBackendEnabled:          true,
+		RedisURL:                      "redis://127.0.0.1:6379/1",
+		RedisPassword:                 "test-password",
+		IPHashSecret:                  []byte("0123456789abcdef0123456789abcdef"),
+		TurnstileSiteKey:              "site-key",
+		SubConverterUpstream:          parseURL("http://subconverter:25500"),
+		MyURLsUpstream:                parseURL(upstream),
+		ConversionRateLimit:           10,
+		ConversionRateWindow:          time.Minute,
+		ConversionMaxRequestBytes:     16 * 1024,
+		ConversionMaxResponseBytes:    8 * 1024 * 1024,
+		ConversionRequestTimeout:      10 * time.Second,
+		ConversionDNSTimeout:          2 * time.Second,
+		EgressConnectTimeout:          5 * time.Second,
+		ConversionMaxConcurrency:      4,
+		ConversionMaxConcurrencyPerIP: 2,
+	}
+}
+
+func closeAllServers(servers []*http.Server) {
+	for _, server := range servers {
+		_ = server.Close()
+	}
+}
+
+func TestBuildServersAddsRestrictedEgressOnlyWhenShortLinksAreEnabled(t *testing.T) {
+	for _, testCase := range []struct {
+		shortLinksEnabled bool
+		wantServers       int
+	}{
+		{shortLinksEnabled: true, wantServers: 3},
+		{shortLinksEnabled: false, wantServers: 2},
+	} {
+		cfg := testGatewayConfig(t, "", testCase.shortLinksEnabled)
+		servers, closeResources, err := buildServers(cfg, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(servers) != testCase.wantServers {
+			t.Fatalf("short links %t: servers = %d, want %d", testCase.shortLinksEnabled, len(servers), testCase.wantServers)
+		}
+		closeResources()
+		closeAllServers(servers)
+	}
+}
+
+func TestShortLinksEnabledForHealthcheckFollowsGatewayDefault(t *testing.T) {
+	for value, want := range map[string]bool{"": true, "true": true, "false": false} {
+		if got := shortLinksEnabledForHealthcheck(value); got != want {
+			t.Fatalf("shortLinksEnabledForHealthcheck(%q) = %t, want %t", value, got, want)
+		}
+	}
+}
+
+func TestNewLoggerGatesTheAccessLogByConfiguredLevel(t *testing.T) {
+	for level, want := range map[string]struct{ info, warn bool }{
+		"debug": {info: true, warn: true},
+		"info":  {info: true, warn: true},
+		"warn":  {info: false, warn: true},
+		"error": {info: false, warn: false},
+	} {
+		logger := newLogger(level)
+		if got := logger.Enabled(context.Background(), slog.LevelInfo); got != want.info {
+			t.Fatalf("newLogger(%q) info enabled = %t, want %t", level, got, want.info)
+		}
+		if got := logger.Enabled(context.Background(), slog.LevelWarn); got != want.warn {
+			t.Fatalf("newLogger(%q) warn enabled = %t, want %t", level, got, want.warn)
+		}
 	}
 }
 

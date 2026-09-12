@@ -80,7 +80,7 @@ Go Gateway 是前端与 MyUrls 之间的唯一适配边界：
 - RFC 9457 problem details 只保留白名单错误、`requestId`、`retryAfterSeconds` 和 `challenge` 元数据。
 - MyUrls 客户端禁用上游重定向，只接受 HTTP(S) 解析结果，并使用 10 秒总超时。
 
-唯一的 MyUrls 实例使用锁定的 Rust v2.0.6 镜像，`PUBLIC_BASE_URL=https://${SHORT_DOMAIN}` 独立于 `TURNSTILE_HOSTNAME=${APP_DOMAIN}`。Gateway 仅使用 `MYURLS_UPSTREAM=http://myurls-edge:3000`。创建保留风险触发的 Turnstile hostname/action 校验；解析只有限流，没有解析挑战。
+唯一的 MyUrls 实例使用锁定的 Rust v2.0.8 镜像，`PUBLIC_BASE_URL=https://${SHORT_DOMAIN}` 独立于 `TURNSTILE_HOSTNAME=${APP_DOMAIN}`。Gateway 仅使用 `MYURLS_UPSTREAM=http://myurls-edge:3000`。MyUrls 只连接内部网络，没有直连公网能力；Turnstile siteverify 经 Gateway 的受限 `:25503` CONNECT 监听访问 `EGRESS_ALLOWED_HOSTS`（默认 `challenges.cloudflare.com`），未列出的目标在 DNS 解析前被拒绝。创建保留风险触发的 Turnstile hostname/action 校验；解析只有限流，没有解析挑战。
 
 ## 6. 配置和功能开关
 

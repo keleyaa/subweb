@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -15,13 +16,16 @@ const (
 	proxyMaxHeaderBytes    = 16 * 1024
 )
 
+var errInvalidAllowedHosts = errors.New("allowed host list is invalid")
+
 // Proxy is the internal HTTP CONNECT proxy used by SubConverter. It performs
 // authorization before dialing and never exposes the destination or lower-level
 // network error in its response body.
 type Proxy struct {
-	authorizer  Authorizer
-	dialer      *Dialer
-	idleTimeout time.Duration
+	authorizer   Authorizer
+	dialer       *Dialer
+	idleTimeout  time.Duration
+	allowedHosts map[string]struct{}
 }
 
 // NewProxy constructs a CONNECT-only proxy from the shared policy components.
@@ -33,6 +37,26 @@ func NewProxy(authorizer Authorizer, dialer *Dialer) *Proxy {
 	}
 }
 
+// NewRestrictedProxy constructs a CONNECT-only proxy that only serves the
+// listed hostnames. Callers use it to hand one dependency (MyUrls) a narrow
+// egress path instead of the unrestricted subscription egress.
+func NewRestrictedProxy(authorizer Authorizer, dialer *Dialer, hosts []string) (*Proxy, error) {
+	if len(hosts) == 0 {
+		return nil, errInvalidAllowedHosts
+	}
+	allowed := make(map[string]struct{}, len(hosts))
+	for _, host := range hosts {
+		host = strings.ToLower(strings.TrimSpace(host))
+		if !isAuthorityHostname(host) {
+			return nil, errInvalidAllowedHosts
+		}
+		allowed[host] = struct{}{}
+	}
+	proxy := NewProxy(authorizer, dialer)
+	proxy.allowedHosts = allowed
+	return proxy, nil
+}
+
 func (proxy *Proxy) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodConnect {
 		response.Header().Set("Allow", http.MethodConnect)
@@ -41,6 +65,12 @@ func (proxy *Proxy) ServeHTTP(response http.ResponseWriter, request *http.Reques
 	}
 	if proxy == nil || proxy.authorizer == nil || proxy.dialer == nil {
 		writeProxyError(response, http.StatusServiceUnavailable)
+		return
+	}
+	// A restricted listener rejects disallowed destinations before any DNS
+	// lookup so a narrow dependency cannot probe arbitrary public hosts.
+	if !proxy.hostAllowed(request.Host) {
+		writeProxyError(response, http.StatusForbidden)
 		return
 	}
 
@@ -80,6 +110,20 @@ func (proxy *Proxy) ServeHTTP(response http.ResponseWriter, request *http.Reques
 	}
 
 	proxy.relay(client, remote, buffered.Reader)
+}
+
+// hostAllowed reports whether the CONNECT authority is permitted on this
+// listener. An empty allowlist keeps the unrestricted subscription behaviour.
+func (proxy *Proxy) hostAllowed(authority string) bool {
+	if len(proxy.allowedHosts) == 0 {
+		return true
+	}
+	hostname, _, _, err := parseAuthority(authority)
+	if err != nil {
+		return false
+	}
+	_, ok := proxy.allowedHosts[strings.ToLower(hostname)]
+	return ok
 }
 
 func (proxy *Proxy) relay(client, remote net.Conn, buffered io.Reader) {

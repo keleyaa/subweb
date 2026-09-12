@@ -1,17 +1,74 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/keleyaa/subweb/services/gateway/internal/config"
 )
+
+func TestAccessLogRecordsRequestsWithoutQueryShortCodesOrHealthProbes(t *testing.T) {
+	var logged bytes.Buffer
+	server := newTestServer(t, Dependencies{
+		Converter: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusOK)
+		}),
+		ShortLinks: http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			if request.URL.Path == "/short-api/links" {
+				w.WriteHeader(http.StatusCreated)
+				return
+			}
+			w.Header().Set("Location", "https://destination.example.test/subscription")
+			w.WriteHeader(http.StatusFound)
+		}),
+		Static: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+		Logger: slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelInfo})),
+	})
+
+	const subscriptionURL = "https://subscription.example.test/api/v1/probe?credential=access-log-sentinel"
+	serveRequest(t, server, http.MethodGet, "app.example.test", "/", nil)
+	serveRequest(t, server, http.MethodGet, "api.example.test",
+		"/sub?target=clash&url="+url.QueryEscape(subscriptionURL), nil)
+	serveRequest(t, server, http.MethodGet, "short.example.test", "/Ab3dE9_x", nil)
+	serveRequest(t, server, http.MethodPost, "app.example.test", "/short-api/links", nil)
+	serveRequest(t, server, http.MethodGet, "app.example.test", "/healthz", nil)
+	serveRequest(t, server, http.MethodGet, "api.example.test", "/readyz", nil)
+
+	output := logged.String()
+	for _, expected := range []string{
+		`msg="gateway request"`,
+		"host=app", "route=static", "status=200",
+		"route=sub", "host=api",
+		"route=short-resolve", "host=short", "status=302",
+		"route=short-create", "status=201",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("access log %q does not contain %q", output, expected)
+		}
+	}
+	for _, forbidden := range []string{
+		"access-log-sentinel", "subscription.example.test", "Ab3dE9_x", "/healthz", "/readyz",
+	} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("access log %q leaked %q", output, forbidden)
+		}
+	}
+	if count := strings.Count(output, `msg="gateway request"`); count != 4 {
+		t.Fatalf("access log lines = %d, want 4 (health and readiness probes excluded)", count)
+	}
+}
 
 func TestAppHostServesStaticPagesButAPIAndShortHostsDoNot(t *testing.T) {
 	staticCalls := 0
@@ -82,6 +139,37 @@ func TestHealthzDoesNotRequireDependencies(t *testing.T) {
 	}
 	if converterCalled || shortLinksCalled || readinessCalled {
 		t.Fatalf("dependencies called: converter=%t shortLinks=%t readiness=%t", converterCalled, shortLinksCalled, readinessCalled)
+	}
+}
+
+func TestResponsesCarryGatewaySecurityHeaders(t *testing.T) {
+	server := newTestServer(t, Dependencies{
+		Static: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	})
+
+	for name, testCase := range map[string]struct {
+		method, host, path string
+	}{
+		"app page":       {http.MethodGet, "app.example.test", "/"},
+		"api conversion": {http.MethodGet, "api.example.test", "/sub?target=clash&url=https%3A%2F%2Fexample.test"},
+		"health check":   {http.MethodGet, "app.example.test", "/healthz"},
+		"unknown host":   {http.MethodGet, "unknown.example.test", "/"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			response := serveRequest(t, server, testCase.method, testCase.host, testCase.path, nil)
+			for header, want := range map[string]string{
+				"X-Content-Type-Options": "nosniff",
+				"Referrer-Policy":        "no-referrer",
+				"X-Frame-Options":        "DENY",
+				"Permissions-Policy":     "camera=(), geolocation=(), microphone=()",
+			} {
+				if got := response.Header().Get(header); got != want {
+					t.Fatalf("%s %s = %q, want %q", name, header, got, want)
+				}
+			}
+		})
 	}
 }
 

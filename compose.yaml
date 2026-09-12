@@ -47,6 +47,9 @@ services:
       <<: *runtime-environment
       LISTEN_ADDR: "0.0.0.0:8080"
       EGRESS_LISTEN_ADDR: "0.0.0.0:25502"
+      EGRESS_RESTRICTED_LISTEN_ADDR: "0.0.0.0:25503"
+      EGRESS_ALLOWED_HOSTS: "${EGRESS_ALLOWED_HOSTS:-challenges.cloudflare.com}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
       API_URL: "${API_URL:?Set API_URL with scripts/configure.sh}"
       APP_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
       API_DOMAIN: "${API_DOMAIN:?Set API_DOMAIN with scripts/configure.sh}"
@@ -67,7 +70,8 @@ services:
       CONVERSION_REQUEST_TIMEOUT_MS: "${CONVERSION_REQUEST_TIMEOUT_MS:-10000}"
       CONVERSION_DNS_TIMEOUT_MS: "${CONVERSION_DNS_TIMEOUT_MS:-2000}"
       CONVERSION_EGRESS_CONNECT_TIMEOUT_MS: "${CONVERSION_EGRESS_CONNECT_TIMEOUT_MS:-5000}"
-      CONVERSION_MAX_CONCURRENCY: "${CONVERSION_MAX_CONCURRENCY:-2}"
+      CONVERSION_MAX_CONCURRENCY: "${CONVERSION_MAX_CONCURRENCY:-4}"
+      CONVERSION_MAX_CONCURRENCY_PER_IP: "${CONVERSION_MAX_CONCURRENCY_PER_IP:-2}"
     depends_on:
       redis:
         condition: service_healthy
@@ -127,12 +131,21 @@ services:
 
   myurls:
     <<: *myurls-common
-    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3}"
+    image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36}"
     environment:
       <<: *runtime-environment
       NODE_ENV: production
+      # MyUrls 的 info 级别会为每次健康探测写一行，且无法按路由过滤；短链请求的
+      # 正常记录由 Gateway 访问日志提供。需要排查时可用 MYURLS_LOG_LEVEL=info。
       LOG_LEVEL: "${MYURLS_LOG_LEVEL:-warn}"
       APP_PORT: "3000"
+      # MyUrls has no direct public network. Turnstile siteverify is the only
+      # outbound call and it uses the Gateway's host-allowlisted CONNECT
+      # listener, so a compromised MyUrls cannot reach arbitrary hosts.
+      HTTPS_PROXY: "http://gateway:25503"
+      https_proxy: "http://gateway:25503"
+      NO_PROXY: "127.0.0.1,localhost"
+      no_proxy: "127.0.0.1,localhost"
       PUBLIC_BASE_URL: "https://${SHORT_DOMAIN:?Set SHORT_DOMAIN with scripts/configure.sh}"
       REDIS_URL: redis://redis:6379/0
       REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD with scripts/configure.sh}"
@@ -161,7 +174,7 @@ services:
 
   subconverter:
     <<: *runtime-security
-    image: "${SUBCONVERTER_IMAGE:-ghcr.io/aethersailor/subconverter-extended:v1.8.6@sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475}"
+    image: "${SUBCONVERTER_IMAGE:-ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423}"
     # Bootstrap the copied named volume, then the entrypoint execs as UID 101.
     user: "0:0"
     cap_add:

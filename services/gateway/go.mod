@@ -1,6 +1,6 @@
 module github.com/keleyaa/subweb/services/gateway
 
-go 1.25
+go 1.27
 
 require github.com/redis/go-redis/v9 v9.22.0
 

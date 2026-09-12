@@ -411,12 +411,12 @@ describe("documentation contract", () => {
 
     for (const document of [readme, architecture]) {
       expect(document).toContain("MyUrls Rust");
-      expect(document).toContain("v2.0.6");
+      expect(document).toContain("v2.0.8");
     }
     expect(configuration).toContain(
       "不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像",
     );
-    expect(integration).toContain("v2.0.6");
+    expect(integration).toContain("v2.0.8");
     expect(integration).toContain("challenge_required");
     expect(integration).toContain("不证明成功 token 的在线兑换");
     expect(maintenance).not.toContain("/Users/li/Desktop/GitHub/MyUrls");

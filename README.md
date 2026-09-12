@@ -11,8 +11,8 @@
 ## 能力
 
 - **订阅转换：** 输入订阅链接或节点，选择客户端与远程配置后生成可复制的转换地址。
-- **统一 Gateway：** Go 1.25 单二进制负责 APP、API、SHORT Host 路由、静态资源、请求策略、限流、MyUrls 适配和内部 CONNECT egress。
-- **短链：** 通过 APP 同源 `/short-api/links` 创建短链；一个 MyUrls Rust v2.0.6 进程为 APP 与 SHORT 的 `/code` 解析提供上游支持，SHORT 不可创建或管理短链。
+- **统一 Gateway：** Go 1.27 单二进制负责 APP、API、SHORT Host 路由、静态资源、请求策略、限流、MyUrls 适配，以及订阅 egress（`:25502`）与 hostname 白名单受限 egress（`:25503`）两个内部 CONNECT 监听。
+- **短链：** 通过 APP 同源 `/short-api/links` 创建短链；一个 MyUrls Rust v2.0.8 进程为 APP 与 SHORT 的 `/code` 解析提供上游支持，SHORT 不可创建或管理短链，MyUrls 没有直连公网能力。
 - **可控功能开关：** `SHORT_LINKS_ENABLED` 控制是否部署 MyUrls/Redis，`CUSTOM_BACKEND_ENABLED` 控制前端自定义后端；安全策略不可关闭。
 - **PWA 图标：** 提供 favicon、Apple Touch Icon、`192 px` / `512 px` 图标与 manifest。
 
@@ -42,7 +42,7 @@ cd subweb
 
 命令会在终端隐藏提示输入 Turnstile Secret Key，随后自动校验、拉取镜像并启动服务；CI 或非交互环境再使用 `--turnstile-secret-key-stdin`。
 
-默认启用短链时会运行 `gateway`、`subconverter`、`myurls` 和 `redis` 四个服务；`myurls` 是唯一的 MyUrls Rust v2.0.6 进程。所有 APP、API、SHORT 域名由外层 TLS 反向代理转发到 `127.0.0.1:<SUBWEB_PORT>`，并保留原始 Host。项目自身不管理 HTTPS 证书、80/443 端口或公网 DNS。
+默认启用短链时会运行 `gateway`、`subconverter`、`myurls` 和 `redis` 四个服务；`myurls` 是唯一的 MyUrls Rust v2.0.8 进程。所有 APP、API、SHORT 域名由外层 TLS 反向代理转发到 `127.0.0.1:<SUBWEB_PORT>`，并保留原始 Host。项目自身不管理 HTTPS 证书、80/443 端口或公网 DNS。
 
 关闭短链时将 `SHORT_LINKS_ENABLED=false` 写入配置，部署入口会选择 `compose.disabled-short-links.yaml`，只运行 Gateway 与 SubConverter，不需要 `SHORT_DOMAIN`、Redis、MyUrls 或 Turnstile 私钥。完整步骤见 [部署索引](docs/deployment.md) 和 [Docker 部署](docs/deployment-docker.md)。
 
@@ -62,7 +62,7 @@ Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 
 | -------------- | --------------------------------------------------------------------------------------- |
 | `gateway`      | 唯一公开 loopback 端口；统一 Host 路由、静态资源、策略、限流、短链适配和 CONNECT egress |
 | `subconverter` | 订阅转换执行器，只能通过内部 egress 网络访问                                            |
-| `myurls`       | 一个 MyUrls Rust v2.0.6 进程；APP 创建/管理，APP 与 SHORT 短码解析由 Gateway 分流        |
+| `myurls`       | 一个 MyUrls Rust v2.0.8 进程；APP 创建/管理，APP 与 SHORT 短码解析由 Gateway 分流        |
 | `redis`        | DB `0` 保存短链，DB `1` 保存 Gateway HMAC IP 限流状态                                   |
 
 ## 界面操作
@@ -77,7 +77,7 @@ Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 
 ## 安全与隐私
 
 - Gateway 只发布 loopback 端口；MyUrls、Redis 和 SubConverter 不发布宿主机端口。
-- `/sub` 强制执行 DNS、SSRF、响应大小、超时、并发、限流和 `:443` CONNECT 策略；SubConverter 不能绕过 Gateway 直接访问公网。
+- `/sub` 强制执行 DNS、SSRF、响应大小、超时、并发（全局 `4`、单客户端 `2`）、限流和 `:443` CONNECT 策略；SubConverter 不能绕过 Gateway 直接访问公网，MyUrls 的 Turnstile siteverify 只能通过 hostname 白名单受限 egress 访问 `challenges.cloudflare.com`。
 - Gateway 清理凭据、Cookie、Origin 和伪造的转发头，验证 Host 并重建客户端身份；日志不记录原始 IP、订阅 URL、Query、Token、Redis 密码或完整短码。
 - 转换 URL 与结果不写入 Redis；用户主动创建的短链按 TTL 保存，短链属于持有即可访问的数据。
 - `proxy-providers` URL 由最终客户端直接拉取，不经过本服务 egress；这是客户端侧边界。

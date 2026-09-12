@@ -10,7 +10,7 @@ describe('Docker runtime contract', () => {
     const finalStage = dockerfile.slice(dockerfile.lastIndexOf('FROM '));
 
     expect(dockerfile).toMatch(/^FROM node:24-alpine@sha256:[0-9a-f]{64} AS frontend-build/m);
-    expect(dockerfile).toMatch(/^FROM golang:1\.25-alpine@sha256:[0-9a-f]{64} AS gateway-build/m);
+    expect(dockerfile).toMatch(/^FROM golang:1\.27-alpine@sha256:[0-9a-f]{64} AS gateway-build/m);
     expect(finalStage).toMatch(/^FROM gcr\.io\/distroless\/static-debian12:nonroot@sha256:[0-9a-f]{64}/m);
     expect(finalStage).toContain('org.opencontainers.image.source="https://github.com/keleyaa/subweb"');
     expect(dockerfile).toContain('RUN apk add --no-cache ca-certificates tzdata');
@@ -47,7 +47,7 @@ describe('Docker runtime contract', () => {
     expect(compose).toContain('cap_drop:');
     expect(compose).toContain('- ALL');
     expect(compose).toContain(
-      'image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.6@sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3}"',
+      'image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36}"',
     );
   });
 

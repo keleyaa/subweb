@@ -80,11 +80,19 @@ const (
 
 func (handler gatewayHandler) serveHTTP(response http.ResponseWriter, request *http.Request) {
 	requestID := newRequestID()
+	startedAt := time.Now()
 	writer := &requestIDResponseWriter{
 		ResponseWriter: response,
 		requestID:      requestID,
 	}
 	writer.enforceRequestID()
+	// The Gateway sets these itself so deployments that do not install the
+	// documented reverse-proxy snippet still receive them. CSP and HSTS remain
+	// the external TLS entry point's responsibility because it owns the origin.
+	writer.Header().Set("X-Content-Type-Options", "nosniff")
+	writer.Header().Set("Referrer-Policy", "no-referrer")
+	writer.Header().Set("X-Frame-Options", "DENY")
+	writer.Header().Set("Permissions-Policy", "camera=(), geolocation=(), microphone=()")
 
 	defer func() {
 		if recover() != nil {
@@ -99,6 +107,7 @@ func (handler gatewayHandler) serveHTTP(response http.ResponseWriter, request *h
 			})
 		}
 		writer.enforceRequestID()
+		handler.logAccess(request, writer, requestID, startedAt)
 	}()
 
 	host := handler.classifyHost(request.Host)
@@ -141,6 +150,70 @@ func (handler gatewayHandler) serveHTTP(response http.ResponseWriter, request *h
 		handler.serveShort(writer, request, requestID)
 	default:
 		writeStatusProblem(writer, requestID, http.StatusMisdirectedRequest, "misdirected_request")
+	}
+}
+
+// logAccess records one line per served request at info level. It intentionally
+// excludes health probes, query strings, subscription URLs, raw client IPs, and
+// short codes so the access log stays useful without becoming a data leak.
+func (handler gatewayHandler) logAccess(request *http.Request, writer *requestIDResponseWriter, requestID string, startedAt time.Time) {
+	hostKind := handler.classifyHost(request.Host)
+	route := accessRoute(hostKind, request)
+	if route == "" {
+		return
+	}
+	handler.logger.Info("gateway request",
+		"request_id", requestID,
+		"host", accessHostClass(hostKind),
+		"method", request.Method,
+		"route", route,
+		"status", writer.statusCode(),
+		"duration_ms", time.Since(startedAt).Milliseconds(),
+	)
+}
+
+// accessRoute maps a request onto a stable label. Health and readiness probes
+// return an empty label so the container healthcheck cannot flood the log.
+func accessRoute(hostKind hostKind, request *http.Request) string {
+	if request.URL == nil {
+		return "unknown"
+	}
+	path := request.URL.Path
+	switch path {
+	case "/healthz", "/readyz":
+		return ""
+	case "/sub":
+		if hostKind == apiHost {
+			return "sub"
+		}
+		return "foreign-host"
+	case "/short-api/links":
+		if hostKind == appHost {
+			return "short-create"
+		}
+		return "foreign-host"
+	case "/conf/config.js":
+		return "runtime-config"
+	}
+	if shortcode.ValidPath(path) {
+		return "short-resolve"
+	}
+	if path == "/assets" || strings.HasPrefix(path, "/assets/") {
+		return "asset"
+	}
+	return "static"
+}
+
+func accessHostClass(hostKind hostKind) string {
+	switch hostKind {
+	case appHost:
+		return "app"
+	case apiHost:
+		return "api"
+	case shortHost:
+		return "short"
+	default:
+		return "unknown"
 	}
 }
 
@@ -428,16 +501,32 @@ func writeStatusProblem(writer http.ResponseWriter, requestID string, status int
 type requestIDResponseWriter struct {
 	http.ResponseWriter
 	requestID string
+	status    int
 }
 
 func (writer *requestIDResponseWriter) WriteHeader(status int) {
 	writer.enforceRequestID()
+	if writer.status == 0 {
+		writer.status = status
+	}
 	writer.ResponseWriter.WriteHeader(status)
 }
 
 func (writer *requestIDResponseWriter) Write(body []byte) (int, error) {
 	writer.enforceRequestID()
+	if writer.status == 0 {
+		writer.status = http.StatusOK
+	}
 	return writer.ResponseWriter.Write(body)
+}
+
+// statusCode reports the status the handler committed, defaulting to 200 for
+// handlers that only wrote a body.
+func (writer *requestIDResponseWriter) statusCode() int {
+	if writer.status == 0 {
+		return http.StatusOK
+	}
+	return writer.status
 }
 
 func (writer *requestIDResponseWriter) Unwrap() http.ResponseWriter {

@@ -23,7 +23,7 @@ const inventoryError =
 const gatewayBaseSourceError =
   'services.gatewayBase.source.repository must equal docker-library/golang';
 const gatewayBaseImageError =
-  'services.gatewayBase.image.reference must use docker.io/library/golang:1.25-alpine';
+  'services.gatewayBase.image.reference must use docker.io/library/golang:1.27-alpine';
 const runtimeImageError =
   'services.gatewayBase.runtimeImages must contain exactly: distroless, frontend';
 const imageReferenceError =
@@ -100,15 +100,15 @@ describe('integrated service artifact locks', () => {
   it('uses the approved upstream repositories and Rust MyUrls release', () => {
     expect(lock.services.myurls.source).toMatchObject({
       repository: 'keleyaa/MyUrls',
-      tag: 'v2.0.6',
-      commit: '9a04a210c19f97178255ed1fe096c4de56922224',
+      tag: 'v2.0.8',
+      commit: '42234e8d1085b6c1449d16f04cd61e34104037f5',
     });
     expect(lock.services.myurls.image).toMatchObject({
-      reference: 'ghcr.io/keleyaa/myurls:v2.0.6',
-      digest: 'sha256:3ccd97bd9b3c5ad6dfea4c414f055698b0cce39a54a47fdb94c5cab7f6526ed3',
+      reference: 'ghcr.io/keleyaa/myurls:v2.0.8',
+      digest: 'sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36',
       platforms: {
-        'linux/amd64': 'sha256:0029651550c833d923359f0b105691c76b6dd96d48e2b775c51c6204d26fe4a0',
-        'linux/arm64': 'sha256:a34b0bbeef548b17a1eee515fd9fba4243429a31c1de8d0539fb6177c635975e',
+        'linux/amd64': 'sha256:a46f3edf00074b4cf9d576305a7fa1aea5b0dd64110cf2b402f5db7a041fdb3a',
+        'linux/arm64': 'sha256:362d6d58fcecd7e6199c1d8ed2ca4f10c533a814c80655ceaf85d7a5ad250983',
       }
     });
     expect(lock.services.subconverter.source.repository).toBe(
@@ -118,9 +118,9 @@ describe('integrated service artifact locks', () => {
 
   it('pins the Go gateway builder and runtime image inputs used by Dockerfile', () => {
     expect(lock.services.gatewayBase.source).toMatchObject({
-      repository: 'docker-library/golang', tag: '1.25/alpine3.24',
+      repository: 'docker-library/golang', tag: '1.27/alpine3.24',
     });
-    expect(lock.services.gatewayBase.image.reference).toBe('docker.io/library/golang:1.25-alpine');
+    expect(lock.services.gatewayBase.image.reference).toBe('docker.io/library/golang:1.27-alpine');
     expect(lock.services.gatewayBase.runtimeImages).toMatchObject({
       frontend: expect.objectContaining({ reference: 'docker.io/library/node:24-alpine' }),
       distroless: expect.objectContaining({ reference: 'gcr.io/distroless/static-debian12:nonroot' }),
@@ -156,7 +156,7 @@ describe('integrated service artifact locks', () => {
   });
 
   it.each([
-    ['ghcr.io/keleyaa/myurls:v2.0.6', 'v2.0.6'],
+    ['ghcr.io/keleyaa/myurls:v2.0.8', 'v2.0.8'],
     ['ghcr.io/keleyaa/myurls:v2.1.0', 'v2.1.0'],
   ])('accepts the tagged MyUrls image reference %s', (reference, tag) => {
     const candidate = structuredClone(lock);
@@ -170,7 +170,7 @@ describe('integrated service artifact locks', () => {
     const candidate = structuredClone(lock);
     candidate.services.myurls.source.repository = 'legacy/MyUrls';
     candidate.services.myurls.source.tag = 'v1.13.0';
-    candidate.services.myurls.image.reference = 'ghcr.io/keleyaa/myurls:v2.0.6';
+    candidate.services.myurls.image.reference = 'ghcr.io/keleyaa/myurls:v2.0.8';
 
     expect(validateVersionLocks(candidate)).toEqual(
       expect.arrayContaining([
@@ -183,7 +183,7 @@ describe('integrated service artifact locks', () => {
 
   it('rejects a MyUrls image from an unapproved registry repository', () => {
     const candidate = structuredClone(lock);
-    candidate.services.myurls.image.reference = 'docker.io/legacy/myurls:v2.0.6';
+    candidate.services.myurls.image.reference = 'docker.io/legacy/myurls:v2.0.8';
 
     expect(validateVersionLocks(candidate)).toContain(
       'services.myurls.image.reference must use ghcr.io/keleyaa/myurls',
@@ -213,7 +213,7 @@ describe('integrated service artifact locks', () => {
     );
   });
 
-  it.each(['v2.0.6', 'v2.1.0'])(
+  it.each(['v2.0.8', 'v2.1.0'])(
     'accepts the Rust MyUrls source tag %s when the image tag matches',
     (tag) => {
       const candidate = structuredClone(lock);

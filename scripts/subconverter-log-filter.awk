@@ -54,6 +54,10 @@ function flush_retryable_burst() {
 }
 
 {
+  # 容器健康检查每 30 秒探测一次 /healthz。该探测属于噪音，不进入日志；
+  # 真实 /sub 请求仍在 info 级别正常记录。
+  if (index($0, "path=/healthz") > 0) next;
+
   line = redact_encoded_uris($0);
   line = redact_uris(line);
   line = redact_request_sources(line);

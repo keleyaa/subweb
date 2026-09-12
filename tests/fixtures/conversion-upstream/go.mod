@@ -1,3 +1,3 @@
 module github.com/keleyaa/subweb/test-fixtures/conversion-upstream
 
-go 1.25
+go 1.27

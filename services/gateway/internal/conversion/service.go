@@ -52,6 +52,7 @@ type Service struct {
 	RateLimiter *ratelimit.RateLimiter
 	IPHasher    *privacy.IPHasher
 	Semaphore   *policy.Semaphore
+	IPGate      *policy.InFlightGate
 	Upstream    *url.URL
 	Transport   http.RoundTripper
 
@@ -125,6 +126,15 @@ func (service *Service) ServeHTTP(response http.ResponseWriter, request *http.Re
 		service.writeProblem(response, requestID, http.StatusInternalServerError, "internal_error", 0)
 		return
 	}
+	// Bound per-client concurrency so one client cannot hold every shared
+	// conversion slot while other clients are rejected.
+	releaseIP, held := service.IPGate.TryAcquire(ipHash)
+	if !held {
+		service.writeError(response, requestID, policy.PolicyError{Code: "concurrency_limited", Status: http.StatusTooManyRequests})
+		return
+	}
+	defer releaseIP()
+
 	rateLimit, err := service.RateLimiter.Allow(requestContext, conversionRateKey(ipHash))
 	if err != nil {
 		if request.Context().Err() != nil {
@@ -156,7 +166,7 @@ func (service *Service) ServeHTTP(response http.ResponseWriter, request *http.Re
 }
 
 func (service *Service) validateConfiguration() error {
-	if service.Policy == nil || service.RateLimiter == nil || service.IPHasher == nil || service.Semaphore == nil || service.Upstream == nil {
+	if service.Policy == nil || service.RateLimiter == nil || service.IPHasher == nil || service.Semaphore == nil || service.IPGate == nil || service.Upstream == nil {
 		return errors.New("conversion service configuration is incomplete")
 	}
 	return nil

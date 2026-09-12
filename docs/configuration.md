@@ -19,7 +19,7 @@
 
 ## 获取 Turnstile 密钥
 
-登录 [Cloudflare Dashboard 的 Turnstile 页面](https://developers.cloudflare.com/turnstile/get-started/widget-management/dashboard/)，选择 **Add widget** 创建 Widget。Hostname 填写 `APP_DOMAIN`；当前 MyUrls v2.0.6 只在创建时触发挑战，SHORT 解析不承载验证组件。创建后复制 Site Key 和 Secret Key。
+登录 [Cloudflare Dashboard 的 Turnstile 页面](https://developers.cloudflare.com/turnstile/get-started/widget-management/dashboard/)，选择 **Add widget** 创建 Widget。Hostname 填写 `APP_DOMAIN`；当前 MyUrls v2.0.8 只在创建时触发挑战，SHORT 解析不承载验证组件。创建后复制 Site Key 和 Secret Key。
 
 部署命令中的 `--turnstile-site-key` 接收 Site Key；交互式部署会隐藏提示输入 Secret Key，并将两者写入根目录 `.env`（权限 `0600`）。CI 或非交互环境使用 `--turnstile-secret-key-stdin` 通过标准输入传入 Secret Key。Site Key 会出现在前端运行时配置中，Secret Key 只能保留在服务端，不能提交到 Git、写入镜像或放入日志。
 
@@ -30,6 +30,7 @@
 以下变量用于统一 Gateway 的 `/sub` 请求策略：
 
 ```dotenv
+LOG_LEVEL=info
 CONVERSION_RATE_LIMIT=10
 CONVERSION_RATE_WINDOW_SECONDS=60
 CONVERSION_MAX_REQUEST_BYTES=16384
@@ -37,10 +38,24 @@ CONVERSION_MAX_RESPONSE_BYTES=8388608
 CONVERSION_REQUEST_TIMEOUT_MS=10000
 CONVERSION_DNS_TIMEOUT_MS=2000
 CONVERSION_EGRESS_CONNECT_TIMEOUT_MS=5000
-CONVERSION_MAX_CONCURRENCY=2
+CONVERSION_MAX_CONCURRENCY=4
+CONVERSION_MAX_CONCURRENCY_PER_IP=2
 ```
 
-Gateway 对远程 URL 只允许 HTTPS，或 loopback host 上的 HTTP；解析结果必须是 public-unicast 地址，拒绝私网、特殊用途、scoped IPv6、DNS rebinding 和非 `443` CONNECT 目标。超时、响应大小、并发和限流限制必须是有限正整数，错误时 fail closed。
+Gateway 对远程 URL 只允许 HTTPS，或 loopback host 上的 HTTP；解析结果必须是 public-unicast 地址，拒绝私网、特殊用途、scoped IPv6、DNS rebinding 和非 `443` CONNECT 目标。超时、响应大小、并发和限流限制必须是有限正整数，错误时 fail closed。`CONVERSION_MAX_CONCURRENCY` 是全部客户端共享的槽位总数，`CONVERSION_MAX_CONCURRENCY_PER_IP` 限制单个客户端可以同时占用的槽位，避免一个调用方占满全部共享槽位；受限时返回 `429 concurrency_limited`。
+
+`LOG_LEVEL` 接受 `debug`、`info`、`warn`、`error`，默认 `info`。`info` 为每个请求写一行访问日志（路由类别、状态、耗时），但跳过 `/healthz` 与 `/readyz` 健康探测；`warn` 及以上只保留失败与警告，访问日志随之关闭。各级别都不会记录 Query、订阅 URL、原始 IP 或完整短码。
+
+## 内部 egress 监听
+
+Gateway 运行两个内部 CONNECT 监听，二者都不发布宿主机端口：
+
+| 监听 | 默认地址 | 允许的目标 | 使用方 |
+| --- | --- | --- | --- |
+| 订阅 egress | `0.0.0.0:25502` | 任意已解析 public-unicast 的 `:443` 目标 | SubConverter 拉取订阅与远程配置 |
+| 受限 egress | `0.0.0.0:25503` | 仅 `EGRESS_ALLOWED_HOSTS` 列出的 hostname | MyUrls 的 Turnstile siteverify |
+
+`EGRESS_ALLOWED_HOSTS` 默认是 `challenges.cloudflare.com`，用逗号分隔，最多 16 个 hostname。MyUrls 只连接内部网络，没有直连公网的能力；移除 `challenges.cloudflare.com` 会使创建挑战在验证阶段返回 `503 dependency_unavailable`。受限监听只在 `SHORT_LINKS_ENABLED=true` 时启动。
 
 ## 日志级别
 

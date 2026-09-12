@@ -40,6 +40,34 @@ describe('SubConverter log sanitization', () => {
     expect(result.stdout).toContain('Authorization: [redacted]');
   });
 
+  it('drops health-check probes while keeping real request records', () => {
+    const result = spawnSync(
+      'sh',
+      [
+        supervisor,
+        'sh',
+        '-c',
+        'printf "%s\\n" "$HEALTH" "$HEALTH" "$CONVERSION"',
+      ],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          HEALTH:
+            '[INFO] HTTP_RESPONSE_PREPARED method=GET path=/healthz status=200 duration_ms=0 response_bytes=2 response_bytes_known=true',
+          CONVERSION:
+            '[INFO] request_id=abc HTTP_RESPONSE_PREPARED method=GET path=/sub status=200 duration_ms=12 response_bytes=2048 response_bytes_known=true',
+        },
+      },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).not.toContain('/healthz');
+    expect(result.stdout).toContain('path=/sub');
+    expect(result.stdout.trim().split('\n')).toHaveLength(1);
+  });
+
   it('collapses contiguous retryable egress warning bursts without hiding the first warning', () => {
     const result = spawnSync(
       'sh',

@@ -1,12 +1,143 @@
 package egress
 
 import (
+	"context"
+	"errors"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/netip"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 )
+
+type recordingAuthorizer struct {
+	authorized []string
+	err        error
+}
+
+func (authorizer *recordingAuthorizer) Authorize(_ context.Context, authority string) (Authorization, error) {
+	authorizer.authorized = append(authorizer.authorized, authority)
+	return authorizer.grant(), authorizer.err
+}
+
+func (authorizer *recordingAuthorizer) Consume(string, string) (Authorization, error) {
+	return authorizer.grant(), authorizer.err
+}
+
+// grant returns one valid, unexpired authorization so tests reach the dialer
+// instead of failing authorization validation first.
+func (authorizer *recordingAuthorizer) grant() Authorization {
+	return Authorization{
+		Token:     "token",
+		Hostname:  "challenges.cloudflare.com",
+		Port:      443,
+		Addresses: []netip.Addr{netip.MustParseAddr("93.184.216.34")},
+		ExpiresAt: time.Now().Add(time.Minute),
+	}
+}
+
+func connectRequest(authority string) *http.Request {
+	return &http.Request{
+		Method: http.MethodConnect,
+		Host:   authority,
+		URL:    &url.URL{},
+		Header: make(http.Header),
+	}
+}
+
+func failingDialer(t *testing.T) *Dialer {
+	t.Helper()
+	return newDialer(time.Second, func(context.Context, string, string) (net.Conn, error) {
+		return nil, errors.New("dial failed")
+	})
+}
+
+func TestRestrictedProxyRejectsUnlistedHostBeforeAuthorizing(t *testing.T) {
+	authorizer := &recordingAuthorizer{}
+	proxy, err := NewRestrictedProxy(authorizer, failingDialer(t), []string{"challenges.cloudflare.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	proxy.ServeHTTP(response, connectRequest("subscription.example.test:443"))
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
+	}
+	if len(authorizer.authorized) != 0 {
+		t.Fatalf("authorize calls = %v, want none for a disallowed host", authorizer.authorized)
+	}
+	if strings.Contains(response.Body.String(), "subscription.example.test") {
+		t.Fatalf("response body = %q, want no destination disclosure", response.Body.String())
+	}
+}
+
+func TestRestrictedProxyServesListedHost(t *testing.T) {
+	authorizer := &recordingAuthorizer{}
+	proxy, err := NewRestrictedProxy(authorizer, failingDialer(t), []string{"Challenges.Cloudflare.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	proxy.ServeHTTP(response, connectRequest("challenges.cloudflare.com:443"))
+
+	if response.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d after the dial failure", response.Code, http.StatusBadGateway)
+	}
+	if len(authorizer.authorized) != 1 || authorizer.authorized[0] != "challenges.cloudflare.com:443" {
+		t.Fatalf("authorize calls = %v, want the allowlisted authority", authorizer.authorized)
+	}
+}
+
+func TestRestrictedProxyRejectsNonConnectMethod(t *testing.T) {
+	proxy, err := NewRestrictedProxy(&recordingAuthorizer{}, failingDialer(t), []string{"challenges.cloudflare.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := connectRequest("challenges.cloudflare.com:443")
+	request.Method = http.MethodGet
+	response := httptest.NewRecorder()
+	proxy.ServeHTTP(response, request)
+
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestNewRestrictedProxyRejectsInvalidAllowlist(t *testing.T) {
+	for name, hosts := range map[string][]string{
+		"empty":          {},
+		"blank":          {"  "},
+		"port":           {"challenges.cloudflare.com:443"},
+		"trailing dot":   {"challenges.cloudflare.com."},
+		"underscore":     {"challenges_cloudflare.com"},
+		"empty label":    {"challenges..cloudflare.com"},
+		"non-ascii host": {"challenges.cloudflare.com/"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := NewRestrictedProxy(&recordingAuthorizer{}, failingDialer(t), hosts); err == nil {
+				t.Fatalf("NewRestrictedProxy(%v) error = nil, want invalid allowlist error", hosts)
+			}
+		})
+	}
+}
+
+func TestUnrestrictedProxyAllowsUnlistedAuthority(t *testing.T) {
+	proxy := NewProxy(&recordingAuthorizer{}, failingDialer(t))
+	if !proxy.hostAllowed("subscription.example.test:443") {
+		t.Fatal("unrestricted proxy rejected an authority, want allowed")
+	}
+	if !proxy.hostAllowed("") {
+		t.Fatal("unrestricted proxy rejected an empty authority, want the authorizer to decide")
+	}
+}
 
 func TestNewProxyServerUsesBoundedHTTPTimeouts(t *testing.T) {
 	server := NewProxyServer("127.0.0.1:0", NewProxy(nil, nil))

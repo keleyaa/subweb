@@ -14,6 +14,8 @@ import (
 const (
 	defaultListenAddr                  = "0.0.0.0:8080"
 	defaultEgressListenAddr            = "0.0.0.0:25502"
+	defaultEgressRestrictedListenAddr  = "0.0.0.0:25503"
+	defaultEgressAllowedHosts          = "challenges.cloudflare.com"
 	defaultConversionRateLimit         = 10
 	defaultConversionRateWindowSeconds = 60
 	defaultMaxRequestBytes             = 16 * 1024
@@ -21,7 +23,9 @@ const (
 	defaultRequestTimeoutMilliseconds  = 10_000
 	defaultDNSTimeoutMilliseconds      = 2_000
 	defaultConnectTimeoutMilliseconds  = 5_000
-	defaultMaxConcurrency              = 2
+	defaultMaxConcurrency              = 4
+	defaultMaxConcurrencyPerIP         = 2
+	defaultLogLevel                    = "info"
 
 	maxConversionRateLimit         = 10_000
 	maxConversionRateWindowSeconds = 3_600
@@ -31,33 +35,39 @@ const (
 	maxDNSTimeoutMilliseconds      = 30_000
 	maxConnectTimeoutMilliseconds  = 30_000
 	maxConversionConcurrency       = 100
+	maxConversionConcurrencyPerIP  = 100
+	maxEgressAllowedHosts          = 16
 )
 
 // Config contains the Gateway's validated runtime configuration.
 type Config struct {
-	ListenAddr                 string
-	EgressListenAddr           string
-	AppDomain                  string
-	APIDomain                  string
-	ShortDomain                string
-	APIURL                     *url.URL
-	ShortLinksEnabled          bool
-	CustomBackendEnabled       bool
-	TrustedProxyCIDR           *net.IPNet
-	RedisURL                   string
-	RedisPassword              string
-	IPHashSecret               []byte
-	TurnstileSiteKey           string
-	SubConverterUpstream       *url.URL
-	MyURLsUpstream             *url.URL
-	ConversionRateLimit        int
-	ConversionRateWindow       time.Duration
-	ConversionMaxRequestBytes  int64
-	ConversionMaxResponseBytes int64
-	ConversionRequestTimeout   time.Duration
-	ConversionDNSTimeout       time.Duration
-	EgressConnectTimeout       time.Duration
-	ConversionMaxConcurrency   int
+	ListenAddr                    string
+	EgressListenAddr              string
+	EgressRestrictedListenAddr    string
+	EgressAllowedHosts            []string
+	LogLevel                      string
+	AppDomain                     string
+	APIDomain                     string
+	ShortDomain                   string
+	APIURL                        *url.URL
+	ShortLinksEnabled             bool
+	CustomBackendEnabled          bool
+	TrustedProxyCIDR              *net.IPNet
+	RedisURL                      string
+	RedisPassword                 string
+	IPHashSecret                  []byte
+	TurnstileSiteKey              string
+	SubConverterUpstream          *url.URL
+	MyURLsUpstream                *url.URL
+	ConversionRateLimit           int
+	ConversionRateWindow          time.Duration
+	ConversionMaxRequestBytes     int64
+	ConversionMaxResponseBytes    int64
+	ConversionRequestTimeout      time.Duration
+	ConversionDNSTimeout          time.Duration
+	EgressConnectTimeout          time.Duration
+	ConversionMaxConcurrency      int
+	ConversionMaxConcurrencyPerIP int
 }
 
 // Load reads and validates Gateway configuration through getenv.
@@ -71,6 +81,18 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, err
 	}
 	egressListenAddr, err := loadListenAddrNamed("EGRESS_LISTEN_ADDR", getenv("EGRESS_LISTEN_ADDR"), defaultEgressListenAddr)
+	if err != nil {
+		return Config{}, err
+	}
+	egressRestrictedListenAddr, err := loadListenAddrNamed("EGRESS_RESTRICTED_LISTEN_ADDR", getenv("EGRESS_RESTRICTED_LISTEN_ADDR"), defaultEgressRestrictedListenAddr)
+	if err != nil {
+		return Config{}, err
+	}
+	egressAllowedHosts, err := loadHostList("EGRESS_ALLOWED_HOSTS", getenv("EGRESS_ALLOWED_HOSTS"), defaultEgressAllowedHosts)
+	if err != nil {
+		return Config{}, err
+	}
+	logLevel, err := loadLogLevel(getenv("LOG_LEVEL"))
 	if err != nil {
 		return Config{}, err
 	}
@@ -116,16 +138,19 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	cfg := Config{
-		ListenAddr:           listenAddr,
-		EgressListenAddr:     egressListenAddr,
-		AppDomain:            appDomain,
-		APIDomain:            apiDomain,
-		ShortDomain:          shortDomain,
-		APIURL:               apiURL,
-		ShortLinksEnabled:    shortLinksEnabled,
-		CustomBackendEnabled: customBackendEnabled,
-		TrustedProxyCIDR:     trustedProxyCIDR,
-		SubConverterUpstream: subConverterUpstream,
+		ListenAddr:                 listenAddr,
+		EgressListenAddr:           egressListenAddr,
+		EgressRestrictedListenAddr: egressRestrictedListenAddr,
+		EgressAllowedHosts:         egressAllowedHosts,
+		LogLevel:                   logLevel,
+		AppDomain:                  appDomain,
+		APIDomain:                  apiDomain,
+		ShortDomain:                shortDomain,
+		APIURL:                     apiURL,
+		ShortLinksEnabled:          shortLinksEnabled,
+		CustomBackendEnabled:       customBackendEnabled,
+		TrustedProxyCIDR:           trustedProxyCIDR,
+		SubConverterUpstream:       subConverterUpstream,
 	}
 
 	if shortLinksEnabled {
@@ -204,8 +229,52 @@ func Load(getenv func(string) string) (Config, error) {
 	if cfg.ConversionMaxConcurrency, err = loadPositiveInt(getenv, "CONVERSION_MAX_CONCURRENCY", defaultMaxConcurrency, maxConversionConcurrency); err != nil {
 		return Config{}, err
 	}
+	if cfg.ConversionMaxConcurrencyPerIP, err = loadPositiveInt(getenv, "CONVERSION_MAX_CONCURRENCY_PER_IP", defaultMaxConcurrencyPerIP, maxConversionConcurrencyPerIP); err != nil {
+		return Config{}, err
+	}
 
 	return cfg, nil
+}
+
+func loadHostList(name, value, fallback string) ([]string, error) {
+	if value == "" {
+		value = fallback
+	}
+	seen := make(map[string]struct{})
+	hosts := make([]string, 0, maxEgressAllowedHosts)
+	for _, entry := range strings.Split(value, ",") {
+		host := strings.ToLower(strings.TrimSpace(entry))
+		if host == "" {
+			continue
+		}
+		if !isValidHostname(host) {
+			return nil, fmt.Errorf("%s must contain only hostnames", name)
+		}
+		if _, ok := seen[host]; ok {
+			continue
+		}
+		seen[host] = struct{}{}
+		hosts = append(hosts, host)
+	}
+	if len(hosts) == 0 || len(hosts) > maxEgressAllowedHosts {
+		return nil, fmt.Errorf("%s must list between 1 and %d hostnames", name, maxEgressAllowedHosts)
+	}
+	return hosts, nil
+}
+
+// loadLogLevel accepts the Gateway's own level names; the level also controls
+// whether the access log is emitted, so an invalid value must fail closed at
+// startup instead of silently falling back to a chatty or silent default.
+func loadLogLevel(value string) (string, error) {
+	if value == "" {
+		return defaultLogLevel, nil
+	}
+	switch value {
+	case "debug", "info", "warn", "error":
+		return value, nil
+	default:
+		return "", fmt.Errorf("LOG_LEVEL must be debug, info, warn, or error")
+	}
 }
 
 func loadListenAddr(value string) (string, error) {

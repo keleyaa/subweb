@@ -85,22 +85,24 @@ describe('unified Docker Gateway stack entrypoint', () => {
     expect(compose).toContain('CONVERSION_DNS_TIMEOUT_MS: "100"');
     expect(compose).toContain('CONVERSION_EGRESS_CONNECT_TIMEOUT_MS: "200"');
     expect(compose).toContain('CONVERSION_MAX_RESPONSE_BYTES: "1024"');
-    expect(dockerfile).toContain('golang:1.25-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59');
+    expect(dockerfile).toContain('golang:1.27-alpine@sha256:cf6fca6641884b8433441b2b0652976f975e1d0fdd26d177eaaf8596087f3125');
     expect(source).toContain('fixture://echo');
     expect(source).toContain('fixture://slow');
     expect(source).toContain('fixture://large');
     expect(verifierSource).toContain('fixture_node_uri');
   });
 
-  it('pins SubConverter to its bundled default config instead of a remote default', async () => {
+  it('generates a local SubConverter default external config instead of a bundled or remote one', async () => {
     const entrypoint = await readFile(
       new URL('../../scripts/subconverter-docker-entrypoint.sh', import.meta.url),
       'utf8',
     );
 
-    expect(entrypoint).toContain(
-      'default_external_config = "config/example_external_config.ini"',
-    );
+    expect(entrypoint).toContain('default_config_path="$base_path/subweb_default.ini"');
+    expect(entrypoint).toContain('clash_rule_base=base/forcerule.yml');
+    expect(entrypoint).toContain('default_external_config = \\"$default_config_path\\"');
+    expect(entrypoint).not.toContain('custom_proxy_group=!!import:');
+    expect(entrypoint).not.toContain('default_external_config = ""');
     expect(entrypoint).not.toContain('testingcf.jsdelivr.net');
   });
 });

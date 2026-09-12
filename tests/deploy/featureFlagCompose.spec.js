@@ -67,7 +67,7 @@ describe('Gateway Dockerfile contract', () => {
   it('uses immutable multi-stage runtime images and the unified binary', async () => {
     const source = await readFile(new URL('../../Dockerfile', import.meta.url), 'utf8');
     expect(source).toMatch(/^FROM node:24-alpine@sha256:/m);
-    expect(source).toMatch(/^FROM golang:1\.25-alpine@sha256:/m);
+    expect(source).toMatch(/^FROM golang:1\.27-alpine@sha256:/m);
     expect(source).toMatch(/^FROM gcr\.io\/distroless\/static-debian12:nonroot@sha256:/m);
     expect(source).toContain('ENTRYPOINT ["/app/gateway"]');
     expect(source).not.toContain('nginx');

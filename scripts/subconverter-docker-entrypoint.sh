@@ -23,12 +23,28 @@ trap 'rm -f "$temporary_pref"' EXIT HUP INT TERM
   exit 1
 }
 
+# Subweb ships its own default external config instead of the image examples:
+# SubConverter v1.9.x rejects the bundled example because of its
+# `!!import:snippets/...` line, and an empty value falls back to the program's
+# remote Custom_OpenClash_Rules URL. The generated file keeps only the local
+# rule base, so no conversion depends on a third-party remote config.
+default_config_path="$base_path/subweb_default.ini"
+cat > "$default_config_path" <<'SUBCONVERTER_DEFAULT_CONFIG'
+[custom]
+enable_rule_generator=false
+overwrite_original_rules=false
+clash_rule_base=base/forcerule.yml
+SUBCONVERTER_DEFAULT_CONFIG
+chmod 0600 "$default_config_path"
+
 # Always derive a fresh privacy policy so an old named volume cannot re-enable
-# verbose request logging. The rest of the upstream defaults remain intact.
+# verbose request logging or point the default config at a third-party URL.
+# The level stays at info so ordinary conversions are recorded; the log filter
+# redacts addresses and drops the high-frequency health-check probes.
 sed -E \
-  -e 's/^[[:space:]]*log_level[[:space:]]*=.*/log_level = "warn"/' \
+  -e 's/^[[:space:]]*log_level[[:space:]]*=.*/log_level = "info"/' \
   -e 's/^[[:space:]]*print_debug_info[[:space:]]*=.*/print_debug_info = false/' \
-  -e 's|^[[:space:]]*default_external_config[[:space:]]*=.*|default_external_config = "config/example_external_config.ini"|' \
+  -e "s|^[[:space:]]*default_external_config[[:space:]]*=.*|default_external_config = \"$default_config_path\"|" \
   "$base_path/pref.example.toml" > "$temporary_pref"
 chmod 0600 "$temporary_pref"
 mv -f "$temporary_pref" "$pref_path"
