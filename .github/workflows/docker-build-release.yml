@@ -125,6 +125,7 @@ jobs:
       - name: Scan final image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
+          version: "v0.74.0"
           image-ref: subweb:ci
           format: table
           exit-code: "1"
@@ -138,6 +139,7 @@ jobs:
       - name: Scan external runtime images (Redis)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
+          version: "v0.74.0"
           image-ref: ${{ env.REDIS_IMAGE }}
           trivyignores: .trivyignore.redis
           format: table
@@ -149,6 +151,7 @@ jobs:
       - name: Scan external runtime images (SubConverter-Extended)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
+          version: "v0.74.0"
           image-ref: ${{ env.SUBCONVERTER_IMAGE }}
           trivyignores: .trivyignore.subconverter
           format: table
@@ -160,6 +163,7 @@ jobs:
       - name: Scan external runtime images (MyUrls)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
+          version: "v0.74.0"
           image-ref: ${{ env.MYURLS_IMAGE }}
           trivyignores: .trivyignore.myurls
           format: table
@@ -246,6 +250,7 @@ jobs:
       - name: Scan release candidate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
+          version: "v0.74.0"
           image-ref: ghcr.io/${{ env.GHCR_IMAGE }}@${{ steps.image.outputs.digest }}
           format: table
           exit-code: "1"

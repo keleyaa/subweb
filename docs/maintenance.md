@@ -6,6 +6,8 @@
 
 发布、回滚和升级必须使用 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 中记录的外部依赖源 commit、OCI tag、manifest digest 和平台 digest。Gateway 发布工作流在推送 `vX.Y.Z` Git tag 时自动触发，也支持手动输入已有 tag 补跑，并同时推送 Docker Hub 与 GHCR；`docker.io/keleyaa/subweb` 和 `ghcr.io/keleyaa/subweb` 是等价来源，部署时使用该 Git tag 或发布后的 digest。不要使用 `latest` 或其他可变 tag 作为部署依据，也不要手工拼接外部镜像 digest。
 
+发布工作流中的镜像扫描固定 trivy `v0.74.0`，与本地 `npm run verify:release` 使用的版本一致；不要依赖 `aquasecurity/trivy-action` 的默认版本，它在同一个锁定 digest 上会给出不同的 Debian 公告结论。
+
 ## 发布前门禁
 
 ```sh
