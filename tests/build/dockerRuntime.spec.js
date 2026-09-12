@@ -123,9 +123,9 @@ describe('Docker runtime contract', () => {
     expect(workflow).not.toMatch(/upload-artifact[\s\S]{0,500}(?:\.env|fullchain\.pem|privkey\.pem|compose\.log|services\.log)/);
     expect(workflow).toContain('aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25');
     expect(workflow).toContain('trivyignores: .trivyignore.redis');
-    // Every image scan must pin the scanner version: the action default moved
-    // ahead of the version the repository verifies with and produced different
-    // Debian advisory results for the same locked image digests.
+    // Every image scan must pin the scanner version: the action default can
+    // move ahead of the version the repository verifies with, and an unrelated
+    // scanner upgrade must not decide release scope.
     const trivySteps = workflow.split('aquasecurity/trivy-action@').length - 1;
     const pinnedScannerVersions = workflow.split('version: "v0.74.0"').length - 1;
     expect(pinnedScannerVersions).toBe(trivySteps);

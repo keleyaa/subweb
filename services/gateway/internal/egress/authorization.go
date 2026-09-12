@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/keleyaa/subweb/services/gateway/internal/hostname"
 	"github.com/keleyaa/subweb/services/gateway/internal/policy"
 )
 
@@ -220,7 +221,7 @@ func parseAuthority(authority string) (string, uint16, string, error) {
 			return "", 0, "", errInvalidAuthority
 		}
 		host = address.String()
-	} else if !isAuthorityHostname(host) {
+	} else if !hostname.Valid(host) {
 		return "", 0, "", errInvalidAuthority
 	} else {
 		host = strings.ToLower(host)
@@ -228,8 +229,8 @@ func parseAuthority(authority string) (string, uint16, string, error) {
 	return host, uint16(port), canonicalAuthority(host, uint16(port)), nil
 }
 
-func canonicalAuthority(hostname string, port uint16) string {
-	return net.JoinHostPort(hostname, strconv.FormatUint(uint64(port), 10))
+func canonicalAuthority(host string, port uint16) string {
+	return net.JoinHostPort(host, strconv.FormatUint(uint64(port), 10))
 }
 
 func hasAuthorityControl(value string) bool {
@@ -239,21 +240,4 @@ func hasAuthorityControl(value string) bool {
 		}
 	}
 	return false
-}
-
-func isAuthorityHostname(value string) bool {
-	if len(value) == 0 || len(value) > 253 || strings.HasSuffix(value, ".") {
-		return false
-	}
-	for _, label := range strings.Split(value, ".") {
-		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
-			return false
-		}
-		for _, character := range label {
-			if !(character >= 'a' && character <= 'z') && !(character >= 'A' && character <= 'Z') && !(character >= '0' && character <= '9') && character != '-' {
-				return false
-			}
-		}
-	}
-	return true
 }

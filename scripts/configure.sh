@@ -454,6 +454,41 @@ REDIS_PASSWORD=$redis_password
 "
 fi
 
+# configure.sh owns the deployment inputs it validates. Every other key an
+# operator keeps in .env (log levels, conversion tunables, advanced egress
+# overrides) must survive a re-run verbatim: rebuilding the file from this
+# template used to drop them silently and revert them to the Compose defaults.
+managed_env_keys='APP_DOMAIN API_DOMAIN API_URL SUBWEB_PORT SHORT_LINKS_ENABLED CUSTOM_BACKEND_ENABLED SHORT_DOMAIN TRUSTED_PROXY_CIDR MYURLS_IMAGE REDIS_IMAGE SUBCONVERTER_IMAGE SUBWEB_IMAGE TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY IP_HASH_SECRET REDIS_PASSWORD'
+
+preserved_env_settings() {
+  preserved_source=$1
+  [ -f "$preserved_source" ] || return 0
+  awk -v managed="$managed_env_keys" '
+    BEGIN {
+      managed_count = split(managed, managed_names, " ")
+      for (position = 1; position <= managed_count; position++) skip[managed_names[position]] = 1
+    }
+    /^[A-Za-z_][A-Za-z0-9_]*=/ {
+      name = substr($0, 1, index($0, "=") - 1)
+      if (skip[name]) next
+      if (!(name in seen)) order[++total] = name
+      seen[name] = 1
+      values[name] = $0
+    }
+    END {
+      for (position = 1; position <= total; position++) print values[order[position]]
+    }
+  ' "$preserved_source"
+}
+
+preserved_settings=$(preserved_env_settings "$env_file")
+preserved_settings_block=
+if [ -n "$preserved_settings" ]; then
+  preserved_settings_block="
+# Preserved from the previous .env: configure.sh does not manage these keys.
+${preserved_settings}"
+fi
+
 write_env_atomically "$env_file" <<EOF
 APP_DOMAIN=$app_domain
 API_DOMAIN=$api_domain
@@ -461,7 +496,7 @@ API_URL=$api_url
 SUBWEB_PORT=$subweb_port
 SHORT_LINKS_ENABLED=$short_links_enabled
 CUSTOM_BACKEND_ENABLED=$custom_backend_enabled
-${short_domain_setting}${trusted_proxy_setting}${image_settings}${turnstile_settings}${short_link_secrets}
+${short_domain_setting}${trusted_proxy_setting}${image_settings}${turnstile_settings}${short_link_secrets}${preserved_settings_block}
 EOF
 
 printf 'Deployment configuration written to %s.\n' "$env_file"

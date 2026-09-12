@@ -39,7 +39,7 @@ describe('single HTTP deployment contract', () => {
   it('starts the Go Gateway without a runtime Nginx renderer or direct TLS configuration', async () => {
     const dockerfile = await readFile(rootFile('Dockerfile'), 'utf8');
 
-    expect(dockerfile).toContain('EXPOSE 8080 25502');
+    expect(dockerfile).toContain('EXPOSE 8080 25502 25503');
     expect(dockerfile).not.toContain('EXPOSE 8080 8443');
     await expect(readFile(rootFile('start.sh'), 'utf8')).rejects.toThrow();
     await expect(readFile(rootFile('scripts/render-gateway-config.sh'), 'utf8')).rejects.toThrow();

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 const repositoryRoot = new URL('../../', import.meta.url);
 const temporaryDirectories = [];
-const imageDigest = 'sha256:5986d0db938d85482185e51b55be3a0326e56c1ba3e3f8326895e89f31804475';
+const imageDigest = 'sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423';
 const image = `ghcr.io/aethersailor/subconverter-extended:v1.9.4@${imageDigest}`;
 const imageTemplateDigest = 'a'.repeat(64);
 const driftingVolumeDigest = 'c'.repeat(64);

@@ -66,7 +66,19 @@ const checkContains = (content, value, label, errors) => {
   if (!content.includes(value)) errors.push(`${label} is missing ${value}`);
 };
 
-const verifyDockerfile = (dockerfile, lock, errors) => {
+// exposedPorts reads the single EXPOSE instruction the Gateway image declares.
+const exposedPorts = (dockerfile) => {
+  const line = dockerfile.split('\n').find((entry) => entry.startsWith('EXPOSE '));
+  if (line === undefined) return null;
+  return line
+    .slice('EXPOSE '.length)
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean)
+    .map(Number);
+};
+
+export const verifyDockerfile = (dockerfile, lock, errors) => {
   const gateway = lock.services?.gatewayBase;
   if (!isRecord(gateway)) return;
 
@@ -82,6 +94,28 @@ const verifyDockerfile = (dockerfile, lock, errors) => {
       'Dockerfile',
       errors,
     );
+  }
+
+  // The lock declares the Gateway's internal port contract, so the built image
+  // must declare the same ports or the lock silently stops describing the
+  // artifact it locks.
+  const internalPorts = gateway.container?.internalPorts;
+  if (!Array.isArray(internalPorts)) return;
+
+  const declared = exposedPorts(dockerfile);
+  if (declared === null) {
+    errors.push('Dockerfile is missing the EXPOSE instruction for the locked internal ports');
+    return;
+  }
+  for (const port of internalPorts) {
+    if (!declared.includes(port)) {
+      errors.push(`Dockerfile EXPOSE must declare the locked internal port ${port}`);
+    }
+  }
+  for (const port of declared) {
+    if (!internalPorts.includes(port)) {
+      errors.push(`Dockerfile EXPOSE declares unlocked internal port ${port}`);
+    }
   }
 };
 

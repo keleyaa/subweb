@@ -24,7 +24,7 @@
 | `myurls` | `warn`（`MYURLS_LOG_LEVEL`） | 只保留警告与错误 | 不产生健康探测日志；短链的正常记录由 Gateway 访问日志覆盖 |
 | `redis` | `warning`（配置模板） | Redis 自身警告与错误 | `PING` 健康检查不产生日志 |
 
-`gateway` 的访问日志只包含路由类别（例如 `sub`、`short-create`、`short-resolve`、`static`），不记录 Query、订阅 URL、原始 IP 或完整短码；需要更少输出时把 `LOG_LEVEL` 调到 `warn` 或 `error`，访问日志会一并关闭。`myurls` 的 `info` 会为每次健康探测写一行且无法按路由过滤，因此生产保持 `warn`；只有在排查短链问题、并接受该噪音时才临时打开。MyUrls 的 challenge/retry 元数据与 Gateway 的受控 egress 失败仍可用于排查，但不要长期开启 `verbose`：SubConverter entrypoint 会把 `print_debug_info` 强制为 `false`，不得通过卷内旧配置重新打开。
+`gateway` 的访问日志只包含路由类别（例如 `sub`、`short-create`、`short-resolve`、`static`），不记录 Query、订阅 URL、原始 IP 或完整短码；需要更少输出时把 `LOG_LEVEL` 调到 `warn` 或 `error`，访问日志会一并关闭。访问日志运行在 `info` 且不受限流保护：限流只作用于 `/sub` 与短链创建，静态资源、`404` 和外站 Host 请求都能写日志，因此未认证洪水可以在 `10m × 3` 轮转窗口内挤掉较早的记录。需要长期保留审计线索时，关闭访问日志并把容器日志转发到宿主机。`myurls` 的 `info` 会为每次健康探测写一行且无法按路由过滤，因此生产保持 `warn`；只有在排查短链问题、并接受该噪音时才临时打开。MyUrls 的 challenge/retry 元数据与 Gateway 的受控 egress 失败仍可用于排查，但不要长期开启 `verbose`：SubConverter entrypoint 会把 `print_debug_info` 强制为 `false`，不得通过卷内旧配置重新打开。
 
 SubConverter 日志会保留首条可恢复出站错误，并将连续、相同错误码的重复告警折叠为一条计数摘要；MyUrls 默认使用 `warn`，Redis 默认使用 `warning`，均保留警告和错误。其他日志仍逐条输出。
 

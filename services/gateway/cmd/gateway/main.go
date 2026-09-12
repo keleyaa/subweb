@@ -53,22 +53,22 @@ func main() {
 	shutdownSignal, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	serverErrors := make(chan error, len(servers))
-	for _, server := range servers {
+	serverErrors := make(chan error, len(servers.all))
+	for _, server := range servers.all {
 		go serve(server, serverErrors)
 	}
 
 	select {
 	case err := <-serverErrors:
 		if !errors.Is(err, http.ErrServerClosed) {
-			shutdownServers(servers...)
+			shutdownServers(servers.all...)
 			log.Fatal(err)
 		}
 	case <-shutdownSignal.Done():
-		if err := shutdownServers(servers...); err != nil {
+		if err := shutdownServers(servers.all...); err != nil {
 			log.Fatal(err)
 		}
-		for range len(servers) {
+		for range len(servers.all) {
 			if err := <-serverErrors; err != nil && !errors.Is(err, http.ErrServerClosed) {
 				log.Fatal(err)
 			}
@@ -153,32 +153,40 @@ func checkEgressListener(address string) error {
 	return connection.Close()
 }
 
-func buildServers(cfg config.Config, logger *slog.Logger) ([]*http.Server, func(), error) {
+// gatewayServers holds every listener the Gateway runs. The public API server is
+// named separately from the full set so callers and tests never depend on the
+// order servers were appended in.
+type gatewayServers struct {
+	public *http.Server
+	all    []*http.Server
+}
+
+func buildServers(cfg config.Config, logger *slog.Logger) (gatewayServers, func(), error) {
 	resolver := net.DefaultResolver
 	urlPolicy := gatewayURLPolicy{resolver: resolver, timeout: cfg.ConversionDNSTimeout}
 
 	ipHasher, err := newIPHasher(cfg)
 	if err != nil {
-		return nil, func() {}, err
+		return gatewayServers{}, func() {}, err
 	}
 	counterStore, closeStore, err := newCounterStore(cfg)
 	if err != nil {
-		return nil, func() {}, err
+		return gatewayServers{}, func() {}, err
 	}
 	rateLimiter, err := ratelimit.NewRateLimiter(counterStore, int64(cfg.ConversionRateLimit), cfg.ConversionRateWindow)
 	if err != nil {
 		closeStore()
-		return nil, func() {}, err
+		return gatewayServers{}, func() {}, err
 	}
 	semaphore, err := policy.NewSemaphore(cfg.ConversionMaxConcurrency)
 	if err != nil {
 		closeStore()
-		return nil, func() {}, err
+		return gatewayServers{}, func() {}, err
 	}
 	ipGate, err := policy.NewInFlightGate(cfg.ConversionMaxConcurrencyPerIP)
 	if err != nil {
 		closeStore()
-		return nil, func() {}, err
+		return gatewayServers{}, func() {}, err
 	}
 
 	internalTransport := http.DefaultTransport.(*http.Transport).Clone()
@@ -214,12 +222,12 @@ func buildServers(cfg config.Config, logger *slog.Logger) ([]*http.Server, func(
 	var authorizer *egress.TokenAuthorizer
 	if authorizer, err = egress.NewAuthorizer(resolver, cfg.ConversionDNSTimeout, 30*time.Second); err != nil {
 		closeStore()
-		return nil, func() {}, err
+		return gatewayServers{}, func() {}, err
 	}
 	dialer, err := egress.NewDialer(cfg.EgressConnectTimeout)
 	if err != nil {
 		closeStore()
-		return nil, func() {}, err
+		return gatewayServers{}, func() {}, err
 	}
 	servers := []*http.Server{
 		egress.NewProxyServer(cfg.EgressListenAddr, egress.NewProxy(authorizer, dialer)),
@@ -233,12 +241,12 @@ func buildServers(cfg config.Config, logger *slog.Logger) ([]*http.Server, func(
 		restrictedProxy, err := egress.NewRestrictedProxy(authorizer, dialer, cfg.EgressAllowedHosts)
 		if err != nil {
 			closeStore()
-			return nil, func() {}, err
+			return gatewayServers{}, func() {}, err
 		}
 		servers = append(servers, egress.NewProxyServer(cfg.EgressRestrictedListenAddr, restrictedProxy))
 	}
-	servers = append(servers, httpapi.NewServer(cfg, dependencies))
-	return servers, closeStore, nil
+	public := httpapi.NewServer(cfg, dependencies)
+	return gatewayServers{public: public, all: append(servers, public)}, closeStore, nil
 }
 
 type gatewayURLPolicy struct {

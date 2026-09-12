@@ -1,9 +1,11 @@
 import fs from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { verifyEvidence } from '../../scripts/verify-evidence.mjs';
+import { verifyDockerfile } from '../../scripts/verify-production-readiness.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
 
@@ -80,6 +82,25 @@ describe('release evidence and command gate', () => {
     expect(`${result.stdout}${result.stderr}`).toContain(
       'compose.disabled-short-links.yaml',
     );
+  });
+
+  it('rejects a Dockerfile that does not declare every locked internal port', async () => {
+    const dockerfile = await readFile(new URL('../../Dockerfile', import.meta.url), 'utf8');
+    const lock = JSON.parse(await readFile(new URL('../../deploy/versions.lock.json', import.meta.url), 'utf8'));
+
+    const accepted = [];
+    verifyDockerfile(dockerfile, lock, accepted);
+    expect(accepted).toEqual([]);
+
+    const drifted = dockerfile.replace('EXPOSE 8080 25502 25503', 'EXPOSE 8080 25502');
+    expect(drifted).not.toBe(dockerfile);
+    const missingPort = [];
+    verifyDockerfile(drifted, lock, missingPort);
+    expect(missingPort).toContain('Dockerfile EXPOSE must declare the locked internal port 25503');
+
+    const extraPort = [];
+    verifyDockerfile(`${dockerfile.replace('EXPOSE 8080 25502 25503', 'EXPOSE 8080 25502 25503 9000')}`, lock, extraPort);
+    expect(extraPort).toContain('Dockerfile EXPOSE declares unlocked internal port 9000');
   });
 
   it('rejects a malformed MyUrls service node during standalone readiness validation', () => {

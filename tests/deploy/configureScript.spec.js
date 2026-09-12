@@ -143,6 +143,33 @@ describe('single HTTP deployment configuration', () => {
     expect(preserved.TRUSTED_PROXY_CIDR).toBe('172.18.0.1/32');
   });
 
+  it('preserves operator settings that configure.sh does not manage', async () => {
+    const cwd = await makeDirectory();
+    await writeFile(join(cwd, '.env'), [
+      'APP_DOMAIN=stale.example.com',
+      'LOG_LEVEL=warn',
+      'CONVERSION_MAX_CONCURRENCY_PER_IP=3',
+      'EGRESS_ALLOWED_HOSTS=challenges.cloudflare.com,cdn.example.com',
+      'MYURLS_LOG_LEVEL=info',
+      'LOG_LEVEL=warn',
+      '',
+    ].join('\n'), { mode: 0o600 });
+
+    const result = runConfigure(cwd, baseArgs);
+
+    expect(result.status, result.stderr).toBe(0);
+    const contents = await readFile(join(cwd, '.env'), 'utf8');
+    const environment = parseEnv(contents);
+    expect(environment.LOG_LEVEL).toBe('warn');
+    expect(environment.CONVERSION_MAX_CONCURRENCY_PER_IP).toBe('3');
+    expect(environment.EGRESS_ALLOWED_HOSTS).toBe('challenges.cloudflare.com,cdn.example.com');
+    expect(environment.MYURLS_LOG_LEVEL).toBe('info');
+    expect(contents.match(/^LOG_LEVEL=/gmu)).toHaveLength(1);
+    // Managed keys stay authoritative: the validated inputs replace the old ones.
+    expect(environment.APP_DOMAIN).toBe('example.com');
+    expect(environment.SHORT_DOMAIN).toBe('short.example.com');
+  });
+
   it('preserves valid existing image overrides and rejects duplicates', async () => {
     const cwd = await makeDirectory();
     await writeFile(join(cwd, '.env'), [

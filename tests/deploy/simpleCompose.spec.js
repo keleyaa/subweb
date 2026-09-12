@@ -119,7 +119,7 @@ describe('unified Compose deployment', () => {
     expect(compose).toContain('dockerfile: Dockerfile');
     expect(dockerfile).toContain('FROM golang:1.27-alpine@sha256:');
     expect(dockerfile).toContain('FROM gcr.io/distroless/static-debian12:nonroot@sha256:');
-    expect(dockerfile).toContain('EXPOSE 8080 25502');
+    expect(dockerfile).toContain('EXPOSE 8080 25502 25503');
     expect(dockerfile).toContain('ENTRYPOINT ["/app/gateway"]');
   });
 });

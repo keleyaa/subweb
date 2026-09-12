@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/keleyaa/subweb/services/gateway/internal/hostname"
 )
 
 const (
@@ -247,7 +249,7 @@ func loadHostList(name, value, fallback string) ([]string, error) {
 		if host == "" {
 			continue
 		}
-		if !isValidHostname(host) {
+		if !hostname.Valid(host) {
 			return nil, fmt.Errorf("%s must contain only hostnames", name)
 		}
 		if _, ok := seen[host]; ok {
@@ -299,27 +301,10 @@ func loadDomain(name, value string) (string, error) {
 	if value == "" {
 		return "", fmt.Errorf("%s is required", name)
 	}
-	if !isValidHostname(value) {
+	if !hostname.Valid(value) {
 		return "", fmt.Errorf("%s must be a hostname", name)
 	}
 	return strings.ToLower(value), nil
-}
-
-func isValidHostname(value string) bool {
-	if len(value) > 253 || strings.HasSuffix(value, ".") {
-		return false
-	}
-	for _, label := range strings.Split(value, ".") {
-		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
-			return false
-		}
-		for _, character := range label {
-			if !(character >= 'a' && character <= 'z') && !(character >= 'A' && character <= 'Z') && !(character >= '0' && character <= '9') && character != '-' {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 func loadAPIURL(value string) (*url.URL, error) {
@@ -366,7 +351,7 @@ func loadURL(name, value string) (*url.URL, error) {
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.Hostname() == "" {
 		return nil, fmt.Errorf("%s must be a valid URL", name)
 	}
-	if _, err := netip.ParseAddr(parsed.Hostname()); err != nil && !isValidHostname(parsed.Hostname()) {
+	if _, err := netip.ParseAddr(parsed.Hostname()); err != nil && !hostname.Valid(parsed.Hostname()) {
 		return nil, fmt.Errorf("%s must be a valid URL", name)
 	}
 	if parsed.User != nil {

@@ -44,8 +44,8 @@ func TestBuildServersRoutesAppAndShortLinksToOneUpstream(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer closeResources()
-	defer closeAllServers(servers)
-	server := servers[len(servers)-1]
+	defer closeAllServers(servers.all)
+	server := servers.public
 
 	appRequest := httptest.NewRequest(http.MethodPost, "http://"+cfg.AppDomain+"/short-api/links", strings.NewReader(`{"url":"https://source.example.test/sub"}`))
 	appRequest.Host = cfg.AppDomain
@@ -272,8 +272,8 @@ func TestBuildServersDisablesShortLinkDependencies(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer closeResources()
-	defer closeAllServers(servers)
-	server := servers[len(servers)-1]
+	defer closeAllServers(servers.all)
+	server := servers.public
 
 	request := httptest.NewRequest(http.MethodPost, "http://"+cfg.AppDomain+"/short-api/links", strings.NewReader(`{}`))
 	request.Host = cfg.AppDomain
@@ -350,11 +350,11 @@ func TestBuildServersAddsRestrictedEgressOnlyWhenShortLinksAreEnabled(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(servers) != testCase.wantServers {
-			t.Fatalf("short links %t: servers = %d, want %d", testCase.shortLinksEnabled, len(servers), testCase.wantServers)
+		if len(servers.all) != testCase.wantServers {
+			t.Fatalf("short links %t: servers = %d, want %d", testCase.shortLinksEnabled, len(servers.all), testCase.wantServers)
 		}
 		closeResources()
-		closeAllServers(servers)
+		closeAllServers(servers.all)
 	}
 }
 

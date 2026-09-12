@@ -1,6 +1,6 @@
 # 配置
 
-生产配置由 `scripts/configure.sh` 管理并写入根目录 `.env`。文件应为权限 `0600` 的普通文件，不应提交到 Git。Compose 会根据 `SHORT_LINKS_ENABLED` 选择生产文件：启用时使用 `compose.yaml`，关闭时使用 `compose.disabled-short-links.yaml`。
+生产配置由 `scripts/configure.sh` 管理并写入根目录 `.env`。文件应为权限 `0600` 的普通文件，不应提交到 Git。Compose 会根据 `SHORT_LINKS_ENABLED` 选择生产文件：启用时使用 `compose.yaml`，关闭时使用 `compose.disabled-short-links.yaml`。重复执行 `configure.sh` 只会重写它校验的部署输入（域名、开关、镜像覆盖、Turnstile 与密钥）；`.env` 中其他键（`LOG_LEVEL`、转换调优、`EGRESS_ALLOWED_HOSTS`、`MYURLS_LOG_LEVEL` 等）会原样保留，不会因为重新部署回到 Compose 默认值。
 
 ## 必填配置
 
@@ -57,13 +57,15 @@ Gateway 运行两个内部 CONNECT 监听，二者都不发布宿主机端口：
 
 `EGRESS_ALLOWED_HOSTS` 默认是 `challenges.cloudflare.com`，用逗号分隔，最多 16 个 hostname。MyUrls 只连接内部网络，没有直连公网的能力；移除 `challenges.cloudflare.com` 会使创建挑战在验证阶段返回 `503 dependency_unavailable`。受限监听只在 `SHORT_LINKS_ENABLED=true` 时启动。
 
+`:25503` 只供 MyUrls 使用：其他服务的代理变量不得指向它，也不要通过 Compose 端口映射或外层代理把这两个内部端口发布到宿主机。
+
 ## 日志级别
 
 生产环境的 MyUrls 默认使用 `MYURLS_LOG_LEVEL=warn`，Redis 默认使用 `loglevel warning`，保留警告和错误并减少正常请求噪音。临时排查时可在 `.env` 设置 `MYURLS_LOG_LEVEL=info`，完成后恢复为 `warn`；不要长期启用 debug/trace 级别。
 
 ## 代理与镜像
 
-`TRUSTED_PROXY_CIDR` 只应配置外层反向代理的确切来源 CIDR。没有可信代理时不要填写；`configure.sh` 入口当前只接受 IPv4 CIDR。Gateway 仅在 socket peer 命中该 CIDR 时信任 `X-Forwarded-For`/`X-Real-IP`；可信链从右向左取首个非可信地址作为限流和上游身份，其他连接始终使用 socket peer。Compose 为 SubConverter、MyUrls Rust v2 和 Redis 内嵌 [版本锁](../deploy/versions.lock.json) 的默认引用，并由 `validate-compose.sh` 校验解析后的服务镜像；`SUBWEB_IMAGE` 是单独的 Gateway release 输入。不可变的 `*_IMAGE` 环境覆盖本身不等于与版本锁兼容，不能用它绕过 `validate-compose.sh` 或 `subweb.sh upgrade` 的合同校验。不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像；跨合同回滚必须同时恢复 Gateway 路由和前端行为。
+`TRUSTED_PROXY_CIDR` 只应配置外层反向代理的确切来源 CIDR。没有可信代理时不要填写；`configure.sh` 入口当前只接受 IPv4 CIDR。Gateway 仅在 socket peer 命中该 CIDR 时信任 `X-Forwarded-For`/`X-Real-IP`；可信链从右向左取首个非可信地址作为限流和上游身份，其他连接始终使用 socket peer。因此外层代理后未配置该项时，所有请求共享同一个 socket peer 身份，`CONVERSION_MAX_CONCURRENCY_PER_IP` 会取代 `CONVERSION_MAX_CONCURRENCY` 成为实际并发上限（默认 `2`）。Compose 为 SubConverter、MyUrls Rust v2 和 Redis 内嵌 [版本锁](../deploy/versions.lock.json) 的默认引用，并由 `validate-compose.sh` 校验解析后的服务镜像；`SUBWEB_IMAGE` 是单独的 Gateway release 输入。不可变的 `*_IMAGE` 环境覆盖本身不等于与版本锁兼容，不能用它绕过 `validate-compose.sh` 或 `subweb.sh upgrade` 的合同校验。不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像；跨合同回滚必须同时恢复 Gateway 路由和前端行为。
 
 ## 运行时前端配置
 

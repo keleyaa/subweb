@@ -34,7 +34,7 @@ USER 65532:65532
 WORKDIR /app
 ENV STATIC_ROOT=/app/dist
 
-EXPOSE 8080 25502
+EXPOSE 8080 25502 25503
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD ["/app/gateway", "--healthcheck"]
 

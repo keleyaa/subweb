@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/keleyaa/subweb/services/gateway/internal/hostname"
 )
 
 const (
@@ -47,7 +49,7 @@ func NewRestrictedProxy(authorizer Authorizer, dialer *Dialer, hosts []string) (
 	allowed := make(map[string]struct{}, len(hosts))
 	for _, host := range hosts {
 		host = strings.ToLower(strings.TrimSpace(host))
-		if !isAuthorityHostname(host) {
+		if !hostname.Valid(host) {
 			return nil, errInvalidAllowedHosts
 		}
 		allowed[host] = struct{}{}
@@ -118,11 +120,11 @@ func (proxy *Proxy) hostAllowed(authority string) bool {
 	if len(proxy.allowedHosts) == 0 {
 		return true
 	}
-	hostname, _, _, err := parseAuthority(authority)
+	host, _, _, err := parseAuthority(authority)
 	if err != nil {
 		return false
 	}
-	_, ok := proxy.allowedHosts[strings.ToLower(hostname)]
+	_, ok := proxy.allowedHosts[strings.ToLower(host)]
 	return ok
 }
 
