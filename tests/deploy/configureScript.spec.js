@@ -174,7 +174,7 @@ describe('single HTTP deployment configuration', () => {
     const cwd = await makeDirectory();
     await writeFile(join(cwd, '.env'), [
       'MYURLS_IMAGE=ghcr.io/keleyaa/myurls@sha256:' + 'a'.repeat(64),
-      'REDIS_IMAGE=docker.io/library/redis:8.10.1',
+      'REDIS_IMAGE=docker.io/library/redis:7.4.11-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf',
       'SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4',
       'SUBWEB_IMAGE=docker.io/keleyaa/subweb:sha-2bf1a9f',
       `IP_HASH_SECRET=${'a'.repeat(64)}`, `REDIS_PASSWORD=${'b'.repeat(64)}`,
@@ -183,6 +183,8 @@ describe('single HTTP deployment configuration', () => {
     expect(runConfigure(cwd, baseArgs).status).toBe(0);
     const contents = await readFile(join(cwd, '.env'), 'utf8');
     expect(contents).toContain('MYURLS_IMAGE=ghcr.io/keleyaa/myurls@sha256:' + 'a'.repeat(64));
+    expect(contents).toContain('REDIS_IMAGE=docker.io/library/redis:7.4.11-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf');
+    expect(contents).toContain('SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4');
     await writeFile(join(cwd, '.env'), contents.replace(/^MYURLS_IMAGE=.*$/m, '$&\nMYURLS_IMAGE=ghcr.io/keleyaa/myurls:latest'));
     const rejected = runConfigure(cwd, baseArgs);
     expect(rejected.status).not.toBe(0);

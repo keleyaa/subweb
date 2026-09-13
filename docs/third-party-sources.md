@@ -5,7 +5,7 @@
 | Subweb | [stilleshan/subweb](https://github.com/stilleshan/subweb) | 本仓库保留来源说明 | 独立维护 |
 | MyUrls Rust | [keleyaa/MyUrls](https://github.com/keleyaa/MyUrls)，原始项目为 [CareyWang/MyUrls](https://github.com/CareyWang/MyUrls) | stable tag `v2.0.8`；commit `42234e8d1085b6c1449d16f04cd61e34104037f5`；manifest `sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36` | 不在本仓库修改 |
 | SubConverter | [Aethersailor/SubConverter-Extended](https://github.com/Aethersailor/SubConverter-Extended) | `v1.9.4` 与锁定 digest | 不在本仓库修改 |
-| Redis | [redis/redis](https://github.com/redis/redis) | `8.10.1` 与锁定 digest | 数据层 |
+| Redis | [redis/redis](https://github.com/redis/redis) | 源码版本 `7.4.11`；镜像 `redis:7.4.11-alpine` 与锁定 digest | 数据层 |
 
 精确 commit、OCI reference、manifest 和 amd64/arm64 digest 均以
 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 为准。MyUrls Rust 当前镜像来自

@@ -32,10 +32,8 @@ require_private_directory() {
   [ $((mode_value & 077)) -eq 0 ] || operations_fail 'output directory must not grant group or other permissions.'
 }
 
-# 备份校验工具链有意使用锁文件基线的 Redis 镜像，而非运行栈的 redis:8-alpine：
-# RDB 格式向后兼容，基线工具链提供确定性的 redis-check-rdb 与隔离校验环境，
-# 避免校验行为随 Redis 8 补丁版本漂移。运行栈镜像升级导致 RDB 主版本变化时，
-# preflight-upgrade.sh 的 Redis 主版本检查会先行拦截。
+# 备份校验工具链使用锁文件基线的 Redis 7.4.11 Alpine 镜像，
+# 提供确定性的 redis-check-rdb 与隔离校验环境，避免校验行为随镜像漂移。
 redis_image_reference() {
   node -e '
 const fs = require("node:fs");
