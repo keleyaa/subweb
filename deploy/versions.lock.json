@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-09-12T13:42:59Z",
+  "verifiedAt": "2026-09-13T18:12:23Z",
   "services": {
     "gatewayBase": {
       "source": {
@@ -68,16 +68,16 @@
       "source": {
         "url": "https://github.com/redis/redis",
         "repository": "redis/redis",
-        "tag": "8.10.1",
-        "commit": "3399357e7c17b668289386b8a15a3037bc4527b1",
+        "tag": "7.4.11",
+        "commit": "aaf0ce63b3239f4b51f86ca1da8711b055721993",
         "prerelease": false
       },
       "image": {
-        "reference": "docker.io/library/redis:8.10.1",
-        "digest": "sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5",
+        "reference": "docker.io/library/redis:7.4.11-alpine",
+        "digest": "sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf",
         "platforms": {
-          "linux/amd64": "sha256:76961cd2a0f40ef6fdd334b6b1b3a76a2bad1848d89f3030ca30a7521d4a9493",
-          "linux/arm64": "sha256:1c92fd971cb4614d1581c7f0482108fe2d571c3debe88a655a15de97c151c8bc"
+          "linux/amd64": "sha256:1db42ccef14898aa29bae778452d567534b59c107129cbc1163fb552de184d3c",
+          "linux/arm64": "sha256:f8d15882ba108587477ce13c00ab0551933a84138427b7cc9abadfbe45ffd973"
         }
       },
       "container": {

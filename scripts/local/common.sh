@@ -4,7 +4,7 @@ local_script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 local_project_root=$(CDPATH= cd -- "$local_script_directory/../.." && pwd -P)
 local_runtime_directory=$local_project_root/.runtime/local
 local_env_file=$local_runtime_directory/compose.env
-local_project_name=${SUBWEB_LOCAL_PROJECT_NAME:-subweb-local}
+local_project_name=${SUBWEB_LOCAL_PROJECT_NAME:-subweb-local-redis7}
 local_myurls_port=${LOCAL_MYURLS_PORT:-18082}
 local_subweb_port=${LOCAL_SUBWEB_PORT:-18081}
 local_vite_port=${LOCAL_VITE_PORT:-5173}
