@@ -27,10 +27,13 @@ describe('Compose-first local workflow contract', () => {
     const isolationBlock = `unset \\
   APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN SUBWEB_PORT \\
   REDIS_PASSWORD IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY \\
+  MYURLS_NETWORK_SUBNET MYURLS_GATEWAY_IP MYURLS_IP MYURLS_TRUST_PROXY_CIDR \\
   SUBWEB_LOCAL_PROJECT_NAME`;
 
     expect(verifier).toContain(isolationBlock);
     expect(verifier).toContain('export SUBWEB_LOCAL_PROJECT_NAME="subweb-local-verify-$(openssl rand -hex 6)"');
+    expect(verifier).toContain('test_network_subnet=$("$script_directory/select-test-network.sh")');
+    expect(verifier).toContain('export MYURLS_NETWORK_SUBNET="$test_network_subnet"');
     expect(verifier).toContain('"$script_directory/local/deps.sh" remove-volumes');
     expect(verifier.indexOf('trap cleanup EXIT HUP INT TERM')).toBeLessThan(verifier.indexOf('"$script_directory/local/deps.sh" up'));
     expect(verifier.indexOf(isolationBlock)).toBeLessThan(verifier.indexOf('"$script_directory/local/deps.sh" up'));
