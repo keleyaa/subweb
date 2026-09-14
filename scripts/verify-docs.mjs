@@ -37,6 +37,15 @@ function localTarget(sourceFile, rawTarget) {
   return path.resolve(path.dirname(sourceFile), withoutFragment);
 }
 
+export const runtimeContractFiles = [
+  ...requiredDocuments,
+  '.env.example',
+  '.github/workflows/docker-build-release.yml',
+  '.github/workflows/local-dev.yml',
+  'docs/assets/readme/subweb-hero.svg',
+  'docs/assets/readme/subweb-architecture.svg',
+];
+
 export function verifyDocs({ root }) {
   const errors = [];
   for (const relativeFile of requiredDocuments) {
@@ -82,6 +91,9 @@ export function verifyDocs({ root }) {
     ['docs/maintenance.md', 'Go race、Go vet、构建和 `git diff --check` 是需要另行执行'],
     ['docs/third-party-sources.md', '不提供已维护的镜像 digest 或 rollback manifest'],
     ['docs/deployment.md', 'Gateway 发布镜像由 release workflow 独立构建'],
+    ['docs/deployment-docker.md', '生产命令要求 `.env` 是权限 `0600` 的普通文件'],
+    ['docs/deployment-docker.md', '`./scripts/subweb.sh down` 只停止服务，不使用 `--volumes`'],
+    ['docs/operations.md', 'RDB format version 15'],
   ];
   for (const [relativeFile, expectedText] of requiredContracts) {
     const absoluteFile = path.join(root, relativeFile);
@@ -91,13 +103,6 @@ export function verifyDocs({ root }) {
   }
 
   const staleRuntimePattern = /(?:Redis\s*v?\s*8(?:\.\d+)?|redis\s*:\s*8|8\.10\.1|两个 MyUrls 服务|two MyUrls services)/iu;
-  const runtimeContractFiles = [
-    ...requiredDocuments,
-    '.env.example',
-    '.github/workflows/docker-build-release.yml',
-    'docs/assets/readme/subweb-hero.svg',
-    'docs/assets/readme/subweb-architecture.svg',
-  ];
   for (const relativeFile of runtimeContractFiles) {
     const source = fs.readFileSync(path.join(root, relativeFile), 'utf8');
     if (staleRuntimePattern.test(source)) {

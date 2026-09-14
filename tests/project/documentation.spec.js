@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { requiredDocuments, verifyDocs } from "../../scripts/verify-docs.mjs";
+import {
+  requiredDocuments,
+  runtimeContractFiles,
+  verifyDocs,
+} from "../../scripts/verify-docs.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -282,6 +286,19 @@ describe("documentation contract", () => {
       "compose.disabled-short-links.yaml",
     );
     expect(read("docs/operations.md")).toContain("verify-unified-stack.sh");
+  });
+
+  it("audits every runtime workflow and production safety contract", () => {
+    expect(runtimeContractFiles).toContain(".github/workflows/local-dev.yml");
+    const production = read("docs/deployment-docker.md");
+    const operations = read("docs/operations.md");
+    for (const contract of [
+      "`.env` 是权限 `0600` 的普通文件",
+      "down` 只停止服务，不使用 `--volumes`",
+      "RDB format version 15",
+    ]) {
+      expect(`${production}\n${operations}`).toContain(contract);
+    }
   });
 
   it("rejects stale runtime versions and retired current-service claims", () => {
