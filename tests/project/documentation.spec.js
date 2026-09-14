@@ -246,8 +246,9 @@ describe("documentation contract", () => {
       expect(document).toContain("docker.io/keleyaa/subweb");
       expect(document).toContain("ghcr.io/keleyaa/subweb");
     }
-    expect(docker).toContain("--image ghcr.io/keleyaa/subweb:sha-");
+    expect(docker).toContain("--image ghcr.io/keleyaa/subweb@sha256:<release-manifest-digest>");
     expect(maintenance).toContain("packages: write");
+    expect(maintenance).toContain("不可变多平台 manifest digest");
   });
 
   it("documents the production logging privacy and retention contract", () => {

@@ -167,6 +167,9 @@ describe('Docker image quick deployment', () => {
     expect(documentation).toContain('./scripts/subweb.sh install \\\n');
     expect(documentation).not.toContain('./scripts/docker-deploy.sh install');
     expect(documentation).toContain('./scripts/configure.sh \\\n  --short-links-enabled false');
+    expect(documentation).toContain('release workflow 产出的多平台 `@sha256:<digest>`');
+    expect(documentation).toContain('--image ghcr.io/keleyaa/subweb@sha256:<release-manifest-digest>');
+    expect(documentation).not.toContain('`--image` 只接受已有 Git tag');
     expect(documentation).not.toContain('SHORT_LINKS_ENABLED=false ./scripts/configure.sh');
   });
 

@@ -15,7 +15,7 @@ cd subweb
   --api-domain api.example.com \
   --short-domain short.example.com \
   --turnstile-site-key YOUR_SITE_KEY \
-  --image ghcr.io/keleyaa/subweb:sha-<commit>
+  --image ghcr.io/keleyaa/subweb@sha256:<release-manifest-digest>
 ```
 
 命令会在终端隐藏提示输入 Turnstile Secret Key，然后自动生成权限为 `0600` 的 `.env`、校验 Compose、拉取镜像并等待服务健康。启用短链时，Turnstile Site Key 与 Secret Key 必须由部署者提供；CI 或非交互环境将私钥通过 `--turnstile-secret-key-stdin` 传入。默认值为 `SHORT_LINKS_ENABLED=true` 与 `CUSTOM_BACKEND_ENABLED=true`；Redis 密码与 IP 哈希密钥由脚本生成或保留已有值，除非显式要求轮换，不要在部署过程中更换它们。
@@ -62,7 +62,7 @@ cd subweb
 
 使用预构建 Gateway 时必须显式传入不可变引用：
 
-`--image` 只接受已有 Git tag 或 `@sha256:<digest>`，拒绝 `latest` 和未经验证的 CLI 参数。Docker Hub `docker.io/keleyaa/subweb` 与 GHCR `ghcr.io/keleyaa/subweb` 是等价发布来源。推送匹配 `vX.Y.Z` 的 Git tag 会自动触发 Docker release workflow；也可以通过 `workflow_dispatch` 的 `version` 输入手动补跑已有 tag。普通分支推送和 Pull Request 不会触发该工作流。SubConverter、MyUrls 和 Redis 的锁定版本、平台 digest 与来源以 [版本锁](../deploy/versions.lock.json) 为准；Gateway 使用当前 release 提供的不可变引用。
+`--image` 只接受 release workflow 产出的多平台 `@sha256:<digest>`，拒绝 `latest`、产品版本标签和未经验证的 CLI 参数。Git tag `vX.Y.Z` 只决定发布身份；Docker Hub `docker.io/keleyaa/subweb` 与 GHCR `ghcr.io/keleyaa/subweb` 是等价发布来源，生产部署应使用发布证据中该 tag 对应的不可变 manifest digest。推送匹配 `vX.Y.Z` 的 Git tag 会自动触发 Docker release workflow；也可以通过 `workflow_dispatch` 的 `version` 输入手动补跑已有 tag。普通分支推送和 Pull Request 不会触发该工作流。SubConverter、MyUrls 和 Redis 的锁定版本、平台 digest 与来源以 [版本锁](../deploy/versions.lock.json) 为准；Gateway 使用当前 release 提供的不可变引用。
 
 CI 或其他非交互环境使用管道传入私钥，不需要 heredoc：
 
@@ -73,7 +73,7 @@ printf '%s\n' "$TURNSTILE_SECRET_KEY" | ./scripts/subweb.sh install \
   --short-domain short.example.com \
   --turnstile-site-key "$TURNSTILE_SITE_KEY" \
   --turnstile-secret-key-stdin \
-  --image ghcr.io/keleyaa/subweb:sha-<commit>
+  --image ghcr.io/keleyaa/subweb@sha256:<release-manifest-digest>
 ```
 
 `subweb.sh upgrade` 会先验证 Compose/版本锁合同，再拉取镜像。不要执行 `cat .env`。

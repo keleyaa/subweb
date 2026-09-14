@@ -140,6 +140,9 @@ describe('release evidence and command gate', () => {
     expect(workflow).toContain('EXPECTED_SOURCE_SHA: ${{ needs.quality.outputs.source_sha }}');
     expect(workflow).toContain('Release tag resolved to a different commit than quality verification');
     expect(workflow).toContain('source_sha=$(git rev-parse HEAD)');
+    expect(workflow).toContain('[[ "$VERSION" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]');
+    expect(workflow).toContain('[[ "$version" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]');
+    expect(workflow).not.toContain('npm pkg get version');
     expect(workflow).toContain('[[ "$source_sha" == "$EXPECTED_SOURCE_SHA" ]]');
     expect(workflow.indexOf('[[ "$source_sha" == "$EXPECTED_SOURCE_SHA" ]]')).toBeLessThan(workflow.indexOf('name: Set up QEMU'));
     expect(workflow).toContain('file: ./Dockerfile');
@@ -197,6 +200,8 @@ describe('release evidence and command gate', () => {
     expect(source).not.toMatch(/^\x20{2}pull_request:/mu);
     expect(source).toContain('git ls-remote --exit-code origin "refs/tags/$VERSION"');
     expect(source).toContain('source_sha=$(git rev-parse HEAD)');
+    expect(source).toContain('tags: ghcr.io/${{ env.GHCR_IMAGE }}:${{ steps.tag.outputs.version }}');
+    expect(source).not.toContain('sha-${SHORT_SHA}');
 
     for (const suffix of [
       'latest',
