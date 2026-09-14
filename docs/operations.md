@@ -39,7 +39,7 @@ SubConverter 日志会保留首条可恢复出站错误，并将连续、相同�
   --confirm-stop-writes
 ```
 
-恢复要求短链启用、备份路径是绝对路径的普通文件，并显式确认停止写入。脚本会根据 `.env` 选择对应 Compose 文件；`.env` 中 `SHORT_LINKS_ENABLED=false` 时，备份和恢复命令会拒绝执行，且不会启动 Redis 或 MyUrls。密码只在容器内通过 `REDISCLI_AUTH` 使用。恢复前保留当前 RDB，完成后检查 Redis、Gateway、SubConverter 和两个 MyUrls 服务健康状态。
+恢复要求短链启用、备份路径是绝对路径的普通文件，并显式确认停止写入。脚本会根据 `.env` 选择对应 Compose 文件；`.env` 中 `SHORT_LINKS_ENABLED=false` 时，备份和恢复命令会拒绝执行，且不会启动 Redis 或 MyUrls。密码只在容器内通过 `REDISCLI_AUTH` 使用。恢复前保留当前 RDB，完成后检查 Redis、Gateway、SubConverter 和唯一 `myurls` 服务的健康状态。
 
 ## 发布后验证
 

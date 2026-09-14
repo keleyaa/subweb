@@ -7,17 +7,19 @@ project_root=$(CDPATH= cd -- "$script_directory/.." && pwd -P)
 # This verifier owns the generated local Compose environment.
 unset \
   APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN SUBWEB_PORT \
-  REDIS_PASSWORD IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY
+  REDIS_PASSWORD IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY \
+  SUBWEB_LOCAL_PROJECT_NAME
 
-"$script_directory/local/deps.sh" up
+export SUBWEB_LOCAL_PROJECT_NAME="subweb-local-verify-$(openssl rand -hex 6)"
 cleanup() {
   if [ -n "${vite_pid:-}" ]; then
     kill "$vite_pid" >/dev/null 2>&1 || true
     wait "$vite_pid" >/dev/null 2>&1 || true
   fi
-  "$script_directory/local/deps.sh" remove >/dev/null 2>&1 || true
+  COMPOSE_PROJECT_NAME="$SUBWEB_LOCAL_PROJECT_NAME" "$script_directory/local/deps.sh" remove-volumes >/dev/null 2>&1 || true
 }
 trap cleanup EXIT HUP INT TERM
+"$script_directory/local/deps.sh" up
 
 local_vite_port=${LOCAL_VITE_PORT:-5173}
 local_myurls_port=${LOCAL_MYURLS_PORT:-18082}

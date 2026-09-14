@@ -283,6 +283,19 @@ describe("documentation contract", () => {
     expect(read("docs/operations.md")).toContain("verify-unified-stack.sh");
   });
 
+  it("rejects stale runtime versions and retired current-service claims", () => {
+    const currentDocs = [
+      ...requiredDocuments,
+      ".env.example",
+      ".github/workflows/docker-build-release.yml",
+    ].map(read).join("\n");
+
+    expect(currentDocs).not.toMatch(/(?:Redis\s*v?\s*8(?:\.\d+)?|redis\s*:\s*8|8\.10\.1|两个 MyUrls 服务|two MyUrls services|myurls-app|myurls-short|双上游 Compose)/iu);
+    for (const asset of ["docs/assets/readme/subweb-hero.svg", "docs/assets/readme/subweb-architecture.svg"]) {
+      expect(read(asset)).not.toMatch(/(?:Redis\s*v?\s*8|two MyUrls services|MyUrls APP|MyUrls SHORT|separate MyUrls)/iu);
+    }
+  });
+
   it("keeps the current product story and local visual proof explicit", () => {
     const readme = read("README.md");
 

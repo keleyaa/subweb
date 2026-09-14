@@ -46,20 +46,22 @@ describe('Compose-first local development workflow', () => {
   it('stops dependencies without deleting development data volumes', async () => {
     const dependencies = await read('scripts/local/deps.sh');
 
-    expect(dependencies).toContain('docker compose stop gateway subconverter myurls redis');
-    expect(dependencies).not.toContain('down --volumes');
-    expect(dependencies).not.toContain('volume rm');
+    const stopBranch = dependencies.slice(dependencies.indexOf('  down)'));
+    expect(stopBranch).toContain('docker compose stop gateway subconverter myurls redis');
+    expect(stopBranch).not.toContain('down --volumes');
+    expect(stopBranch).not.toContain('volume rm');
   });
 
-  it('removes verifier-owned Compose resources without deleting data volumes', async () => {
+  it('removes verifier-owned Compose resources and data volumes', async () => {
     const [dependencies, verifier] = await Promise.all([
       read('scripts/local/deps.sh'),
       read('scripts/verify-local-dev.sh'),
     ]);
 
-    expect(verifier).toContain('"$script_directory/local/deps.sh" remove');
-    expect(dependencies).toContain('remove)');
+    expect(verifier).toContain('"$script_directory/local/deps.sh" remove-volumes');
+    expect(dependencies).toContain('remove-volumes)');
     expect(dependencies).toContain('docker compose down --remove-orphans');
-    expect(dependencies).not.toContain('docker compose down --volumes');
+    expect(dependencies).toContain('docker compose down --volumes --remove-orphans');
+    expect(dependencies).toContain('remove-volumes is restricted to verifier-owned projects.');
   });
 });

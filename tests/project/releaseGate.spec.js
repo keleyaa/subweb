@@ -136,6 +136,12 @@ describe('release evidence and command gate', () => {
       'RUN_DOCKER_INTEGRATION=1 RUN_REDIS_INTEGRATION=1 npm run verify',
     );
     expect(workflow).toContain('run: npm run verify:ci');
+    expect(workflow).toContain('outputs:\n      source_sha: ${{ steps.source.outputs.source_sha }}');
+    expect(workflow).toContain('EXPECTED_SOURCE_SHA: ${{ needs.quality.outputs.source_sha }}');
+    expect(workflow).toContain('Release tag resolved to a different commit than quality verification');
+    expect(workflow).toContain('source_sha=$(git rev-parse HEAD)');
+    expect(workflow).toContain('[[ "$source_sha" == "$EXPECTED_SOURCE_SHA" ]]');
+    expect(workflow.indexOf('[[ "$source_sha" == "$EXPECTED_SOURCE_SHA" ]]')).toBeLessThan(workflow.indexOf('name: Set up QEMU'));
     expect(workflow).toContain('file: ./Dockerfile');
     expect(workflow).not.toContain('Dockerfile.simple');
     expect(workflow).not.toContain('request-policy');

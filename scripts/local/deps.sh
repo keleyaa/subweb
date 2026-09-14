@@ -4,7 +4,7 @@ set -eu
 # shellcheck source=common.sh
 . "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)/common.sh"
 
-[ "$#" -eq 1 ] || local_fail 'usage: deps.sh up|status|down|remove'
+[ "$#" -eq 1 ] || local_fail 'usage: deps.sh up|status|down|remove|remove-volumes'
 prepare_local_environment
 cd "$local_project_root"
 
@@ -14,6 +14,13 @@ case "$1" in
     ;;
   remove)
     docker compose down --remove-orphans
+    ;;
+  remove-volumes)
+    case "$local_project_name" in
+      subweb-local-verify-*) ;;
+      *) local_fail 'remove-volumes is restricted to verifier-owned projects.' ;;
+    esac
+    docker compose down --volumes --remove-orphans
     ;;
   status)
     docker compose ps gateway subconverter myurls redis
@@ -27,5 +34,5 @@ case "$1" in
   down)
     docker compose stop gateway subconverter myurls redis
     ;;
-  *) local_fail 'usage: deps.sh up|status|down|remove' ;;
+  *) local_fail 'usage: deps.sh up|status|down|remove|remove-volumes' ;;
 esac

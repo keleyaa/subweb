@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
   <title id="title">Subconverter Web</title>
-  <desc id="desc">A self-hosted subscription delivery stack. APP_DOMAIN, API_DOMAIN, and SHORT_DOMAIN enter one Go Gateway, which connects privately to SubConverter, two MyUrls services, and Redis.</desc>
+  <desc id="desc">A self-hosted subscription delivery stack. APP_DOMAIN, API_DOMAIN, and SHORT_DOMAIN enter one Go Gateway, which connects privately to SubConverter, one MyUrls service, and Redis.</desc>
   <defs>
     <linearGradient id="ground" x1="0" y1="0" x2="1200" y2="360" gradientUnits="userSpaceOnUse">
       <stop stop-color="#080B14"/>
@@ -65,11 +65,9 @@
       <rect width="140" height="36" rx="9" fill="#152B38" stroke="#6EDAE6" stroke-opacity="0.52"/>
       <text x="70" y="24" text-anchor="middle" fill="#C8F6FA" font-size="16" font-weight="650">SubConverter</text>
       <rect y="36" width="140" height="36" rx="9" fill="#211E3C" stroke="#BC92FF" stroke-opacity="0.52"/>
-      <text x="70" y="60" text-anchor="middle" fill="#E4D9FA" font-size="16" font-weight="650">MyUrls APP</text>
-      <rect y="72" width="140" height="36" rx="9" fill="#211E3C" stroke="#BC92FF" stroke-opacity="0.52"/>
-      <text x="70" y="96" text-anchor="middle" fill="#E4D9FA" font-size="16" font-weight="650">MyUrls SHORT</text>
-      <rect y="108" width="140" height="36" rx="9" fill="#18243A" stroke="#6F9FFF" stroke-opacity="0.52"/>
-      <text x="70" y="132" text-anchor="middle" fill="#D5E3FF" font-size="16" font-weight="650">Redis</text>
+      <text x="70" y="60" text-anchor="middle" fill="#E4D9FA" font-size="16" font-weight="650">MyUrls</text>
+      <rect y="72" width="140" height="36" rx="9" fill="#18243A" stroke="#6F9FFF" stroke-opacity="0.52"/>
+      <text x="70" y="96" text-anchor="middle" fill="#D5E3FF" font-size="16" font-weight="650">Redis</text>
     </g>
   </g>
 </svg>

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
   <title id="title">Subconverter Web request paths</title>
-  <desc id="desc">The browser reaches APP_DOMAIN, API_DOMAIN, and SHORT_DOMAIN through one Go Gateway. Conversion routes to SubConverter, while short-link creation and redirects use separate MyUrls APP and SHORT services backed by Redis.</desc>
+  <desc id="desc">The browser reaches APP_DOMAIN, API_DOMAIN, and SHORT_DOMAIN through one Go Gateway. Conversion and short-link creation and redirects use SubConverter and one MyUrls service backed by Redis.</desc>
   <defs>
     <linearGradient id="ground" x1="0" y1="0" x2="1200" y2="520" gradientUnits="userSpaceOnUse">
       <stop stop-color="#F4F7FF"/>
@@ -54,11 +54,8 @@
     <text x="83" y="29" text-anchor="middle" fill="#174C55" font-size="17" font-weight="700">SubConverter</text>
     <text x="83" y="48" text-anchor="middle" fill="#477078" font-size="14">CONVERT</text>
     <rect y="75" width="166" height="60" rx="14" fill="#F0EBFF" stroke="#8E76D8" stroke-width="2"/>
-    <text x="83" y="101" text-anchor="middle" fill="#3C2C70" font-size="18" font-weight="700">MyUrls APP</text>
-    <text x="83" y="120" text-anchor="middle" fill="#67558F" font-size="14">CREATE · MANAGE</text>
-    <rect y="150" width="166" height="60" rx="14" fill="#F0EBFF" stroke="#8E76D8" stroke-width="2"/>
-    <text x="83" y="176" text-anchor="middle" fill="#3C2C70" font-size="18" font-weight="700">MyUrls SHORT</text>
-    <text x="83" y="195" text-anchor="middle" fill="#67558F" font-size="14">REDIRECT</text>
+     <text x="83" y="101" text-anchor="middle" fill="#3C2C70" font-size="18" font-weight="700">MyUrls</text>
+     <text x="83" y="120" text-anchor="middle" fill="#67558F" font-size="14">CREATE · REDIRECT</text>
   </g>
 
   <g transform="translate(1090 286)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">

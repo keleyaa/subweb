@@ -20,6 +20,9 @@ const requiredServices = [
 const requiredPlatforms = ['linux/amd64', 'linux/arm64'];
 const myurlsSourceRepository = 'keleyaa/MyUrls';
 const myurlsImageRepository = 'ghcr.io/keleyaa/myurls';
+const redisSourceRepository = 'redis/redis';
+const redisSourceTag = '7.4.11';
+const redisImageReference = 'docker.io/library/redis:7.4.11-alpine';
 const myurlsReleaseTagPattern = /^v2\.\d+\.\d+$/u;
 const gatewayBaseSourceRepository = 'docker-library/golang';
 const gatewayBaseImageReference = 'docker.io/library/golang:1.27-alpine';
@@ -209,6 +212,14 @@ export function validateVersionLocks(lock) {
       if (source.prerelease !== false) {
         errors.push(`${prefix}.source.prerelease must equal false`);
       }
+      if (name === 'redis') {
+        if (source.repository !== redisSourceRepository) {
+          errors.push(`${prefix}.source.repository must equal ${redisSourceRepository}`);
+        }
+        if (source.tag !== redisSourceTag) {
+          errors.push(`${prefix}.source.tag must equal ${redisSourceTag}`);
+        }
+      }
       if (name === 'myurls') {
         if (source.repository !== myurlsSourceRepository) {
           errors.push(
@@ -222,6 +233,9 @@ export function validateVersionLocks(lock) {
     }
 
     const parsedReference = validateImageDescriptor(`${prefix}.image`, service.image, errors);
+    if (name === 'redis' && parsedReference && service.image.reference !== redisImageReference) {
+      errors.push(`${prefix}.image.reference must equal ${redisImageReference}`);
+    }
     if (name === 'myurls' && parsedReference) {
       const imageRepository = `${parsedReference.registry}/${parsedReference.repository}`;
       if (imageRepository !== myurlsImageRepository) {

@@ -90,6 +90,21 @@ export function verifyDocs({ root }) {
     }
   }
 
+  const staleRuntimePattern = /(?:Redis\s*v?\s*8(?:\.\d+)?|redis\s*:\s*8|8\.10\.1|两个 MyUrls 服务|two MyUrls services)/iu;
+  const runtimeContractFiles = [
+    ...requiredDocuments,
+    '.env.example',
+    '.github/workflows/docker-build-release.yml',
+    'docs/assets/readme/subweb-hero.svg',
+    'docs/assets/readme/subweb-architecture.svg',
+  ];
+  for (const relativeFile of runtimeContractFiles) {
+    const source = fs.readFileSync(path.join(root, relativeFile), 'utf8');
+    if (staleRuntimePattern.test(source)) {
+      errors.push(`stale runtime claim: ${relativeFile}`);
+    }
+  }
+
   const architecturePrdPath = path.join(root, 'docs/architecture-prd.md');
   if (fs.existsSync(architecturePrdPath)) {
     const architecturePrd = fs.readFileSync(architecturePrdPath, 'utf8');

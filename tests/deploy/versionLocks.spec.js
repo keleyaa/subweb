@@ -22,9 +22,11 @@ const inventoryError =
   'services must contain exactly: gatewayBase, myurls, redis, subconverter';
 const gatewayBaseSourceError =
   'services.gatewayBase.source.repository must equal docker-library/golang';
-const gatewayBaseImageError =
-  'services.gatewayBase.image.reference must use docker.io/library/golang:1.27-alpine';
-const runtimeImageError =
+  const gatewayBaseImageError =
+    'services.gatewayBase.image.reference must use docker.io/library/golang:1.27-alpine';
+  const redisSourceError = 'services.redis.source.tag must equal 7.4.11';
+  const redisImageError = 'services.redis.image.reference must equal docker.io/library/redis:7.4.11-alpine';
+  const runtimeImageError =
   'services.gatewayBase.runtimeImages must contain exactly: distroless, frontend';
 const imageReferenceError =
   'services.myurls.image.reference must be a valid tagged OCI/Docker reference';
@@ -97,6 +99,17 @@ describe('integrated service artifact locks', () => {
     }
   });
 
+  it('pins Redis 7.4.11 Alpine as the approved runtime', () => {
+    expect(lock.services.redis.source).toMatchObject({
+      repository: 'redis/redis',
+      tag: '7.4.11',
+    });
+    expect(lock.services.redis.image).toMatchObject({
+      reference: 'docker.io/library/redis:7.4.11-alpine',
+      digest: 'sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf',
+    });
+  });
+
   it('uses the approved upstream repositories and Rust MyUrls release', () => {
     expect(lock.services.myurls.source).toMatchObject({
       repository: 'keleyaa/MyUrls',
@@ -142,6 +155,16 @@ describe('integrated service artifact locks', () => {
 
   it('passes the reusable production lock validator', () => {
     expect(validateVersionLocks(lock)).toEqual([]);
+  });
+
+  it('rejects a Redis source or image outside the approved 7.4.11 Alpine lock', () => {
+    const candidate = structuredClone(lock);
+    candidate.services.redis.source.tag = '8.10.1';
+    candidate.services.redis.image.reference = 'docker.io/library/redis:8.10.1';
+
+    expect(validateVersionLocks(candidate)).toEqual(expect.arrayContaining([
+      redisSourceError, redisImageError,
+    ]));
   });
 
   it('rejects a Gateway base image or runtime input that differs from Dockerfile', () => {

@@ -24,9 +24,13 @@ describe('Compose-first local workflow contract', () => {
     const verifier = await readFile(new URL('../../scripts/verify-local-dev.sh', import.meta.url), 'utf8');
     const isolationBlock = `unset \\
   APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN SUBWEB_PORT \\
-  REDIS_PASSWORD IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY`;
+  REDIS_PASSWORD IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY \\
+  SUBWEB_LOCAL_PROJECT_NAME`;
 
     expect(verifier).toContain(isolationBlock);
+    expect(verifier).toContain('export SUBWEB_LOCAL_PROJECT_NAME="subweb-local-verify-$(openssl rand -hex 6)"');
+    expect(verifier).toContain('"$script_directory/local/deps.sh" remove-volumes');
+    expect(verifier.indexOf('trap cleanup EXIT HUP INT TERM')).toBeLessThan(verifier.indexOf('"$script_directory/local/deps.sh" up'));
     expect(verifier.indexOf(isolationBlock)).toBeLessThan(verifier.indexOf('"$script_directory/local/deps.sh" up'));
   });
 

@@ -90,13 +90,8 @@ printf '%s\n' "$TURNSTILE_SECRET_KEY" | ./scripts/subweb.sh install \
 
 备份和恢复只在短链启用且显式确认停止写入时可用。不要将 `.env`、备份文件、Redis 密码、Turnstile 私钥或完整短码放入日志、Issue 或截图。
 
-## 从双 MyUrls 迁移
+## 当前运行时版本
 
-本次变更需要新 Gateway 与新 Compose 配套使用；旧镜像读取两个上游变量，不能搭配新的 `MYURLS_UPSTREAM`。保留相同的 Compose project、`.env` 中的 Redis 密码/IP 哈希密钥及 `redis-data` volume，不需要迁移 Redis key。
+当前启用短链的生产 profile 固定运行四个服务：`gateway`、`subconverter`、唯一的 `myurls` 和 Redis。Redis 使用 `docker.io/library/redis:7.4.11-alpine`，具体 manifest 与平台 digest 以 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 为准。
 
-1. 在旧版本目录先执行 `./scripts/subweb.sh backup --output /absolute/path/pre-single-myurls.rdb`，并记录旧 Git commit 和 Gateway 镜像 digest。
-2. 仍使用旧 Compose，执行 `docker compose stop gateway myurls-app myurls-short` 停止写入，必要时再次备份；不要执行带 `--volumes` 的删除命令。
-3. 更新到四服务版本，并使用与该版本匹配的 Gateway 镜像，或清除旧 `SUBWEB_IMAGE` 配置后从当前源码构建。执行 `./scripts/subweb.sh verify` 和 `./scripts/subweb.sh up`；启动入口的 `--remove-orphans` 会移除旧的两个 MyUrls 容器，不删除数据卷。
-4. 确认只有四个服务，验证 APP 创建返回 SHORT 域名地址、SHORT 跳转、SHORT 创建接口被拒绝和创建挑战。
-
-回滚前停止新 Gateway 和 MyUrls，恢复旧 Git 版本、旧 Gateway 镜像配置和双上游 Compose，再启动并清理新 `myurls` 孤立容器；不能只改镜像。仅在数据确实需要恢复时使用备份，并明确接受备份之后写入的数据会丢失。
+升级前执行 `./scripts/subweb.sh verify`，升级使用 `./scripts/subweb.sh upgrade`；不要手工替换 Redis、MyUrls 或 SubConverter 的镜像 tag，也不要使用 `latest`。升级后执行 `npm run verify:integration`，确认四个服务健康且短链创建、解析和过期流程正常。
