@@ -1,0 +1,11 @@
+[Unit]
+Description=Monthly isolated verification of the Subweb Redis backup
+
+[Timer]
+OnCalendar=Sun *-*-01..07 04:15:00
+Persistent=true
+RandomizedDelaySec=15m
+Unit=subweb-backup-verify.service
+
+[Install]
+WantedBy=timers.target

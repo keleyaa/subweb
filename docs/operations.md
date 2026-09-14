@@ -66,4 +66,4 @@ npm run verify:operations
 - MyUrls unhealthy：确认 Redis DB `0`、`PUBLIC_BASE_URL=https://${SHORT_DOMAIN}` 和 `TURNSTILE_HOSTNAME=${APP_DOMAIN}`；创建挑战需要有效的 Cloudflare 配置，且 `EGRESS_ALLOWED_HOSTS` 必须包含 `challenges.cloudflare.com`，否则 siteverify 无法经 Gateway 的受限 `:25503` egress 到达，会以 `503 dependency_unavailable` fail closed。
 - Redis unhealthy：检查密码、只读配置模板和数据 volume；不要删除 volume 作为第一步排查。若日志显示 RDB format 不兼容，先保存备份和错误信息，再按数据恢复或显式重置流程处理。
 
-维护前先记录 `git status --short` 和 Compose 状态。升级与恢复的详细边界见 [维护与验证](maintenance.md) 和 [安全](security.md)。
+维护前先记录 `git status --short` 和 Compose 状态。单台 VPS 的 systemd、主机权限、定时备份和外部 Nginx 合同见 [VPS 部署](deployment-vps.md)；升级与恢复的详细边界见 [维护与验证](maintenance.md) 和 [安全](security.md)。

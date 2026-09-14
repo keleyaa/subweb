@@ -112,6 +112,7 @@ git diff --check
 - [本地开发](docs/deployment-local.md)
 - [Docker 部署](docs/deployment-docker.md)
 - [外部 TLS 反向代理示例](docs/deployment-nginx.md)
+- [单台 Linux VPS 部署](docs/deployment-vps.md)
 - [安全边界](docs/security.md)
 - [运维](docs/operations.md)
 

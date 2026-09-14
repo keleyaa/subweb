@@ -1,0 +1,18 @@
+[Unit]
+Description=Subweb encrypted Redis backup
+Requires=docker.service
+After=docker.service subweb.service
+Wants=subweb.service
+
+[Service]
+Type=oneshot
+User=subweb
+Group=subweb
+WorkingDirectory=/opt/subweb
+EnvironmentFile=-/etc/subweb/backup.env
+ExecStart=/opt/subweb/scripts/vps/backup.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups

@@ -1,0 +1,28 @@
+[Unit]
+Description=Subweb Compose application
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=10min
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=subweb
+Group=subweb
+WorkingDirectory=/opt/subweb
+ExecStart=/opt/subweb/scripts/subweb.sh up
+ExecStop=/opt/subweb/scripts/subweb.sh down
+TimeoutStartSec=10min
+TimeoutStopSec=2min
+Restart=on-failure
+RestartSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/subweb/.runtime /opt/subweb/.local
+
+[Install]
+WantedBy=multi-user.target

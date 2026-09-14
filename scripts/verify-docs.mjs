@@ -10,6 +10,7 @@ export const requiredDocuments = [
   'docs/deployment-local.md',
   'docs/deployment-docker.md',
   'docs/deployment-nginx.md',
+  'docs/deployment-vps.md',
   'docs/security.md',
   'docs/operations.md',
   'docs/third-party-sources.md',
@@ -94,6 +95,9 @@ export function verifyDocs({ root }) {
     ['docs/deployment-docker.md', '生产命令要求 `.env` 是权限 `0600` 的普通文件'],
     ['docs/deployment-docker.md', '`./scripts/subweb.sh down` 只停止服务，不使用 `--volumes`'],
     ['docs/operations.md', 'RDB format version 15'],
+    ['docs/deployment-vps.md', 'subweb-backup-verify.timer'],
+    ['docs/deployment-vps.md', 'BACKUP_REMOTE_MOUNT'],
+    ['docs/deployment-vps.md', 'systemctl daemon-reload'],
   ];
   for (const [relativeFile, expectedText] of requiredContracts) {
     const absoluteFile = path.join(root, relativeFile);

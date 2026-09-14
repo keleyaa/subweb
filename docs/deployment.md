@@ -7,6 +7,7 @@ Subweb 生产部署仅使用多容器 Compose：短链启用时运行 Go Gateway
 | 方式 | 适用场景 | 入口 | 合同 |
 | --- | --- | --- | --- |
 | [Docker 部署](deployment-docker.md) | 默认生产与预构建镜像 | 外层 TLS 代理转发到 `127.0.0.1:<SUBWEB_PORT>` | 推荐的多容器部署方式 |
+| [单台 Linux VPS](deployment-vps.md) | systemd、备份、主机检查和 Nginx | `/opt/subweb` 与外部 TLS | VPS 主机层合同 |
 | [本机源码](deployment-local.md) | 开发、调试和本地集成 | Vite、Gateway 与本地 SHORT loopback 端口 | Compose 加 Vite |
 
 ## 生产模式
