@@ -33,3 +33,39 @@ jobs:
       - name: Stop local dependencies
         if: always()
         run: ./scripts/local/stop.sh
+
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify Docker-gated tests, lint, and build
+        run: npm run verify:ci
+      - name: Verify artifact locks
+        run: npm run verify:locks
+      - name: Verify production release readiness
+        run: npm run verify:production-readiness
+      - name: Validate Compose
+        run: npm run verify:compose
+      - name: Verify documentation and deployment evidence
+        run: npm run verify:docs && npm run verify:evidence
+      - name: Verify workflow syntax
+        run: npm run verify:workflows
+      - name: Verify shell scripts
+        run: git ls-files -z '*.sh' | xargs -0 shellcheck --severity=error
+      - name: Clean quality resources
+        if: always()
+        run: |
+          docker compose down --volumes --remove-orphans || true
+          ./scripts/local/stop.sh || true
+          rm -f .env

@@ -9,6 +9,8 @@ describe('Compose-first local workflow contract', () => {
     expect(workflow).toContain('./scripts/verify-local-dev.sh');
     expect(workflow).toContain('if: always()');
     expect(workflow).toContain('./scripts/local/stop.sh');
+    expect(workflow).toContain('quality:');
+    expect(workflow).toContain('timeout-minutes: 45');
     expect(workflow).not.toContain('bootstrap.sh');
   });
 
