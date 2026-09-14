@@ -24,6 +24,21 @@ if [ "$command_name" = install ]; then
   exec "$SCRIPT_DIRECTORY/docker-deploy.sh" "$@"
 fi
 
+require_production_env() {
+  [ -f "$ENV_FILE" ] && [ ! -L "$ENV_FILE" ] \
+    || fail 'production .env is required and must be a regular, non-symlink file.'
+
+  if permissions=$(stat -c '%a' "$ENV_FILE" 2>/dev/null); then
+    :
+  else
+    permissions=$(stat -f '%Lp' "$ENV_FILE") \
+      || fail 'unable to inspect production .env permissions.'
+  fi
+  [ "$permissions" = 600 ] || fail 'production .env must be mode 0600.'
+}
+
+require_production_env
+
 command -v docker >/dev/null 2>&1 || fail 'Docker is not installed or not available in PATH.'
 docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
 
