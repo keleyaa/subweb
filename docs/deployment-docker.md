@@ -78,6 +78,8 @@ printf '%s\n' "$TURNSTILE_SECRET_KEY" | ./scripts/subweb.sh install \
 
 `subweb.sh upgrade` 会先验证 Compose/版本锁合同，再拉取镜像。不要执行 `cat .env`。
 
+生产命令要求 `.env` 是权限 `0600` 的普通文件，且不能是符号链接。`./scripts/subweb.sh down` 只停止服务，不使用 `--volumes`；启动或升级失败不会自动重置 Redis 数据。若 Redis 7 无法读取来自较新主版本的 RDB，命令会明确报告数据格式不兼容，必须使用兼容备份或由操作者确认单独的重置操作。
+
 ## 6. 常用运维命令
 
 ```sh

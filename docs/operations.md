@@ -41,6 +41,8 @@ SubConverter 日志会保留首条可恢复出站错误，并将连续、相同�
 
 恢复要求短链启用、备份路径是绝对路径的普通文件，并显式确认停止写入。脚本会根据 `.env` 选择对应 Compose 文件；`.env` 中 `SHORT_LINKS_ENABLED=false` 时，备份和恢复命令会拒绝执行，且不会启动 Redis 或 MyUrls。密码只在容器内通过 `REDISCLI_AUTH` 使用。恢复前保留当前 RDB，完成后检查 Redis、Gateway、SubConverter 和唯一 `myurls` 服务的健康状态。
 
+普通 `./scripts/subweb.sh down` 只停止容器，不删除命名 volume；启动或升级失败不会自动删除或重写 Redis 数据。恢复失败会自动尝试使用恢复前保留的快照回滚，并在回滚失败时明确提示写入仍处于停止状态。若 Redis 7 报告 `RDB format version 15` 或其他不兼容格式，必须将其视为数据格式问题，保留原始备份并使用兼容备份或经过操作者确认的显式重置流程。不要把删除 volume 作为首次故障排查步骤。
+
 ## 发布后验证
 
 GitHub package publish job 需要 `packages: write` 权限，并先通过完整发布门禁。完整业务 smoke 由 [`verify-unified-stack.sh`](../scripts/verify-unified-stack.sh) 执行，稳定入口是：
@@ -62,6 +64,6 @@ npm run verify:operations
 - Gateway unhealthy：先查看 `gateway` 日志，再确认 `.env` 中 API URL、域名和 feature flags，没有把外部代理变量误传给本地服务。
 - SubConverter unhealthy：检查 `/base` volume bootstrap、业务进程是否为非 root UID 和 `CapEff=0`，不要给容器恢复全部 capabilities。
 - MyUrls unhealthy：确认 Redis DB `0`、`PUBLIC_BASE_URL=https://${SHORT_DOMAIN}` 和 `TURNSTILE_HOSTNAME=${APP_DOMAIN}`；创建挑战需要有效的 Cloudflare 配置，且 `EGRESS_ALLOWED_HOSTS` 必须包含 `challenges.cloudflare.com`，否则 siteverify 无法经 Gateway 的受限 `:25503` egress 到达，会以 `503 dependency_unavailable` fail closed。
-- Redis unhealthy：检查密码、只读配置模板和数据 volume；不要删除 volume 作为第一步排查。
+- Redis unhealthy：检查密码、只读配置模板和数据 volume；不要删除 volume 作为第一步排查。若日志显示 RDB format 不兼容，先保存备份和错误信息，再按数据恢复或显式重置流程处理。
 
 维护前先记录 `git status --short` 和 Compose 状态。升级与恢复的详细边界见 [维护与验证](maintenance.md) 和 [安全](security.md)。

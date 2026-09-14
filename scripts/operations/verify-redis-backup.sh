@@ -17,12 +17,27 @@ require_absolute_regular_file "$backup" 'backup'
 require_docker
 image=$(redis_image_reference)
 
-docker run --rm --read-only --network none \
-  --mount "type=bind,src=$backup,dst=/backup.rdb,readonly" \
-  --entrypoint redis-check-rdb "$image" /backup.rdb >/dev/null \
-  || operations_fail 'Redis backup validation failed.'
+rdb_format_error() {
+  case "$1" in
+    *'RDB format version'*|*"Can't handle RDB"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
-key_count=$(docker run --rm --read-only --network none \
+report_rdb_format_error() {
+  operations_fail 'Redis RDB format is incompatible with the locked Redis image; use a compatible backup or perform an explicit reset.'
+}
+
+if check_output=$(docker run --rm --read-only --network none \
+  --mount "type=bind,src=$backup,dst=/backup.rdb,readonly" \
+  --entrypoint redis-check-rdb "$image" /backup.rdb 2>&1); then
+  :
+else
+  rdb_format_error "$check_output" && report_rdb_format_error
+  operations_fail 'Redis backup validation failed.'
+fi
+
+if key_count=$(docker run --rm --read-only --network none \
   --tmpfs /data:uid=999,gid=1000,mode=0700 \
   --tmpfs /tmp:uid=999,gid=1000,mode=0700 \
   --mount "type=bind,src=$backup,dst=/backup.rdb,readonly" \
@@ -37,7 +52,12 @@ key_count=$(docker run --rm --read-only --network none \
       [ "$attempts" -lt 50 ] || exit 1
     done
     redis-cli -s /tmp/redis.sock --raw DBSIZE
-  ') || operations_fail 'Redis backup could not be loaded in an isolated process.'
+  ' 2>&1); then
+  :
+else
+  rdb_format_error "$key_count" && report_rdb_format_error
+  operations_fail 'Redis backup could not be loaded in an isolated process.'
+fi
 case "$key_count" in ''|*[!0-9]*) operations_fail 'Redis backup returned an invalid key count.' ;; esac
 
 printf 'Redis backup verified: %s keys=%s sha256=%s\n' "$backup" "$key_count" "$(sha256_file "$backup")"

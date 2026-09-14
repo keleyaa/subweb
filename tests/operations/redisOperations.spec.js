@@ -1,11 +1,19 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { tmpdir } from 'node:os';
+import { describe, expect, it, afterEach } from 'vitest';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const operation = (name) => path.join(root, 'scripts/operations', name);
 const operationsVerifier = path.join(root, 'scripts/verify-redis-operations.sh');
+const temporaryDirectories = [];
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((directory) =>
+    rm(directory, { recursive: true, force: true })));
+});
 
 describe('Redis operations safety contracts', () => {
   it.each([
@@ -59,6 +67,37 @@ describe('Redis operations safety contracts', () => {
     expect(restore).toContain('CONFIG SET appendonly yes');
     expect(restore).toContain('aof_rewrite_in_progress:0');
     expect(restore).not.toContain('down -v');
+  });
+
+  it('keeps destructive volume removal out of production stop and restore paths', () => {
+    const command = fs.readFileSync(path.join(root, 'scripts/subweb.sh'), 'utf8');
+    const restore = fs.readFileSync(operation('restore-redis.sh'), 'utf8');
+
+    expect(command).not.toMatch(/compose down[^\n]*(?:--volumes|-v)/u);
+    expect(restore).not.toMatch(/compose down[^\n]*(?:--volumes|-v)/u);
+  });
+
+  it('reports an incompatible Redis RDB format instead of a generic validation failure', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'subweb-redis-rdb-'));
+    temporaryDirectories.push(directory);
+    const dockerPath = path.join(directory, 'docker');
+    await writeFile(dockerPath, `#!/bin/sh
+printf '%s\\n' "Can't handle RDB format version 15" >&2
+exit 1
+`);
+    await chmod(dockerPath, 0o755);
+    const backupPath = path.join(directory, 'backup.rdb');
+    await writeFile(backupPath, 'rdb-placeholder', { mode: 0o600 });
+
+    const result = spawnSync('sh', [operation('verify-redis-backup.sh'), '--backup', backupPath], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${directory}:${process.env.PATH}` },
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}${result.stderr}`).toContain(
+      'Redis RDB format is incompatible with the locked Redis image',
+    );
   });
 
   it('uses the locked Redis image for offline backup validation', () => {
