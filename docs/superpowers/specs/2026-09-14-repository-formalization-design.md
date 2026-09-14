@@ -1,6 +1,6 @@
 # Repository Formalization Design
 
-- Status: Draft for review
+- Status: Phase A accepted; Phase B design pending
 - Scope: Phase A of the Linux VPS formalization
 - Target: one Linux VPS running Docker Compose behind an external TLS reverse proxy
 - Release authority: Git tag `vX.Y.Z`
@@ -124,7 +124,20 @@ Phase A is complete when all of the following are true:
 9. No current user-facing document or architecture asset contains stale Redis 8, dual-MyUrls, or obsolete container-count claims.
 10. The complete repository verification suite passes with a clean diff.
 
-## 9. Phase B handoff
+## 9. Phase A acceptance record
+
+Phase A was accepted on 2026-09-15 in the `phase-a-formalization` worktree after these commits:
+
+- `4dbb715` production configuration and volume safety boundary;
+- `bb71a9d` explicit Redis failure handling;
+- `0f8ea43` Git tag release authority;
+- `650223f` PR/main quality gates;
+- `c5ef8ab` documentation and runtime contract verification;
+- `b8c7c2e` isolated local verification network subnets.
+
+The acceptance run passed `npm test`, `npm run lint`, `npm run build`, `npm run verify:release`, workflow syntax and contract checks, version-lock checks, production-readiness checks, Compose checks, documentation/evidence checks, ShellCheck with `--severity=error`, and `git diff --check`. The release gate initially exposed a fixed-subnet collision in local verification; the final run passed after the verifier selected an unused `/29` subnet without touching persistent application volumes.
+
+## 10. Phase B handoff
 
 After Phase A is accepted, Phase B will define the host contract for a single Linux VPS:
 
