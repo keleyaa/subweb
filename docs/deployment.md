@@ -2,7 +2,7 @@
 
 Subweb 生产部署仅使用多容器 Compose：短链启用时运行 Go Gateway、SubConverter、一个 MyUrls Rust v2.0.8 进程和 Redis 四个服务。设置 `SHORT_LINKS_ENABLED=false` 时必须改用明确的 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml)，该 profile 只运行 Gateway 与 SubConverter。
 
-项目公开一个由 Gateway 绑定到宿主机 loopback 的 HTTP 端口。公网 DNS、TLS 证书、80/443 端口和外层反向代理由部署者负责；外层代理必须保留原始 Host，并将 APP、API、SHORT 三个域名转发到同一个 Gateway 端口。
+项目公开一个由 Gateway 绑定到宿主机 loopback 的 HTTP 端口。公网 DNS、TLS 证书、80/443 端口和外层反向代理由部署者负责；外层代理必须保留原始 Host。短链启用时外层反向代理转发 `APP_DOMAIN`、`API_DOMAIN` 和 `SHORT_DOMAIN` 到同一个 Gateway 端口。短链关闭时不设置 `SHORT_DOMAIN` 或短链路由，外层反向代理只转发 `APP_DOMAIN` 和 `API_DOMAIN`。
 
 | 方式 | 适用场景 | 入口 | 合同 |
 | --- | --- | --- | --- |

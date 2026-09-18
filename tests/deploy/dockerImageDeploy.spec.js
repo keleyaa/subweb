@@ -18,6 +18,20 @@ const dockerHubImage = `docker.io/keleyaa/subweb@sha256:${releaseDigest}`;
 const ghcrImage = `ghcr.io/keleyaa/subweb@sha256:${releaseDigest}`;
 const registryPortImage = `registry.example:5000/repository@sha256:${releaseDigest}`;
 const immutableDigestError = 'Docker deployment error: --image must use an immutable sha256 digest.\n';
+const disabledProfileImage = `ghcr.io/keleyaa/subweb@sha256:${'1'.repeat(64)}`;
+const composeInterpolationVariables = [
+  'API_DOMAIN', 'API_URL', 'APP_DOMAIN', 'CONVERSION_DNS_TIMEOUT_MS',
+  'CONVERSION_EGRESS_CONNECT_TIMEOUT_MS', 'CONVERSION_MAX_CONCURRENCY',
+  'CONVERSION_MAX_CONCURRENCY_PER_IP', 'CONVERSION_MAX_REQUEST_BYTES',
+  'CONVERSION_MAX_RESPONSE_BYTES', 'CONVERSION_RATE_LIMIT',
+  'CONVERSION_RATE_WINDOW_SECONDS', 'CONVERSION_REQUEST_TIMEOUT_MS',
+  'CUSTOM_BACKEND_ENABLED', 'EGRESS_ALLOWED_HOSTS', 'IP_HASH_SECRET',
+  'LOG_LEVEL', 'MYURLS_GATEWAY_IP', 'MYURLS_IMAGE', 'MYURLS_IP',
+  'MYURLS_LOG_LEVEL', 'MYURLS_NETWORK_SUBNET', 'MYURLS_TRUST_PROXY_CIDR',
+  'REDIS_IMAGE', 'REDIS_PASSWORD', 'SHORT_DOMAIN', 'SHORT_LINKS_ENABLED',
+  'SUBCONVERTER_IMAGE', 'SUBWEB_IMAGE', 'SUBWEB_PORT', 'TRUSTED_PROXY_CIDR',
+  'TURNSTILE_SECRET_KEY', 'TURNSTILE_SITE_KEY',
+];
 
 const enabledCompose = {
   networks: {
@@ -102,6 +116,7 @@ const makeFixture = async () => {
        'scripts/lib/release-image.sh',
       'compose.yaml',
       'compose.common-services.yaml',
+      'compose.disabled-short-links.yaml',
       'deploy/versions.lock.json',
     'deploy/redis/redis.conf.template',
   ]) {
@@ -481,6 +496,27 @@ EOF
     expect(result.stderr).not.toContain('Turnstile secret key must be provided on stdin.');
     expect(await readFile(join(root, '.env'), 'utf8').catch(() => '')).toBe('');
     expect(await readDockerLog(root)).toBe('');
+  });
+
+  it('renders the selected direct image through the real disabled Compose profile after fake deployment', async () => {
+    const root = await makeFixture();
+    const deployment = runDeploy(root, [
+      '--image', disabledProfileImage,
+      '--disable-short-links',
+    ], {}, '');
+
+    expect(deployment.status, `${deployment.stdout}\n${deployment.stderr}`).toBe(0);
+    const environment = { ...process.env };
+    for (const name of composeInterpolationVariables) delete environment[name];
+    const rendered = spawnSync('docker', [
+      'compose', '-f', 'compose.disabled-short-links.yaml', '--env-file',
+      '.env', 'config', '--format', 'json',
+    ], { cwd: root, encoding: 'utf8', env: environment });
+
+    expect(rendered.status, rendered.stderr).toBe(0);
+    const config = JSON.parse(rendered.stdout);
+    expect(Object.keys(config.services).sort()).toEqual(['gateway', 'subconverter']);
+    expect(config.services.gateway.image).toBe(disabledProfileImage);
   });
 
   it('deploys only Gateway and SubConverter when short links are disabled', async () => {

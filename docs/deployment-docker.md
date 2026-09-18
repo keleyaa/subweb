@@ -33,13 +33,13 @@ cd subweb
 
 ## 3. 外层 TLS
 
-外层反向代理将以下三个 HTTPS 虚拟主机全部转发到 `http://127.0.0.1:<SUBWEB_PORT>`：
+短链启用时外层反向代理转发 `APP_DOMAIN`、`API_DOMAIN` 和 `SHORT_DOMAIN` 到 `http://127.0.0.1:<SUBWEB_PORT>`：
 
 - `APP_DOMAIN`：前端和 APP 短链管理接口
 - `API_DOMAIN`：转换 API
 - `SHORT_DOMAIN`：短码跳转
 
-外层代理负责证书、TLS、HSTS 和公网 DNS。必须保留 Host，并按部署者实际代理地址配置 `TRUSTED_PROXY_CIDR`；`configure.sh` 的部署入口接受精确 IPv4 CIDR，不要把任意公网 IPv4 网段配置为可信代理。Gateway 仅在 TCP peer 命中该 CIDR 时信任 `X-Forwarded-For`/`X-Real-IP`，并使用代理链中最右侧的非可信地址作为客户端身份；否则只使用 socket peer。可参考 [外部 TLS 反向代理示例](deployment-nginx.md)，但示例不是项目运行时。
+短链关闭时不设置 `SHORT_DOMAIN` 或短链路由，外层反向代理只转发 `APP_DOMAIN` 和 `API_DOMAIN` 到 `http://127.0.0.1:<SUBWEB_PORT>`。外层代理负责证书、TLS、HSTS 和公网 DNS。必须保留 Host，并按部署者实际代理地址配置 `TRUSTED_PROXY_CIDR`；`configure.sh` 的部署入口接受精确 IPv4 CIDR，不要把任意公网 IPv4 网段配置为可信代理。Gateway 仅在 TCP peer 命中该 CIDR 时信任 `X-Forwarded-For`/`X-Real-IP`，并使用代理链中最右侧的非可信地址作为客户端身份；否则只使用 socket peer。可参考 [外部 TLS 反向代理示例](deployment-nginx.md)，但示例不是项目运行时。
 
 ## 4. 关闭短链
 

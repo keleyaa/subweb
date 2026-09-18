@@ -169,6 +169,20 @@ describe("documentation contract", () => {
     expect(thirdPartySources).not.toContain("v1.13.0 digest 只保留在回滚说明中");
   });
 
+  it("distinguishes external proxy hosts for both short-link deployment profiles", () => {
+    const deployment = read("docs/deployment.md");
+    const docker = read("docs/deployment-docker.md");
+
+    for (const document of [deployment, docker]) {
+      expect(document).toContain(
+        "短链启用时外层反向代理转发 `APP_DOMAIN`、`API_DOMAIN` 和 `SHORT_DOMAIN`",
+      );
+      expect(document).toContain(
+        "短链关闭时不设置 `SHORT_DOMAIN` 或短链路由，外层反向代理只转发 `APP_DOMAIN` 和 `API_DOMAIN`",
+      );
+    }
+  });
+
   it("documents the Gateway image boundary separately from locked dependencies", () => {
     const deployment = read("docs/deployment.md");
 
