@@ -1,6 +1,6 @@
 # 配置
 
-生产配置由 `scripts/configure.sh` 管理并写入根目录 `.env`。文件应为权限 `0600` 的普通文件，不应提交到 Git。Compose 会根据 `SHORT_LINKS_ENABLED` 选择生产入口：启用时使用 `compose.yaml`，关闭时使用 `compose.disabled-short-links.yaml`；两者都通过 `compose.common-services.yaml` 复用 Gateway 与 SubConverter 的公共服务合同。重复执行 `configure.sh` 会重写它校验的部署输入（域名、开关、Gateway 发布镜像、Turnstile 与密钥）以及从 `deploy/versions.lock.json` 生成的外部 runtime 镜像；`.env` 中其他键（`LOG_LEVEL`、转换调优、`EGRESS_ALLOWED_HOSTS`、`MYURLS_LOG_LEVEL` 等）会原样保留。
+生产配置由 `scripts/configure.sh` 管理并写入根目录 `.env`。首次由人安装时，首选不带参数的 `./scripts/subweb.sh install`：它只在交互式终端打开向导，收集域名、短链开关、可选 `TRUSTED_PROXY_CIDR` 和明确的 `vX.Y.Z` Gateway 版本，并在解析为不可变 GHCR manifest digest、显示不含密钥的摘要且收到 `yes` 后才进入既有隐藏密钥流程。显式 `configure.sh` 保留给高级或手动操作。文件应为权限 `0600` 的普通文件，不应提交到 Git。Compose 会根据 `SHORT_LINKS_ENABLED` 选择生产入口：启用时使用 `compose.yaml`，关闭时使用 `compose.disabled-short-links.yaml`；两者都通过 `compose.common-services.yaml` 复用 Gateway 与 SubConverter 的公共服务合同。重复执行 `configure.sh` 会重写它校验的部署输入（域名、开关、Gateway 发布镜像、Turnstile 与密钥）以及从 `deploy/versions.lock.json` 生成的外部 runtime 镜像；`.env` 中其他键（`LOG_LEVEL`、转换调优、`EGRESS_ALLOWED_HOSTS`、`MYURLS_LOG_LEVEL` 等）会原样保留。
 
 ## 必填配置
 
@@ -21,7 +21,7 @@
 
 登录 [Cloudflare Dashboard 的 Turnstile 页面](https://developers.cloudflare.com/turnstile/get-started/widget-management/dashboard/)，选择 **Add widget** 创建 Widget。Hostname 填写 `APP_DOMAIN`；当前 MyUrls v2.0.8 只在创建时触发挑战，SHORT 解析不承载验证组件。创建后复制 Site Key 和 Secret Key。
 
-部署命令中的 `--turnstile-site-key` 接收 Site Key；交互式部署会隐藏提示输入 Secret Key，并将两者写入根目录 `.env`（权限 `0600`）。CI 或非交互环境使用 `--turnstile-secret-key-stdin` 通过标准输入传入 Secret Key。Site Key 会出现在前端运行时配置中，Secret Key 只能保留在服务端，不能提交到 Git、写入镜像或放入日志。
+在首次安装向导中，只有选择启用短链才会询问 SHORT 域名和 `--turnstile-site-key` 对应的 Site Key；确认部署后，既有交互式流程会隐藏提示输入 Secret Key，并将两者写入根目录 `.env`（权限 `0600`）。CI 或非交互环境使用 `--turnstile-secret-key-stdin` 通过标准输入传入 Secret Key。Site Key 会出现在前端运行时配置中，Secret Key 只能保留在服务端，不能提交到 Git、写入镜像或放入日志。
 
 启用短链时只运行一个 `myurls` 实例。Compose 将 `PUBLIC_BASE_URL` 固定为 `https://${SHORT_DOMAIN}`，将 `TURNSTILE_HOSTNAME` 固定为 `${APP_DOMAIN}`，分别控制返回的短链地址和创建挑战的 hostname 校验；两项可以独立配置。Gateway 使用唯一的 `MYURLS_UPSTREAM=http://myurls-edge:3000`，但仍按 Host 隔离路由，不给 SHORT Host 暴露创建或管理 API。
 
@@ -65,7 +65,7 @@ Gateway 运行两个内部 CONNECT 监听，二者都不发布宿主机端口：
 
 ## 代理与镜像
 
-`TRUSTED_PROXY_CIDR` 只应配置外层反向代理的确切来源 CIDR。没有可信代理时不要填写；`configure.sh` 入口当前只接受 IPv4 CIDR。Gateway 仅在 socket peer 命中该 CIDR 时信任 `X-Forwarded-For`/`X-Real-IP`；可信链从右向左取首个非可信地址作为限流和上游身份，其他连接始终使用 socket peer。因此外层代理后未配置该项时，所有请求共享同一个 socket peer 身份，`CONVERSION_MAX_CONCURRENCY_PER_IP` 会取代 `CONVERSION_MAX_CONCURRENCY` 成为实际并发上限（默认 `2`）。`scripts/runtime-image-contract.mjs` 先校验 [版本锁](../deploy/versions.lock.json)，再生成 `REDIS_IMAGE`、`SUBCONVERTER_IMAGE` 和 `MYURLS_IMAGE`；Compose 只接受这些受管值，且不接受手工 `REDIS_IMAGE`、`SUBCONVERTER_IMAGE` 或 `MYURLS_IMAGE` 覆盖。`SUBWEB_IMAGE` 是单独的 Gateway release 输入。不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像；跨合同回滚必须同时恢复 Gateway 路由和前端行为。
+`TRUSTED_PROXY_CIDR` 只应配置外层反向代理的确切来源 CIDR。没有可信代理时不要填写；`configure.sh` 入口当前只接受 IPv4 CIDR。Gateway 仅在 socket peer 命中该 CIDR 时信任 `X-Forwarded-For`/`X-Real-IP`；可信链从右向左取首个非可信地址作为限流和上游身份，其他连接始终使用 socket peer。因此外层代理后未配置该项时，所有请求共享同一个 socket peer 身份，`CONVERSION_MAX_CONCURRENCY_PER_IP` 会取代 `CONVERSION_MAX_CONCURRENCY` 成为实际并发上限（默认 `2`）。`scripts/runtime-image-contract.mjs` 先校验 [版本锁](../deploy/versions.lock.json)，再生成 `REDIS_IMAGE`、`SUBCONVERTER_IMAGE` 和 `MYURLS_IMAGE`；Compose 只接受这些受管值，不能手工覆盖；它不接受手工 `REDIS_IMAGE`、`SUBCONVERTER_IMAGE` 或 `MYURLS_IMAGE` 覆盖。`SUBWEB_IMAGE` 是单独的 Gateway release 输入：自动化可通过 `--version vX.Y.Z` 仅通过 GHCR 解析其不可变 manifest digest。`--image` 是直接传入的、与 registry 无关的不可变 digest 镜像输入；Docker Hub 与 GHCR 的 release digest 是等价的直接来源，例如 `--image ghcr.io/keleyaa/subweb@sha256:<digest>`。`--version` 与 `--image` 互斥，运行时不保存发布版本 tag，`--image` 不接收 `latest` 或发布版本 tag。不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像；跨合同回滚必须同时恢复 Gateway 路由和前端行为。
 
 ## 运行时前端配置
 

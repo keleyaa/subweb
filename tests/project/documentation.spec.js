@@ -251,7 +251,6 @@ describe("documentation contract", () => {
     }
     expect(docker).not.toContain("docker-deploy.sh install");
     expect(docker).toContain("不要执行 `cat .env`");
-    expect(docker).toContain("自动生成");
     expect(local).toContain("http://127.0.0.1:5173/");
     expect(local).toContain("compose.dev.yaml");
     expect(local).toContain("myurls");
@@ -270,16 +269,34 @@ describe("documentation contract", () => {
     );
   });
 
-  it("documents Docker Hub and GHCR as equivalent release sources", () => {
+  it("documents GHCR version resolution and registry-neutral direct digests", () => {
     const readme = read("README.md");
     const docker = read("docs/deployment-docker.md");
+    const configuration = read("docs/configuration.md");
     const maintenance = read("docs/maintenance.md");
+    const versionResolutionToken = "`--version vX.Y.Z` 仅通过 GHCR";
+    const directDigestToken = "`--image` 是直接传入的、与 registry 无关的不可变 digest 镜像输入";
+    const equivalentRegistriesToken = "Docker Hub 与 GHCR 的 release digest";
 
-    for (const document of [readme, docker, maintenance]) {
-      expect(document).toContain("docker.io/keleyaa/subweb");
-      expect(document).toContain("ghcr.io/keleyaa/subweb");
+    for (const document of [readme, docker, configuration]) {
+      expect(document).toContain("--version vX.Y.Z");
+      expect(document).toContain("GHCR");
+      expect(document).toContain("不可变");
+      expect(document).toContain("digest");
+      expect(document).toContain("--image");
+      expect(document).toContain("@sha256:<digest>");
+      expect(document).toContain("`--version` 与 `--image` 互斥");
+      expect(document).toContain(versionResolutionToken);
+      expect(document).toContain(directDigestToken);
+      expect(document).toContain(equivalentRegistriesToken);
+      expect(document.indexOf(versionResolutionToken)).toBeLessThan(
+        document.indexOf(directDigestToken),
+      );
     }
-    expect(docker).toContain("--image ghcr.io/keleyaa/subweb@sha256:<release-manifest-digest>");
+    expect(readme).toContain("不会将版本 tag 直接写入运行时配置");
+    expect(docker).toContain("版本 tag 不会直接写入运行时配置");
+    expect(readme).toContain("`--image` 不接收 `latest` 或发布版本 tag");
+    expect(docker).toContain("不要将 `latest` 或发布版本 tag 传给 `--image`");
     expect(maintenance).toContain("packages: write");
     expect(maintenance).toContain("不可变多平台 manifest digest");
   });
@@ -351,10 +368,9 @@ describe("documentation contract", () => {
       "固定黑色命令界面",
       "assets/readme/command-interface.png",
       "assets/readme/security-architecture.svg",
-      "docker.io/keleyaa/subweb",
       "ghcr.io/keleyaa/subweb",
       "npm run verify:ci",
-      "拒绝可变的 `latest`",
+      "`--image` 不接收 `latest` 或发布版本 tag",
       "docs/validation/docker-integration.md",
       "docs/validation/interface.md",
       "deploy/subconverter/README.md",

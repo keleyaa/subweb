@@ -29,26 +29,35 @@
 
 ### 生产 Docker 部署
 
+首次由人部署时，在交互式终端运行：
+
 ```sh
 git clone https://github.com/keleyaa/subweb.git
 cd subweb
-./scripts/subweb.sh install \
-  --app-domain app.example.com \
-  --api-domain api.example.com \
-  --short-domain short.example.com \
-  --turnstile-site-key YOUR_SITE_KEY \
-  --image ghcr.io/keleyaa/subweb@sha256:<release-manifest-digest>
+./scripts/subweb.sh install
 ```
 
-命令会在终端隐藏提示输入 Turnstile Secret Key，随后自动校验、拉取镜像并启动服务；CI 或非交互环境再使用 `--turnstile-secret-key-stdin`。
+向导依次询问 APP、API 域名和是否启用短链；启用时才询问 SHORT 域名与 Turnstile Site Key；随后可选填 `TRUSTED_PROXY_CIDR`，并要求明确输入 Gateway 发布版本 `vX.Y.Z`。它会将该版本解析为不可变 GHCR manifest digest，显示不含密钥的确认摘要，并且只接受 `yes` 才会继续；之后 Turnstile Secret Key 仍通过既有隐藏输入流程处理。不会选择 `latest`，也不会隐式选择版本。
 
 默认启用短链时会运行 `gateway`、`subconverter`、`myurls` 和 `redis` 四个服务；`myurls` 是唯一的 MyUrls Rust v2.0.8 进程。所有 APP、API、SHORT 域名由外层 TLS 反向代理转发到 `127.0.0.1:<SUBWEB_PORT>`，并保留原始 Host。项目自身不管理 HTTPS 证书、80/443 端口或公网 DNS。
 
-关闭短链时将 `SHORT_LINKS_ENABLED=false` 写入配置，部署入口会选择 `compose.disabled-short-links.yaml`，只运行 Gateway 与 SubConverter，不需要 `SHORT_DOMAIN`、Redis、MyUrls 或 Turnstile 私钥。完整步骤见 [部署索引](docs/deployment.md) 和 [Docker 部署](docs/deployment-docker.md)。
+在向导中关闭短链时，不会询问 SHORT 域名、Turnstile Site Key 或 Secret Key，也不会部署 Redis 或 MyUrls；仅启动 Gateway 与 SubConverter。完整步骤见 [部署索引](docs/deployment.md) 和 [Docker 部署](docs/deployment-docker.md)。
 
-### 预构建镜像
+### 自动化与预构建镜像
 
-Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 是等价的 Gateway 发布来源。使用 [`scripts/docker-deploy.sh`](scripts/docker-deploy.sh) 时必须显式传入 release workflow 产出的多平台 `@sha256` 摘要，拒绝可变的 `latest` 和产品版本标签。SubConverter、MyUrls Rust 和 Redis 的版本与 digest 由 [版本锁](deploy/versions.lock.json) 管理；`configure.sh` 通过 `scripts/runtime-image-contract.mjs` 将它们写入受管 `.env` 值，不能手工覆盖。推送 `vX.Y.Z` 格式的 Git tag 会自动触发 Docker release workflow，也可以手动输入已有 tag 补跑。产品发布版本只由 Git tag 决定，`package.json` 仅是 Node 工具链元数据。
+CI 或其他非交互环境显式提供安装参数。启用短链时，Turnstile Secret Key 必须通过 `--turnstile-secret-key-stdin` 管道传入：
+
+```sh
+printf '%s\n' "$TURNSTILE_SECRET_KEY" | ./scripts/subweb.sh install \
+  --app-domain app.example.com \
+  --api-domain api.example.com \
+  --short-domain short.example.com \
+  --turnstile-site-key "$TURNSTILE_SITE_KEY" \
+  --turnstile-secret-key-stdin \
+  --version vX.Y.Z
+```
+
+`--version vX.Y.Z` 仅通过 GHCR 在配置和部署前解析为不可变 manifest digest，不会将版本 tag 直接写入运行时配置。`--image` 是直接传入的、与 registry 无关的不可变 digest 镜像输入；Docker Hub 与 GHCR 的 release digest 是等价的直接来源，例如 `--image ghcr.io/keleyaa/subweb@sha256:<digest>`。`--version` 与 `--image` 互斥，`--image` 不接收 `latest` 或发布版本 tag。SubConverter、MyUrls Rust 和 Redis 的镜像只从 [版本锁](deploy/versions.lock.json) 的 runtime-image contract 派生，不能手工覆盖。推送 `vX.Y.Z` 格式的 Git tag 会自动触发 Docker release workflow，也可以手动输入已有 tag 补跑。产品发布版本只由 Git tag 决定，`package.json` 仅是 Node 工具链元数据。
 
 ## 架构
 

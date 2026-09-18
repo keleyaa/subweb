@@ -194,15 +194,61 @@ afterEach(async () => {
 });
 
 describe('Docker image quick deployment', () => {
-  it('documents a runnable prebuilt-image installation command', async () => {
-    const documentation = await readFile(new URL('docs/deployment-docker.md', repositoryRoot), 'utf8');
+  it('documents the approved interactive and explicit deployment contracts', async () => {
+    const [readme, documentation, configuration] = await Promise.all([
+      readFile(new URL('README.md', repositoryRoot), 'utf8'),
+      readFile(new URL('docs/deployment-docker.md', repositoryRoot), 'utf8'),
+      readFile(new URL('docs/configuration.md', repositoryRoot), 'utf8'),
+    ]);
 
-    expect(documentation).toContain('./scripts/subweb.sh install \\\n');
+    expect(readme).toMatch(/^\.\/scripts\/subweb\.sh install$/m);
+    expect(documentation).toContain('不带参数的 `./scripts/subweb.sh install`');
+    expect(documentation).toContain('只在交互式终端打开安装向导');
+    expect(documentation).toContain('APP 域名');
+    expect(documentation).toContain('API 域名');
+    expect(configuration).toContain('| `SHORT_LINKS_ENABLED` | `true` | `false` |');
+    expect(documentation).toContain('仅启用短链时询问 SHORT 域名和 Turnstile Site Key');
+    expect(documentation).toContain('`TRUSTED_PROXY_CIDR`');
+    expect(documentation).toContain('Gateway 发布版本 `vX.Y.Z`');
+
+    const releaseResolution = documentation.indexOf('不可变 GHCR manifest digest');
+    const configurationWrite = documentation.indexOf('生成权限为 `0600` 的 `.env`');
+    const imagePull = documentation.indexOf('拉取镜像');
+    expect(releaseResolution).toBeGreaterThan(-1);
+    expect(configurationWrite).toBeGreaterThan(releaseResolution);
+    expect(imagePull).toBeGreaterThan(configurationWrite);
+    expect(documentation).toContain('不含 Turnstile Secret Key 的确认摘要');
+    expect(documentation).toContain('只接受 `yes` 才会继续');
+    expect(documentation).toContain('不会使用 `latest`');
+    expect(documentation).toContain('版本 tag 不会直接写入运行时配置');
+    expect(documentation).toContain('`--image ghcr.io/keleyaa/subweb@sha256:<digest>`');
+    expect(documentation).toContain('`--version` 与 `--image` 互斥');
+    expect(documentation).toContain('不要将 `latest` 或发布版本 tag 传给 `--image`');
+
+    const versionResolutionToken = '`--version vX.Y.Z` 仅通过 GHCR';
+    const directDigestToken = '`--image` 是直接传入的、与 registry 无关的不可变 digest 镜像输入';
+    const equivalentRegistriesToken = 'Docker Hub 与 GHCR 的 release digest';
+    for (const document of [readme, documentation, configuration]) {
+      expect(document).toContain(versionResolutionToken);
+      expect(document).toContain(directDigestToken);
+      expect(document).toContain(equivalentRegistriesToken);
+      expect(document.indexOf(versionResolutionToken)).toBeLessThan(
+        document.indexOf(directDigestToken),
+      );
+    }
+
+    expect(documentation).toContain('`--turnstile-secret-key-stdin`');
+    expect(documentation).toContain('管道传入');
+    expect(configuration).toMatch(/Secret Key.*不能提交到 Git.*放入日志/u);
+
+    expect(documentation).toContain('在首次安装向导中选择 `false` 时');
+    expect(documentation).toContain('不会询问 SHORT 域名、Turnstile Site Key 或 Secret Key');
+    expect(documentation).toContain('不会启动 Redis 或 MyUrls');
+    expect(documentation).toContain('只运行 `gateway` 和 `subconverter`');
+    expect(documentation).toContain('现有显式配置方式保留给高级或手动操作');
+    expect(documentation).toContain('./scripts/configure.sh');
+    expect(documentation).toContain('runtime-image contract 派生，不能手工覆盖');
     expect(documentation).not.toContain('./scripts/docker-deploy.sh install');
-    expect(documentation).toContain('./scripts/configure.sh \\\n  --short-links-enabled false');
-    expect(documentation).toContain('release workflow 产出的多平台 `@sha256:<digest>`');
-    expect(documentation).toContain('--image ghcr.io/keleyaa/subweb@sha256:<release-manifest-digest>');
-    expect(documentation).not.toContain('`--image` 只接受已有 Git tag');
     expect(documentation).not.toContain('SHORT_LINKS_ENABLED=false ./scripts/configure.sh');
   });
 
@@ -265,6 +311,24 @@ describe('Docker image quick deployment', () => {
       'compose -f compose.yaml ps',
       '',
     ].join('\n'));
+  });
+
+  it('accepts Docker Hub and GHCR direct digests without release resolution', async () => {
+    const directImages = [
+      `docker.io/keleyaa/subweb@sha256:${releaseDigest}`,
+      `ghcr.io/keleyaa/subweb@sha256:${releaseDigest}`,
+    ];
+
+    for (const image of directImages) {
+      const root = await makeFixture();
+      const result = runDeploy(root, ['--image', image]);
+
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+      expect(await readFile(join(root, '.env'), 'utf8')).toContain(
+        `SUBWEB_IMAGE=${image}\n`,
+      );
+      expect(await readDockerLog(root)).not.toContain('buildx imagetools inspect');
+    }
   });
 
   it('resolves a release version once and deploys the immutable digest', async () => {
