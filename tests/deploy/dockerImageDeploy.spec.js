@@ -124,6 +124,25 @@ case "$*" in
     fi
     ;;
 esac
+render_compose() {
+  compose_json=$1
+  gateway_image=$(awk -F= '$1 == "SUBWEB_IMAGE" { print substr($0, index($0, "=") + 1); exit }' .env)
+  if [ "\${CAPTURE_COMPOSE_GATEWAY_IMAGE-}" = 1 ]; then
+    printf 'COMPOSE_GATEWAY_IMAGE=%s\\n' "$gateway_image" >> "$DOCKER_LOG"
+  fi
+  node -e '
+const { readFileSync } = require("node:fs");
+const [composePath, gatewayImage] = process.argv.slice(1);
+const compose = JSON.parse(readFileSync(composePath, "utf8"));
+process.stdout.write(JSON.stringify({
+  ...compose,
+  services: {
+    ...compose.services,
+    gateway: { ...compose.services.gateway, image: gatewayImage },
+  },
+}));
+' "$compose_json" "$gateway_image"
+}
 case "$*" in
   'buildx version') exit "\${DOCKER_BUILDX_STATUS:-0}" ;;
   'buildx imagetools inspect ghcr.io/keleyaa/subweb:'*' --format {{.Manifest.Digest}}')
@@ -137,18 +156,13 @@ case "$*" in
   'compose version') exit 0 ;;
   'compose -f compose.yaml config --quiet') exit 0 ;;
    'compose -f compose.yaml config --format json')
-     gateway_image=$(awk -F= '$1 == "SUBWEB_IMAGE" { print substr($0, index($0, "=") + 1); exit }' .env)
-     if [ "\${CAPTURE_COMPOSE_GATEWAY_IMAGE-}" = 1 ]; then
-       printf 'COMPOSE_GATEWAY_IMAGE=%s\\n' "$gateway_image" >> "$DOCKER_LOG"
-     fi
-     sed 's|"image":"docker.io/keleyaa/subweb:sha-2bf1a9f"|"image":"'"$gateway_image"'"|g' "$COMPOSE_JSON_ENABLED"
-     ;;
+      render_compose "$COMPOSE_JSON_ENABLED"
+      ;;
   'compose -f compose.yaml pull gateway subconverter myurls redis') exit "\${DOCKER_PULL_STATUS:-0}" ;;
    'compose -f compose.disabled-short-links.yaml config --quiet') exit 0 ;;
-   'compose -f compose.disabled-short-links.yaml config --format json')
-     gateway_image=$(awk -F= '$1 == "SUBWEB_IMAGE" { print substr($0, index($0, "=") + 1); exit }' .env)
-     sed 's|"image":"docker.io/keleyaa/subweb:sha-2bf1a9f"|"image":"'"$gateway_image"'"|g' "$COMPOSE_JSON_DISABLED"
-     ;;
+    'compose -f compose.disabled-short-links.yaml config --format json')
+      render_compose "$COMPOSE_JSON_DISABLED"
+      ;;
   'compose -f compose.disabled-short-links.yaml pull gateway subconverter') exit "\${DOCKER_PULL_STATUS:-0}" ;;
   'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --remove-orphans --wait') exit 0 ;;
   'compose -f compose.disabled-short-links.yaml ps') exit 0 ;;
@@ -259,18 +273,25 @@ describe('Docker image quick deployment', () => {
     ].join('\n'));
   });
 
-  it('accepts Docker Hub, GHCR, and registry-port direct digests without release resolution', async () => {
+  it.each([
+    ['with short links enabled', []],
+    ['with short links disabled', ['--disable-short-links']],
+  ])('renders each direct digest %s without release resolution', async (_profile, profileArgs) => {
     const directImages = [dockerHubImage, ghcrImage, registryPortImage];
 
     for (const image of directImages) {
       const root = await makeFixture();
-      const result = runDeploy(root, ['--image', image]);
+      const result = runDeploy(root, ['--image', image, ...profileArgs], {
+        CAPTURE_COMPOSE_GATEWAY_IMAGE: '1',
+      });
 
       expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
       expect(await readFile(join(root, '.env'), 'utf8')).toContain(
         `SUBWEB_IMAGE=${image}\n`,
       );
-      expect(await readDockerLog(root)).not.toContain('buildx imagetools inspect');
+      const log = await readDockerLog(root);
+      expect(log).toContain(`COMPOSE_GATEWAY_IMAGE=${image}`);
+      expect(log).not.toContain('buildx imagetools inspect');
     }
   });
 
