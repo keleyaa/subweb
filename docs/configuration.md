@@ -1,6 +1,6 @@
 # 配置
 
-生产配置由 `scripts/configure.sh` 管理并写入根目录 `.env`。文件应为权限 `0600` 的普通文件，不应提交到 Git。Compose 会根据 `SHORT_LINKS_ENABLED` 选择生产文件：启用时使用 `compose.yaml`，关闭时使用 `compose.disabled-short-links.yaml`。重复执行 `configure.sh` 只会重写它校验的部署输入（域名、开关、镜像覆盖、Turnstile 与密钥）；`.env` 中其他键（`LOG_LEVEL`、转换调优、`EGRESS_ALLOWED_HOSTS`、`MYURLS_LOG_LEVEL` 等）会原样保留，不会因为重新部署回到 Compose 默认值。
+生产配置由 `scripts/configure.sh` 管理并写入根目录 `.env`。文件应为权限 `0600` 的普通文件，不应提交到 Git。Compose 会根据 `SHORT_LINKS_ENABLED` 选择生产入口：启用时使用 `compose.yaml`，关闭时使用 `compose.disabled-short-links.yaml`；两者都通过 `compose.common-services.yaml` 复用 Gateway 与 SubConverter 的公共服务合同。重复执行 `configure.sh` 会重写它校验的部署输入（域名、开关、Gateway 发布镜像、Turnstile 与密钥）以及从 `deploy/versions.lock.json` 生成的外部 runtime 镜像；`.env` 中其他键（`LOG_LEVEL`、转换调优、`EGRESS_ALLOWED_HOSTS`、`MYURLS_LOG_LEVEL` 等）会原样保留。
 
 ## 必填配置
 
@@ -65,7 +65,7 @@ Gateway 运行两个内部 CONNECT 监听，二者都不发布宿主机端口：
 
 ## 代理与镜像
 
-`TRUSTED_PROXY_CIDR` 只应配置外层反向代理的确切来源 CIDR。没有可信代理时不要填写；`configure.sh` 入口当前只接受 IPv4 CIDR。Gateway 仅在 socket peer 命中该 CIDR 时信任 `X-Forwarded-For`/`X-Real-IP`；可信链从右向左取首个非可信地址作为限流和上游身份，其他连接始终使用 socket peer。因此外层代理后未配置该项时，所有请求共享同一个 socket peer 身份，`CONVERSION_MAX_CONCURRENCY_PER_IP` 会取代 `CONVERSION_MAX_CONCURRENCY` 成为实际并发上限（默认 `2`）。Compose 为 SubConverter、MyUrls Rust v2 和 Redis 内嵌 [版本锁](../deploy/versions.lock.json) 的默认引用，并由 `validate-compose.sh` 校验解析后的服务镜像；`SUBWEB_IMAGE` 是单独的 Gateway release 输入。不可变的 `*_IMAGE` 环境覆盖本身不等于与版本锁兼容，不能用它绕过 `validate-compose.sh` 或 `subweb.sh upgrade` 的合同校验。不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像；跨合同回滚必须同时恢复 Gateway 路由和前端行为。
+`TRUSTED_PROXY_CIDR` 只应配置外层反向代理的确切来源 CIDR。没有可信代理时不要填写；`configure.sh` 入口当前只接受 IPv4 CIDR。Gateway 仅在 socket peer 命中该 CIDR 时信任 `X-Forwarded-For`/`X-Real-IP`；可信链从右向左取首个非可信地址作为限流和上游身份，其他连接始终使用 socket peer。因此外层代理后未配置该项时，所有请求共享同一个 socket peer 身份，`CONVERSION_MAX_CONCURRENCY_PER_IP` 会取代 `CONVERSION_MAX_CONCURRENCY` 成为实际并发上限（默认 `2`）。`scripts/runtime-image-contract.mjs` 先校验 [版本锁](../deploy/versions.lock.json)，再生成 `REDIS_IMAGE`、`SUBCONVERTER_IMAGE` 和 `MYURLS_IMAGE`；Compose 只接受这些受管值，且不接受手工 `REDIS_IMAGE`、`SUBCONVERTER_IMAGE` 或 `MYURLS_IMAGE` 覆盖。`SUBWEB_IMAGE` 是单独的 Gateway release 输入。不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像；跨合同回滚必须同时恢复 Gateway 路由和前端行为。
 
 ## 运行时前端配置
 

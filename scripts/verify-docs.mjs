@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 export const requiredDocuments = [
   'README.md',
   'docs/architecture.md',
+  'docs/deployment-integration-baseline.md',
   'docs/configuration.md',
   'docs/deployment.md',
   'docs/deployment-local.md',
@@ -85,7 +86,7 @@ export function verifyDocs({ root }) {
     ['docs/deployment-local.md', '--env-file .runtime/local/compose.env'],
     ['docs/validation/local-dev.md', '自动契约验证使用独立的终端和运行时'],
     ['docs/deployment-docker.md', 'Turnstile Site Key 与 Secret Key 必须由部署者提供'],
-    ['docs/configuration.md', '不可变的 `*_IMAGE` 环境覆盖本身不等于与版本锁兼容'],
+    ['docs/configuration.md', '不接受手工 `REDIS_IMAGE`、`SUBCONVERTER_IMAGE` 或 `MYURLS_IMAGE` 覆盖'],
     ['docs/architecture-prd.md', 'npm run verify:production-readiness'],
     ['docs/maintenance.md', 'npm run verify:production-readiness'],
     ['docs/validation/docker-integration.md', '仅替换 SubConverter'],

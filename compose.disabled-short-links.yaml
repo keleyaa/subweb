@@ -1,136 +1,17 @@
 name: subweb
 
-x-runtime-environment: &runtime-environment
-  TZ: Asia/Shanghai
-
-x-runtime-logging: &runtime-logging
-  driver: json-file
-  options:
-    max-size: "10m"
-    max-file: "3"
-
-x-runtime-security: &runtime-security
-  read_only: true
-  cap_drop:
-    - ALL
-  security_opt:
-    - no-new-privileges:true
-  restart: unless-stopped
-  stop_grace_period: 10s
-  logging: *runtime-logging
-
 services:
   gateway:
-    <<: *runtime-security
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: "${SUBWEB_IMAGE:-subweb:local}"
-    user: "65532:65532"
+    extends:
+      file: compose.common-services.yaml
+      service: gateway
     environment:
-      <<: *runtime-environment
-      LISTEN_ADDR: "0.0.0.0:8080"
-      EGRESS_LISTEN_ADDR: "0.0.0.0:25502"
-      LOG_LEVEL: "${LOG_LEVEL:-info}"
-      API_URL: "${API_URL:?Set API_URL with scripts/configure.sh}"
-      APP_DOMAIN: "${APP_DOMAIN:?Set APP_DOMAIN with scripts/configure.sh}"
-      API_DOMAIN: "${API_DOMAIN:?Set API_DOMAIN with scripts/configure.sh}"
       SHORT_LINKS_ENABLED: "false"
-      CUSTOM_BACKEND_ENABLED: "${CUSTOM_BACKEND_ENABLED:-true}"
-      TRUSTED_PROXY_CIDR: "${TRUSTED_PROXY_CIDR:-}"
-      SUBCONVERTER_UPSTREAM: http://subconverter:25500
-      CONVERSION_RATE_LIMIT: "${CONVERSION_RATE_LIMIT:-10}"
-      CONVERSION_RATE_WINDOW_SECONDS: "${CONVERSION_RATE_WINDOW_SECONDS:-60}"
-      CONVERSION_MAX_REQUEST_BYTES: "${CONVERSION_MAX_REQUEST_BYTES:-16384}"
-      CONVERSION_MAX_RESPONSE_BYTES: "${CONVERSION_MAX_RESPONSE_BYTES:-8388608}"
-      CONVERSION_REQUEST_TIMEOUT_MS: "${CONVERSION_REQUEST_TIMEOUT_MS:-10000}"
-      CONVERSION_DNS_TIMEOUT_MS: "${CONVERSION_DNS_TIMEOUT_MS:-2000}"
-      CONVERSION_EGRESS_CONNECT_TIMEOUT_MS: "${CONVERSION_EGRESS_CONNECT_TIMEOUT_MS:-5000}"
-      CONVERSION_MAX_CONCURRENCY: "${CONVERSION_MAX_CONCURRENCY:-4}"
-      CONVERSION_MAX_CONCURRENCY_PER_IP: "${CONVERSION_MAX_CONCURRENCY_PER_IP:-2}"
-    networks:
-      default: {}
-      subconverter-egress: {}
-    ports:
-      - "127.0.0.1:${SUBWEB_PORT:-18080}:8080"
-    healthcheck:
-      test: [CMD, /app/gateway, --healthcheck]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
 
   subconverter:
-    <<: *runtime-security
-    image: "${SUBCONVERTER_IMAGE:-ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423}"
-    # Bootstrap the copied named volume, then the entrypoint execs as UID 101.
-    user: "0:0"
-    cap_add:
-      - CHOWN
-      - SETUID
-      - SETGID
-    environment:
-      <<: *runtime-environment
-      MANAGED_CONFIG_PREFIX: "${API_URL:?Set API_URL with scripts/configure.sh}"
-      SUBCONVERTER_SECURITY_PROFILE: public
-      SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: "false"
-      HTTPS_PROXY: http://gateway:25502
-      https_proxy: http://gateway:25502
-      NO_PROXY: 127.0.0.1,localhost
-      no_proxy: 127.0.0.1,localhost
-    depends_on:
-      gateway:
-        condition: service_healthy
-        restart: true
-    networks:
-      subconverter-egress: {}
-    volumes:
-      - subconverter-runtime:/base
-      - type: bind
-        source: ./deploy/subconverter/gai.conf
-        target: /etc/gai.conf
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./deploy/subconverter/passwd
-        target: /etc/passwd
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./deploy/subconverter/group
-        target: /etc/group
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./scripts/subconverter-docker-entrypoint.sh
-        target: /usr/local/bin/subweb-subconverter-entrypoint
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./scripts/subconverter-log-supervisor.sh
-        target: /usr/local/bin/subweb-log-supervisor
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./scripts/subconverter-log-filter.awk
-        target: /usr/local/bin/subweb-log-filter.awk
-        read_only: true
-        bind:
-          create_host_path: false
-    tmpfs:
-      - /run/subconverter:uid=101,gid=101,mode=0700
-    command: [/bin/sh, /usr/local/bin/subweb-subconverter-entrypoint]
-    healthcheck:
-      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:25500/healthz"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+    extends:
+      file: compose.common-services.yaml
+      service: subconverter
 
 volumes:
   subconverter-runtime:

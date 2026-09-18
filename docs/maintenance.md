@@ -4,7 +4,7 @@
 
 项目运行时由 Go Gateway、SubConverter、一个 MyUrls Rust v2.0.8 实例和 Redis 组成。默认生产部署使用 [`compose.yaml`](../compose.yaml) 四服务 profile；短链关闭时使用明确的 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml) 两服务 profile。外部 TLS 反向代理示例只描述项目外的入口，不属于 Compose 运行时。
 
-发布、回滚和升级必须使用 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 中记录的外部依赖源 commit、OCI tag、manifest digest 和平台 digest。Gateway 发布工作流在推送 `vX.Y.Z` Git tag 时自动触发，也支持手动输入已有 tag 补跑，并同时推送 Docker Hub 与 GHCR；`docker.io/keleyaa/subweb` 和 `ghcr.io/keleyaa/subweb` 是等价来源，生产部署使用该发布证据中的不可变多平台 manifest digest。Git tag 是产品版本的唯一来源；`package.json` 仅描述 Node 工具链，不参与决定发布版本。不要使用 `latest`、产品版本标签或其他可变 tag 作为部署依据，也不要手工拼接外部镜像 digest。
+发布、回滚和升级必须使用 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 中记录的外部依赖源 commit、OCI tag、manifest digest 和平台 digest。`scripts/runtime-image-contract.mjs` 是锁定外部镜像值和完整 release rollback runtime image 列表的唯一生成入口，Compose、部署和 release workflow 共同调用它。Gateway 发布工作流在推送 `vX.Y.Z` Git tag 时自动触发，也支持手动输入已有 tag 补跑，并同时推送 Docker Hub 与 GHCR；`docker.io/keleyaa/subweb` 和 `ghcr.io/keleyaa/subweb` 是等价来源，生产部署使用该发布证据中的不可变多平台 manifest digest。Git tag 是产品版本的唯一来源；`package.json` 仅描述 Node 工具链，不参与决定发布版本。不要使用 `latest`、产品版本标签或其他可变 tag 作为部署依据，也不要手工拼接外部镜像 digest。
 
 发布工作流中的镜像扫描固定 trivy `v0.74.0`，与本地 `npm run verify:release` 使用的版本一致；不要依赖 `aquasecurity/trivy-action` 的默认版本。固定版本的目的不是改变扫描结论：锁定 digest 在该版本前后报告同样的结果，固定只是让结论可复现、与本地验证使用同一漏洞库和检测逻辑，避免一次无关的扫描器升级决定发布范围。
 

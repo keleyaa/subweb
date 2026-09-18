@@ -6,6 +6,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const root = new URL('../../', import.meta.url);
 const composePath = new URL('compose.yaml', root).pathname;
+const disabledComposePath = new URL('compose.disabled-short-links.yaml', root).pathname;
+const commonServicesPath = new URL('compose.common-services.yaml', root).pathname;
 const testSecret = '0123456789abcdef'.repeat(4);
 const composeVariableNames = [
   'API_DOMAIN', 'API_URL', 'APP_DOMAIN', 'CONVERSION_DNS_TIMEOUT_MS',
@@ -31,6 +33,9 @@ const renderCompose = async (extra = []) => {
     'APP_DOMAIN=app.example.com', 'API_DOMAIN=api.example.com', 'API_URL=https://api.example.com',
     'SHORT_DOMAIN=short.example.com', 'SHORT_LINKS_ENABLED=true', 'CUSTOM_BACKEND_ENABLED=true',
     'SUBWEB_IMAGE=subweb:ci', 'SUBWEB_PORT=19080',
+    'REDIS_IMAGE=docker.io/library/redis:7.4.11-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf',
+    'SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423',
+    'MYURLS_IMAGE=ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36',
     `IP_HASH_SECRET=${testSecret}`, `REDIS_PASSWORD=${testSecret}`,
     'TURNSTILE_SITE_KEY=test-site-key', 'TURNSTILE_SECRET_KEY=test-secret-key', ...extra, '',
   ].join('\n'));
@@ -52,6 +57,24 @@ const expectHealthBounds = (service) => {
 };
 
 describe('integrated Compose stack', () => {
+  it('composes shared Gateway and SubConverter service definitions into both production contracts', async () => {
+    const [commonServices, enabledContract, disabledContract] = await Promise.all([
+      readFile(commonServicesPath, 'utf8'),
+      readFile(composePath, 'utf8'),
+      readFile(disabledComposePath, 'utf8'),
+    ]);
+
+    expect(commonServices).toContain('services:');
+    expect(commonServices).toContain('gateway:');
+    expect(commonServices).toContain('subconverter:');
+    for (const contract of [enabledContract, disabledContract]) {
+      expect(contract).toContain('extends:');
+      expect(contract).toContain('file: compose.common-services.yaml');
+      expect(contract).toContain('service: gateway');
+      expect(contract).toContain('service: subconverter');
+    }
+  });
+
   it('renders the sole four-container production topology', async () => {
     const config = await renderCompose();
     expect(Object.keys(config.services).sort()).toEqual(['gateway', 'myurls', 'redis', 'subconverter'].sort());

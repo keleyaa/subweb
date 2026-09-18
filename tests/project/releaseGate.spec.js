@@ -5,7 +5,10 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { verifyEvidence } from '../../scripts/verify-evidence.mjs';
-import { verifyDockerfile } from '../../scripts/verify-production-readiness.mjs';
+import {
+  verifyDockerfile,
+  verifyRenderedCompose,
+} from '../../scripts/verify-production-readiness.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
 
@@ -59,6 +62,9 @@ describe('release evidence and command gate', () => {
       expect(source).toContain(assignment);
     }
     expect(source).toContain('export APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN');
+    expect(source).toContain('runtime_image_env=$(node scripts/runtime-image-contract.mjs env)');
+    expect(source).toContain('export "$name=$value"');
+    expect(source).not.toContain("const fs = require('node:fs');");
     expect(source).not.toContain('compose.hardened.yaml');
     expect(source).not.toContain('request-policy');
     expect(source).not.toContain('Dockerfile.simple');
@@ -82,6 +88,22 @@ describe('release evidence and command gate', () => {
     expect(`${result.stdout}${result.stderr}`).toContain(
       'compose.disabled-short-links.yaml',
     );
+  });
+
+  it('rejects a security override in the rendered Compose profile', () => {
+    const lock = JSON.parse(
+      fs.readFileSync(path.join(root, 'deploy/versions.lock.json'), 'utf8'),
+    );
+    const errors = [];
+
+    verifyRenderedCompose(
+      { services: { gateway: { read_only: false } } },
+      { composeFile: 'compose.yaml', services: ['gateway', 'myurls', 'redis', 'subconverter'] },
+      lock,
+      errors,
+    );
+
+    expect(errors).toContain('gateway must set read_only to true');
   });
 
   it('rejects a Dockerfile that does not declare every locked internal port', async () => {
@@ -223,7 +245,8 @@ describe('release evidence and command gate', () => {
     expect(source).toContain('Published digest mismatch');
     expect(source).toContain('dockerhub_reference');
     expect(source).toContain('ghcr_reference');
-    expect(source).toContain('runtime_images_json=$(node');
+    expect(source).toContain('node scripts/runtime-image-contract.mjs env >> "$GITHUB_ENV"');
+    expect(source).toContain('runtime_images_json=$(node scripts/runtime-image-contract.mjs rollback)');
     expect(source).toContain('--argjson runtime_images "$runtime_images_json"');
     expect(source).toContain('runtime_images: $runtime_images');
     expect(source).toContain('.release_identity.runtime_images | has("redis") and has("subconverter") and has("myurls")');

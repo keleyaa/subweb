@@ -363,18 +363,11 @@ fi
   || fail 'TRUSTED_PROXY_CIDR must be one IPv4 CIDR, for example 172.18.0.1/32.'
 [ ! -d "$env_file" ] || fail '.env target must not be a directory or a symlink to a directory.'
 
+if ! runtime_image_settings=$(node "$SCRIPT_DIRECTORY/runtime-image-contract.mjs" env); then
+  fail "could not derive external runtime images from deploy/versions.lock.json"
+fi
+
 image_settings=
-for image_key in MYURLS_IMAGE REDIS_IMAGE SUBCONVERTER_IMAGE; do
-  if [ -f "$env_file" ]; then
-    if existing_image=$(load_existing_image "$env_file" "$image_key"); then
-      image_settings="${image_settings}${image_key}=${existing_image}
-"
-    else
-      existing_image_status=$?
-      [ "$existing_image_status" -eq 1 ] || fail "Existing $image_key is duplicated or invalid."
-    fi
-  fi
-done
 
 if [ "$subweb_image_seen" -eq 0 ] && [ -f "$env_file" ]; then
   if existing_image=$(load_existing_image "$env_file" SUBWEB_IMAGE); then
@@ -496,7 +489,8 @@ API_URL=$api_url
 SUBWEB_PORT=$subweb_port
 SHORT_LINKS_ENABLED=$short_links_enabled
 CUSTOM_BACKEND_ENABLED=$custom_backend_enabled
-${short_domain_setting}${trusted_proxy_setting}${image_settings}${turnstile_settings}${short_link_secrets}${preserved_settings_block}
+${short_domain_setting}${trusted_proxy_setting}${image_settings}${runtime_image_settings}
+${turnstile_settings}${short_link_secrets}${preserved_settings_block}
 EOF
 
 printf 'Deployment configuration written to %s.\n' "$env_file"

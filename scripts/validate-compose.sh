@@ -43,6 +43,8 @@ if [ ! -f .env ]; then
       'TURNSTILE_SITE_KEY=compose-validation-site-key' \
       'TURNSTILE_SECRET_KEY=compose-validation-secret-key'
   } > "$validation_env_file"
+  node "$script_directory/runtime-image-contract.mjs" env >> "$validation_env_file" \
+    || fail 'could not derive external runtime images from deploy/versions.lock.json'
 fi
 
 compose_config() {

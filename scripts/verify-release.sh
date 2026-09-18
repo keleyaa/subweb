@@ -15,6 +15,25 @@ if [ ! -f .env ]; then
   printf '%s\n' 'release verification environment=ephemeral'
 fi
 
+runtime_image_env=$(node scripts/runtime-image-contract.mjs env)
+unset REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE
+while IFS='=' read -r name value; do
+  case "$name" in
+    REDIS_IMAGE|SUBCONVERTER_IMAGE|MYURLS_IMAGE)
+      export "$name=$value"
+      ;;
+    *)
+      printf '%s\n' "release verification error: unexpected runtime image variable: $name" >&2
+      exit 1
+      ;;
+  esac
+done <<EOF
+$runtime_image_env
+EOF
+: "${REDIS_IMAGE:?Runtime image contract did not provide REDIS_IMAGE}"
+: "${SUBCONVERTER_IMAGE:?Runtime image contract did not provide SUBCONVERTER_IMAGE}"
+: "${MYURLS_IMAGE:?Runtime image contract did not provide MYURLS_IMAGE}"
+
 stage() {
   name=$1
   shift
@@ -34,24 +53,11 @@ stage compose npm run verify:compose
 stage documentation npm run verify:docs
 stage gateway-image docker build --file Dockerfile --tag subweb:release-check .
 
-locked_images=$(node - <<'NODE'
-const fs = require('node:fs');
-const lock = JSON.parse(fs.readFileSync('deploy/versions.lock.json', 'utf8'));
-for (const service of ['redis', 'subconverter', 'myurls']) {
-  const image = lock.services[service].image;
-  console.log(`${image.reference}@${image.digest}`);
-}
-NODE
-)
-set -- subweb:release-check $locked_images
-candidate_image=$1
-redis_image=$2
-subconverter_image=$3
-myurls_image=$4
+candidate_image=subweb:release-check
 stage image-security ./scripts/verify-image-security.sh "$candidate_image"
-stage image-security-myurls ./scripts/verify-image-security.sh --ignorefile .trivyignore.myurls "$myurls_image"
-stage image-security-redis ./scripts/verify-image-security.sh --ignorefile .trivyignore.redis "$redis_image"
-stage image-security-subconverter ./scripts/verify-image-security.sh --ignorefile .trivyignore.subconverter "$subconverter_image"
+stage image-security-myurls ./scripts/verify-image-security.sh --ignorefile .trivyignore.myurls "$MYURLS_IMAGE"
+stage image-security-redis ./scripts/verify-image-security.sh --ignorefile .trivyignore.redis "$REDIS_IMAGE"
+stage image-security-subconverter ./scripts/verify-image-security.sh --ignorefile .trivyignore.subconverter "$SUBCONVERTER_IMAGE"
 stage evidence node scripts/verify-evidence.mjs
 
 printf '%s\n' 'release verification=passed'
