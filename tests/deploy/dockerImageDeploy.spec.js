@@ -14,6 +14,10 @@ const lockedImages = {
 };
 const releaseVersion = 'v1.2.3';
 const releaseDigest = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+const dockerHubImage = `docker.io/keleyaa/subweb@sha256:${releaseDigest}`;
+const ghcrImage = `ghcr.io/keleyaa/subweb@sha256:${releaseDigest}`;
+const registryPortImage = `registry.example:5000/repository@sha256:${releaseDigest}`;
+const immutableDigestError = 'Docker deployment error: --image must use an immutable sha256 digest.\n';
 
 const enabledCompose = {
   networks: {
@@ -225,18 +229,6 @@ describe('Docker image quick deployment', () => {
     expect(documentation).toContain('`--version` 与 `--image` 互斥');
     expect(documentation).toContain('不要将 `latest` 或发布版本 tag 传给 `--image`');
 
-    const versionResolutionToken = '`--version vX.Y.Z` 仅通过 GHCR';
-    const directDigestToken = '`--image` 是直接传入的、与 registry 无关的不可变 digest 镜像输入';
-    const equivalentRegistriesToken = 'Docker Hub 与 GHCR 的 release digest';
-    for (const document of [readme, documentation, configuration]) {
-      expect(document).toContain(versionResolutionToken);
-      expect(document).toContain(directDigestToken);
-      expect(document).toContain(equivalentRegistriesToken);
-      expect(document.indexOf(versionResolutionToken)).toBeLessThan(
-        document.indexOf(directDigestToken),
-      );
-    }
-
     expect(documentation).toContain('`--turnstile-secret-key-stdin`');
     expect(documentation).toContain('管道传入');
     expect(configuration).toMatch(/Secret Key.*不能提交到 Git.*放入日志/u);
@@ -292,7 +284,7 @@ describe('Docker image quick deployment', () => {
 
   it('persists the selected image and pulls the three default services', async () => {
     const root = await makeFixture();
-    const image = 'docker.io/keleyaa/subweb:sha-2bf1a9f';
+    const image = dockerHubImage;
 
     const result = runDeploy(root, ['--image', image]);
 
@@ -313,11 +305,8 @@ describe('Docker image quick deployment', () => {
     ].join('\n'));
   });
 
-  it('accepts Docker Hub and GHCR direct digests without release resolution', async () => {
-    const directImages = [
-      `docker.io/keleyaa/subweb@sha256:${releaseDigest}`,
-      `ghcr.io/keleyaa/subweb@sha256:${releaseDigest}`,
-    ];
+  it('accepts Docker Hub, GHCR, and registry-port direct digests without release resolution', async () => {
+    const directImages = [dockerHubImage, ghcrImage, registryPortImage];
 
     for (const image of directImages) {
       const root = await makeFixture();
@@ -371,7 +360,7 @@ describe('Docker image quick deployment', () => {
 
     const result = runDeploy(root, [
       '--version', releaseVersion,
-      '--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f',
+      '--image', dockerHubImage,
     ]);
 
     expect(result.status).not.toBe(0);
@@ -444,7 +433,7 @@ SHORT_DOMAIN=short.example.com
 API_URL=https://api.example.com
 SHORT_LINKS_ENABLED=true
 CUSTOM_BACKEND_ENABLED=true
-SUBWEB_IMAGE=docker.io/keleyaa/subweb:sha-2bf1a9f
+SUBWEB_IMAGE=${dockerHubImage}
 TURNSTILE_SITE_KEY=test-site-key
 TURNSTILE_SECRET_KEY=test-secret-key
 IP_HASH_SECRET=${'a'.repeat(64)}
@@ -453,7 +442,7 @@ EOF
 `);
     await chmod(join(root, 'scripts/configure.sh'), 0o755);
 
-    const result = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f'], {
+    const result = runDeploy(root, ['--image', dockerHubImage], {
       CONFIGURE_ARGS_LOG: argsLog,
       CONFIGURE_STDIN_LOG: stdinLog,
     });
@@ -466,7 +455,7 @@ EOF
 
   it('does not let an inherited Gateway image override the selected deployment image', async () => {
     const root = await makeFixture();
-    const selectedImage = 'docker.io/keleyaa/subweb:sha-2bf1a9f';
+    const selectedImage = dockerHubImage;
     const result = runDeploy(root, ['--image', selectedImage], {
       CAPTURE_SUBWEB_IMAGE: '1',
       SUBWEB_IMAGE: 'docker.io/attacker/subweb:sha-deadbee',
@@ -479,38 +468,49 @@ EOF
     expect(log).not.toContain('SUBWEB_IMAGE=docker.io/attacker/subweb:sha-deadbee');
   });
 
-  it('requires an immutable Gateway image instead of silently deploying latest', async () => {
+  it('requires an immutable Gateway digest instead of silently deploying a tag', async () => {
     const root = await makeFixture();
 
     const missing = runDeploy(root);
     const mutable = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:latest']);
 
     expect(missing.status).not.toBe(0);
-    expect(missing.stderr).toContain('--image is required');
+    expect(missing.stderr).toBe(
+      'Docker deployment error: --image is required and must use an immutable sha256 digest.\n',
+    );
     expect(mutable.status).not.toBe(0);
-    expect(mutable.stderr).toContain('immutable sha-* tag or sha256 digest');
-    const invalidProxy = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f', '--trusted-proxy-cidr', '0.0.0.0/0']);
+    expect(mutable.stderr).toBe(immutableDigestError);
+    const invalidProxy = runDeploy(root, [
+      '--image', dockerHubImage,
+      '--trusted-proxy-cidr', '0.0.0.0/0',
+    ]);
     expect(invalidProxy.status).not.toBe(0);
     expect(invalidProxy.stderr).toContain('TRUSTED_PROXY_CIDR');
     const invalidProxyLog = await readFile(join(root, 'docker.log'), 'utf8');
     expect(invalidProxyLog).toBe('compose version\n');
   });
 
-  it('rejects a mutable image before reading Turnstile input or starting deployment', async () => {
+  it.each([
+    ['sha tag', 'docker.io/keleyaa/subweb:sha-2bf1a9f'],
+    ['latest tag', 'docker.io/keleyaa/subweb:latest'],
+    ['tagged digest', `docker.io/keleyaa/subweb:sha-2bf1a9f@sha256:${releaseDigest}`],
+    ['registry port 0', `registry.example:0/repository@sha256:${releaseDigest}`],
+    ['registry port 65536', `registry.example:65536/repository@sha256:${releaseDigest}`],
+  ])('rejects a %s before reading Turnstile input or starting deployment', async (_kind, image) => {
     const root = await makeFixture();
 
-    const result = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:latest'], {}, '');
+    const result = runDeploy(root, ['--image', image], {}, '');
 
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('immutable sha-* tag or sha256 digest');
+    expect(result.stderr).toBe(immutableDigestError);
     expect(result.stderr).not.toContain('Turnstile secret key must be provided on stdin.');
     expect(await readFile(join(root, '.env'), 'utf8').catch(() => '')).toBe('');
-    expect(await readDockerLog(root)).not.toMatch(/compose|pull|up/);
+    expect(await readDockerLog(root)).toBe('');
   });
 
   it('deploys only Gateway and SubConverter when short links are disabled', async () => {
     const root = await makeFixture();
-    const result = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f', '--disable-short-links'], {}, '');
+    const result = runDeploy(root, ['--image', dockerHubImage, '--disable-short-links'], {}, '');
 
     expect(result.status, `${result.stdout}\\n${result.stderr}`).toBe(0);
     const env = await readFile(join(root, '.env'), 'utf8');
@@ -525,7 +525,7 @@ EOF
   it('does not start containers when pulling an image fails', async () => {
     const root = await makeFixture();
 
-    const result = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f'], { DOCKER_PULL_STATUS: '23' });
+    const result = runDeploy(root, ['--image', dockerHubImage], { DOCKER_PULL_STATUS: '23' });
 
     expect(result.status).not.toBe(0);
     const log = await readFile(join(root, 'docker.log'), 'utf8');

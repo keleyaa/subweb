@@ -117,7 +117,7 @@ done
 if [ "$version_seen" -eq 1 ] && [ "$image_seen" -eq 1 ]; then
   fail '--version and --image may not be used together.'
 fi
-[ "$image_seen" -eq 1 ] || [ "$version_seen" -eq 1 ] || fail '--image is required and must use an immutable sha-* tag or sha256 digest.'
+[ "$image_seen" -eq 1 ] || [ "$version_seen" -eq 1 ] || fail '--image is required and must use an immutable sha256 digest.'
 if [ "$version_seen" -eq 1 ]; then
   if ! image=$(resolve_release_image "$version" </dev/null); then
     exit 1
@@ -125,14 +125,18 @@ if [ "$version_seen" -eq 1 ]; then
   image_seen=1
 fi
 
-case "$image" in
-  *@sha256:*)
-    printf '%s\n' "$image" | LC_ALL=C grep -Eq '^[^[:space:]@]+@sha256:[0-9a-f]{64}$' \
-      || fail '--image must use an immutable sha-* tag or sha256 digest.'
-    ;;
-  *)
-    printf '%s\n' "$image" | LC_ALL=C grep -Eq '^[^[:space:]@]+:sha-[0-9a-f]{7,64}$' \
-      || fail '--image must use an immutable sha-* tag or sha256 digest.'
+printf '%s\n' "$image" | LC_ALL=C grep -Eq '^[^[:space:]@/:]+(:[0-9]+)?(/[^[:space:]@/:]+)+@sha256:[0-9a-f]{64}$' \
+  || fail '--image must use an immutable sha256 digest.'
+
+registry=${image%%/*}
+case "$registry" in
+  *:*)
+    registry_port=${registry##*:}
+    case "$registry_port" in
+      ''|*[!0-9]*) fail '--image must use an immutable sha256 digest.' ;;
+    esac
+    [ "$registry_port" -ge 1 ] 2>/dev/null && [ "$registry_port" -le 65535 ] 2>/dev/null \
+      || fail '--image must use an immutable sha256 digest.'
     ;;
 esac
 
