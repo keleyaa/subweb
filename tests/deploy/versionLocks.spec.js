@@ -6,6 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { validateVersionLocks } from '../../scripts/verify-version-locks.mjs';
+import {
+  renderRuntimeImageEnv,
+  resolveRuntimeImages,
+  runtimeImagesForRollback,
+} from '../../scripts/runtime-image-contract.mjs';
 
 const lockPath = fileURLToPath(
   new URL('../../deploy/versions.lock.json', import.meta.url),
@@ -155,6 +160,33 @@ describe('integrated service artifact locks', () => {
 
   it('passes the reusable production lock validator', () => {
     expect(validateVersionLocks(lock)).toEqual([]);
+  });
+
+  it('derives Compose and rollback runtime images from the validated lock', () => {
+    const images = resolveRuntimeImages(lock);
+
+    expect(images).toEqual({
+      REDIS_IMAGE: `${lock.services.redis.image.reference}@${lock.services.redis.image.digest}`,
+      SUBCONVERTER_IMAGE: `${lock.services.subconverter.image.reference}@${lock.services.subconverter.image.digest}`,
+      MYURLS_IMAGE: `${lock.services.myurls.image.reference}@${lock.services.myurls.image.digest}`,
+    });
+    expect(renderRuntimeImageEnv(images)).toBe(
+      `${Object.entries(images).map(([name, image]) => `${name}=${image}`).join('\n')}\n`,
+    );
+    expect(runtimeImagesForRollback(lock)).toEqual({
+      redis: lock.services.redis.image,
+      subconverter: lock.services.subconverter.image,
+      myurls: lock.services.myurls.image,
+    });
+  });
+
+  it('refuses to derive runtime images from an invalid lock', () => {
+    const candidate = structuredClone(lock);
+    candidate.services.redis.image.digest = 'sha256:bad';
+
+    expect(() => resolveRuntimeImages(candidate)).toThrow(
+      'services.redis.image.digest must be a sha256 digest',
+    );
   });
 
   it('rejects a Redis source or image outside the approved 7.4.11 Alpine lock', () => {

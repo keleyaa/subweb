@@ -1,6 +1,6 @@
 # Docker 部署
 
-Docker 生产部署使用 [`compose.yaml`](../compose.yaml) 的唯一启用短链 profile。Gateway 是项目自有的 Go 单二进制，负责 Host 路由、静态资源、转换请求策略、Redis 限流、MyUrls 适配和内部 HTTPS CONNECT egress。SubConverter、一个 MyUrls Rust v2 实例和 Redis 作为独立服务运行。
+Docker 生产部署由公共服务合同 [`compose.common-services.yaml`](../compose.common-services.yaml) 和两个显式入口组合：启用短链使用 [`compose.yaml`](../compose.yaml)，关闭短链使用 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml)。Gateway 是项目自有的 Go 单二进制，负责 Host 路由、静态资源、转换请求策略、Redis 限流、MyUrls 适配和内部 HTTPS CONNECT egress。SubConverter、一个 MyUrls Rust v2 实例和 Redis 作为独立服务运行。
 
 公网部署必须在外层 HTTPS 代理启用认证（例如 Cloudflare Access、VPN 或 Basic Auth），并且不要直接把容器端口发布到公网。若不需要短链，应关闭短链；短链目标会按 TTL 写入 Redis，持有码即可访问。
 
@@ -18,7 +18,7 @@ cd subweb
   --image ghcr.io/keleyaa/subweb@sha256:<release-manifest-digest>
 ```
 
-命令会在终端隐藏提示输入 Turnstile Secret Key，然后自动生成权限为 `0600` 的 `.env`、校验 Compose、拉取镜像并等待服务健康。启用短链时，Turnstile Site Key 与 Secret Key 必须由部署者提供；CI 或非交互环境将私钥通过 `--turnstile-secret-key-stdin` 传入。默认值为 `SHORT_LINKS_ENABLED=true` 与 `CUSTOM_BACKEND_ENABLED=true`；Redis 密码与 IP 哈希密钥由脚本生成或保留已有值，除非显式要求轮换，不要在部署过程中更换它们。
+命令会在终端隐藏提示输入 Turnstile Secret Key，然后自动生成权限为 `0600` 的 `.env`、校验 Compose、拉取镜像并等待服务健康。启用短链时，Turnstile Site Key 与 Secret Key 必须由部署者提供；CI 或非交互环境将私钥通过 `--turnstile-secret-key-stdin` 传入。默认值为 `SHORT_LINKS_ENABLED=true` 与 `CUSTOM_BACKEND_ENABLED=true`；Redis 密码与 IP 哈希密钥由脚本生成或保留已有值，除非显式要求轮换，不要在部署过程中更换它们。`configure.sh` 同时从 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 生成三项外部 runtime 镜像值。
 
 ## 2. 手动验证与启动
 
@@ -62,7 +62,7 @@ cd subweb
 
 使用预构建 Gateway 时必须显式传入不可变引用：
 
-`--image` 只接受 release workflow 产出的多平台 `@sha256:<digest>`，拒绝 `latest`、产品版本标签和未经验证的 CLI 参数。Git tag `vX.Y.Z` 只决定发布身份；Docker Hub `docker.io/keleyaa/subweb` 与 GHCR `ghcr.io/keleyaa/subweb` 是等价发布来源，生产部署应使用发布证据中该 tag 对应的不可变 manifest digest。推送匹配 `vX.Y.Z` 的 Git tag 会自动触发 Docker release workflow；也可以通过 `workflow_dispatch` 的 `version` 输入手动补跑已有 tag。普通分支推送和 Pull Request 不会触发该工作流。SubConverter、MyUrls 和 Redis 的锁定版本、平台 digest 与来源以 [版本锁](../deploy/versions.lock.json) 为准；Gateway 使用当前 release 提供的不可变引用。
+`--image` 只接受 release workflow 产出的多平台 `@sha256:<digest>`，拒绝 `latest`、产品版本标签和未经验证的 CLI 参数。Git tag `vX.Y.Z` 只决定发布身份；Docker Hub `docker.io/keleyaa/subweb` 与 GHCR `ghcr.io/keleyaa/subweb` 是等价发布来源，生产部署应使用发布证据中该 tag 对应的不可变 manifest digest。推送匹配 `vX.Y.Z` 的 Git tag 会自动触发 Docker release workflow；也可以通过 `workflow_dispatch` 的 `version` 输入手动补跑已有 tag。普通分支推送和 Pull Request 不会触发该工作流。SubConverter、MyUrls 和 Redis 的锁定版本、平台 digest 与来源以 [版本锁](../deploy/versions.lock.json) 为准；`scripts/runtime-image-contract.mjs` 为 Compose、部署和 release rollback 生成同一组不可变引用，Gateway 使用当前 release 提供的不可变引用。
 
 CI 或其他非交互环境使用管道传入私钥，不需要 heredoc：
 

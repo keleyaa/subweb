@@ -97,18 +97,7 @@ jobs:
       - name: Resolve external runtime images
         shell: bash
         run: |
-          node <<'NODE' >> "$GITHUB_ENV"
-          const fs = require('node:fs');
-          const lock = JSON.parse(fs.readFileSync('deploy/versions.lock.json', 'utf8'));
-          for (const [variable, service] of [
-            ['REDIS_IMAGE', 'redis'],
-            ['SUBCONVERTER_IMAGE', 'subconverter'],
-            ['MYURLS_IMAGE', 'myurls'],
-          ]) {
-            const image = lock.services[service].image;
-            console.log(`${variable}=${image.reference}@${image.digest}`);
-          }
-          NODE
+          node scripts/runtime-image-contract.mjs env >> "$GITHUB_ENV"
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -315,15 +304,7 @@ jobs:
             echo "Docker image digest is missing or malformed" >&2
             exit 1
           }
-          runtime_images_json=$(node - <<'NODE'
-          const fs = require('node:fs');
-          const lock = JSON.parse(fs.readFileSync('deploy/versions.lock.json', 'utf8'));
-          const services = Object.fromEntries(
-            ['redis', 'subconverter', 'myurls'].map((service) => [service, lock.services[service].image]),
-          );
-          process.stdout.write(JSON.stringify(services));
-          NODE
-          )
+          runtime_images_json=$(node scripts/runtime-image-contract.mjs rollback)
           manifest_path="$RUNNER_TEMP/rollback-manifest.json"
           jq -n \
             --arg source_sha "$SOURCE_SHA" \

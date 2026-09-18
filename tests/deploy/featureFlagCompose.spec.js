@@ -19,6 +19,7 @@ const renderDisabledCompose = async () => {
     'SHORT_DOMAIN=short.example.com',
     'CUSTOM_BACKEND_ENABLED=false',
     'SUBWEB_IMAGE=subweb:ci',
+    'SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423',
     'SUBWEB_PORT=19081',
     '',
   ].join('\n'));

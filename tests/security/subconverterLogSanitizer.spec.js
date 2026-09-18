@@ -103,17 +103,20 @@ describe('SubConverter log sanitization', () => {
   it('uses the sanitizer and a transient privacy configuration in both unified deployment profiles', async () => {
     await expect(access(rootFile('scripts/subconverter-docker-entrypoint.sh'))).resolves.toBeUndefined();
     await expect(access(rootFile('scripts/subconverter-log-filter.awk'))).resolves.toBeUndefined();
-    const [enabledCompose, disabledCompose] = await Promise.all([
+    const [enabledCompose, disabledCompose, commonServices] = await Promise.all([
       readFile(rootFile('compose.yaml'), 'utf8'),
       readFile(rootFile('compose.disabled-short-links.yaml'), 'utf8'),
+      readFile(rootFile('compose.common-services.yaml'), 'utf8'),
     ]);
 
     for (const compose of [enabledCompose, disabledCompose]) {
-      expect(compose).toContain('/usr/local/bin/subweb-subconverter-entrypoint');
-      expect(compose).toContain('/usr/local/bin/subweb-log-supervisor');
-      expect(compose).toContain('/usr/local/bin/subweb-log-filter.awk');
-      expect(compose).toContain('subconverter-docker-entrypoint');
-      expect(compose).toContain('read_only: true');
+      expect(compose).toContain('file: compose.common-services.yaml');
+      expect(compose).toContain('service: subconverter');
     }
+    expect(commonServices).toContain('/usr/local/bin/subweb-subconverter-entrypoint');
+    expect(commonServices).toContain('/usr/local/bin/subweb-log-supervisor');
+    expect(commonServices).toContain('/usr/local/bin/subweb-log-filter.awk');
+    expect(commonServices).toContain('subconverter-docker-entrypoint');
+    expect(commonServices).toContain('read_only: true');
   });
 });

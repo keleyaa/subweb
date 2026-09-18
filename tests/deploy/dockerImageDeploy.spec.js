@@ -89,10 +89,13 @@ const makeFixture = async () => {
   for (const file of [
     'scripts/docker-deploy.sh',
     'scripts/configure.sh',
-    'scripts/validate-compose.sh',
-    'scripts/lib/config.sh',
-    'compose.yaml',
-    'deploy/versions.lock.json',
+     'scripts/validate-compose.sh',
+     'scripts/runtime-image-contract.mjs',
+     'scripts/verify-version-locks.mjs',
+      'scripts/lib/config.sh',
+      'compose.yaml',
+      'compose.common-services.yaml',
+      'deploy/versions.lock.json',
     'deploy/redis/redis.conf.template',
   ]) {
     await cp(new URL(file, repositoryRoot), join(root, file));
@@ -173,6 +176,44 @@ describe('Docker image quick deployment', () => {
     expect(documentation).not.toContain('SHORT_LINKS_ENABLED=false ./scripts/configure.sh');
   });
 
+  it('resolves shared services in the image-deployment fixture', async () => {
+    const root = await makeFixture();
+    const envPath = join(root, 'compose.env');
+    await writeFile(envPath, [
+      'APP_DOMAIN=example.com',
+      'API_DOMAIN=api.example.com',
+      'API_URL=https://api.example.com',
+      'SHORT_DOMAIN=short.example.com',
+      'SHORT_LINKS_ENABLED=true',
+      'CUSTOM_BACKEND_ENABLED=true',
+      'SUBWEB_IMAGE=docker.io/keleyaa/subweb:sha-2bf1a9f',
+      `REDIS_IMAGE=${lockedImages.redis}`,
+      `SUBCONVERTER_IMAGE=${lockedImages.subconverter}`,
+      `MYURLS_IMAGE=${lockedImages.myurls}`,
+      `IP_HASH_SECRET=${'a'.repeat(64)}`,
+      `REDIS_PASSWORD=${'b'.repeat(64)}`,
+      'TURNSTILE_SITE_KEY=test-site-key',
+      'TURNSTILE_SECRET_KEY=test-secret-key',
+      '',
+    ].join('\n'));
+    const environment = { ...process.env };
+    for (const name of [
+      'APP_DOMAIN', 'API_DOMAIN', 'API_URL', 'SHORT_DOMAIN', 'SHORT_LINKS_ENABLED',
+      'CUSTOM_BACKEND_ENABLED', 'SUBWEB_IMAGE', 'REDIS_IMAGE', 'SUBCONVERTER_IMAGE',
+      'MYURLS_IMAGE', 'IP_HASH_SECRET', 'REDIS_PASSWORD', 'TURNSTILE_SITE_KEY',
+      'TURNSTILE_SECRET_KEY',
+    ]) delete environment[name];
+
+    const result = spawnSync(
+      'docker',
+      ['compose', '-f', 'compose.yaml', '--env-file', envPath, 'config', '--format', 'json'],
+      { cwd: root, encoding: 'utf8', env: environment },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout).services.subconverter.image).toBe(lockedImages.subconverter);
+  });
+
   it('persists the selected image and pulls the three default services', async () => {
     const root = await makeFixture();
     const image = 'docker.io/keleyaa/subweb:sha-2bf1a9f';
@@ -180,8 +221,12 @@ describe('Docker image quick deployment', () => {
     const result = runDeploy(root, ['--image', image]);
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
-    expect(await readFile(join(root, '.env'), 'utf8')).toContain(`SUBWEB_IMAGE=${image}\n`);
-    expect(await readFile(join(root, 'docker.log'), 'utf8')).toBe([
+     const environment = await readFile(join(root, '.env'), 'utf8');
+     expect(environment).toContain(`SUBWEB_IMAGE=${image}\n`);
+     expect(environment).toContain('REDIS_IMAGE=docker.io/library/redis:7.4.11-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf\n');
+     expect(environment).toContain('SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423\n');
+     expect(environment).toContain('MYURLS_IMAGE=ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36\n');
+     expect(await readFile(join(root, 'docker.log'), 'utf8')).toBe([
       'compose version',
       'compose -f compose.yaml config --quiet',
       'compose -f compose.yaml config --format json',

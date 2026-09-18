@@ -48,7 +48,7 @@ cd subweb
 
 ### 预构建镜像
 
-Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 是等价的 Gateway 发布来源。使用 [`scripts/docker-deploy.sh`](scripts/docker-deploy.sh) 时必须显式传入 release workflow 产出的多平台 `@sha256` 摘要，拒绝可变的 `latest` 和产品版本标签。SubConverter、MyUrls Rust 和 Redis 的版本与 digest 由 [版本锁](deploy/versions.lock.json) 管理。推送 `vX.Y.Z` 格式的 Git tag 会自动触发 Docker release workflow，也可以手动输入已有 tag 补跑。产品发布版本只由 Git tag 决定，`package.json` 仅是 Node 工具链元数据。
+Docker Hub 的 `docker.io/keleyaa/subweb` 与 GHCR 的 `ghcr.io/keleyaa/subweb` 是等价的 Gateway 发布来源。使用 [`scripts/docker-deploy.sh`](scripts/docker-deploy.sh) 时必须显式传入 release workflow 产出的多平台 `@sha256` 摘要，拒绝可变的 `latest` 和产品版本标签。SubConverter、MyUrls Rust 和 Redis 的版本与 digest 由 [版本锁](deploy/versions.lock.json) 管理；`configure.sh` 通过 `scripts/runtime-image-contract.mjs` 将它们写入受管 `.env` 值，不能手工覆盖。推送 `vX.Y.Z` 格式的 Git tag 会自动触发 Docker release workflow，也可以手动输入已有 tag 补跑。产品发布版本只由 Git tag 决定，`package.json` 仅是 Node 工具链元数据。
 
 ## 架构
 
@@ -102,6 +102,7 @@ git diff --check
 **使用与配置**
 
 - [架构](docs/architecture.md)
+- [部署契约整合基线](docs/deployment-integration-baseline.md)
 - [配置](docs/configuration.md)
 - [远程配置来源](docs/remote-config-sources.md)
 - [界面设计](docs/interface-design.md)

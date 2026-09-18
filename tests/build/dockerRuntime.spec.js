@@ -27,28 +27,33 @@ describe('Docker runtime contract', () => {
   });
 
   it('provides a four-service Compose deployment with one loopback entrypoint', async () => {
-    const compose = await readFile(rootFile('compose.yaml'), 'utf8');
+    const [compose, commonServices] = await Promise.all([
+      readFile(rootFile('compose.yaml'), 'utf8'),
+      readFile(rootFile('compose.common-services.yaml'), 'utf8'),
+    ]);
 
-    expect(compose).toContain('x-runtime-environment: &runtime-environment');
-    expect(compose).toContain('TZ: Asia/Shanghai');
-    expect(compose).toContain('x-runtime-logging: &runtime-logging');
-    expect(compose).toContain('driver: json-file');
-    expect(compose).toContain('max-size: "10m"');
-    expect(compose).toContain('max-file: "3"');
     expect(compose).toContain('gateway:');
     expect(compose).toContain('myurls:');
     expect(compose).toContain('redis:');
     expect(compose).toContain('subconverter:');
+    expect(compose).toContain('file: compose.common-services.yaml');
     expect(compose).not.toContain('request-policy:');
     expect(compose).not.toContain('profiles:');
-    expect(compose).toContain('127.0.0.1:${SUBWEB_PORT:-18080}:8080');
     expect(compose).toContain('redis-data:');
-    expect(compose).toContain('no-new-privileges:true');
-    expect(compose).toContain('cap_drop:');
-    expect(compose).toContain('- ALL');
     expect(compose).toContain(
-      'image: "${MYURLS_IMAGE:-ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36}"',
+      'image: "${MYURLS_IMAGE:?Generate deployment configuration with scripts/configure.sh}"',
     );
+
+    expect(commonServices).toContain('x-runtime-environment: &runtime-environment');
+    expect(commonServices).toContain('TZ: Asia/Shanghai');
+    expect(commonServices).toContain('x-runtime-logging: &runtime-logging');
+    expect(commonServices).toContain('driver: json-file');
+    expect(commonServices).toContain('max-size: "10m"');
+    expect(commonServices).toContain('max-file: "3"');
+    expect(commonServices).toContain('127.0.0.1:${SUBWEB_PORT:-18080}:8080');
+    expect(commonServices).toContain('no-new-privileges:true');
+    expect(commonServices).toContain('cap_drop:');
+    expect(commonServices).toContain('- ALL');
   });
 
   it('ships a distroless Gateway healthcheck verifier without the retired combined image', async () => {

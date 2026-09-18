@@ -110,6 +110,9 @@ describe('single HTTP deployment configuration', () => {
       APP_DOMAIN: 'example.com', API_DOMAIN: 'api.example.com', SHORT_DOMAIN: 'short.example.com',
       API_URL: 'https://api.example.com',
       TURNSTILE_SITE_KEY: 'test-site-key', TURNSTILE_SECRET_KEY: 'test-secret-key',
+      REDIS_IMAGE: 'docker.io/library/redis:7.4.11-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf',
+      MYURLS_IMAGE: 'ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36',
+      SUBCONVERTER_IMAGE: 'ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423',
     });
     expect(env.TURNSTILE_HOSTNAME).toBeUndefined();
     for (const removed of ['COMPOSE_PROFILES', 'DOMAIN_MODE', 'PUBLIC_SCHEME', 'GATEWAY_MODE', 'TLS_CERT_PATH', 'TLS_KEY_PATH']) expect(env[removed]).toBeUndefined();
@@ -170,7 +173,7 @@ describe('single HTTP deployment configuration', () => {
     expect(environment.SHORT_DOMAIN).toBe('short.example.com');
   });
 
-  it('preserves valid existing image overrides and rejects duplicates', async () => {
+  it('replaces external runtime image overrides with the version-lock contract', async () => {
     const cwd = await makeDirectory();
     await writeFile(join(cwd, '.env'), [
       'MYURLS_IMAGE=ghcr.io/keleyaa/myurls@sha256:' + 'a'.repeat(64),
@@ -182,12 +185,13 @@ describe('single HTTP deployment configuration', () => {
     ].join('\n'), { mode: 0o600 });
     expect(runConfigure(cwd, baseArgs).status).toBe(0);
     const contents = await readFile(join(cwd, '.env'), 'utf8');
-    expect(contents).toContain('MYURLS_IMAGE=ghcr.io/keleyaa/myurls@sha256:' + 'a'.repeat(64));
+    expect(contents).toContain('MYURLS_IMAGE=ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36');
     expect(contents).toContain('REDIS_IMAGE=docker.io/library/redis:7.4.11-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf');
-    expect(contents).toContain('SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4');
-    await writeFile(join(cwd, '.env'), contents.replace(/^MYURLS_IMAGE=.*$/m, '$&\nMYURLS_IMAGE=ghcr.io/keleyaa/myurls:latest'));
-    const rejected = runConfigure(cwd, baseArgs);
-    expect(rejected.status).not.toBe(0);
+    expect(contents).toContain('SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423');
+    expect(contents.match(/^MYURLS_IMAGE=/gmu)).toHaveLength(1);
+    expect(contents.match(/^REDIS_IMAGE=/gmu)).toHaveLength(1);
+    expect(contents.match(/^SUBCONVERTER_IMAGE=/gmu)).toHaveLength(1);
+    expect(contents).toContain('SUBWEB_IMAGE=docker.io/keleyaa/subweb:sha-2bf1a9f');
   });
 
   it('does not source an existing environment file or accept malformed secrets', async () => {

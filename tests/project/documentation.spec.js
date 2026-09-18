@@ -118,7 +118,35 @@ const hasEmbeddedReadmeImage = (source, asset) => {
 describe("documentation contract", () => {
   it("keeps the documentation graph complete and linkable", () => {
     expect(verifyDocs({ root })).toEqual([]);
-    expect(requiredDocuments).toHaveLength(18);
+    expect(requiredDocuments).toHaveLength(19);
+  });
+
+  it("records the deployment-contract integration baseline before changing it", () => {
+    const baseline = read("docs/deployment-integration-baseline.md");
+
+    for (const contract of [
+      "四服务短链启用合同",
+      "两服务短链关闭合同",
+      "deploy/versions.lock.json",
+      "Compose profile 不能作为隐藏必填变量的条件机制",
+    ]) {
+      expect(baseline).toContain(contract);
+    }
+  });
+
+  it("documents the generated deployment contract and managed runtime images", () => {
+    const readme = read("README.md");
+    const docker = read("docs/deployment-docker.md");
+    const configuration = read("docs/configuration.md");
+    const maintenance = read("docs/maintenance.md");
+
+    for (const document of [readme, docker, configuration, maintenance]) {
+      expect(document).toContain("deploy/versions.lock.json");
+    }
+    expect(docker).toContain("compose.common-services.yaml");
+    expect(configuration).toContain("runtime-image-contract.mjs");
+    expect(configuration).toContain("不接受手工 `REDIS_IMAGE`、`SUBCONVERTER_IMAGE` 或 `MYURLS_IMAGE` 覆盖");
+    expect(maintenance).toContain("runtime-image-contract.mjs");
   });
 
   it("documents exactly the approved deployment families and source lineage", () => {

@@ -20,11 +20,15 @@ describe('single HTTP deployment contract', () => {
   });
 
   it('runs one loopback gateway and keeps private services unpublished', async () => {
-    const compose = await readFile(rootFile('compose.yaml'), 'utf8');
-    const validator = await readFile(rootFile('scripts/validate-compose.sh'), 'utf8');
+    const [compose, commonServices, validator] = await Promise.all([
+      readFile(rootFile('compose.yaml'), 'utf8'),
+      readFile(rootFile('compose.common-services.yaml'), 'utf8'),
+      readFile(rootFile('scripts/validate-compose.sh'), 'utf8'),
+    ]);
 
     expect(compose).toContain('  gateway:');
-    expect(compose).toContain('127.0.0.1:${SUBWEB_PORT:-18080}:8080');
+    expect(compose).toContain('file: compose.common-services.yaml');
+    expect(commonServices).toContain('127.0.0.1:${SUBWEB_PORT:-18080}:8080');
     expect(compose).toContain('  subconverter:');
     expect(compose).toContain('  myurls:');
     expect(compose).not.toContain('  request-policy:');
