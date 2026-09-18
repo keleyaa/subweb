@@ -12,6 +12,8 @@ const lockedImages = {
   myurls: 'ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36',
   subconverter: 'ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423',
 };
+const releaseVersion = 'v1.2.3';
+const releaseDigest = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
 const enabledCompose = {
   networks: {
@@ -92,7 +94,8 @@ const makeFixture = async () => {
      'scripts/validate-compose.sh',
      'scripts/runtime-image-contract.mjs',
      'scripts/verify-version-locks.mjs',
-      'scripts/lib/config.sh',
+       'scripts/lib/config.sh',
+       'scripts/lib/release-image.sh',
       'compose.yaml',
       'compose.common-services.yaml',
       'deploy/versions.lock.json',
@@ -118,12 +121,30 @@ case "$*" in
     ;;
 esac
 case "$*" in
+  'buildx version') exit "\${DOCKER_BUILDX_STATUS:-0}" ;;
+  'buildx imagetools inspect ghcr.io/keleyaa/subweb:'*' --format {{.Manifest.Digest}}')
+     if [ "\${DOCKER_INSPECT_READ_STDIN-}" = 1 ]; then
+       inspect_stdin=$(cat)
+       printf 'BUILDX_INSPECT_STDIN=%s\\n' "\${inspect_stdin:-<none>}" >> "$DOCKER_LOG"
+     fi
+     [ "\${DOCKER_RESOLVE_STATUS:-0}" -eq 0 ] || exit "\${DOCKER_RESOLVE_STATUS}"
+     printf 'sha256:%s' "\${DOCKER_RELEASE_DIGEST-}"
+    ;;
   'compose version') exit 0 ;;
   'compose -f compose.yaml config --quiet') exit 0 ;;
-  'compose -f compose.yaml config --format json') cat "$COMPOSE_JSON_ENABLED" ;;
+   'compose -f compose.yaml config --format json')
+     gateway_image=$(awk -F= '$1 == "SUBWEB_IMAGE" { print substr($0, index($0, "=") + 1); exit }' .env)
+     if [ "\${CAPTURE_COMPOSE_GATEWAY_IMAGE-}" = 1 ]; then
+       printf 'COMPOSE_GATEWAY_IMAGE=%s\\n' "$gateway_image" >> "$DOCKER_LOG"
+     fi
+     sed 's|"image":"docker.io/keleyaa/subweb:sha-2bf1a9f"|"image":"'"$gateway_image"'"|g' "$COMPOSE_JSON_ENABLED"
+     ;;
   'compose -f compose.yaml pull gateway subconverter myurls redis') exit "\${DOCKER_PULL_STATUS:-0}" ;;
-  'compose -f compose.disabled-short-links.yaml config --quiet') exit 0 ;;
-  'compose -f compose.disabled-short-links.yaml config --format json') cat "$COMPOSE_JSON_DISABLED" ;;
+   'compose -f compose.disabled-short-links.yaml config --quiet') exit 0 ;;
+   'compose -f compose.disabled-short-links.yaml config --format json')
+     gateway_image=$(awk -F= '$1 == "SUBWEB_IMAGE" { print substr($0, index($0, "=") + 1); exit }' .env)
+     sed 's|"image":"docker.io/keleyaa/subweb:sha-2bf1a9f"|"image":"'"$gateway_image"'"|g' "$COMPOSE_JSON_DISABLED"
+     ;;
   'compose -f compose.disabled-short-links.yaml pull gateway subconverter') exit "\${DOCKER_PULL_STATUS:-0}" ;;
   'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --remove-orphans --wait') exit 0 ;;
   'compose -f compose.disabled-short-links.yaml ps') exit 0 ;;
@@ -157,6 +178,15 @@ const runDeploy = (root, extraArgs = [], env = {}, input = 'test-secret-key\n') 
       ...env,
     },
   });
+
+const readDockerLog = async (root) => {
+  try {
+    return await readFile(join(root, 'docker.log'), 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return '';
+    throw error;
+  }
+};
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((root) =>
@@ -237,6 +267,104 @@ describe('Docker image quick deployment', () => {
     ].join('\n'));
   });
 
+  it('resolves a release version once and deploys the immutable digest', async () => {
+    const root = await makeFixture();
+
+    const result = runDeploy(root, ['--version', releaseVersion], {
+      CAPTURE_COMPOSE_GATEWAY_IMAGE: '1',
+      DOCKER_RELEASE_DIGEST: releaseDigest,
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(await readFile(join(root, '.env'), 'utf8')).toContain(
+      `SUBWEB_IMAGE=ghcr.io/keleyaa/subweb@sha256:${releaseDigest}\n`,
+    );
+    const log = await readDockerLog(root);
+    expect(log).toContain(
+      `buildx imagetools inspect ghcr.io/keleyaa/subweb:${releaseVersion} --format {{.Manifest.Digest}}`,
+    );
+    expect(log.match(/^buildx version$/gm)).toHaveLength(1);
+    expect(log.match(/^buildx imagetools inspect /gm)).toHaveLength(1);
+    expect(log).toContain(`COMPOSE_GATEWAY_IMAGE=ghcr.io/keleyaa/subweb@sha256:${releaseDigest}`);
+  });
+
+  it('does not pass the Turnstile secret to release image resolution', async () => {
+    const root = await makeFixture();
+
+    const result = runDeploy(root, ['--version', releaseVersion], {
+      DOCKER_INSPECT_READ_STDIN: '1',
+      DOCKER_RELEASE_DIGEST: releaseDigest,
+    });
+
+    expect(result.status, `${result.stdout}\\n${result.stderr}`).toBe(0);
+    const log = await readDockerLog(root);
+    expect(log).toContain('BUILDX_INSPECT_STDIN=<none>');
+    expect(log).not.toContain('BUILDX_INSPECT_STDIN=test-secret-key');
+  });
+
+  it('rejects --version together with --image before deployment or secret input', async () => {
+    const root = await makeFixture();
+
+    const result = runDeploy(root, [
+      '--version', releaseVersion,
+      '--image', 'docker.io/keleyaa/subweb:sha-2bf1a9f',
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('--version and --image may not be used together.');
+    expect(await readFile(join(root, '.env'), 'utf8').catch(() => '')).toBe('');
+    expect(await readDockerLog(root)).toBe('');
+  });
+
+  it('stops before secret input or deployment when release resolution fails', async () => {
+    const root = await makeFixture();
+
+    const result = runDeploy(root, ['--version', releaseVersion], {
+      DOCKER_RESOLVE_STATUS: '23',
+    }, '');
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(`Unable to resolve release image: ghcr.io/keleyaa/subweb:${releaseVersion}`);
+    expect(await readFile(join(root, '.env'), 'utf8').catch(() => '')).toBe('');
+    const log = await readDockerLog(root);
+    expect(log).not.toMatch(/compose|pull|up/);
+  });
+
+  it('rejects a malformed release digest before secret input or deployment', async () => {
+    const root = await makeFixture();
+
+    const result = runDeploy(root, ['--version', releaseVersion], {
+      DOCKER_RELEASE_DIGEST: 'not-a-valid-digest',
+    }, '');
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `Unable to resolve immutable digest for: ghcr.io/keleyaa/subweb:${releaseVersion}`,
+    );
+    expect(result.stderr).not.toContain('Turnstile secret key must be provided on stdin');
+    expect(await readFile(join(root, '.env'), 'utf8').catch(() => '')).toBe('');
+    const log = await readDockerLog(root);
+    expect(log).toBe([
+      'buildx version',
+      `buildx imagetools inspect ghcr.io/keleyaa/subweb:${releaseVersion} --format {{.Manifest.Digest}}`,
+      '',
+    ].join('\n'));
+    expect(log).not.toMatch(/compose|pull|up/);
+  });
+
+  it('rejects duplicate or missing --version values before invoking Docker', async () => {
+    const root = await makeFixture();
+
+    const duplicate = runDeploy(root, ['--version', releaseVersion, '--version', 'v2.3.4']);
+    const missing = runDeploy(root, ['--version']);
+
+    expect(duplicate.status).not.toBe(0);
+    expect(duplicate.stderr).toContain('--version may be provided only once.');
+    expect(missing.status).not.toBe(0);
+    expect(missing.stderr).toContain('--version requires a value.');
+    expect(await readDockerLog(root)).toBe('');
+  });
+
   it('passes the Turnstile secret through stdin instead of configure argv', async () => {
     const root = await makeFixture();
     const argsLog = join(root, 'configure-args.log');
@@ -252,6 +380,7 @@ SHORT_DOMAIN=short.example.com
 API_URL=https://api.example.com
 SHORT_LINKS_ENABLED=true
 CUSTOM_BACKEND_ENABLED=true
+SUBWEB_IMAGE=docker.io/keleyaa/subweb:sha-2bf1a9f
 TURNSTILE_SITE_KEY=test-site-key
 TURNSTILE_SECRET_KEY=test-secret-key
 IP_HASH_SECRET=${'a'.repeat(64)}
@@ -301,6 +430,18 @@ EOF
     expect(invalidProxy.stderr).toContain('TRUSTED_PROXY_CIDR');
     const invalidProxyLog = await readFile(join(root, 'docker.log'), 'utf8');
     expect(invalidProxyLog).toBe('compose version\n');
+  });
+
+  it('rejects a mutable image before reading Turnstile input or starting deployment', async () => {
+    const root = await makeFixture();
+
+    const result = runDeploy(root, ['--image', 'docker.io/keleyaa/subweb:latest'], {}, '');
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('immutable sha-* tag or sha256 digest');
+    expect(result.stderr).not.toContain('Turnstile secret key must be provided on stdin.');
+    expect(await readFile(join(root, '.env'), 'utf8').catch(() => '')).toBe('');
+    expect(await readDockerLog(root)).not.toMatch(/compose|pull|up/);
   });
 
   it('deploys only Gateway and SubConverter when short links are disabled', async () => {

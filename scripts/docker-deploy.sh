@@ -3,6 +3,7 @@ set -eu
 
 SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_DIRECTORY=$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd)
+. "$SCRIPT_DIRECTORY/lib/release-image.sh"
 
 fail() {
   printf 'Docker deployment error: %s\n' "$1" >&2
@@ -24,6 +25,8 @@ turnstile_secret_key_stdin=0
 turnstile_secret_key=
 image=
 image_seen=0
+version=
+version_seen=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -97,21 +100,31 @@ while [ "$#" -gt 0 ]; do
       image_seen=1
       shift 2
       ;;
+    --version)
+      [ "$version_seen" -eq 0 ] || fail '--version may be provided only once.'
+      [ "$#" -ge 2 ] || fail '--version requires a value.'
+      case "$2" in
+        --*) fail '--version requires a value.' ;;
+      esac
+      version=$2
+      version_seen=1
+      shift 2
+      ;;
     *) fail "Unknown argument: $1" ;;
   esac
 done
 
-if [ "$short_links_enabled_seen" -eq 1 ] && [ "$short_links_enabled" = false ]; then
-  turnstile_secret_key_stdin=0
-elif [ "$turnstile_secret_key_stdin" -eq 1 ]; then
-  if IFS= read -r turnstile_secret_key || [ -n "$turnstile_secret_key" ]; then
-    :
-  else
-    fail 'Turnstile secret key must be provided on stdin.'
+if [ "$version_seen" -eq 1 ] && [ "$image_seen" -eq 1 ]; then
+  fail '--version and --image may not be used together.'
+fi
+[ "$image_seen" -eq 1 ] || [ "$version_seen" -eq 1 ] || fail '--image is required and must use an immutable sha-* tag or sha256 digest.'
+if [ "$version_seen" -eq 1 ]; then
+  if ! image=$(resolve_release_image "$version" </dev/null); then
+    exit 1
   fi
+  image_seen=1
 fi
 
-[ "$image_seen" -eq 1 ] || fail '--image is required and must use an immutable sha-* tag or sha256 digest.'
 case "$image" in
   *@sha256:*)
     printf '%s\n' "$image" | LC_ALL=C grep -Eq '^[^[:space:]@]+@sha256:[0-9a-f]{64}$' \
@@ -122,6 +135,16 @@ case "$image" in
       || fail '--image must use an immutable sha-* tag or sha256 digest.'
     ;;
 esac
+
+if [ "$short_links_enabled_seen" -eq 1 ] && [ "$short_links_enabled" = false ]; then
+  turnstile_secret_key_stdin=0
+elif [ "$turnstile_secret_key_stdin" -eq 1 ]; then
+  if IFS= read -r turnstile_secret_key || [ -n "$turnstile_secret_key" ]; then
+    :
+  else
+    fail 'Turnstile secret key must be provided on stdin.'
+  fi
+fi
 
 command -v docker >/dev/null 2>&1 || fail 'Docker is not installed or not available in PATH.'
 docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
