@@ -173,7 +173,9 @@ describe("documentation contract", () => {
     const deployment = read("docs/deployment.md");
 
     expect(deployment).toContain("Gateway 发布镜像由 release workflow 独立构建");
-    expect(deployment).toContain("通过 `--image` 使用 Git tag 或 digest");
+    expect(deployment).toContain("`--version vX.Y.Z` 仅通过 GHCR 解析为不可变 manifest digest");
+    expect(deployment).toContain("直接 `--image` 只接受与 registry 无关的 `repository@sha256:<digest>` 引用");
+    expect(deployment).toContain("不能传入 Git tag 或 `latest`");
     expect(deployment).not.toContain("生产镜像、外部依赖版本和不可变 digest 由");
   });
 
