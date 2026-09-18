@@ -269,7 +269,7 @@ describe("documentation contract", () => {
     );
   });
 
-  it("documents GHCR version resolution and registry-neutral direct digests", () => {
+  it("documents Docker installation and immutable image-selection contracts", () => {
     const readme = read("README.md");
     const docker = read("docs/deployment-docker.md");
     const configuration = read("docs/configuration.md");
@@ -277,6 +277,45 @@ describe("documentation contract", () => {
     const versionResolutionToken = "`--version vX.Y.Z` 仅通过 GHCR";
     const directDigestToken = "`--image` 是直接传入的、与 registry 无关的不可变 digest 镜像输入";
     const equivalentRegistriesToken = "Docker Hub 与 GHCR 的 release digest";
+
+    expect(readme).toMatch(/^\.\/scripts\/subweb\.sh install$/m);
+    expect(docker).toContain("不带参数的 `./scripts/subweb.sh install`");
+    expect(docker).toContain("只在交互式终端打开安装向导");
+    expect(docker).toContain("APP 域名");
+    expect(docker).toContain("API 域名");
+    expect(configuration).toContain(
+      "| `SHORT_LINKS_ENABLED` | `true` | `false` |",
+    );
+    expect(docker).toContain("仅启用短链时询问 SHORT 域名和 Turnstile Site Key");
+    expect(docker).toContain("`TRUSTED_PROXY_CIDR`");
+    expect(docker).toContain("Gateway 发布版本 `vX.Y.Z`");
+
+    const releaseResolution = docker.indexOf("不可变 GHCR manifest digest");
+    const configurationWrite = docker.indexOf("生成权限为 `0600` 的 `.env`");
+    const imagePull = docker.indexOf("拉取镜像");
+    expect(releaseResolution).toBeGreaterThan(-1);
+    expect(configurationWrite).toBeGreaterThan(releaseResolution);
+    expect(imagePull).toBeGreaterThan(configurationWrite);
+    expect(docker).toContain("不含 Turnstile Secret Key 的确认摘要");
+    expect(docker).toContain("只接受 `yes` 才会继续");
+    expect(docker).toContain("不会使用 `latest`");
+    expect(docker).toContain("版本 tag 不会直接写入运行时配置");
+    expect(docker).toContain("`--image ghcr.io/keleyaa/subweb@sha256:<digest>`");
+    expect(docker).toContain("`--version` 与 `--image` 互斥");
+    expect(docker).toContain("不要将 `latest` 或发布版本 tag 传给 `--image`");
+    expect(docker).toContain("`--turnstile-secret-key-stdin`");
+    expect(docker).toContain("管道传入");
+    expect(configuration).toMatch(/Secret Key.*不能提交到 Git.*放入日志/u);
+
+    expect(docker).toContain("在首次安装向导中选择 `false` 时");
+    expect(docker).toContain("不会询问 SHORT 域名、Turnstile Site Key 或 Secret Key");
+    expect(docker).toContain("不会启动 Redis 或 MyUrls");
+    expect(docker).toContain("只运行 `gateway` 和 `subconverter`");
+    expect(docker).toContain("现有显式配置方式保留给高级或手动操作");
+    expect(docker).toContain("./scripts/configure.sh");
+    expect(docker).toContain("runtime-image contract 派生，不能手工覆盖");
+    expect(docker).not.toContain("./scripts/docker-deploy.sh install");
+    expect(docker).not.toContain("SHORT_LINKS_ENABLED=false ./scripts/configure.sh");
 
     for (const document of [readme, docker, configuration]) {
       expect(document).toContain("--version vX.Y.Z");
@@ -294,9 +333,7 @@ describe("documentation contract", () => {
       );
     }
     expect(readme).toContain("不会将版本 tag 直接写入运行时配置");
-    expect(docker).toContain("版本 tag 不会直接写入运行时配置");
     expect(readme).toContain("`--image` 不接收 `latest` 或发布版本 tag");
-    expect(docker).toContain("不要将 `latest` 或发布版本 tag 传给 `--image`");
     expect(maintenance).toContain("packages: write");
     expect(maintenance).toContain("不可变多平台 manifest digest");
   });
