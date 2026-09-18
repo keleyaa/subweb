@@ -2,7 +2,7 @@
 
 Subweb 生产部署仅使用多容器 Compose：短链启用时运行 Go Gateway、SubConverter、一个 MyUrls Rust v2.0.8 进程和 Redis 四个服务。设置 `SHORT_LINKS_ENABLED=false` 时必须改用明确的 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml)，该 profile 只运行 Gateway 与 SubConverter。
 
-项目公开一个由 Gateway 绑定到宿主机 loopback 的 HTTP 端口。公网 DNS、TLS 证书、80/443 端口和外层反向代理由部署者负责；外层代理必须保留原始 Host，并将 APP、API、SHORT 三个域名转发到同一个 Gateway 端口。
+项目公开一个由 Gateway 绑定到宿主机 loopback 的 HTTP 端口。公网 DNS、TLS 证书、80/443 端口和外层反向代理由部署者负责；外层代理必须保留原始 Host。短链启用时外层反向代理转发 `APP_DOMAIN`、`API_DOMAIN` 和 `SHORT_DOMAIN` 到同一个 Gateway 端口。短链关闭时不设置 `SHORT_DOMAIN` 或短链路由，外层反向代理只转发 `APP_DOMAIN` 和 `API_DOMAIN`。
 
 | 方式 | 适用场景 | 入口 | 合同 |
 | --- | --- | --- | --- |
@@ -14,7 +14,7 @@ Subweb 生产部署仅使用多容器 Compose：短链启用时运行 Go Gateway
 
 短链启用时需要 `APP_DOMAIN`、`API_DOMAIN`、`SHORT_DOMAIN` 三个不同域名，以及 Cloudflare Turnstile、Redis 和 IP 哈希密钥。唯一 MyUrls 服务的 `PUBLIC_BASE_URL` 是 `https://${SHORT_DOMAIN}`，`TURNSTILE_HOSTNAME` 是 `${APP_DOMAIN}`。短链关闭时不需要 `SHORT_DOMAIN`、MyUrls、Redis 或 Turnstile 私钥；API 和 APP 仍由 Gateway 提供，SubConverter 仍通过内部 egress 边界运行。
 
-SubConverter、MyUrls 和 Redis 的生产版本与不可变 digest 由 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 约束；Gateway 发布镜像由 release workflow 独立构建，推送 `vX.Y.Z` Git tag 会自动发布，也可手动输入已有 tag 补跑。部署时必须通过 `--image` 使用 Git tag 或 digest，且不作为该版本锁中的发布镜像清单。不要用 `latest` 替换锁定引用，也不要将已删除的旧 Nginx、Node Request Policy 或历史 Compose 文件作为部署步骤。
+SubConverter、MyUrls 和 Redis 的生产版本与不可变 digest 由 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 约束；Gateway 发布镜像由 release workflow 独立构建，推送 `vX.Y.Z` Git tag 会自动发布，也可手动输入已有 tag 补跑。部署时，`--version vX.Y.Z` 仅通过 GHCR 解析为不可变 manifest digest；直接 `--image` 只接受与 registry 无关的 `repository@sha256:<digest>` 引用，不能传入 Git tag 或 `latest`，运行时也不会保存版本 tag。Gateway 不作为该版本锁中的发布镜像清单。不要用 `latest` 替换锁定引用，也不要将已删除的旧 Nginx、Node Request Policy 或历史 Compose 文件作为部署步骤。
 
 ## 通用准备
 

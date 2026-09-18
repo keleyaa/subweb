@@ -81,7 +81,7 @@ const runIsolatedRedisTest = async () => {
     composeFile = path.join(directory, 'compose.yaml');
     await writeFile(composeFile, `services:
   redis:
-    image: docker.io/library/redis:7.4.11-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+    image: docker.io/library/redis:7.4.11-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7
     command: ["redis-server", "--save", "", "--appendonly", "no", "--requirepass", "${redisTestPassword}"]
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${redisTestPassword}", "ping"]

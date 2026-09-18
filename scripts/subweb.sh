@@ -21,6 +21,11 @@ command_name=${1-}
 shift
 
 if [ "$command_name" = install ]; then
+  if [ "$#" -eq 0 ]; then
+    [ -t 0 ] && [ -t 2 ] \
+      || fail 'interactive install requires an interactive terminal; arguments are required for automation.'
+    exec "$SCRIPT_DIRECTORY/install-wizard.sh"
+  fi
   exec "$SCRIPT_DIRECTORY/docker-deploy.sh" "$@"
 fi
 

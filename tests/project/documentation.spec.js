@@ -169,11 +169,27 @@ describe("documentation contract", () => {
     expect(thirdPartySources).not.toContain("v1.13.0 digest 只保留在回滚说明中");
   });
 
+  it("distinguishes external proxy hosts for both short-link deployment profiles", () => {
+    const deployment = read("docs/deployment.md");
+    const docker = read("docs/deployment-docker.md");
+
+    for (const document of [deployment, docker]) {
+      expect(document).toContain(
+        "短链启用时外层反向代理转发 `APP_DOMAIN`、`API_DOMAIN` 和 `SHORT_DOMAIN`",
+      );
+      expect(document).toContain(
+        "短链关闭时不设置 `SHORT_DOMAIN` 或短链路由，外层反向代理只转发 `APP_DOMAIN` 和 `API_DOMAIN`",
+      );
+    }
+  });
+
   it("documents the Gateway image boundary separately from locked dependencies", () => {
     const deployment = read("docs/deployment.md");
 
     expect(deployment).toContain("Gateway 发布镜像由 release workflow 独立构建");
-    expect(deployment).toContain("通过 `--image` 使用 Git tag 或 digest");
+    expect(deployment).toContain("`--version vX.Y.Z` 仅通过 GHCR 解析为不可变 manifest digest");
+    expect(deployment).toContain("直接 `--image` 只接受与 registry 无关的 `repository@sha256:<digest>` 引用");
+    expect(deployment).toContain("不能传入 Git tag 或 `latest`");
     expect(deployment).not.toContain("生产镜像、外部依赖版本和不可变 digest 由");
   });
 
@@ -251,7 +267,6 @@ describe("documentation contract", () => {
     }
     expect(docker).not.toContain("docker-deploy.sh install");
     expect(docker).toContain("不要执行 `cat .env`");
-    expect(docker).toContain("自动生成");
     expect(local).toContain("http://127.0.0.1:5173/");
     expect(local).toContain("compose.dev.yaml");
     expect(local).toContain("myurls");
@@ -270,16 +285,72 @@ describe("documentation contract", () => {
     );
   });
 
-  it("documents Docker Hub and GHCR as equivalent release sources", () => {
+  it("documents Docker installation and immutable image-selection contracts", () => {
     const readme = read("README.md");
     const docker = read("docs/deployment-docker.md");
+    const configuration = read("docs/configuration.md");
     const maintenance = read("docs/maintenance.md");
+    const versionResolutionToken = "`--version vX.Y.Z` 仅通过 GHCR";
+    const directDigestToken = "`--image` 是直接传入的、与 registry 无关的不可变 digest 镜像输入";
+    const equivalentRegistriesToken = "Docker Hub 与 GHCR 的 release digest";
 
-    for (const document of [readme, docker, maintenance]) {
-      expect(document).toContain("docker.io/keleyaa/subweb");
-      expect(document).toContain("ghcr.io/keleyaa/subweb");
+    expect(readme).toMatch(/^\.\/scripts\/subweb\.sh install$/m);
+    expect(docker).toContain("不带参数的 `./scripts/subweb.sh install`");
+    expect(docker).toContain("只在交互式终端打开安装向导");
+    expect(docker).toContain("APP 域名");
+    expect(docker).toContain("API 域名");
+    expect(configuration).toContain(
+      "| `SHORT_LINKS_ENABLED` | `true` | `false` |",
+    );
+    expect(docker).toContain("仅启用短链时询问 SHORT 域名和 Turnstile Site Key");
+    expect(docker).toContain("`TRUSTED_PROXY_CIDR`");
+    expect(docker).toContain("Gateway 发布版本 `vX.Y.Z`");
+
+    const releaseResolution = docker.indexOf("不可变 GHCR manifest digest");
+    const configurationWrite = docker.indexOf("生成权限为 `0600` 的 `.env`");
+    const imagePull = docker.indexOf("拉取镜像");
+    expect(releaseResolution).toBeGreaterThan(-1);
+    expect(configurationWrite).toBeGreaterThan(releaseResolution);
+    expect(imagePull).toBeGreaterThan(configurationWrite);
+    expect(docker).toContain("不含 Turnstile Secret Key 的确认摘要");
+    expect(docker).toContain("仅启用短链时，确认后才通过既有隐藏输入流程获取 Turnstile Secret Key");
+    expect(docker).toContain("只接受 `yes` 才会继续");
+    expect(docker).toContain("不会使用 `latest`");
+    expect(docker).toContain("版本 tag 不会直接写入运行时配置");
+    expect(docker).toContain("`--image ghcr.io/keleyaa/subweb@sha256:<digest>`");
+    expect(docker).toContain("`--version` 与 `--image` 互斥");
+    expect(docker).toContain("不要将 `latest` 或发布版本 tag 传给 `--image`");
+    expect(docker).toContain("`--turnstile-secret-key-stdin`");
+    expect(docker).toContain("管道传入");
+    expect(configuration).toMatch(/Secret Key.*不能提交到 Git.*放入日志/u);
+
+    expect(docker).toContain("在首次安装向导中选择 `false` 时");
+    expect(docker).toContain("不会询问 SHORT 域名、Turnstile Site Key 或 Secret Key");
+    expect(docker).toContain("不会启动 Redis 或 MyUrls");
+    expect(docker).toContain("只运行 `gateway` 和 `subconverter`");
+    expect(docker).toContain("现有显式配置方式保留给高级或手动操作");
+    expect(docker).toContain("./scripts/configure.sh");
+    expect(docker).toContain("runtime-image contract 派生，不能手工覆盖");
+    expect(docker).not.toContain("./scripts/docker-deploy.sh install");
+    expect(docker).not.toContain("SHORT_LINKS_ENABLED=false ./scripts/configure.sh");
+
+    for (const document of [readme, docker, configuration]) {
+      expect(document).toContain("--version vX.Y.Z");
+      expect(document).toContain("GHCR");
+      expect(document).toContain("不可变");
+      expect(document).toContain("digest");
+      expect(document).toContain("--image");
+      expect(document).toContain("@sha256:<digest>");
+      expect(document).toContain("`--version` 与 `--image` 互斥");
+      expect(document).toContain(versionResolutionToken);
+      expect(document).toContain(directDigestToken);
+      expect(document).toContain(equivalentRegistriesToken);
+      expect(document.indexOf(versionResolutionToken)).toBeLessThan(
+        document.indexOf(directDigestToken),
+      );
     }
-    expect(docker).toContain("--image ghcr.io/keleyaa/subweb@sha256:<release-manifest-digest>");
+    expect(readme).toContain("不会将版本 tag 直接写入运行时配置");
+    expect(readme).toContain("`--image` 不接收 `latest` 或发布版本 tag");
     expect(maintenance).toContain("packages: write");
     expect(maintenance).toContain("不可变多平台 manifest digest");
   });
@@ -351,10 +422,9 @@ describe("documentation contract", () => {
       "固定黑色命令界面",
       "assets/readme/command-interface.png",
       "assets/readme/security-architecture.svg",
-      "docker.io/keleyaa/subweb",
       "ghcr.io/keleyaa/subweb",
       "npm run verify:ci",
-      "拒绝可变的 `latest`",
+      "`--image` 不接收 `latest` 或发布版本 tag",
       "docs/validation/docker-integration.md",
       "docs/validation/interface.md",
       "deploy/subconverter/README.md",
@@ -505,6 +575,17 @@ describe("documentation contract", () => {
       expect(document).toContain("Go race、Go vet、构建和 `git diff --check` 是需要另行执行");
       expect(document).not.toContain("发布 workflow 从同一版本锁构建 Gateway");
     }
+  });
+
+  it("makes short-link enablement explicit in automated Docker installation", () => {
+    const readme = read("README.md");
+    const continuation = String.fromCharCode(92);
+
+    expect(readme).toContain([
+      "  --api-domain api.example.com " + continuation,
+      "  --short-links-enabled true " + continuation,
+      "  --short-domain short.example.com " + continuation,
+    ].join("\n"));
   });
 
   it("keeps the immutable release contract in deployment documentation", () => {

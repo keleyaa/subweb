@@ -3,6 +3,7 @@ set -eu
 
 SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_DIRECTORY=$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd)
+. "$SCRIPT_DIRECTORY/lib/release-image.sh"
 
 fail() {
   printf 'Docker deployment error: %s\n' "$1" >&2
@@ -24,6 +25,8 @@ turnstile_secret_key_stdin=0
 turnstile_secret_key=
 image=
 image_seen=0
+version=
+version_seen=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -97,9 +100,45 @@ while [ "$#" -gt 0 ]; do
       image_seen=1
       shift 2
       ;;
+    --version)
+      [ "$version_seen" -eq 0 ] || fail '--version may be provided only once.'
+      [ "$#" -ge 2 ] || fail '--version requires a value.'
+      case "$2" in
+        --*) fail '--version requires a value.' ;;
+      esac
+      version=$2
+      version_seen=1
+      shift 2
+      ;;
     *) fail "Unknown argument: $1" ;;
   esac
 done
+
+if [ "$version_seen" -eq 1 ] && [ "$image_seen" -eq 1 ]; then
+  fail '--version and --image may not be used together.'
+fi
+[ "$image_seen" -eq 1 ] || [ "$version_seen" -eq 1 ] || fail '--image is required and must use an immutable sha256 digest.'
+if [ "$version_seen" -eq 1 ]; then
+  if ! image=$(resolve_release_image "$version" </dev/null); then
+    exit 1
+  fi
+  image_seen=1
+fi
+
+printf '%s\n' "$image" | LC_ALL=C grep -Eq '^[^[:space:]@/:]+(:[0-9]+)?(/[^[:space:]@/:]+)+@sha256:[0-9a-f]{64}$' \
+  || fail '--image must use an immutable sha256 digest.'
+
+registry=${image%%/*}
+case "$registry" in
+  *:*)
+    registry_port=${registry##*:}
+    case "$registry_port" in
+      ''|*[!0-9]*) fail '--image must use an immutable sha256 digest.' ;;
+    esac
+    [ "$registry_port" -ge 1 ] 2>/dev/null && [ "$registry_port" -le 65535 ] 2>/dev/null \
+      || fail '--image must use an immutable sha256 digest.'
+    ;;
+esac
 
 if [ "$short_links_enabled_seen" -eq 1 ] && [ "$short_links_enabled" = false ]; then
   turnstile_secret_key_stdin=0
@@ -110,18 +149,6 @@ elif [ "$turnstile_secret_key_stdin" -eq 1 ]; then
     fail 'Turnstile secret key must be provided on stdin.'
   fi
 fi
-
-[ "$image_seen" -eq 1 ] || fail '--image is required and must use an immutable sha-* tag or sha256 digest.'
-case "$image" in
-  *@sha256:*)
-    printf '%s\n' "$image" | LC_ALL=C grep -Eq '^[^[:space:]@]+@sha256:[0-9a-f]{64}$' \
-      || fail '--image must use an immutable sha-* tag or sha256 digest.'
-    ;;
-  *)
-    printf '%s\n' "$image" | LC_ALL=C grep -Eq '^[^[:space:]@]+:sha-[0-9a-f]{7,64}$' \
-      || fail '--image must use an immutable sha-* tag or sha256 digest.'
-    ;;
-esac
 
 command -v docker >/dev/null 2>&1 || fail 'Docker is not installed or not available in PATH.'
 docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
