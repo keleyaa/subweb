@@ -33,7 +33,7 @@ const renderCompose = async (extra = []) => {
     'APP_DOMAIN=app.example.com', 'API_DOMAIN=api.example.com', 'API_URL=https://api.example.com',
     'SHORT_DOMAIN=short.example.com', 'SHORT_LINKS_ENABLED=true', 'CUSTOM_BACKEND_ENABLED=true',
     'SUBWEB_IMAGE=subweb:ci', 'SUBWEB_PORT=19080',
-    'REDIS_IMAGE=docker.io/library/redis:7.4.11-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf',
+    'REDIS_IMAGE=docker.io/library/redis:7.4.11-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7',
     'SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423',
     'MYURLS_IMAGE=ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36',
     `IP_HASH_SECRET=${testSecret}`, `REDIS_PASSWORD=${testSecret}`,

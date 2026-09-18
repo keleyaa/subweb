@@ -104,14 +104,22 @@ describe('integrated service artifact locks', () => {
     }
   });
 
-  it('pins Redis 7.4.11 Alpine as the approved runtime', () => {
-    expect(lock.services.redis.source).toMatchObject({
+  it('pins the approved Redis 7.4.11 Alpine security manifest', () => {
+    expect(lock.verifiedAt).toBe('2026-09-18T18:59:27Z');
+    expect(lock.services.redis.source).toEqual({
+      url: 'https://github.com/redis/redis',
       repository: 'redis/redis',
       tag: '7.4.11',
+      commit: 'aaf0ce63b3239f4b51f86ca1da8711b055721993',
+      prerelease: false,
     });
-    expect(lock.services.redis.image).toMatchObject({
+    expect(lock.services.redis.image).toEqual({
       reference: 'docker.io/library/redis:7.4.11-alpine',
-      digest: 'sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf',
+      digest: 'sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7',
+      platforms: {
+        'linux/amd64': 'sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2',
+        'linux/arm64': 'sha256:1f09a89a207d794a8c61d9edfc26e7c58427de10ccef7c5d18d638df79a63b85',
+      },
     });
   });
 
@@ -166,7 +174,7 @@ describe('integrated service artifact locks', () => {
     const images = resolveRuntimeImages(lock);
 
     expect(images).toEqual({
-      REDIS_IMAGE: `${lock.services.redis.image.reference}@${lock.services.redis.image.digest}`,
+      REDIS_IMAGE: 'docker.io/library/redis:7.4.11-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7',
       SUBCONVERTER_IMAGE: `${lock.services.subconverter.image.reference}@${lock.services.subconverter.image.digest}`,
       MYURLS_IMAGE: `${lock.services.myurls.image.reference}@${lock.services.myurls.image.digest}`,
     });
