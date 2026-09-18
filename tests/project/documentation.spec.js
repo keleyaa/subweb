@@ -577,6 +577,17 @@ describe("documentation contract", () => {
     }
   });
 
+  it("makes short-link enablement explicit in automated Docker installation", () => {
+    const readme = read("README.md");
+    const continuation = String.fromCharCode(92);
+
+    expect(readme).toContain([
+      "  --api-domain api.example.com " + continuation,
+      "  --short-links-enabled true " + continuation,
+      "  --short-domain short.example.com " + continuation,
+    ].join("\n"));
+  });
+
   it("keeps the immutable release contract in deployment documentation", () => {
     const policyDocuments = [
       "README.md",

@@ -51,6 +51,7 @@ CI 或其他非交互环境显式提供安装参数。启用短链时，Turnstil
 printf '%s\n' "$TURNSTILE_SECRET_KEY" | ./scripts/subweb.sh install \
   --app-domain app.example.com \
   --api-domain api.example.com \
+  --short-links-enabled true \
   --short-domain short.example.com \
   --turnstile-site-key "$TURNSTILE_SITE_KEY" \
   --turnstile-secret-key-stdin \

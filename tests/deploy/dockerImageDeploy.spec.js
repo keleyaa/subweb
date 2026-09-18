@@ -533,6 +533,25 @@ EOF
     expect(log).not.toContain('compose -f compose.yaml pull');
   });
 
+  it('overrides a stale disabled profile when short links are explicitly enabled', async () => {
+    const root = await makeFixture();
+    await writeFile(join(root, '.env'), 'SHORT_LINKS_ENABLED=false\n');
+
+    const result = runDeploy(root, [
+      '--image', dockerHubImage,
+      '--short-links-enabled', 'true',
+    ]);
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(await readFile(join(root, '.env'), 'utf8')).toContain(
+      'SHORT_LINKS_ENABLED=true\n',
+    );
+    const log = await readDockerLog(root);
+    expect(log).toContain('compose -f compose.yaml pull gateway subconverter myurls redis');
+    expect(log).toContain('compose -f compose.yaml up -d --no-build --pull never --remove-orphans --wait');
+    expect(log).not.toContain('compose -f compose.disabled-short-links.yaml pull');
+  });
+
   it('does not start containers when pulling an image fails', async () => {
     const root = await makeFixture();
 
