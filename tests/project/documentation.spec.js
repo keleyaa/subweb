@@ -313,6 +313,7 @@ describe("documentation contract", () => {
     expect(configurationWrite).toBeGreaterThan(releaseResolution);
     expect(imagePull).toBeGreaterThan(configurationWrite);
     expect(docker).toContain("不含 Turnstile Secret Key 的确认摘要");
+    expect(docker).toContain("仅启用短链时，确认后才通过既有隐藏输入流程获取 Turnstile Secret Key");
     expect(docker).toContain("只接受 `yes` 才会继续");
     expect(docker).toContain("不会使用 `latest`");
     expect(docker).toContain("版本 tag 不会直接写入运行时配置");

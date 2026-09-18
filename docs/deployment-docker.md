@@ -14,7 +14,7 @@ cd subweb
 
 不带参数的 `./scripts/subweb.sh install` 只在交互式终端打开安装向导。它依次询问 APP 域名、API 域名、是否启用短链；仅启用短链时询问 SHORT 域名和 Turnstile Site Key；随后可选填 `TRUSTED_PROXY_CIDR`，并要求明确输入 Gateway 发布版本 `vX.Y.Z`。
 
-向导先将该版本解析为不可变 GHCR manifest digest，再展示不含 Turnstile Secret Key 的确认摘要；只接受 `yes` 才会继续。确认后才通过既有隐藏输入流程获取 Turnstile Secret Key，随后生成权限为 `0600` 的 `.env`、校验 Compose、拉取镜像并等待服务健康。不会使用 `latest`，也没有隐式版本选择。
+向导先将该版本解析为不可变 GHCR manifest digest，再展示不含 Turnstile Secret Key 的确认摘要；只接受 `yes` 才会继续。仅启用短链时，确认后才通过既有隐藏输入流程获取 Turnstile Secret Key；随后生成权限为 `0600` 的 `.env`、校验 Compose、拉取镜像并等待服务健康。不会使用 `latest`，也没有隐式版本选择。
 
 启用短链时，Turnstile Site Key 与 Secret Key 必须由部署者提供。默认值为 `SHORT_LINKS_ENABLED=true` 与 `CUSTOM_BACKEND_ENABLED=true`；Redis 密码与 IP 哈希密钥由脚本生成或保留已有值，除非显式要求轮换，不要在部署过程中更换它们。`configure.sh` 同时从 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 生成三项外部 runtime 镜像值。
 
