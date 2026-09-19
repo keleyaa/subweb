@@ -234,6 +234,22 @@ reconcile_restore_prior_service() {
   systemctl start subweb.service
 }
 
+reconcile_release_start_prior_service() {
+  reconcile_restore_prior_service || return 1
+  RECONCILE_RELEASE_SERVICE_WAS_ACTIVE=0
+}
+
+reconcile_release_commit() {
+  [ "$RECONCILE_RELEASE_CUTOVER_PENDING" -eq 1 ] || return 1
+  reconcile_remove_work_path "$RECONCILE_RELEASE_OLD" || return 1
+  RECONCILE_RELEASE_OLD=''
+  RECONCILE_RELEASE_OLD_IS_TREE=0
+  RECONCILE_RELEASE_NEW_TREE_LIVE=0
+  RECONCILE_RELEASE_CUTOVER_PENDING=0
+  RECONCILE_RELEASE_SERVICE_WAS_ACTIVE=0
+  RECONCILE_RELEASE_STAGE=''
+}
+
 reconcile_release_abort() {
   reconcile_abort_status=0
   if [ "$RECONCILE_RELEASE_CUTOVER_PENDING" -eq 1 ]; then
@@ -324,20 +340,6 @@ reconcile_release_tree() {
   RECONCILE_RELEASE_STAGE=''
   RECONCILE_RELEASE_NEW_TREE_LIVE=1
 
-  if [ "$RECONCILE_RELEASE_SERVICE_WAS_ACTIVE" -eq 1 ] && ! systemctl start subweb.service; then
-    systemctl stop subweb.service || true
-    reconcile_release_abort || true
-    return 1
-  fi
-
-  reconcile_remove_work_path "$RECONCILE_RELEASE_OLD" || {
-    reconcile_release_abort || true
-    return 1
-  }
-  RECONCILE_RELEASE_OLD=''
-  RECONCILE_RELEASE_OLD_IS_TREE=0
-  RECONCILE_RELEASE_NEW_TREE_LIVE=0
-  RECONCILE_RELEASE_CUTOVER_PENDING=0
-  RECONCILE_RELEASE_SERVICE_WAS_ACTIVE=0
-  RECONCILE_RELEASE_STAGE=''
+  # The installer activates the prior service after host assets and daemon state are ready.
+  # Keep the old release available until that activation and timer restoration succeed.
 }

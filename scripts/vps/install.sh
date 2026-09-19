@@ -51,6 +51,87 @@ fi
 getent group subweb >/dev/null 2>&1 || groupadd --system subweb
 id subweb >/dev/null 2>&1 || useradd --system --gid subweb --home-dir "$TARGET_DIRECTORY" --no-create-home --shell /usr/sbin/nologin subweb
 
+HOST_ASSET_BACKUP=''
+HOST_ASSET_MANIFEST=''
+INSTALLATION_COMMITTED=0
+
+reconcile_host_assets() {
+  printf '%s|%s\n' "$SOURCE_DIRECTORY/deploy/systemd/subweb.service" /etc/systemd/system/subweb.service
+  printf '%s|%s\n' "$SOURCE_DIRECTORY/deploy/systemd/subweb-backup.service" /etc/systemd/system/subweb-backup.service
+  printf '%s|%s\n' "$SOURCE_DIRECTORY/deploy/systemd/subweb-backup.timer" /etc/systemd/system/subweb-backup.timer
+  printf '%s|%s\n' "$SOURCE_DIRECTORY/deploy/systemd/subweb-backup-verify.service" /etc/systemd/system/subweb-backup-verify.service
+  printf '%s|%s\n' "$SOURCE_DIRECTORY/deploy/systemd/subweb-backup-verify.timer" /etc/systemd/system/subweb-backup-verify.timer
+  printf '%s|%s\n' "$SOURCE_DIRECTORY/nginx/snippets/security-headers.conf" /etc/nginx/snippets/security-headers.conf
+  printf '%s|%s\n' "$SOURCE_DIRECTORY/deploy/logrotate/subweb.conf" /etc/logrotate.d/subweb
+  printf '%s|%s\n' "$SOURCE_DIRECTORY/deploy/nginx/subweb.conf" /etc/nginx/sites-available/subweb
+}
+
+reconcile_preflight_host_assets() {
+  reconcile_host_assets | while IFS='|' read -r host_asset_source host_asset_target; do
+    [ -f "$host_asset_source" ] && [ ! -L "$host_asset_source" ] || return 1
+    [ ! -e "$host_asset_target" ] && [ ! -L "$host_asset_target" ] && continue
+    [ -f "$host_asset_target" ] && [ ! -L "$host_asset_target" ] || return 1
+  done
+}
+
+reconcile_snapshot_host_assets() {
+  install -d -o root -g root -m 0755 /etc/subweb /etc/nginx/sites-available /etc/nginx/snippets || return 1
+  HOST_ASSET_BACKUP=$(mktemp -d /etc/subweb/.install-assets.XXXXXX) || return 1
+  HOST_ASSET_MANIFEST="$HOST_ASSET_BACKUP/manifest"
+  reconcile_host_assets | while IFS='|' read -r host_asset_source host_asset_target; do
+    if [ -e "$host_asset_target" ]; then
+      host_asset_backup="$HOST_ASSET_BACKUP$host_asset_target"
+      install -d -m 0700 "$(dirname -- "$host_asset_backup")" || return 1
+      cp -p "$host_asset_target" "$host_asset_backup" || return 1
+      printf 'present|%s\n' "$host_asset_target" >> "$HOST_ASSET_MANIFEST" || return 1
+    else
+      printf 'absent|%s\n' "$host_asset_target" >> "$HOST_ASSET_MANIFEST" || return 1
+    fi
+  done
+}
+
+reconcile_restore_host_assets() {
+  [ -n "$HOST_ASSET_MANIFEST" ] && [ -f "$HOST_ASSET_MANIFEST" ] || return 0
+  while IFS='|' read -r host_asset_state host_asset_target; do
+    case "$host_asset_state" in
+      present)
+        host_asset_backup="$HOST_ASSET_BACKUP$host_asset_target"
+        [ -f "$host_asset_backup" ] && [ ! -L "$host_asset_backup" ] || return 1
+        rm -f -- "$host_asset_target" || return 1
+        cp -p "$host_asset_backup" "$host_asset_target" || return 1
+        ;;
+      absent) rm -f -- "$host_asset_target" || return 1 ;;
+      *) return 1 ;;
+    esac
+  done < "$HOST_ASSET_MANIFEST"
+}
+
+reconcile_discard_host_asset_snapshot() {
+  [ -n "$HOST_ASSET_BACKUP" ] || return 0
+  rm -rf -- "$HOST_ASSET_BACKUP" || return 1
+  HOST_ASSET_BACKUP=''
+  HOST_ASSET_MANIFEST=''
+}
+
+reconcile_install_host_assets() {
+  reconcile_host_assets | while IFS='|' read -r host_asset_source host_asset_target; do
+    install -m 0644 "$host_asset_source" "$host_asset_target" || return 1
+  done
+}
+
+cleanup_installation() {
+  cleanup_status=$1
+  trap - 0 HUP INT TERM
+  if [ "$INSTALLATION_COMMITTED" -eq 0 ]; then
+    reconcile_restore_host_assets >/dev/null 2>&1 || true
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    reconcile_release_abort >/dev/null 2>&1 || true
+    resume_paused_release_timers >/dev/null 2>&1 || true
+  fi
+  reconcile_discard_host_asset_snapshot >/dev/null 2>&1 || true
+  return "$cleanup_status"
+}
+
 if release_trees_overlap "$SOURCE_DIRECTORY" "$TARGET_DIRECTORY"; then
   fail 'SUBWEB_SOURCE must not overlap the deployment root.'
 else
@@ -58,12 +139,15 @@ else
   [ "$release_overlap_status" -eq 1 ] \
     || fail 'unable to resolve the release source and deployment root.'
 fi
-trap 'reconcile_release_abort >/dev/null 2>&1 || true; resume_paused_release_timers >/dev/null 2>&1 || true' 0
+reconcile_preflight_host_assets || fail 'selected release host assets are missing or unsafe.'
+trap 'cleanup_installation "$?"' 0
+trap 'exit 1' HUP INT TERM
+reconcile_snapshot_host_assets || fail 'unable to snapshot existing host assets.'
 pause_enabled_release_timers \
   || fail 'unable to pause enabled backup or verification timers.'
 install -d -o subweb -g subweb -m 0700 /var/lib/subweb-backups
 reconcile_release_tree "$SOURCE_DIRECTORY" "$TARGET_DIRECTORY" \
-  || fail 'unable to reconcile the installed release tree.'
+  || fail 'unable to stage and cut over the installed release tree.'
 install -d -o subweb -g subweb -m 0700 "$TARGET_DIRECTORY/.runtime" "$TARGET_DIRECTORY/.local"
 if find "$TARGET_DIRECTORY" -type l -print -quit | grep -q .; then
   fail 'reconciled deployment tree must not contain symbolic links.'
@@ -77,22 +161,17 @@ chown subweb:subweb "$TARGET_DIRECTORY/.env"
 chmod 0600 "$TARGET_DIRECTORY/.env"
 find "$TARGET_DIRECTORY/scripts" -type f -name '*.sh' -exec chmod 0750 {} +
 
-install -d -o root -g root -m 0755 /etc/subweb
-install -m 0644 "$SOURCE_DIRECTORY/deploy/systemd/subweb.service" /etc/systemd/system/subweb.service
-install -m 0644 "$SOURCE_DIRECTORY/deploy/systemd/subweb-backup.service" /etc/systemd/system/subweb-backup.service
-install -m 0644 "$SOURCE_DIRECTORY/deploy/systemd/subweb-backup.timer" /etc/systemd/system/subweb-backup.timer
-install -m 0644 "$SOURCE_DIRECTORY/deploy/systemd/subweb-backup-verify.service" /etc/systemd/system/subweb-backup-verify.service
-install -m 0644 "$SOURCE_DIRECTORY/deploy/systemd/subweb-backup-verify.timer" /etc/systemd/system/subweb-backup-verify.timer
-install -d -m 0755 /etc/nginx/sites-available /etc/nginx/snippets
-install -m 0644 "$SOURCE_DIRECTORY/nginx/snippets/security-headers.conf" /etc/nginx/snippets/security-headers.conf
-install -m 0644 "$SOURCE_DIRECTORY/deploy/logrotate/subweb.conf" /etc/logrotate.d/subweb
-install -m 0644 "$SOURCE_DIRECTORY/deploy/nginx/subweb.conf" /etc/nginx/sites-available/subweb
-
-systemctl daemon-reload
+reconcile_install_host_assets || fail 'unable to install selected release host assets.'
+systemctl daemon-reload || fail 'unable to reload systemd after installing host assets.'
 systemctl enable subweb.service
 systemctl enable subweb-backup.timer
 systemctl enable subweb-backup-verify.timer
+reconcile_release_start_prior_service \
+  || fail 'unable to start the prior active service from the selected release.'
 resume_paused_release_timers \
   || fail 'unable to resume active backup or verification timers.'
-trap - 0
+reconcile_release_commit || fail 'unable to commit the selected release.'
+INSTALLATION_COMMITTED=1
+trap - 0 HUP INT TERM
+reconcile_discard_host_asset_snapshot || fail 'unable to discard host asset snapshot.'
 printf 'VPS installation prepared at %s. Run scripts/vps/check-host.sh, then systemctl start subweb.service.\n' "$TARGET_DIRECTORY"

@@ -392,7 +392,7 @@ exec /bin/cp "$@"
     await writeReleaseSystemctl(bin);
 
     const result = runShell(
-      'set -eu; . "$1"; reconcile_release_tree "$2" "$3"',
+      'set -eu; . "$1"; reconcile_release_tree "$2" "$3"; reconcile_release_commit',
       [reconcilerPath, source, target],
       {
         PATH: `${bin}:${process.env.PATH}`,
@@ -428,7 +428,7 @@ exec /bin/cp "$@"
     await writeReleaseSystemctl(bin);
 
     const result = runShell(
-      'set -eu; . "$1"; reconcile_release_tree "$2" "$3"',
+      'set -eu; . "$1"; reconcile_release_tree "$2" "$3"; reconcile_release_start_prior_service || { reconcile_release_abort; exit 1; }',
       [reconcilerPath, source, target],
       {
         PATH: `${bin}:${process.env.PATH}`,
@@ -445,22 +445,43 @@ exec /bin/cp "$@"
       'is-active --quiet subweb.service',
       'stop subweb.service',
       'start subweb.service',
-      'stop subweb.service',
       'start subweb.service',
     ]);
     expect(await workTrees(fixture, 'target')).toEqual([]);
   });
 
-  it('installs host configuration from the selected release tree and restores cleanup state on exit', async () => {
+  it('activates a staged release only after preflighting and installing host assets', async () => {
     const installer = await readFile(installerPath, 'utf8');
+    const reconciler = await readFile(reconcilerPath, 'utf8');
 
+    expect(installer).toContain('reconcile_preflight_host_assets');
+    expect(installer).toContain('reconcile_snapshot_host_assets');
+    expect(installer).toContain('reconcile_restore_host_assets');
     expect(installer).toContain('"$SOURCE_DIRECTORY/deploy/systemd/subweb.service"');
     expect(installer).toContain('"$SOURCE_DIRECTORY/nginx/snippets/security-headers.conf"');
     expect(installer).toContain('"$SOURCE_DIRECTORY/deploy/logrotate/subweb.conf"');
     expect(installer).toContain('reconcile_release_abort >/dev/null 2>&1 || true');
     expect(installer).toContain('resume_paused_release_timers >/dev/null 2>&1 || true');
-    expect(installer.indexOf('trap \'reconcile_release_abort')).toBeLessThan(
-      installer.indexOf('pause_enabled_release_timers'),
+    expect(installer.lastIndexOf('reconcile_preflight_host_assets')).toBeLessThan(
+      installer.lastIndexOf('reconcile_release_tree'),
+    );
+    expect(installer.lastIndexOf("trap 'cleanup_installation")).toBeLessThan(
+      installer.lastIndexOf('reconcile_snapshot_host_assets'),
+    );
+    expect(installer.lastIndexOf('reconcile_snapshot_host_assets')).toBeLessThan(
+      installer.lastIndexOf('reconcile_release_tree'),
+    );
+    expect(installer.lastIndexOf('systemctl daemon-reload')).toBeLessThan(
+      installer.lastIndexOf('reconcile_release_start_prior_service'),
+    );
+    expect(installer.lastIndexOf('reconcile_release_start_prior_service')).toBeLessThan(
+      installer.lastIndexOf('resume_paused_release_timers'),
+    );
+    expect(installer.lastIndexOf('resume_paused_release_timers')).toBeLessThan(
+      installer.lastIndexOf('reconcile_release_commit'),
+    );
+    expect(reconciler.indexOf('reconcile_release_start_prior_service')).toBeLessThan(
+      reconciler.indexOf('reconcile_release_commit'),
     );
   });
 });
