@@ -29,7 +29,7 @@ const generatedEnvironment = {
   MYURLS_IMAGE: resolveRuntimeImages(lock).MYURLS_IMAGE,
   REDIS_IMAGE: resolveRuntimeImages(lock).REDIS_IMAGE,
   SUBCONVERTER_IMAGE: resolveRuntimeImages(lock).SUBCONVERTER_IMAGE,
-  TURNSTILE_SECRET_KEY: 'readiness-turnstile-secret',
+  TURNSTILE_SECRET_KEY: 'testing-only-placeholder',
   TURNSTILE_SITE_KEY: 'readiness-turnstile-site-key',
 };
 
@@ -45,7 +45,7 @@ const renderedProfile = (profile) => {
   const gateway = secureService({
     build: { dockerfile: 'Dockerfile' },
     image: generatedEnvironment.SUBWEB_IMAGE,
-    ports: [{ host_ip: '127.0.0.1', target: 8080 }],
+    ports: [{ host_ip: '127.0.0.1', published: 18080, target: 8080 }],
     networks: profile.shortLinksEnabled
       ? { default: {}, 'myurls-edge': {}, 'redis-policy': {}, 'subconverter-egress': {} }
       : { default: {}, 'subconverter-egress': {} },
@@ -260,7 +260,7 @@ describe('production readiness verifier', () => {
         PATH: `${directory}${path.delimiter}${process.env.PATH ?? ''}`,
       });
 
-      expect(result.status).toBe(0);
+      expect(result.status, `${result.stdout}${result.stderr}`).toBe(0);
       expect(`${result.stdout}${result.stderr}`).toContain(
         `Production readiness unified lock gate passed (${profile.composeFile}).`,
       );
@@ -288,6 +288,30 @@ describe('production readiness verifier', () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  it.each([
+    ['missing published host port', undefined],
+    ['ephemeral published host port', ''],
+    ['zero published host port', 0],
+    ['out-of-range published host port', 65_536],
+    ['non-numeric published host port', 'auto'],
+  ])('rejects a rendered gateway with %s', (_name, published) => {
+    const rendered = renderedProfile(fullProfile);
+    rendered.services.gateway.ports = [{ host_ip: '127.0.0.1', published, target: 8080 }];
+
+    expect(renderedErrors(rendered, fullProfile)).toContain('gateway must publish only loopback port 8080');
+  });
+
+  it('fails closed when docker compose config returns invalid JSON', () => {
+    const spawn = () => ({ status: 0, stdout: 'not JSON' });
+
+    expect(() => runDockerComposeConfig(spawn, {
+      composeFile: fullProfile.composeFile,
+      cwd: root,
+      envFile: '/tmp/subweb-compose.env',
+      environment: {},
+    })).toThrow('docker compose config returned invalid JSON');
   });
 
   it('fails closed when docker compose config times out', () => {

@@ -41,6 +41,21 @@ if [ "$command_name" = install ]; then
   exec "$SCRIPT_DIRECTORY/docker-deploy.sh" "$@"
 fi
 
+environment_file_identity() {
+  if identity=$(stat -Lc '%d:%i' "$1" 2>/dev/null); then
+    case "$identity" in
+      *[!0-9:]*|*::*|:*) return 1 ;;
+    esac
+  else
+    # macOS fdesc reports a synthetic device for /dev/fd/N but preserves inode.
+    identity=$(stat -Lf '%i' "$1") || return 1
+    case "$identity" in
+      *[!0-9]*|'') return 1 ;;
+    esac
+  fi
+  printf '%s\n' "$identity"
+}
+
 require_production_env() {
   [ -f "$ENV_FILE" ] && [ ! -L "$ENV_FILE" ] \
     || fail 'production .env is required and must be a regular, non-symlink file.'
@@ -52,18 +67,32 @@ require_production_env() {
       || fail 'unable to inspect production .env permissions.'
   fi
   [ "$permissions" = 600 ] || fail 'production .env must be mode 0600.'
+  production_env_identity=$(environment_file_identity "$ENV_FILE") \
+    || fail 'unable to identify the production .env file.'
 }
 
 require_production_env
 
 validated_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-env.XXXXXX") \
   || fail 'unable to create a private production environment snapshot.'
-trap 'rm -f "$validated_env_file"' EXIT
+trap 'rm -f "$validated_env_file"' 0
 trap 'rm -f "$validated_env_file"; exit 1' HUP INT TERM
 chmod 0600 "$validated_env_file" \
   || fail 'unable to protect the production environment snapshot.'
-cp "$ENV_FILE" "$validated_env_file" \
+exec 9< "$ENV_FILE" || fail 'unable to open the production environment.'
+opened_env_identity=$(environment_file_identity /dev/fd/9) \
+  || fail 'unable to identify the opened production environment.'
+[ "$opened_env_identity" = "$production_env_identity" ] \
+  || fail 'production .env changed before it could be opened.'
+cat <&9 > "$validated_env_file" \
   || fail 'unable to snapshot the production environment.'
+exec 9<&-
+current_env_identity=$(environment_file_identity "$ENV_FILE") \
+  || fail 'unable to identify the production .env file after snapshotting.'
+[ "$current_env_identity" = "$production_env_identity" ] \
+  || fail 'production .env changed while it was being snapshotted.'
+[ -f "$validated_env_file" ] && [ ! -L "$validated_env_file" ] \
+  || fail 'production environment snapshot is invalid.'
 chmod 0600 "$validated_env_file" \
   || fail 'unable to protect the production environment snapshot.'
 ENV_FILE=$validated_env_file

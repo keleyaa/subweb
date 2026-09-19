@@ -110,6 +110,17 @@ describe('production command configuration contract', () => {
     );
   });
 
+  it('uses a source-identity-checked descriptor for the private environment snapshot', async () => {
+    const source = await readFile(join(repositoryRoot, 'scripts/subweb.sh'), 'utf8');
+
+    expect(source).toContain('exec 9< "$ENV_FILE"');
+    expect(source).toContain('environment_file_identity /dev/fd/9');
+    expect(source).toContain('cat <&9 > "$validated_env_file"');
+    expect(source.indexOf('opened_env_identity=$(environment_file_identity /dev/fd/9)')).toBeLessThan(
+      source.indexOf('cat <&9 > "$validated_env_file"'),
+    );
+  });
+
   it('uses the private environment snapshot after the caller file changes', async () => {
     const root = await makeFixture();
     const envFile = join(root, '.env');

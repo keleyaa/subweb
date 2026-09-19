@@ -64,12 +64,12 @@ const readinessEnvironment = (profile, lock) => ({
   API_DOMAIN: 'api.readiness.test',
   API_URL: 'https://api.readiness.test',
   CUSTOM_BACKEND_ENABLED: 'true',
-  IP_HASH_SECRET: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  IP_HASH_SECRET: 'readiness-hash-placeholder',
   REDIS_PASSWORD: 'readiness-redis-password',
   SHORT_DOMAIN: 'short.readiness.test',
   SHORT_LINKS_ENABLED: String(profile.shortLinksEnabled),
   SUBWEB_IMAGE: readinessGatewayImage,
-  TURNSTILE_SECRET_KEY: 'readiness-turnstile-secret',
+  TURNSTILE_SECRET_KEY: 'testing-only-placeholder',
   TURNSTILE_SITE_KEY: 'readiness-turnstile-site-key',
   ...resolveRuntimeImages(lock),
 });
@@ -114,7 +114,11 @@ export const runDockerComposeConfig = (spawn, {
     throw new Error(`docker compose config failed with exit status ${status}${stderr ? `: ${stderr}` : ''}`);
   }
 
-  return JSON.parse(result.stdout);
+  try {
+    return JSON.parse(result.stdout);
+  } catch (error) {
+    throw new Error(`docker compose config returned invalid JSON: ${error.message}`, { cause: error });
+  }
 };
 
 const dockerfileReference = (reference) =>
@@ -220,7 +224,11 @@ export const verifyRenderedCompose = (rendered, profile, lock, errors, environme
   check(gateway?.build?.dockerfile === 'Dockerfile', 'gateway must use Dockerfile', errors);
   check(
     Array.isArray(gateway?.ports) && gateway.ports.length === 1
-      && gateway.ports[0].host_ip === '127.0.0.1' && Number(gateway.ports[0].target) === 8080,
+      && gateway.ports[0].host_ip === '127.0.0.1'
+      && Number(gateway.ports[0].target) === 8080
+      && /^\d+$/u.test(String(gateway.ports[0].published))
+      && Number(gateway.ports[0].published) >= 1
+      && Number(gateway.ports[0].published) <= 65_535,
     'gateway must publish only loopback port 8080',
     errors,
   );
