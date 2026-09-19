@@ -21,10 +21,10 @@ prompt_secret() {
   [ -r "$secret_tty" ] || fail 'Turnstile Secret Key requires an interactive terminal.'
 
   printf 'Turnstile Secret Key (hidden): ' > "$secret_tty"
+  trap 'restore_secret_tty' 0
+  trap 'restore_secret_tty; exit 1' HUP INT TERM
   stty -echo < "$secret_tty" 2>/dev/null \
     || fail 'Unable to hide Turnstile Secret Key input.'
-  trap 'restore_secret_tty' EXIT
-  trap 'restore_secret_tty; exit 1' HUP INT TERM
 
   secret_read_status=0
   if IFS= read -r turnstile_secret_key < "$secret_tty"; then
@@ -37,7 +37,7 @@ prompt_secret() {
     trap - HUP INT TERM
     fail 'Unable to restore terminal echo after reading Turnstile Secret Key.'
   fi
-  trap - EXIT HUP INT TERM
+  trap - 0 HUP INT TERM
   printf '\n' > "$secret_tty"
 
   if [ "$secret_read_status" -ne 0 ] && [ -z "$turnstile_secret_key" ]; then

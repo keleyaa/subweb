@@ -81,14 +81,25 @@ const runWizard = (root, input, environment = {}) => runScript(
 
 const shellQuote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
 
-const runInteractiveInstall = async (root, input, environment = {}) => {
-  const scriptPath = join(root, 'scripts', 'subweb.sh');
+const runInteractiveInstall = async (
+  root,
+  input,
+  environment = {},
+  interpreter = 'sh',
+  script = 'subweb.sh',
+) => {
+  const scriptPath = join(root, 'scripts', script);
   const inputPath = join(root, 'interactive-input');
   await writeFile(inputPath, input);
   const inputFd = openSync(inputPath, 'r');
-  const command = 'IFS= read -r discarded || :; exec "$1" install';
+  const command = interpreter === 'sh'
+    ? 'IFS= read -r discarded || :; exec "$1" install'
+    : `IFS= read -r discarded || :; exec ${shellQuote(interpreter)} "$1" install`;
+  const linuxCommand = interpreter === 'sh'
+    ? `IFS= read -r discarded || :; exec ${shellQuote(scriptPath)} install`
+    : `IFS= read -r discarded || :; exec ${shellQuote(interpreter)} ${shellQuote(scriptPath)} install`;
   const args = process.platform === 'linux'
-    ? ['-e', '-q', '-c', `IFS= read -r discarded || :; exec ${shellQuote(scriptPath)} install`, '/dev/null']
+    ? ['-e', '-q', '-c', linuxCommand, '/dev/null']
     : ['-q', '/dev/null', 'sh', '-c', command, 'sh', scriptPath];
 
   try {
@@ -236,6 +247,42 @@ describe('interactive deployment install', () => {
     expect(await readFile(join(root, 'docker.log'), 'utf8')).not.toContain(secret);
     expect(await readOptional(join(root, '.env'))).toBe('');
   });
+
+  it('runs the enabled wizard directly under dash and preserves the secret handoff', async () => {
+    const root = await makeFixture();
+    const secret = 'test-turnstile-secret-key';
+    const input = [
+      'app.example.com',
+      'api.example.com',
+      'true',
+      'short.example.com',
+      'site-key-not-secret',
+      '',
+      releaseVersion,
+      'yes',
+      secret,
+      '',
+    ].join('\n');
+
+    const result = await runInteractiveInstall(root, input, {}, '/bin/dash', 'install-wizard.sh');
+    const output = `${result.stdout}\n${result.stderr}`;
+    const deploymentOutput = output.slice(output.indexOf('Deployment summary'));
+
+    expect(result.status, output).toBe(0);
+    expect(await readArgs(root)).toEqual([
+      '--app-domain', 'app.example.com',
+      '--api-domain', 'api.example.com',
+      '--short-links-enabled', 'true',
+      '--short-domain', 'short.example.com',
+      '--turnstile-site-key', 'site-key-not-secret',
+      '--turnstile-secret-key-stdin',
+      '--image', resolvedImage,
+    ]);
+    expect(await readDeployStdin(root)).toBe(`${secret}\n`);
+    expect(deploymentOutput).not.toContain(secret);
+    expect(await readFile(join(root, 'deploy-args.log'), 'utf8')).not.toContain(secret);
+    expect(await readOptional(join(root, '.env'))).toBe('');
+  }, 35_000);
 
   it('omits short-link arguments for a confirmed disabled profile', async () => {
     const root = await makeFixture();
