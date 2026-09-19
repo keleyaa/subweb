@@ -1,4 +1,7 @@
-import { readFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('Compose-first local workflow contract', () => {
@@ -52,6 +55,55 @@ describe('Compose-first local workflow contract', () => {
     expect(verifier).toContain('"$script_directory/local/deps.sh" remove-volumes');
     expect(verifier.indexOf('trap cleanup EXIT HUP INT TERM')).toBeLessThan(verifier.indexOf('"$script_directory/local/deps.sh" up'));
     expect(verifier.indexOf(isolationBlock)).toBeLessThan(verifier.indexOf('"$script_directory/local/deps.sh" up'));
+  });
+
+  it('requires distinct usable host addresses inside the local MyUrls subnet', async () => {
+    const commonPath = new URL('../../scripts/local/common.sh', import.meta.url).pathname;
+    const runValidation = (subnet, gateway, myurls) => spawnSync(
+      'sh',
+      ['-c', '. "$1"; validate_local_ipv4s_in_subnet "$2" "$3" "$4"', '--', commonPath, subnet, gateway, myurls],
+      { encoding: 'utf8' },
+    );
+
+    expect(runValidation('172.30.255.0/29', '172.30.255.1', '172.30.255.6').status).toBe(0);
+    expect(runValidation('172.30.255.0/29', '172.30.255.0', '172.30.255.3').status).not.toBe(0);
+    expect(runValidation('172.30.255.0/29', '172.30.255.2', '172.30.255.7').status).not.toBe(0);
+    expect(runValidation('172.30.255.0/31', '172.30.255.0', '172.30.255.1').status).not.toBe(0);
+    expect(runValidation('172.30.255.0/32', '172.30.255.0', '172.30.255.0').status).not.toBe(0);
+  });
+
+  it('exits on a signal while updating the temporary local environment', async () => {
+    const fixture = await mkdtemp(join(tmpdir(), 'subweb-local-signal-'));
+    try {
+      const fixtureScripts = join(fixture, 'scripts/local');
+      const runtimeDirectory = join(fixture, '.runtime/local');
+      const bin = join(fixture, 'bin');
+      await mkdir(fixtureScripts, { recursive: true });
+      await mkdir(runtimeDirectory, { recursive: true });
+      await mkdir(bin, { recursive: true });
+      await writeFile(join(fixtureScripts, 'common.sh'), await readFile(new URL('../../scripts/local/common.sh', import.meta.url)));
+      await writeFile(join(runtimeDirectory, 'compose.env'), 'API_URL=http://127.0.0.1:18081\nSUBWEB_PORT=18081\n');
+      await writeFile(join(fixture, 'scripts/runtime-image-contract.mjs'), '');
+      for (const command of ['docker', 'openssl']) {
+        await writeFile(join(bin, command), '#!/bin/sh\nexit 0\n');
+        await chmod(join(bin, command), 0o755);
+      }
+      await writeFile(join(bin, 'node'), '#!/bin/sh\nprintf "REDIS_IMAGE=redis\\nSUBCONVERTER_IMAGE=subconverter\\nMYURLS_IMAGE=myurls\\n"\n');
+      await chmod(join(bin, 'node'), 0o755);
+      await writeFile(join(bin, 'sed'), '#!/bin/sh\ncase "$*" in\n  *compose.env) kill -TERM "$PPID"; exit 0 ;;\n  *) exec /usr/bin/sed "$@" ;;\nesac\n');
+      await chmod(join(bin, 'sed'), 0o755);
+
+      const result = spawnSync('sh', ['-c', '. "$1"; prepare_local_environment', '--', join(fixtureScripts, 'common.sh')], {
+        cwd: fixture,
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+        encoding: 'utf8',
+      });
+
+      expect(result.status).not.toBe(0);
+      expect((await readdir(runtimeDirectory)).filter((name) => name.startsWith('compose.env.tmp.'))).toEqual([]);
+    } finally {
+      await rm(fixture, { recursive: true, force: true });
+    }
   });
 
   it('derives three distinct local ports and leaves Redis private', async () => {

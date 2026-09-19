@@ -56,6 +56,19 @@ require_production_env() {
 
 require_production_env
 
+validated_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-env.XXXXXX") \
+  || fail 'unable to create a private production environment snapshot.'
+trap 'rm -f "$validated_env_file"' EXIT
+trap 'rm -f "$validated_env_file"; exit 1' HUP INT TERM
+chmod 0600 "$validated_env_file" \
+  || fail 'unable to protect the production environment snapshot.'
+cp "$ENV_FILE" "$validated_env_file" \
+  || fail 'unable to snapshot the production environment.'
+chmod 0600 "$validated_env_file" \
+  || fail 'unable to protect the production environment snapshot.'
+ENV_FILE=$validated_env_file
+export SUBWEB_ENV_FILE=$ENV_FILE
+
 command -v docker >/dev/null 2>&1 || fail 'Docker is not installed or not available in PATH.'
 docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
 
@@ -120,7 +133,7 @@ case "$command_name" in
     compose ps --services --filter status=running | grep -qx redis \
       || fail 'Redis must be running before backup.'
     export COMPOSE_FILE=$compose_file
-    exec "$SCRIPT_DIRECTORY/operations/backup-redis.sh" "$@"
+    "$SCRIPT_DIRECTORY/operations/backup-redis.sh" "$@"
     ;;
   restore)
     [ "$short_links_enabled" = true ] || fail 'restore requires SHORT_LINKS_ENABLED=true.'
@@ -132,7 +145,7 @@ case "$command_name" in
     esac
     [ -f "$2" ] && [ ! -L "$2" ] || fail 'restore backup must be a regular file and not a symlink.'
     export COMPOSE_FILE=$compose_file
-    exec "$SCRIPT_DIRECTORY/operations/restore-redis.sh" --backup "$2" --confirm-stop-writes
+    "$SCRIPT_DIRECTORY/operations/restore-redis.sh" --backup "$2" --confirm-stop-writes
     ;;
   upgrade)
     [ "$#" -eq 0 ] || fail 'upgrade does not accept extra arguments.'

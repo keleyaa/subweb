@@ -44,7 +44,7 @@ validate_local_ipv4_cidr() (
   printf '%s\n' "$cidr" | awk -F'[./]' '
     BEGIN { valid = 0 }
     NR == 1 {
-      valid = (NF == 5 && $5 ~ /^([0-9]|[12][0-9]|3[0-2])$/ && ($5 + 0) > 0)
+      valid = (NF == 5 && $5 ~ /^([0-9]|[12][0-9]|3[0-2])$/ && ($5 + 0) > 0 && ($5 + 0) <= 30)
       for (octet = 1; octet <= 4 && valid; octet += 1) {
         if ($octet !~ /^[0-9]+$/ || (length($octet) > 1 && substr($octet, 1, 1) == "0") || ($octet + 0) > 255) {
           valid = 0
@@ -85,7 +85,7 @@ validate_local_ipv4s_in_subnet() (
       network_end = network_start + (2 ^ (32 - subnet_parts[2])) - 1
       gateway_number = ip_number(gateway)
       myurls_number = ip_number(myurls)
-      exit !(gateway_number >= network_start && gateway_number <= network_end && myurls_number >= network_start && myurls_number <= network_end)
+      exit !(gateway_number > network_start && gateway_number < network_end && myurls_number > network_start && myurls_number < network_end)
     }
   '
 )
@@ -131,7 +131,8 @@ prepare_local_environment() {
     redis_password=$(openssl rand -hex 32) || local_fail 'unable to generate Redis password.'
     ip_hash_secret=$(openssl rand -hex 32) || local_fail 'unable to generate IP hash secret.'
     temporary_env=$local_env_file.tmp.$$
-    trap 'rm -f "$temporary_env"' EXIT HUP INT TERM
+    trap 'rm -f "$temporary_env"' EXIT
+    trap 'rm -f "$temporary_env"; exit 1' HUP INT TERM
     {
       printf '%s\n' \
         'APP_DOMAIN=app.local.test' \
