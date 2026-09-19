@@ -37,7 +37,7 @@ describe('single HTTP deployment contract', () => {
     expect(compose).not.toContain('TLS_CERT_PATH');
     expect(compose).not.toContain('TLS_KEY_PATH');
     expect(validator).toContain('"gateway", "myurls", "redis", "subconverter"');
-    expect(validator).not.toContain('COMPOSE_PROFILES');
+    expect(validator).toContain('unset COMPOSE_FILE COMPOSE_PROFILES COMPOSE_PROJECT_NAME');
   });
 
   it('starts the Go Gateway without a runtime Nginx renderer or direct TLS configuration', async () => {
