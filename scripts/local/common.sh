@@ -41,10 +41,11 @@ validate_local_ipv4() (
 
 validate_local_ipv4_cidr() (
   cidr=${1-}
-  printf '%s\n' "$cidr" | awk -F'[./]' '
+  maximum_prefix=${2:-30}
+  printf '%s\n' "$cidr" | awk -F'[./]' -v maximum_prefix="$maximum_prefix" '
     BEGIN { valid = 0 }
     NR == 1 {
-      valid = (NF == 5 && $5 ~ /^([0-9]|[12][0-9]|3[0-2])$/ && ($5 + 0) > 0 && ($5 + 0) <= 30)
+      valid = (NF == 5 && $5 ~ /^([0-9]|[12][0-9]|3[0-2])$/ && ($5 + 0) > 0 && ($5 + 0) <= maximum_prefix)
       for (octet = 1; octet <= 4 && valid; octet += 1) {
         if ($octet !~ /^[0-9]+$/ || (length($octet) > 1 && substr($octet, 1, 1) == "0") || ($octet + 0) > 255) {
           valid = 0
@@ -112,7 +113,7 @@ prepare_local_environment() {
   validate_local_ipv4s_in_subnet \
     "$local_myurls_network_subnet" "$local_myurls_gateway_ip" "$local_myurls_ip" \
     || local_fail 'LOCAL_MYURLS_GATEWAY_IP and LOCAL_MYURLS_IP must be inside LOCAL_MYURLS_NETWORK_SUBNET.'
-  validate_local_ipv4_cidr "$local_myurls_trust_proxy_cidr" \
+  validate_local_ipv4_cidr "$local_myurls_trust_proxy_cidr" 32 \
     || local_fail 'LOCAL_MYURLS_TRUST_PROXY_CIDR must be a canonical IPv4 CIDR.'
   [ "$local_myurls_trust_proxy_cidr" = "$local_myurls_gateway_ip/32" ] \
     || local_fail 'LOCAL_MYURLS_TRUST_PROXY_CIDR must exactly match LOCAL_MYURLS_GATEWAY_IP/32.'
@@ -131,7 +132,7 @@ prepare_local_environment() {
     redis_password=$(openssl rand -hex 32) || local_fail 'unable to generate Redis password.'
     ip_hash_secret=$(openssl rand -hex 32) || local_fail 'unable to generate IP hash secret.'
     temporary_env=$local_env_file.tmp.$$
-    trap 'rm -f "$temporary_env"' EXIT
+    trap 'rm -f "$temporary_env"' 0
     trap 'rm -f "$temporary_env"; exit 1' HUP INT TERM
     {
       printf '%s\n' \
@@ -147,7 +148,7 @@ prepare_local_environment() {
     } > "$temporary_env" || local_fail 'unable to write local environment.'
     chmod 0600 "$temporary_env"
     mv "$temporary_env" "$local_env_file"
-    trap - EXIT HUP INT TERM
+    trap - 0 HUP INT TERM
   fi
   [ -f "$local_env_file" ] && [ ! -L "$local_env_file" ] \
     || local_fail 'local environment must be a regular file.'
@@ -170,7 +171,8 @@ prepare_local_environment() {
   export MYURLS_IMAGE="$local_myurls_image"
 
   temporary_env=$local_env_file.tmp.$$
-  trap 'rm -f "$temporary_env"' EXIT HUP INT TERM
+  trap 'rm -f "$temporary_env"' 0
+  trap 'rm -f "$temporary_env"; exit 1' HUP INT TERM
   sed \
     -e "s#^API_URL=.*#API_URL=http://127.0.0.1:$local_subweb_port#" \
     -e "s#^SUBWEB_PORT=.*#SUBWEB_PORT=$local_subweb_port#" \
@@ -192,7 +194,7 @@ prepare_local_environment() {
   chmod 0600 "$temporary_env"
   mv "$temporary_env" "$local_env_file" \
     || local_fail 'unable to update local environment.'
-  trap - EXIT HUP INT TERM
+  trap - 0 HUP INT TERM
 
   export COMPOSE_FILE=$local_project_root/compose.yaml:$local_project_root/compose.dev.yaml
   export COMPOSE_ENV_FILES=$local_env_file

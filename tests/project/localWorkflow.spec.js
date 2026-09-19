@@ -90,7 +90,7 @@ describe('Compose-first local workflow contract', () => {
       }
       await writeFile(join(bin, 'node'), '#!/bin/sh\nprintf "REDIS_IMAGE=redis\\nSUBCONVERTER_IMAGE=subconverter\\nMYURLS_IMAGE=myurls\\n"\n');
       await chmod(join(bin, 'node'), 0o755);
-      await writeFile(join(bin, 'sed'), '#!/bin/sh\ncase "$*" in\n  *compose.env) kill -TERM "$PPID"; exit 0 ;;\n  *) exec /usr/bin/sed "$@" ;;\nesac\n');
+      await writeFile(join(bin, 'sed'), '#!/bin/sh\ncase "$*" in\n  *compose.env*) kill -TERM "$PPID"; exit 0 ;;\n  *) exec /usr/bin/sed "$@" ;;\nesac\n');
       await chmod(join(bin, 'sed'), 0o755);
 
       const result = spawnSync('sh', ['-c', '. "$1"; prepare_local_environment', '--', join(fixtureScripts, 'common.sh')], {
