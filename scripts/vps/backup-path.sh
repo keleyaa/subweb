@@ -36,6 +36,30 @@ backup_path_without_trailing_slashes() {
   printf '%s\n' "$backup_normalized_path"
 }
 
+backup_path_has_navigation_component() {
+  case "$1" in
+    *'/../'*|*/..|*'/./'*|*/.) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+backup_canonical_child_path() {
+  backup_root=$1
+  backup_path=$2
+  backup_path_is_within "$backup_root" "$backup_path" || return 1
+  backup_path_has_navigation_component "$backup_path" && return 1
+  backup_path_has_symlink_component "$backup_root" "$backup_path" && return 1
+
+  backup_name=${backup_path##*/}
+  backup_parent=${backup_path%/*}
+  [ -n "$backup_name" ] && [ -n "$backup_parent" ] || return 1
+  backup_canonical_root=$(CDPATH= cd -- "$backup_root" && pwd -P) || return 1
+  backup_canonical_parent=$(CDPATH= cd -- "$backup_parent" && pwd -P) || return 1
+  backup_canonical_path=$backup_canonical_parent/$backup_name
+  backup_path_is_within "$backup_canonical_root" "$backup_canonical_path" || return 1
+  printf '%s\n' "$backup_canonical_path"
+}
+
 backup_mount_is_distinct() {
   backup_mount_path=$(backup_path_without_trailing_slashes "$1") || return 1
   [ "$backup_mount_path" != / ] || return 1
@@ -51,6 +75,12 @@ backup_mount_identity() {
   backup_mount_device=$(findmnt -rn --mountpoint "$backup_mount_path" -o MAJ:MIN 2>/dev/null) || return 1
   [ -n "$backup_mount_source" ] && [ -n "$backup_mount_fstype" ] && [ -n "$backup_mount_device" ] || return 1
   printf '%s|%s|%s\n' "$backup_mount_source" "$backup_mount_fstype" "$backup_mount_device"
+}
+
+backup_hold_mount() {
+  backup_mount_path=$(backup_path_without_trailing_slashes "$1") || return 1
+  [ -d "$backup_mount_path" ] || return 1
+  exec 8<"$backup_mount_path" || return 1
 }
 
 backup_path_is_within() {
@@ -72,9 +102,7 @@ backup_path_is_supported() {
       ;;
     *) return 1 ;;
   esac
-  case "$1" in
-    *'/../'*|*/..|*'/./'*|*/.) return 1 ;;
-  esac
+  backup_path_has_navigation_component "$1" && return 1
   backup_path_has_symlink_component "$backup_root" "$1" && return 1
   return 0
 }

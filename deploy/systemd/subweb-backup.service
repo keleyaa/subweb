@@ -1,8 +1,9 @@
 [Unit]
 Description=Subweb encrypted Redis backup
 Requires=docker.service
-After=docker.service subweb.service
-Wants=subweb.service
+RequiresMountsFor=/var/lib/subweb-backups /mnt/subweb-backups
+After=docker.service remote-fs.target subweb.service
+Wants=remote-fs.target subweb.service
 
 [Service]
 Type=oneshot
@@ -10,6 +11,7 @@ User=root
 Group=root
 WorkingDirectory=/opt/subweb
 EnvironmentFile=-/etc/subweb/backup.env
+ExecCondition=/bin/sh -eu -c '. /opt/subweb/scripts/vps/backup-path.sh; mount=${BACKUP_REMOTE_MOUNT:-}; [ -z "$mount" ] || { backup_path_is_supported "$mount" && command -v findmnt >/dev/null 2>&1 && backup_mount_is_distinct "$mount"; }'
 ExecStart=/opt/subweb/scripts/vps/backup.sh
 NoNewPrivileges=true
 PrivateTmp=true

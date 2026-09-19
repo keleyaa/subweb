@@ -139,9 +139,24 @@ describe('VPS runtime contract', () => {
     expect(backupPath).toContain('$path_label must be under a systemd ReadWritePaths entry.');
     expect(backup).toContain('require_supported_backup_path BACKUP_DIRECTORY');
     expect(verifyBackup).toContain('require_supported_backup_path BACKUP_DIRECTORY');
-    expect(service).toContain('ReadWritePaths=/opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups');
-    expect(verifyService).toContain('ReadWritePaths=/opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups');
-    });
+     expect(service).toContain('ReadWritePaths=/opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups');
+     expect(verifyService).toContain('ReadWritePaths=/opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups');
+     for (const unit of [service, verifyService]) {
+       expect(unit).toContain('RequiresMountsFor=/var/lib/subweb-backups /mnt/subweb-backups');
+       expect(unit).toContain('After=docker.service remote-fs.target');
+       expect(unit).toContain('Wants=remote-fs.target');
+       expect(unit).toContain('ExecCondition=/bin/sh -eu -c');
+       expect(unit).toContain('mount=${BACKUP_REMOTE_MOUNT:-}');
+       expect(unit).toContain('backup_path_is_supported "$mount"');
+       expect(unit).toContain('backup_mount_is_distinct "$mount"');
+       expect(unit).not.toContain('RequiresMountsFor=${BACKUP_REMOTE_MOUNT}');
+     }
+     expect(backupPath).toContain('backup_canonical_child_path');
+     expect(backupPath).toContain('backup_path_has_navigation_component');
+     expect(backupPath).toContain('backup_hold_mount');
+     expect(verifyBackup).toContain('backup_canonical_child_path "$BACKUP_DIRECTORY" "$backup"');
+     expect(verifyBackup).toContain('validate_backup_destination');
+     });
 
     it('provides host checks for supported tools, disk pressure, and protected env', async () => {
     const checker = await read('scripts/vps/check-host.sh');

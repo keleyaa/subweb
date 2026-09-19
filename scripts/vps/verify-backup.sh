@@ -15,23 +15,43 @@ fail() {
 
 # shellcheck source=backup-path.sh
 . "$SCRIPT_DIRECTORY/backup-path.sh"
-require_supported_backup_path BACKUP_DIRECTORY "$BACKUP_DIRECTORY"
-if [ -n "$BACKUP_REMOTE_MOUNT" ]; then
+
+backup_expected_mount_identity=
+validate_backup_destination() {
+  require_supported_backup_path BACKUP_DIRECTORY "$BACKUP_DIRECTORY"
+  if [ -z "$BACKUP_REMOTE_MOUNT" ]; then
+    return 0
+  fi
+
   require_supported_backup_path BACKUP_REMOTE_MOUNT "$BACKUP_REMOTE_MOUNT"
   command -v findmnt >/dev/null 2>&1 || fail 'findmnt is required for BACKUP_REMOTE_MOUNT.'
   backup_mount_is_distinct "$BACKUP_REMOTE_MOUNT" \
     || fail 'BACKUP_REMOTE_MOUNT must be a distinct mounted filesystem; refusing verification.'
   backup_path_is_within "$BACKUP_REMOTE_MOUNT" "$BACKUP_DIRECTORY" \
     || fail 'BACKUP_DIRECTORY must be under BACKUP_REMOTE_MOUNT; refusing verification.'
+  backup_observed_mount_identity=$(backup_mount_identity "$BACKUP_REMOTE_MOUNT") \
+    || fail 'unable to determine BACKUP_REMOTE_MOUNT identity.'
+  case "$backup_expected_mount_identity" in
+    '') backup_expected_mount_identity=$backup_observed_mount_identity ;;
+    "$backup_observed_mount_identity") ;;
+    *) fail 'BACKUP_REMOTE_MOUNT identity changed; refusing verification.' ;;
+  esac
+}
+
+validate_backup_destination
+if [ -n "$BACKUP_REMOTE_MOUNT" ]; then
+  # Keep the validated directory open and revalidate its mount before use.
+  backup_hold_mount "$BACKUP_REMOTE_MOUNT" \
+    || fail 'unable to hold BACKUP_REMOTE_MOUNT open; refusing verification.'
+  validate_backup_destination
 fi
 
 case "$backup" in /*) ;; *) fail 'backup path must be absolute.' ;; esac
+backup=$(backup_canonical_child_path "$BACKUP_DIRECTORY" "$backup") \
+  || fail 'backup must resolve inside BACKUP_DIRECTORY without symlink components.'
 [ -f "$backup" ] && [ ! -L "$backup" ] || fail 'backup must be a regular file.'
-case "$backup" in
-  "$BACKUP_DIRECTORY"/*) ;;
-  *) fail 'backup must be inside BACKUP_DIRECTORY.' ;;
-esac
 [ -f "$backup.sha256" ] || fail 'backup checksum sidecar is missing.'
+validate_backup_destination
 sha256sum -c "$backup.sha256" >/dev/null 2>&1 \
   || shasum -a 256 -c "$backup.sha256" >/dev/null 2>&1 \
   || fail 'backup checksum does not match.'
@@ -48,6 +68,7 @@ case "$backup" in
       || fail 'unable to inspect AGE_IDENTITY_FILE permissions.'
     [ "$identity_permissions" = 600 ] || fail 'AGE_IDENTITY_FILE must be mode 0600.'
     command -v age >/dev/null 2>&1 || fail 'age is required for encrypted backup verification.'
+    validate_backup_destination
     temporary=$(mktemp "$BACKUP_DIRECTORY/.verify.XXXXXX")
     chmod 0600 "$temporary"
     age --decrypt --identity "$AGE_IDENTITY_FILE" -o "$temporary" "$backup" \
@@ -56,6 +77,8 @@ case "$backup" in
     ;;
 esac
 
+# This is the final check before the verified path reaches Docker as a bind mount.
+validate_backup_destination
 COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-subweb} \
   "$PROJECT_ROOT/scripts/operations/verify-redis-backup.sh" --backup "$verified_backup"
 printf 'Redis backup restore verification passed: %s\n' "$backup"

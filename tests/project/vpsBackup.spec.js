@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -156,5 +156,73 @@ describe('VPS backup mount safety', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(expectedError);
+  });
+
+  it.each([
+    {
+      name: 'lexical traversal outside BACKUP_DIRECTORY',
+      backupPath: (backupDirectory) => `${backupDirectory}/../outside/subweb-redis.rdb`,
+      prepare: async (backupDirectory, outside) => {
+        await mkdir(outside, { recursive: true });
+      },
+    },
+    {
+      name: 'a symlinked directory component',
+      backupPath: (backupDirectory) => join(backupDirectory, 'linked', 'subweb-redis.rdb'),
+      prepare: async (backupDirectory, outside) => {
+        await mkdir(outside, { recursive: true });
+        await symlink(outside, join(backupDirectory, 'linked'));
+      },
+    },
+    {
+      name: 'a symlinked final backup file',
+      backupPath: (backupDirectory) => join(backupDirectory, 'linked.rdb'),
+      prepare: async (backupDirectory, outside) => {
+        await mkdir(outside, { recursive: true });
+        await symlink(join(outside, 'subweb-redis.rdb'), join(backupDirectory, 'linked.rdb'));
+      },
+    },
+  ])('rejects $name before binding the backup into Docker', async ({ backupPath, prepare }) => {
+    const fixture = await mkdtemp(join(tmpdir(), 'subweb-vps-path-'));
+    temporaryDirectories.push(fixture);
+    const scriptsDirectory = join(fixture, 'scripts', 'vps');
+    const projectRoot = join(fixture, 'project');
+    const backupDirectory = join(fixture, 'approved-backups');
+    const outside = join(fixture, 'outside');
+    const marker = join(fixture, 'docker-bind-attempted');
+    const actualBackupPath = backupPath(backupDirectory, outside);
+    const backupPathSource = await readFile(backupPathScript, 'utf8');
+    const verifyBackupSource = await readFile(verifyBackupScript, 'utf8');
+
+    await mkdir(scriptsDirectory, { recursive: true });
+    await mkdir(join(projectRoot, 'scripts', 'operations'), { recursive: true });
+    await mkdir(backupDirectory, { recursive: true });
+    await prepare(backupDirectory, outside);
+    await writeFile(actualBackupPath, 'backup');
+    await writeFile(`${actualBackupPath}.sha256`, 'checksum');
+    await writeExecutable(join(scriptsDirectory, 'backup-path.sh'), backupPathSource
+      .replaceAll('/var/lib/subweb-backups', backupDirectory)
+      .replaceAll('/mnt/subweb-backups', join(fixture, 'other-managed-root')));
+    await writeExecutable(join(scriptsDirectory, 'verify-backup.sh'), verifyBackupSource);
+    await writeExecutable(join(projectRoot, 'scripts', 'operations', 'verify-redis-backup.sh'),
+      `#!/bin/sh\nprintf '%s' "$2" > '${marker}'\nexit 0\n`);
+    await writeExecutable(join(fixture, 'sha256sum'), '#!/bin/sh\nexit 0\n');
+
+    const result = spawnSync('sh', [join(scriptsDirectory, 'verify-backup.sh'), actualBackupPath], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${fixture}:${process.env.PATH}`,
+        SUBWEB_ROOT: projectRoot,
+        BACKUP_DIRECTORY: backupDirectory,
+        BACKUP_REMOTE_MOUNT: '',
+        AGE_IDENTITY_FILE: '',
+        AGE_RECIPIENT: '',
+      },
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('backup must resolve inside BACKUP_DIRECTORY');
+    await expect(readFile(marker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });

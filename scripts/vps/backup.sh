@@ -43,6 +43,13 @@ validate_backup_destination() {
 }
 
 validate_backup_destination
+if [ -n "$BACKUP_REMOTE_MOUNT" ]; then
+  # Hold the validated mount directory open so its identity can be checked again
+  # before each operation that writes or removes backup data.
+  backup_hold_mount "$BACKUP_REMOTE_MOUNT" \
+    || fail 'unable to hold BACKUP_REMOTE_MOUNT open; refusing retention.'
+  validate_backup_destination
+fi
 
 case "$BACKUP_RETENTION" in
   ''|*[!0-9]*) fail 'BACKUP_RETENTION must be a positive integer.' ;;
