@@ -193,11 +193,23 @@ describe('integrated service artifact locks', () => {
       `SUBCONVERTER_IMAGE=${images.SUBCONVERTER_IMAGE}`,
       `MYURLS_IMAGE=${images.MYURLS_IMAGE}`,
       '',
-    ].join('\n')); 
+    ].join('\n'));
     expect(runtimeImagesForRollback(lock)).toEqual({
-      redis: lock.services.redis.image,
-      subconverter: lock.services.subconverter.image,
-      myurls: lock.services.myurls.image,
+      redis: {
+        reference: `${lock.services.redis.image.reference}@${lock.services.redis.image.digest}`,
+        digest: lock.services.redis.image.digest,
+        platforms: { ...lock.services.redis.image.platforms },
+      },
+      subconverter: {
+        reference: `${lock.services.subconverter.image.reference}@${lock.services.subconverter.image.digest}`,
+        digest: lock.services.subconverter.image.digest,
+        platforms: { ...lock.services.subconverter.image.platforms },
+      },
+      myurls: {
+        reference: `${lock.services.myurls.image.reference}@${lock.services.myurls.image.digest}`,
+        digest: lock.services.myurls.image.digest,
+        platforms: { ...lock.services.myurls.image.platforms },
+      },
     });
   });
 
@@ -220,6 +232,37 @@ describe('integrated service artifact locks', () => {
     expect(() => resolveRuntimeImages(candidate)).toThrow(
       'services.redis.image.digest must be a sha256 digest',
     );
+  });
+
+  it('rejects malformed locks before generating rollback images', () => {
+    const candidate = structuredClone(lock);
+    candidate.services.myurls.image = null;
+
+    expect(() => runtimeImagesForRollback(candidate)).toThrow(
+      'services.myurls.image must be an object',
+    );
+  });
+
+  it.each([
+    [
+      'an invalid image digest',
+      (candidate) => {
+        candidate.services.redis.image.digest = 'sha256:bad';
+      },
+      'services.redis.image.digest must be a sha256 digest',
+    ],
+    [
+      'an invalid platform digest',
+      (candidate) => {
+        candidate.services.redis.image.platforms['linux/arm64'] = 'sha256:bad';
+      },
+      'services.redis.image.platforms.linux/arm64 must be a sha256 digest',
+    ],
+  ])('rejects rollback generation with %s', (_label, mutate, expectedError) => {
+    const candidate = structuredClone(lock);
+    mutate(candidate);
+
+    expect(() => runtimeImagesForRollback(candidate)).toThrow(expectedError);
   });
 
   it('rejects a Redis source or image outside the approved 7.4.11 Alpine lock', () => {

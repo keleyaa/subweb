@@ -79,7 +79,7 @@ export function runtimeImagesForRollback(lock) {
       return [
         service,
         {
-          reference: image.reference,
+          reference: immutableImageReference(image),
           digest: image.digest,
           platforms: { ...image.platforms },
         },
