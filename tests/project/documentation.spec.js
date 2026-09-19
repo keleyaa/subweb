@@ -163,6 +163,56 @@ describe("documentation contract", () => {
     expect(vps).not.toContain("/srv/releases/subweb-v1.0.4");
   });
 
+  it.each([
+    ["v1.2.3 tag", "docker.io/keleyaa/subweb:v1.2.3", true],
+    ["latest tag", "ghcr.io/keleyaa/subweb:latest", true],
+    ["sha tag", "docker.io/keleyaa/subweb:sha-deadbee", true],
+    [
+      "tag and digest ambiguity",
+      `docker.io/keleyaa/subweb:v1.2.3@sha256:${"a".repeat(64)}`,
+      true,
+    ],
+    [
+      "Docker Hub digest",
+      `docker.io/keleyaa/subweb@sha256:${"a".repeat(64)}`,
+      false,
+    ],
+    [
+      "GHCR digest",
+      `ghcr.io/keleyaa/subweb@sha256:${"b".repeat(64)}`,
+      false,
+    ],
+    [
+      "registry-port digest",
+      `registry.example:5000/repository/subweb@sha256:${"c".repeat(64)}`,
+      false,
+    ],
+    [
+      "documented placeholder",
+      "docker.io/keleyaa/subweb@sha256:<64-hex-digest>",
+      false,
+    ],
+  ])("validates the %s SUBWEB_IMAGE example", (_label, image, rejectsImage) => {
+    const envExamplePath = path.join(root, ".env.example");
+    const originalEnvExample = fs.readFileSync(envExamplePath, "utf8");
+
+    try {
+      fs.writeFileSync(
+        envExamplePath,
+        originalEnvExample.replace(
+          "# SUBWEB_IMAGE=docker.io/keleyaa/subweb@sha256:<64-hex-digest>",
+          `# SUBWEB_IMAGE=${image}`,
+        ),
+      );
+
+      expect(verifyDocs({ root }).includes("env example uses a mutable Gateway image tag")).toBe(
+        rejectsImage,
+      );
+    } finally {
+      fs.writeFileSync(envExamplePath, originalEnvExample);
+    }
+  });
+
   it("documents exactly the approved deployment families and source lineage", () => {
     const readme = read("README.md");
     for (const name of ["本机源码", "Docker"]) expect(readme).toContain(name);
