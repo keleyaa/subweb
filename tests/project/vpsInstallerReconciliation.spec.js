@@ -44,12 +44,14 @@ const writeTimerSystemctl = async (bin) => writeExecutable(join(bin, 'systemctl'
 printf '%s\\n' "$*" >> "$CALL_LOG"
 case "$1 $2" in
   'is-enabled --quiet')
-    [ "${'${TIMER_STATE:-disabled}'}" != disabled ] && exit 0
-    exit 3
+    case "${'${TIMER_STATE:-disabled}'}" in
+      disabled|disabled-active) exit 3 ;;
+      *) exit 0 ;;
+    esac
     ;;
   'is-active --quiet')
     case "${'${TIMER_STATE:-disabled}'}:$3" in
-      active:subweb-backup.timer|active:subweb-backup-verify.timer|active:subweb-backup.service|active:subweb-backup-verify.service) exit 0 ;;
+      active:subweb-backup.timer|active:subweb-backup-verify.timer|active:subweb-backup.service|active:subweb-backup-verify.service|disabled-active:subweb-backup.timer|disabled-active:subweb-backup-verify.timer|disabled-active:subweb-backup.service|disabled-active:subweb-backup-verify.service) exit 0 ;;
     esac
     exit 3
     ;;
@@ -182,7 +184,27 @@ printf '%s\\n' "$NESTED_MOUNT"
   it.each([
     ['disabled', [
       'is-enabled --quiet subweb-backup.timer',
+      'is-active --quiet subweb-backup.timer',
+      'is-active --quiet subweb-backup.service',
       'is-enabled --quiet subweb-backup-verify.timer',
+      'is-active --quiet subweb-backup-verify.timer',
+      'is-active --quiet subweb-backup-verify.service',
+    ]],
+    ['disabled but active', [
+      'is-enabled --quiet subweb-backup.timer',
+      'is-active --quiet subweb-backup.timer',
+      'is-active --quiet subweb-backup.service',
+      'stop subweb-backup.timer',
+      'stop subweb-backup.service',
+      'is-enabled --quiet subweb-backup-verify.timer',
+      'is-active --quiet subweb-backup-verify.timer',
+      'is-active --quiet subweb-backup-verify.service',
+      'stop subweb-backup-verify.timer',
+      'stop subweb-backup-verify.service',
+      'start subweb-backup.service',
+      'start subweb-backup-verify.service',
+      'start subweb-backup.timer',
+      'start subweb-backup-verify.timer',
     ]],
     ['enabled but inactive', [
       'is-enabled --quiet subweb-backup.timer',
@@ -193,8 +215,6 @@ printf '%s\\n' "$NESTED_MOUNT"
       'is-active --quiet subweb-backup-verify.timer',
        'is-active --quiet subweb-backup-verify.service',
        'stop subweb-backup-verify.timer',
-       'start subweb-backup.timer',
-       'start subweb-backup-verify.timer',
      ]],
     ['enabled and active', [
       'is-enabled --quiet subweb-backup.timer',
@@ -222,7 +242,17 @@ printf '%s\\n' "$NESTED_MOUNT"
     const result = runShell(
       'set -eu; . "$1"; pause_enabled_release_timers; resume_paused_release_timers',
       [reconcilerPath],
-      { PATH: `${bin}:${process.env.PATH}`, CALL_LOG: calls, TIMER_STATE: state === 'disabled' ? state : state === 'enabled but inactive' ? 'inactive' : 'active' },
+      {
+        PATH: `${bin}:${process.env.PATH}`,
+        CALL_LOG: calls,
+        TIMER_STATE: state === 'disabled'
+          ? 'disabled'
+          : state === 'disabled but active'
+            ? 'disabled-active'
+            : state === 'enabled but inactive'
+              ? 'inactive'
+              : 'active',
+      },
     );
 
     expect(result.status, result.stderr).toBe(0);
