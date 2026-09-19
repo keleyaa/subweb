@@ -21,6 +21,7 @@ validate_local_port() {
 
 prepare_local_environment() {
   command -v docker >/dev/null 2>&1 || local_fail 'docker is required.'
+  command -v node >/dev/null 2>&1 || local_fail 'node is required.'
   command -v openssl >/dev/null 2>&1 || local_fail 'openssl is required.'
   for port in "$local_myurls_port" "$local_subweb_port" "$local_vite_port"; do
     validate_local_port "$port" || local_fail 'local ports must be integers from 1024 to 65535.'
@@ -60,24 +61,37 @@ prepare_local_environment() {
   [ -f "$local_env_file" ] && [ ! -L "$local_env_file" ] \
     || local_fail 'local environment must be a regular file.'
 
+  runtime_image_env=$(node "$local_project_root/scripts/runtime-image-contract.mjs" env) \
+    || local_fail 'unable to resolve locked runtime images.'
+  for name in REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE; do
+    printf '%s\n' "$runtime_image_env" | grep -q "^$name=" \
+      || local_fail 'runtime image contract is incomplete.'
+  done
+
   temporary_env=$local_env_file.tmp.$$
-  if grep -q '^API_URL=' "$local_env_file"; then
-    sed -e "s#^API_URL=.*#API_URL=http://127.0.0.1:$local_subweb_port#" \
-      -e "s#^SUBWEB_PORT=.*#SUBWEB_PORT=$local_subweb_port#" "$local_env_file" > "$temporary_env" \
-      || local_fail 'unable to update local API URL.'
-  else
-    cp "$local_env_file" "$temporary_env" \
-      || local_fail 'unable to prepare local environment update.'
-    printf '%s\\n' "API_URL=http://127.0.0.1:$local_subweb_port" "SUBWEB_PORT=$local_subweb_port" >> "$temporary_env" \
+  trap 'rm -f "$temporary_env"' EXIT HUP INT TERM
+  sed \
+    -e "s#^API_URL=.*#API_URL=http://127.0.0.1:$local_subweb_port#" \
+    -e "s#^SUBWEB_PORT=.*#SUBWEB_PORT=$local_subweb_port#" \
+    -e '/^REDIS_IMAGE=/d' \
+    -e '/^SUBCONVERTER_IMAGE=/d' \
+    -e '/^MYURLS_IMAGE=/d' \
+    "$local_env_file" > "$temporary_env" \
+    || local_fail 'unable to update local API URL.'
+  if ! grep -q '^API_URL=' "$temporary_env"; then
+    printf '%s\n' "API_URL=http://127.0.0.1:$local_subweb_port" >> "$temporary_env" \
       || local_fail 'unable to add local API URL.'
   fi
   if ! grep -q '^SUBWEB_PORT=' "$temporary_env"; then
     printf '%s\n' "SUBWEB_PORT=$local_subweb_port" >> "$temporary_env" \
       || local_fail 'unable to add local Subweb port.'
   fi
+  printf '%s\n' "$runtime_image_env" >> "$temporary_env" \
+    || local_fail 'unable to add locked runtime images.'
   chmod 0600 "$temporary_env"
   mv "$temporary_env" "$local_env_file" \
     || local_fail 'unable to update local environment.'
+  trap - EXIT HUP INT TERM
 
   export COMPOSE_FILE=$local_project_root/compose.yaml:$local_project_root/compose.dev.yaml
   export COMPOSE_ENV_FILES=$local_env_file

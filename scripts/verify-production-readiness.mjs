@@ -214,7 +214,41 @@ export const verifyRenderedCompose = (rendered, profile, lock, errors) => {
 
   const images = resolveRuntimeImages(lock);
   const expectedImages = { subconverter: images.SUBCONVERTER_IMAGE };
+  const internalNetworks = profile.shortLinksEnabled
+    ? ['myurls-data', 'myurls-edge', 'redis-policy', 'subconverter-egress']
+    : ['subconverter-egress'];
+  for (const network of internalNetworks) {
+    check(rendered?.networks?.[network]?.internal === true, `${network} must be an internal network`, errors);
+  }
+
   if (profile.shortLinksEnabled) {
+    const shortDomain = environmentValue(gateway, 'SHORT_DOMAIN');
+    const appDomain = environmentValue(gateway, 'APP_DOMAIN');
+    check(
+      typeof shortDomain === 'string' && shortDomain.length > 0 && shortDomain !== appDomain,
+      'gateway SHORT_DOMAIN is invalid',
+      errors,
+    );
+    check(
+      environmentValue(gateway, 'REDIS_URL') === 'redis://redis:6379/1',
+      'gateway Redis URL must use database 1',
+      errors,
+    );
+    check(
+      environmentValue(services.myurls, 'PUBLIC_BASE_URL') === `https://${shortDomain}`,
+      'MyUrls public base URL must match gateway SHORT_DOMAIN',
+      errors,
+    );
+    check(
+      environmentValue(services.myurls, 'REDIS_URL') === 'redis://redis:6379/0',
+      'MyUrls Redis URL must use database 0',
+      errors,
+    );
+    check(
+      environmentValue(services.myurls, 'TURNSTILE_HOSTNAME') === appDomain,
+      'MyUrls Turnstile hostname must match gateway APP_DOMAIN',
+      errors,
+    );
     expectedImages.myurls = images.MYURLS_IMAGE;
     expectedImages.redis = images.REDIS_IMAGE;
     check(
@@ -232,8 +266,17 @@ export const verifyRenderedCompose = (rendered, profile, lock, errors) => {
       'MyUrls egress proxy is invalid',
       errors,
     );
-    for (const network of ['myurls-data', 'myurls-edge', 'redis-policy', 'subconverter-egress']) {
-      check(rendered?.networks?.[network]?.internal === true, `${network} must be an internal network`, errors);
+  } else {
+    for (const name of [
+      'EGRESS_RESTRICTED_LISTEN_ADDR', 'IP_HASH_SECRET', 'MYURLS_UPSTREAM',
+      'REDIS_PASSWORD', 'REDIS_URL', 'SHORT_DOMAIN', 'TURNSTILE_SECRET_KEY',
+      'TURNSTILE_SITE_KEY',
+    ]) {
+      check(
+        environmentValue(gateway, name) === undefined,
+        `disabled short-link profile must not set ${name}`,
+        errors,
+      );
     }
   }
 

@@ -1,0 +1,1 @@
+{"ts":"2026-09-19T06:54:06.342Z","pid":18715,"turnId":"turn:0","level":"debug","subsystem":"tools","message":"situational tool dead weight","metadata":{"tools":["ast_grep_search","ast_grep_replace","ast_grep_outline","lsp_navigation","lens_diagnostic_mark"]}}
