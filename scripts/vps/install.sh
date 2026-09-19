@@ -58,9 +58,9 @@ else
   [ "$release_overlap_status" -eq 1 ] \
     || fail 'unable to resolve the release source and deployment root.'
 fi
+trap 'reconcile_release_abort >/dev/null 2>&1 || true; resume_paused_release_timers >/dev/null 2>&1 || true' 0
 pause_enabled_release_timers \
   || fail 'unable to pause enabled backup or verification timers.'
-trap 'reconcile_release_abort >/dev/null 2>&1 || true; resume_paused_release_timers >/dev/null 2>&1 || true' 0
 install -d -o subweb -g subweb -m 0700 /var/lib/subweb-backups
 reconcile_release_tree "$SOURCE_DIRECTORY" "$TARGET_DIRECTORY" \
   || fail 'unable to reconcile the installed release tree.'

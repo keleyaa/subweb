@@ -1,7 +1,7 @@
 #!/bin/sh
 
-PAUSED_RELEASE_ACTIVE_TIMERS=''
-PAUSED_RELEASE_ACTIVE_SERVICES=''
+PAUSED_RELEASE_STOPPED_TIMERS=''
+PAUSED_RELEASE_STOPPED_SERVICES=''
 RECONCILE_RELEASE_STAGE=''
 RECONCILE_RELEASE_OLD=''
 RECONCILE_RELEASE_TARGET=''
@@ -76,24 +76,26 @@ pause_enabled_release_timer() {
   reconcile_service=$2
   reconcile_timer_was_enabled=0
   reconcile_timer_was_active=0
-  reconcile_service_was_active=0
 
   if systemctl is-enabled --quiet "$reconcile_timer"; then
     reconcile_timer_was_enabled=1
   fi
   if systemctl is-active --quiet "$reconcile_timer"; then
     reconcile_timer_was_active=1
-    PAUSED_RELEASE_ACTIVE_TIMERS="${PAUSED_RELEASE_ACTIVE_TIMERS}${PAUSED_RELEASE_ACTIVE_TIMERS:+ }${reconcile_timer}"
   fi
+  reconcile_service_was_active=0
   if systemctl is-active --quiet "$reconcile_service"; then
     reconcile_service_was_active=1
-    PAUSED_RELEASE_ACTIVE_SERVICES="${PAUSED_RELEASE_ACTIVE_SERVICES}${PAUSED_RELEASE_ACTIVE_SERVICES:+ }${reconcile_service}"
   fi
 
   if [ "$reconcile_timer_was_enabled" -eq 1 ] || [ "$reconcile_timer_was_active" -eq 1 ]; then
     systemctl stop "$reconcile_timer" || return 1
+    PAUSED_RELEASE_STOPPED_TIMERS="${PAUSED_RELEASE_STOPPED_TIMERS}${PAUSED_RELEASE_STOPPED_TIMERS:+ }${reconcile_timer}"
   fi
-  [ "$reconcile_service_was_active" -eq 0 ] || systemctl stop "$reconcile_service"
+  if [ "$reconcile_service_was_active" -eq 1 ]; then
+    systemctl stop "$reconcile_service" || return 1
+    PAUSED_RELEASE_STOPPED_SERVICES="${PAUSED_RELEASE_STOPPED_SERVICES}${PAUSED_RELEASE_STOPPED_SERVICES:+ }${reconcile_service}"
+  fi
 }
 
 pause_enabled_release_timers() {
@@ -102,14 +104,14 @@ pause_enabled_release_timers() {
 }
 
 resume_paused_release_timers() {
-  for reconcile_service in $PAUSED_RELEASE_ACTIVE_SERVICES; do
+  for reconcile_service in $PAUSED_RELEASE_STOPPED_SERVICES; do
     systemctl start "$reconcile_service" || return 1
   done
-  for reconcile_timer in $PAUSED_RELEASE_ACTIVE_TIMERS; do
+  for reconcile_timer in $PAUSED_RELEASE_STOPPED_TIMERS; do
     systemctl start "$reconcile_timer" || return 1
   done
-  PAUSED_RELEASE_ACTIVE_TIMERS=''
-  PAUSED_RELEASE_ACTIVE_SERVICES=''
+  PAUSED_RELEASE_STOPPED_TIMERS=''
+  PAUSED_RELEASE_STOPPED_SERVICES=''
 }
 
 reconcile_tree_is_safe() {

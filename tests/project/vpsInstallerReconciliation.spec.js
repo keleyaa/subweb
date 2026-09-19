@@ -55,7 +55,11 @@ case "$1 $2" in
     esac
     exit 3
     ;;
-  'stop subweb-backup.timer'|'stop subweb-backup-verify.timer'|'stop subweb-backup.service'|'stop subweb-backup-verify.service'|'start subweb-backup.timer'|'start subweb-backup-verify.timer'|'start subweb-backup.service'|'start subweb-backup-verify.service') exit 0 ;;
+  'stop subweb-backup.timer'|'stop subweb-backup-verify.timer')
+    [ -n "${'${TIMER_STOP_FAIL:-}'}" ] && [ "$2" = "${'${TIMER_STOP_FAIL}'}" ] && exit 1
+    exit 0
+    ;;
+  'stop subweb-backup.service'|'stop subweb-backup-verify.service'|'start subweb-backup.timer'|'start subweb-backup-verify.timer'|'start subweb-backup.service'|'start subweb-backup-verify.service') exit 0 ;;
 esac
 exit 64
 `);
@@ -213,9 +217,11 @@ printf '%s\\n' "$NESTED_MOUNT"
       'stop subweb-backup.timer',
       'is-enabled --quiet subweb-backup-verify.timer',
       'is-active --quiet subweb-backup-verify.timer',
-       'is-active --quiet subweb-backup-verify.service',
-       'stop subweb-backup-verify.timer',
-     ]],
+      'is-active --quiet subweb-backup-verify.service',
+      'stop subweb-backup-verify.timer',
+      'start subweb-backup.timer',
+      'start subweb-backup-verify.timer',
+    ]],
     ['enabled and active', [
       'is-enabled --quiet subweb-backup.timer',
       'is-active --quiet subweb-backup.timer',
@@ -257,6 +263,41 @@ printf '%s\\n' "$NESTED_MOUNT"
 
     expect(result.status, result.stderr).toBe(0);
     expect(await readFile(calls, 'utf8')).toBe(`${expectedCalls.join('\n')}\n`);
+  });
+
+  it('resumes every timer successfully paused before a later timer pause fails', async () => {
+    const fixture = await createTemporaryDirectory('subweb-vps-partial-timer-pause-');
+    const bin = join(fixture, 'bin');
+    const calls = join(fixture, 'calls');
+    await mkdir(bin);
+    await writeTimerSystemctl(bin);
+
+    const result = runShell(
+      'set -eu; . "$1"; trap "resume_paused_release_timers" 0; pause_enabled_release_timers',
+      [reconcilerPath],
+      {
+        PATH: `${bin}:${process.env.PATH}`,
+        CALL_LOG: calls,
+        TIMER_STATE: 'active',
+        TIMER_STOP_FAIL: 'subweb-backup-verify.timer',
+      },
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(await readFile(calls, 'utf8')).toBe([
+      'is-enabled --quiet subweb-backup.timer',
+      'is-active --quiet subweb-backup.timer',
+      'is-active --quiet subweb-backup.service',
+      'stop subweb-backup.timer',
+      'stop subweb-backup.service',
+      'is-enabled --quiet subweb-backup-verify.timer',
+      'is-active --quiet subweb-backup-verify.timer',
+      'is-active --quiet subweb-backup-verify.service',
+      'stop subweb-backup-verify.timer',
+      'start subweb-backup.service',
+      'start subweb-backup.timer',
+      '',
+    ].join('\n'));
   });
 
   it('keeps the live tree intact when a staged copy fails', async () => {
@@ -418,5 +459,8 @@ exec /bin/cp "$@"
     expect(installer).toContain('"$SOURCE_DIRECTORY/deploy/logrotate/subweb.conf"');
     expect(installer).toContain('reconcile_release_abort >/dev/null 2>&1 || true');
     expect(installer).toContain('resume_paused_release_timers >/dev/null 2>&1 || true');
+    expect(installer.indexOf('trap \'reconcile_release_abort')).toBeLessThan(
+      installer.indexOf('pause_enabled_release_timers'),
+    );
   });
 });
