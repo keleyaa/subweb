@@ -21,6 +21,10 @@ const makeFixture = async () => {
 set -eu
 printf '%s\\n' "$*" >> "$DOCKER_LOG"
 if [ "$1" = compose ] && [ "$2" = version ]; then exit 0; fi
+if [ "\${EXPECT_LOCKED_IMAGE_VARIABLES_CLEARED-}" = 1 ]; then
+  [ -z "\${REDIS_IMAGE-}" ] && [ -z "\${SUBCONVERTER_IMAGE-}" ] && [ -z "\${MYURLS_IMAGE-}" ] || exit 65
+  [ "\${SUBWEB_IMAGE-}" = "$EXPECTED_GATEWAY_IMAGE" ] || exit 66
+fi
 [ "$1" = compose ] || exit 64
 shift
 [ "$1" = --env-file ] || exit 64
@@ -98,6 +102,24 @@ describe('production command configuration contract', () => {
       `compose --env-file ${await realpath(envFile)} -f compose.disabled-short-links.yaml ps`,
       '',
     ].join('\n'));
+  });
+
+  it('clears inherited locked external image variables before invoking Compose', async () => {
+    const root = await makeFixture();
+    const envFile = join(root, '.env');
+    await writeFile(envFile, 'SHORT_LINKS_ENABLED=false\n', { mode: 0o600 });
+
+    const result = run(root, 'status', {
+      EXPECT_LOCKED_IMAGE_VARIABLES_CLEARED: '1',
+      REDIS_IMAGE: 'registry.example/attacker-redis:latest',
+      SUBCONVERTER_IMAGE: 'registry.example/attacker-subconverter:latest',
+      MYURLS_IMAGE: 'registry.example/attacker-myurls:latest',
+      SUBWEB_IMAGE: 'registry.example/subweb:2.0.0',
+      EXPECTED_GATEWAY_IMAGE: 'registry.example/subweb:2.0.0',
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(await readDockerLog(root)).toContain('compose --env-file');
   });
 
   it('keeps install before the production environment preflight', async () => {

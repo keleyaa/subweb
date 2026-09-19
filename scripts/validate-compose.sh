@@ -82,12 +82,17 @@ printf '%s\n' "$runtime_image_env" >> "$validation_env_file" \
   || fail 'could not write locked runtime images to Compose validation environment.'
 
 compose_config() (
-  while IFS= read -r assignment; do
-    variable_name=${assignment%%=*}
-    case "$variable_name" in
-      [A-Za-z_][A-Za-z0-9_]*) unset "$variable_name" ;;
-    esac
-  done < "$validation_env_file"
+  unset \
+    API_DOMAIN API_URL APP_DOMAIN \
+    CONVERSION_DNS_TIMEOUT_MS CONVERSION_EGRESS_CONNECT_TIMEOUT_MS \
+    CONVERSION_MAX_CONCURRENCY CONVERSION_MAX_CONCURRENCY_PER_IP \
+    CONVERSION_MAX_REQUEST_BYTES CONVERSION_MAX_RESPONSE_BYTES \
+    CONVERSION_RATE_LIMIT CONVERSION_RATE_WINDOW_SECONDS CONVERSION_REQUEST_TIMEOUT_MS \
+    CUSTOM_BACKEND_ENABLED EGRESS_ALLOWED_HOSTS IP_HASH_SECRET LOG_LEVEL \
+    MYURLS_GATEWAY_IP MYURLS_IMAGE MYURLS_IP MYURLS_LOG_LEVEL MYURLS_NETWORK_SUBNET \
+    MYURLS_TRUST_PROXY_CIDR REDIS_IMAGE REDIS_PASSWORD SHORT_DOMAIN \
+    SUBCONVERTER_IMAGE SUBWEB_IMAGE SUBWEB_PORT TRUSTED_PROXY_CIDR \
+    TURNSTILE_SECRET_KEY TURNSTILE_SITE_KEY
   unset COMPOSE_FILE COMPOSE_PROFILES COMPOSE_PROJECT_NAME
   docker compose -f "$compose_file" --env-file "$validation_env_file" "$@"
 )

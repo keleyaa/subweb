@@ -73,9 +73,10 @@ case "$short_links_enabled" in
 esac
 
 cd "$PROJECT_DIRECTORY"
-compose() {
+compose() (
+  unset REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE
   docker compose --env-file "$ENV_FILE" -f "$compose_file" "$@"
-}
+)
 
 case "$command_name" in
   up)
