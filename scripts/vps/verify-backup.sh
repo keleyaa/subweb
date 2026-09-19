@@ -50,11 +50,23 @@ case "$backup" in /*) ;; *) fail 'backup path must be absolute.' ;; esac
 backup=$(backup_canonical_child_path "$BACKUP_DIRECTORY" "$backup") \
   || fail 'backup must resolve inside BACKUP_DIRECTORY without symlink components.'
 [ -f "$backup" ] && [ ! -L "$backup" ] || fail 'backup must be a regular file.'
-[ -f "$backup.sha256" ] || fail 'backup checksum sidecar is missing.'
+checksum_sidecar=$backup.sha256
+[ -f "$checksum_sidecar" ] && [ ! -L "$checksum_sidecar" ] \
+  || fail 'backup checksum sidecar must be a regular, non-symlink file.'
+checksum_sidecar=$(backup_canonical_child_path "$BACKUP_DIRECTORY" "$checksum_sidecar") \
+  || fail 'backup checksum sidecar must resolve inside BACKUP_DIRECTORY without symlink components.'
+expected_checksum=$(awk -v selected_backup="$backup" '
+  $2 == selected_backup && NF == 2 { count += 1; checksum = $1 }
+  END { if (count == 1) print checksum; else exit 1 }
+' "$checksum_sidecar") \
+  || fail 'backup checksum sidecar must contain exactly one record for the selected backup.'
+printf '%s\n' "$expected_checksum" | LC_ALL=C grep -Eq '^[0-9a-f]{64}$' \
+  || fail 'backup checksum sidecar contains an invalid SHA-256 digest.'
+actual_checksum=$(sha256sum "$backup" 2>/dev/null | awk 'NR == 1 { print $1 }') \
+  || actual_checksum=$(shasum -a 256 "$backup" 2>/dev/null | awk 'NR == 1 { print $1 }') \
+  || fail 'unable to calculate backup checksum.'
+[ "$actual_checksum" = "$expected_checksum" ] || fail 'backup checksum does not match.'
 validate_backup_destination
-sha256sum -c "$backup.sha256" >/dev/null 2>&1 \
-  || shasum -a 256 -c "$backup.sha256" >/dev/null 2>&1 \
-  || fail 'backup checksum does not match.'
 
 verified_backup=$backup
 temporary=

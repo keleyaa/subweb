@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -146,6 +146,36 @@ for (const path of paths) {
   return { backupDirectory, fixture, projectRoot, script: join(scriptsDirectory, 'backup.sh') };
 };
 
+const makeBackupVerificationFixture = async (sidecarContents) => {
+  let fixture = await mkdtemp(join(tmpdir(), 'subweb-vps-verify-'));
+  fixture = await realpath(fixture);
+  const backupDirectory = join(fixture, 'backups');
+  const scriptsDirectory = join(fixture, 'scripts', 'vps');
+  const projectRoot = join(fixture, 'project');
+  const backupFile = join(backupDirectory, 'subweb-redis.rdb');
+  const verifiedMarker = join(fixture, 'verified');
+  const backupPathSource = await readFile(backupPathScript, 'utf8');
+  const verifyBackupSource = await readFile(verifyBackupScript, 'utf8');
+
+  temporaryDirectories.push(fixture);
+  await mkdir(scriptsDirectory, { recursive: true });
+  await mkdir(join(projectRoot, 'scripts', 'operations'), { recursive: true });
+  await mkdir(backupDirectory, { recursive: true });
+  await writeFile(backupFile, 'backup');
+  await writeFile(`${backupFile}.sha256`, sidecarContents(backupFile));
+  await writeExecutable(join(scriptsDirectory, 'backup-path.sh'), backupPathSource
+    .replaceAll('/var/lib/subweb-backups', backupDirectory)
+    .replaceAll('/mnt/subweb-backups', join(fixture, 'other-managed-root')));
+  await writeExecutable(join(scriptsDirectory, 'verify-backup.sh'), verifyBackupSource);
+  await writeExecutable(join(projectRoot, 'scripts', 'operations', 'verify-redis-backup.sh'),
+    `#!/bin/sh\ntouch '${verifiedMarker}'\n`);
+  await writeExecutable(join(fixture, 'sha256sum'), `#!/bin/sh
+printf '%064d  %s\\n' 0 "$1"
+`);
+
+  return { backupDirectory, backupFile, fixture, projectRoot, script: join(scriptsDirectory, 'verify-backup.sh'), verifiedMarker };
+};
+
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) =>
     rm(directory, { recursive: true, force: true })));
@@ -266,7 +296,7 @@ describe('VPS backup mount safety', () => {
     {
       name: 'lexical traversal outside BACKUP_DIRECTORY',
       backupPath: (backupDirectory) => `${backupDirectory}/../outside/subweb-redis.rdb`,
-      prepare: async (backupDirectory, outside) => {
+      prepare: async (_backupDirectory, outside) => {
         await mkdir(outside, { recursive: true });
       },
     },
@@ -333,6 +363,30 @@ describe('VPS backup mount safety', () => {
 
 
 describe('VPS backup retention', () => {
+  it('fails closed when the sort stage fails', async () => {
+    const { backupDirectory, fixture, projectRoot, script } = await makeBackupRetentionFixture();
+    await writeFile(join(backupDirectory, 'subweb-redis-20250101T000000Z-ABC123.rdb'), 'retain');
+    await writeFile(join(fixture, 'production.env'), '');
+    await writeExecutable(join(fixture, 'sort'), '#!/bin/sh\nexit 1\n');
+
+    const result = spawnSync('sh', [script], {
+      cwd: fixture,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${fixture}:${process.env.PATH}`,
+        AGE_RECIPIENT: 'age1testrecipient',
+        BACKUP_DIRECTORY: backupDirectory,
+        BACKUP_REMOTE_MOUNT: '',
+        SUBWEB_ENV_FILE: join(fixture, 'production.env'),
+        SUBWEB_ROOT: projectRoot,
+      },
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('unable to sort retained backups');
+  });
+
   it('does not delete a forged path outside the backup directory from a newline-bearing matching filename', async () => {
     const { backupDirectory, fixture, projectRoot, script } = await makeBackupRetentionFixture();
     const retainedBackup = join(backupDirectory, 'subweb-redis-20250101T000000Z-ABC123.rdb');
@@ -370,5 +424,52 @@ describe('VPS backup retention', () => {
     await expect(readFile(retainedBackup, 'utf8')).resolves.toBe('retain');
     await expect(readFile(staleBackup, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(readFile(`${staleBackup}.sha256`, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  }, 15_000);
+});
+
+
+describe('VPS backup checksum verification', () => {
+  const zeroDigest = '0'.repeat(64);
+
+  it('rejects a symlink checksum sidecar before binding the backup', async () => {
+    const fixture = await makeBackupVerificationFixture((backup) => `${zeroDigest}  ${backup}\n`);
+    const outsideSidecar = join(fixture.fixture, 'outside.sha256');
+    await writeFile(outsideSidecar, `${zeroDigest}  ${fixture.backupFile}\n`);
+    await rm(`${fixture.backupFile}.sha256`);
+    await symlink(outsideSidecar, `${fixture.backupFile}.sha256`);
+
+    const result = spawnSync('sh', [fixture.script, fixture.backupFile], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${fixture.fixture}:${process.env.PATH}`, SUBWEB_ROOT: fixture.projectRoot, BACKUP_DIRECTORY: fixture.backupDirectory }
+    });
+
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(result.stderr, result.stderr).toContain('backup checksum sidecar must be a regular, non-symlink file');
+    await expect(readFile(fixture.verifiedMarker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('rejects a sidecar that verifies a different file', async () => {
+    const fixture = await makeBackupVerificationFixture(() => `${zeroDigest}  /etc/passwd\n`);
+
+    const result = spawnSync('sh', [fixture.script, fixture.backupFile], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${fixture.fixture}:${process.env.PATH}`, SUBWEB_ROOT: fixture.projectRoot, BACKUP_DIRECTORY: fixture.backupDirectory }
+    });
+
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(result.stderr, result.stderr).toContain('exactly one record for the selected backup');
+    await expect(readFile(fixture.verifiedMarker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('accepts the sole matching sidecar record', async () => {
+    const fixture = await makeBackupVerificationFixture((backup) => `${zeroDigest}  ${backup}\n`);
+
+    const result = spawnSync('sh', [fixture.script, fixture.backupFile], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${fixture.fixture}:${process.env.PATH}`, SUBWEB_ROOT: fixture.projectRoot, BACKUP_DIRECTORY: fixture.backupDirectory }
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    await expect(readFile(fixture.verifiedMarker, 'utf8')).resolves.toBe('');
   });
 });
