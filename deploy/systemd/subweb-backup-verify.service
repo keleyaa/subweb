@@ -9,7 +9,7 @@ User=subweb
 Group=subweb
 WorkingDirectory=/opt/subweb
 EnvironmentFile=-/etc/subweb/backup.env
-ExecStart=/bin/sh -eu -c 'latest=$(find "${BACKUP_DIRECTORY:-/var/lib/subweb-backups}" -maxdepth 1 -type f \( -name "subweb-redis-*.rdb" -o -name "subweb-redis-*.rdb.age" \) -printf "%T@ %p\\n" | sort -nr | sed -n "1s/^[^ ]* //p"); [ -n "$latest" ] || { echo "No Redis backup available for verification." >&2; exit 1; }; /opt/subweb/scripts/vps/verify-backup.sh "$latest"'
+ExecStart=/bin/sh -eu -c 'BACKUP_DIRECTORY=${BACKUP_DIRECTORY:-/var/lib/subweb-backups}; BACKUP_REMOTE_MOUNT=${BACKUP_REMOTE_MOUNT:-}; fail() { echo "VPS backup verification failed: $1" >&2; exit 1; }; . /opt/subweb/scripts/vps/backup-path.sh; require_supported_backup_path BACKUP_DIRECTORY "$BACKUP_DIRECTORY"; [ -z "$BACKUP_REMOTE_MOUNT" ] || require_supported_backup_path BACKUP_REMOTE_MOUNT "$BACKUP_REMOTE_MOUNT"; latest=$(find "$BACKUP_DIRECTORY" -maxdepth 1 -type f \( -name "subweb-redis-*.rdb" -o -name "subweb-redis-*.rdb.age" \) -printf "%T@ %p\\n" | sort -nr | sed -n "1s/^[^ ]* //p"); [ -n "$latest" ] || { echo "No Redis backup available for verification." >&2; exit 1; }; /opt/subweb/scripts/vps/verify-backup.sh "$latest"'
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true

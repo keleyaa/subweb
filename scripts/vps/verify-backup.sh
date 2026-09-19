@@ -2,14 +2,23 @@
 set -eu
 umask 077
 
+SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 PROJECT_ROOT=${SUBWEB_ROOT:-/opt/subweb}
 BACKUP_DIRECTORY=${BACKUP_DIRECTORY:-/var/lib/subweb-backups}
+BACKUP_REMOTE_MOUNT=${BACKUP_REMOTE_MOUNT:-}
 AGE_IDENTITY_FILE=${AGE_IDENTITY_FILE:-}
 backup=${1-}
 fail() {
   printf 'VPS backup verification failed: %s\n' "$1" >&2
   exit 1
 }
+
+# shellcheck source=backup-path.sh
+. "$SCRIPT_DIRECTORY/backup-path.sh"
+require_supported_backup_path BACKUP_DIRECTORY "$BACKUP_DIRECTORY"
+if [ -n "$BACKUP_REMOTE_MOUNT" ]; then
+  require_supported_backup_path BACKUP_REMOTE_MOUNT "$BACKUP_REMOTE_MOUNT"
+fi
 
 case "$backup" in /*) ;; *) fail 'backup path must be absolute.' ;; esac
 [ -f "$backup" ] && [ ! -L "$backup" ] || fail 'backup must be a regular file.'
@@ -24,7 +33,7 @@ sha256sum -c "$backup.sha256" >/dev/null 2>&1 \
 
 verified_backup=$backup
 temporary=
-cleanup() { [ -z "$temporary" ] || rm -f "$temporary"; }
+cleanup() { [ -z "$temporary" ] || rm -f -- "$temporary"; }
 trap cleanup EXIT HUP INT TERM
 case "$backup" in
   *.age)

@@ -7,7 +7,7 @@
 - `/opt/subweb`：经过审查的 release checkout，由 `root:subweb` 持有，目录 `0750`。
 - `/opt/subweb/.env`：普通非符号链接文件，所有者 `subweb:subweb`，权限 `0600`。
 - `/opt/subweb/.runtime`、`/opt/subweb/.local`：`subweb:subweb`、`0700`，用于验证器或本地运行时状态。
-- `/var/lib/subweb-backups`：`subweb:subweb`、`0700`；若使用远端挂载，必须把它放在 `BACKUP_REMOTE_MOUNT` 之下。
+- `/var/lib/subweb-backups`：`subweb:subweb`、`0700`；自定义 `BACKUP_DIRECTORY` 和 `BACKUP_REMOTE_MOUNT` 只能位于 `/var/lib/subweb-backups` 或 `/mnt/subweb-backups`，以符合 systemd backup unit 的 `ReadWritePaths`；若使用远端挂载，备份目录还必须位于挂载点之下。
 - `/etc/subweb/backup.env`：`root:root`、`0600`，只存备份策略和 age recipient/identity 路径，不存 Redis 密码。
 
 主机安装由 checkout 中的以下命令完成。命令不会生成 `.env`，也不会删除现有 Compose volume：
@@ -52,7 +52,7 @@ sudo -u subweb sh -c 'cd /opt/subweb && npm run verify:integration'
 备份使用 `subweb.sh backup` 生成 RDB，然后必须满足以下至少一个条件后才允许 retention 删除旧备份：
 
 1. 配置 `AGE_RECIPIENT`，在保留前把备份加密；或
-2. 配置已挂载的 `BACKUP_REMOTE_MOUNT`，并且 `BACKUP_DIRECTORY` 位于该挂载点下。
+2. 配置已挂载的 `BACKUP_REMOTE_MOUNT`，并且 `BACKUP_DIRECTORY` 位于该挂载点下；两个路径都必须位于 systemd 允许写入的 `/var/lib/subweb-backups` 或 `/mnt/subweb-backups` 目录树内。
 
 配置模板位于 [`deploy/vps/backup.env.example`](../deploy/vps/backup.env.example)：
 
@@ -75,7 +75,7 @@ sudo journalctl -u subweb-backup.service -u subweb-backup-verify.service --since
 
 ```sh
 sudo -u subweb /opt/subweb/scripts/subweb.sh restore \
-  --backup /var/lib/subweb-backups/subweb-redis-YYYYMMDDTHHMMSSZ.rdb \
+  --backup /var/lib/subweb-backups/subweb-redis-YYYYMMDDTHHMMSSZ-UNIQUE.rdb \
   --confirm-stop-writes
 ```
 
@@ -83,7 +83,7 @@ sudo -u subweb /opt/subweb/scripts/subweb.sh restore \
 
 ## 日志、磁盘和外部 TLS
 
-Compose 已为所有服务固定 `json-file`：每个容器 `10m`、最多 `3` 个文件。主机层的 `/etc/logrotate.d/subweb` 仅轮转可选的 `/var/log/subweb/*.log`，不直接操作 Docker 数据目录。管理员必须监控 `/var/lib/docker` 和备份文件系统；`check-host.sh` 默认要求 `/opt/subweb` 所在文件系统至少有 10 GiB 可用空间，可用 `MIN_FREE_KIB` 调整但不应低于发布容量需求。
+Compose 已为所有服务固定 `json-file`：每个容器 `10m`、最多 `3` 个文件。主机层的 `/etc/logrotate.d/subweb` 仅轮转可选的 `/var/log/subweb/*.log`，不直接操作 Docker 数据目录。管理员必须监控 `/var/lib/docker` 和备份文件系统；`check-host.sh` 默认要求 `/opt/subweb` 所在文件系统至少有 10 GiB 可用空间，可用非负十进制整数 `MIN_FREE_KIB` 调整但不应低于发布容量需求。
 
 Nginx 模板位于 [`deploy/nginx/subweb.conf`](../deploy/nginx/subweb.conf)，只代理到 `127.0.0.1:18080`，保留 Host 和转发链，并把 HTTP 重定向到 HTTPS。启用前替换三个域名和证书路径，并按实际代理网段配置 `TRUSTED_PROXY_CIDR`；不要把容器端口绑定到公网。
 

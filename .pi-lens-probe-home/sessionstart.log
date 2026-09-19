@@ -1,0 +1,62 @@
+[2026-09-19T07:00:44.854Z] pi-lens loaded: 3666ms after process start (from dist)
+[2026-09-19T07:00:48.070Z] pi-lens loaded: 3084ms after process start (from dist)
+[2026-09-19T07:00:48.627Z] session_start fired
+[2026-09-19T07:00:48.628Z] session_start: build identity — commit=unknown entryMtime=2026-09-18T21:17:33.986Z version=4.2.1
+[2026-09-19T07:00:48.628Z] session_start: disabled tools = ast_grep_search,ast_grep_replace
+[2026-09-19T07:00:48.628Z] session_start: project trust = trusted
+[2026-09-19T07:00:48.630Z] session_start config_resolution_pending session=lib-mu81g9yt-2 root=/private/var/folders/pt/mmb7csdd6hx82p40g4bpc1_w0000gn/T/pi-agent-325c6c52-8e7d-4fb-5cddc7b5
+[2026-09-19T07:00:48.632Z] config resolved documents=1 legacy=0 records=0 deniedServers=0 resolveMs=1 session=lib-mu81g9yt-2 root=/private/var/folders/pt/mmb7csdd6hx82p40g4bpc1_w0000gn/T/pi-agent-325c6c52-8e7d-4fb-5cddc7b5
+[2026-09-19T07:00:48.634Z] session_start startup mode: quick
+[2026-09-19T07:00:48.635Z] session_start: LSP service reset
+[2026-09-19T07:00:48.635Z] session_start: phase0 workspace diagnostics observation enabled (capability probe only)
+[2026-09-19T07:00:48.647Z] session_start sequence: projectSeq=0 fileSeqEntries=0
+[2026-09-19T07:00:48.647Z] project_snapshot: probe root=/private/var/folders/pt/mmb7csdd6hx82p40g4bpc1_w0000gn/T/pi-agent-325c6c52-8e7d-4fb-5cddc7b5 path=/Users/li/.pi-lens/projects/private-var-folders-pt-mmb7csdd6hx82p40g4bpc1w0000gn-T-pi-agent-325c6c52-8e7d-4fb-5cddc7b5-a39bea23/cache/project-snapshot.json.gz currentSeq=0
+[2026-09-19T07:00:48.647Z] project_snapshot: miss reason=missing
+[2026-09-19T07:00:48.647Z] session_start tools: LSP Service
+[2026-09-19T07:00:48.647Z] session_start: quick mode active - skipping slow tool probes, language profiling, preinstall, scans, and error debt baseline
+[2026-09-19T07:00:48.648Z] session_start total: 21ms (interactive path)
+[2026-09-19T07:00:48.649Z] session_start: startup 01a0b877-aa44-71a1-b6e4-bfff11cce713 — no persisted state (clean)
+[2026-09-19T07:00:48.649Z] widget mount suppressed in "json" mode (no interactive TUI)
+[2026-09-19T07:00:48.664Z] widget mount suppressed in "json" mode (no interactive TUI)
+[2026-09-19T07:01:24.841Z] turn_end: no modified files, scheduling LSP idle reset (360s)
+[2026-09-19T07:01:41.320Z] pi-lens loaded: 3426ms after process start (from dist)
+[2026-09-19T07:01:44.427Z] pi-lens loaded: 2939ms after process start (from dist)
+[2026-09-19T07:01:44.936Z] session_start fired
+[2026-09-19T07:01:44.936Z] session_start: build identity — commit=unknown entryMtime=2026-09-18T21:17:33.986Z version=4.2.1
+[2026-09-19T07:01:44.936Z] session_start: disabled tools = ast_grep_search,ast_grep_replace
+[2026-09-19T07:01:44.937Z] session_start: project trust = trusted
+[2026-09-19T07:01:44.938Z] session_start config_resolution_pending session=lyj-mu81hhex-2 root=/private/var/folders/pt/mmb7csdd6hx82p40g4bpc1_w0000gn/T/pi-agent-325c6c52-8e7d-4fb-5cddc7b5
+[2026-09-19T07:01:44.940Z] config resolved documents=1 legacy=0 records=0 deniedServers=0 resolveMs=1 session=lyj-mu81hhex-2 root=/private/var/folders/pt/mmb7csdd6hx82p40g4bpc1_w0000gn/T/pi-agent-325c6c52-8e7d-4fb-5cddc7b5
+[2026-09-19T07:01:44.942Z] session_start startup mode: quick
+[2026-09-19T07:01:44.942Z] session_start: LSP service reset
+[2026-09-19T07:01:44.942Z] session_start: phase0 workspace diagnostics observation enabled (capability probe only)
+[2026-09-19T07:01:44.946Z] session_start sequence: projectSeq=0 fileSeqEntries=0
+[2026-09-19T07:01:44.947Z] project_snapshot: probe root=/private/var/folders/pt/mmb7csdd6hx82p40g4bpc1_w0000gn/T/pi-agent-325c6c52-8e7d-4fb-5cddc7b5 path=/Users/li/.pi-lens/projects/private-var-folders-pt-mmb7csdd6hx82p40g4bpc1w0000gn-T-pi-agent-325c6c52-8e7d-4fb-5cddc7b5-a39bea23/cache/project-snapshot.json.gz currentSeq=0
+[2026-09-19T07:01:44.947Z] project_snapshot: miss reason=missing
+[2026-09-19T07:01:44.947Z] session_start tools: LSP Service
+[2026-09-19T07:01:44.947Z] session_start: quick mode active - skipping slow tool probes, language profiling, preinstall, scans, and error debt baseline
+[2026-09-19T07:01:44.947Z] session_start total: 11ms (interactive path)
+[2026-09-19T07:01:44.949Z] session_start: startup 01a0b878-86fc-7282-b794-d859c5475305 — no persisted state (clean)
+[2026-09-19T07:01:44.949Z] widget mount suppressed in "json" mode (no interactive TUI)
+[2026-09-19T07:01:44.963Z] widget mount suppressed in "json" mode (no interactive TUI)
+[2026-09-19T07:02:25.785Z] turn_end: no modified files, scheduling LSP idle reset (360s)
+[2026-09-19T07:03:49.579Z] pi-lens loaded: 3506ms after process start (from dist)
+[2026-09-19T07:03:52.910Z] pi-lens loaded: 3159ms after process start (from dist)
+[2026-09-19T07:03:53.411Z] session_start fired
+[2026-09-19T07:03:53.411Z] session_start: build identity — commit=unknown entryMtime=2026-09-18T21:17:33.986Z version=4.2.1
+[2026-09-19T07:03:53.411Z] session_start: disabled tools = ast_grep_search,ast_grep_replace
+[2026-09-19T07:03:53.412Z] session_start: project trust = trusted
+[2026-09-19T07:03:53.413Z] session_start config_resolution_pending session=q4n-mu81k8jo-2 root=/private/var/folders/pt/mmb7csdd6hx82p40g4bpc1_w0000gn/T/pi-agent-325c6c52-8e7d-4fb-5cddc7b5
+[2026-09-19T07:03:53.415Z] config resolved documents=1 legacy=0 records=0 deniedServers=0 resolveMs=0 session=q4n-mu81k8jo-2 root=/private/var/folders/pt/mmb7csdd6hx82p40g4bpc1_w0000gn/T/pi-agent-325c6c52-8e7d-4fb-5cddc7b5
+[2026-09-19T07:03:53.417Z] session_start startup mode: quick
+[2026-09-19T07:03:53.418Z] session_start: LSP service reset
+[2026-09-19T07:03:53.418Z] session_start: phase0 workspace diagnostics observation enabled (capability probe only)
+[2026-09-19T07:03:53.421Z] session_start sequence: projectSeq=0 fileSeqEntries=0
+[2026-09-19T07:03:53.422Z] project_snapshot: probe root=/private/var/folders/pt/mmb7csdd6hx82p40g4bpc1_w0000gn/T/pi-agent-325c6c52-8e7d-4fb-5cddc7b5 path=/Users/li/.pi-lens/projects/private-var-folders-pt-mmb7csdd6hx82p40g4bpc1w0000gn-T-pi-agent-325c6c52-8e7d-4fb-5cddc7b5-a39bea23/cache/project-snapshot.json.gz currentSeq=0
+[2026-09-19T07:03:53.422Z] project_snapshot: miss reason=missing
+[2026-09-19T07:03:53.422Z] session_start tools: LSP Service
+[2026-09-19T07:03:53.422Z] session_start: quick mode active - skipping slow tool probes, language profiling, preinstall, scans, and error debt baseline
+[2026-09-19T07:03:53.422Z] session_start total: 11ms (interactive path)
+[2026-09-19T07:03:53.424Z] session_start: startup 01a0b87a-7c11-746b-951c-e92c32b7114b — no persisted state (clean)
+[2026-09-19T07:03:53.424Z] widget mount suppressed in "json" mode (no interactive TUI)
+[2026-09-19T07:03:53.437Z] widget mount suppressed in "json" mode (no interactive TUI)

@@ -3,7 +3,7 @@ set -eu
 
 SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_DIRECTORY=$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd)
-ENV_FILE=$PROJECT_DIRECTORY/.env
+ENV_FILE=${SUBWEB_ENV_FILE:-$PROJECT_DIRECTORY/.env}
 
 fail() {
   printf 'Subweb error: %s\n' "$1" >&2
@@ -62,7 +62,7 @@ esac
 
 cd "$PROJECT_DIRECTORY"
 compose() {
-  docker compose -f "$compose_file" "$@"
+  docker compose --env-file "$ENV_FILE" -f "$compose_file" "$@"
 }
 
 case "$command_name" in
