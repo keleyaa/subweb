@@ -300,6 +300,24 @@ describe('interactive deployment install', () => {
     expect(await readOptional(join(root, 'docker.log'))).toBe('');
   });
 
+  it('rejects a non-default deployment env file before dispatching the deployer', async () => {
+    const root = await makeFixture();
+    const args = [
+      '--app-domain', 'app.example.com',
+      '--api-domain', 'api.example.com',
+      '--short-links-enabled', 'false',
+      '--image', 'ghcr.io/example/subweb@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    ];
+
+    const result = runScript(root, 'subweb.sh', ['install', ...args], '', {
+      SUBWEB_ENV_FILE: 'custom.env',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('install requires the repository .env');
+    expect(await readOptional(join(root, 'deploy-args.log'))).toBe('');
+  });
+
   it('passes parameterized install arguments transparently to the deployer', async () => {
     const root = await makeFixture();
     const args = [

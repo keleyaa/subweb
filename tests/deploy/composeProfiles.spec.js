@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -176,6 +176,40 @@ describe('unified Compose validation', () => {
     expect(await readFile(fixture.env.DOCKER_CALL_LOG, 'utf8')).toContain(
       'compose -f compose.disabled-short-links.yaml --env-file',
     );
+  });
+
+  it('uses an explicit relative custom env file to select the disabled profile', async () => {
+    const fixture = await createFixture(disabledCompose(), 'true');
+    const customEnvPath = join(fixture.directory, 'custom.env');
+    const customEnvironment = (await readFile(fixture.envPath, 'utf8'))
+      .replace('SHORT_LINKS_ENABLED=true', 'SHORT_LINKS_ENABLED=false');
+    await writeFile(customEnvPath, customEnvironment);
+    delete fixture.env.COMPOSE_VALIDATION_FILE;
+
+    const result = spawnSync('sh', [validatorPath], {
+      cwd: fixture.directory,
+      encoding: 'utf8',
+      env: { ...fixture.env, SUBWEB_ENV_FILE: 'custom.env' },
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(await readFile(fixture.env.DOCKER_CALL_LOG, 'utf8')).toContain(
+      'compose -f compose.disabled-short-links.yaml --env-file',
+    );
+  });
+
+  it('rejects an explicit symlinked custom env file', async () => {
+    const fixture = await createFixture(validCompose);
+    await symlink(fixture.envPath, join(fixture.directory, 'linked.env'));
+
+    const result = spawnSync('sh', [validatorPath], {
+      cwd: fixture.directory,
+      encoding: 'utf8',
+      env: { ...fixture.env, SUBWEB_ENV_FILE: 'linked.env' },
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('SUBWEB_ENV_FILE must be a regular, non-symlink file.');
   });
 
   it('derives locked runtime images over stale existing environment values without changing .env', async () => {

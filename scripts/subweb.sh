@@ -3,7 +3,8 @@ set -eu
 
 SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_DIRECTORY=$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd)
-ENV_FILE=${SUBWEB_ENV_FILE:-$PROJECT_DIRECTORY/.env}
+DEFAULT_ENV_FILE=$PROJECT_DIRECTORY/.env
+ENV_FILE=${SUBWEB_ENV_FILE:-$DEFAULT_ENV_FILE}
 
 fail() {
   printf 'Subweb error: %s\n' "$1" >&2
@@ -30,6 +31,8 @@ command_name=${1-}
 shift
 
 if [ "$command_name" = install ]; then
+  [ "$ENV_FILE" = "$DEFAULT_ENV_FILE" ] \
+    || fail 'install requires the repository .env; unset SUBWEB_ENV_FILE before provisioning.'
   if [ "$#" -eq 0 ]; then
     [ -t 0 ] && [ -t 2 ] \
       || fail 'interactive install requires an interactive terminal; arguments are required for automation.'
@@ -77,7 +80,7 @@ compose() {
 case "$command_name" in
   up)
     [ "$#" -eq 0 ] || fail 'up does not accept extra arguments.'
-    SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
+    SUBWEB_ENV_FILE=$ENV_FILE SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
       "$SCRIPT_DIRECTORY/validate-compose.sh"
     if [ "${SUBWEB_IMAGE+x}" = x ]; then
       gateway_image=$SUBWEB_IMAGE
@@ -107,7 +110,7 @@ case "$command_name" in
     ;;
   verify)
     [ "$#" -eq 0 ] || fail 'verify does not accept extra arguments.'
-    SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
+    SUBWEB_ENV_FILE=$ENV_FILE SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
       "$SCRIPT_DIRECTORY/validate-compose.sh"
     compose ps
     ;;
@@ -133,7 +136,7 @@ case "$command_name" in
   upgrade)
     [ "$#" -eq 0 ] || fail 'upgrade does not accept extra arguments.'
     unset SUBWEB_IMAGE MYURLS_IMAGE REDIS_IMAGE SUBCONVERTER_IMAGE
-    SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
+    SUBWEB_ENV_FILE=$ENV_FILE SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
       "$SCRIPT_DIRECTORY/validate-compose.sh"
     if [ "$short_links_enabled" = true ]; then
       compose pull gateway subconverter myurls redis

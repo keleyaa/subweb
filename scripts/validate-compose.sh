@@ -7,14 +7,33 @@ fail() {
 }
 
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+source_env_file=
+if [ "${SUBWEB_ENV_FILE+x}" = x ]; then
+  source_env_file=$SUBWEB_ENV_FILE
+  [ -n "$source_env_file" ] || fail 'SUBWEB_ENV_FILE must not be empty when explicitly set.'
+  case "$source_env_file" in
+    /*) ;;
+    *)
+      source_directory=$(CDPATH= cd -- "$(dirname -- "$source_env_file")" && pwd -P) \
+        || fail 'SUBWEB_ENV_FILE parent directory is unavailable.'
+      source_env_file=$source_directory/$(basename -- "$source_env_file")
+      ;;
+  esac
+  [ -f "$source_env_file" ] && [ ! -L "$source_env_file" ] \
+    || fail 'SUBWEB_ENV_FILE must be a regular, non-symlink file.'
+elif [ -e .env ]; then
+  [ -f .env ] && [ ! -L .env ] || fail '.env must be a regular, non-symlink file.'
+  source_env_file=.env
+fi
+
 compose_file=${COMPOSE_VALIDATION_FILE:-}
 if [ -z "$compose_file" ]; then
   compose_file=compose.yaml
-  if [ -f .env ]; then
-    if short_links_enabled=$(awk -F= '$1 == "SHORT_LINKS_ENABLED" { count += 1; value = $2 } END { if (count == 1) print value; else exit (count > 1 ? 2 : 1) }' .env); then
+  if [ -n "$source_env_file" ]; then
+    if short_links_enabled=$(awk -F= '$1 == "SHORT_LINKS_ENABLED" { count += 1; value = $2 } END { if (count == 1) print value; else exit (count > 1 ? 2 : 1) }' "$source_env_file"); then
       :
     else
-      fail '.env must contain exactly one SHORT_LINKS_ENABLED value.'
+      fail 'selected environment must contain exactly one SHORT_LINKS_ENABLED value.'
     fi
     case "$short_links_enabled" in
       true) ;;
@@ -29,14 +48,15 @@ validation_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-compose-validation.XXXXXX")
 chmod 600 "$validation_env_file"
 trap 'rm -f "$validation_env_file"' EXIT HUP INT TERM
 
-if [ -f .env ]; then
+if [ -n "$source_env_file" ]; then
   sed \
     -e '/^REDIS_IMAGE=/d' \
     -e '/^SUBCONVERTER_IMAGE=/d' \
     -e '/^MYURLS_IMAGE=/d' \
-    .env > "$validation_env_file" \
+    "$source_env_file" > "$validation_env_file" \
     || fail 'could not prepare a Compose validation environment.'
 else
+  validation_ip_hash_secret=$(printf '%064d' 0)
   {
     printf '%s\n' \
       'APP_DOMAIN=app.validation.test' \
@@ -45,15 +65,15 @@ else
       'SHORT_DOMAIN=short.validation.test' \
       'SHORT_LINKS_ENABLED=true' \
       'CUSTOM_BACKEND_ENABLED=true' \
-      'REDIS_PASSWORD=compose-validation-redis-password' \
-      'IP_HASH_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
-      'TURNSTILE_SITE_KEY=compose-validation-site-key' \
+       'REDIS_PASSWORD=compose-validation-redis-password' \
+       "IP_HASH_SECRET=$validation_ip_hash_secret" \
+       'TURNSTILE_SITE_KEY=compose-validation-site-key' \
       'TURNSTILE_SECRET_KEY=compose-validation-secret-key'
   } > "$validation_env_file"
 fi
 
-runtime_image_env=$(node "$script_directory/runtime-image-contract.mjs" env) \
-  || fail 'could not derive external runtime images from deploy/versions.lock.json'
+runtime_image_env=$(node "$script_directory/runtime-image-contract.mjs" env --lock "$version_lock_file") \
+  || fail "could not derive external runtime images from $version_lock_file"
 for name in REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE; do
   printf '%s\n' "$runtime_image_env" | grep -q "^$name=" \
     || fail 'runtime image contract is incomplete.'
@@ -62,7 +82,13 @@ printf '%s\n' "$runtime_image_env" >> "$validation_env_file" \
   || fail 'could not write locked runtime images to Compose validation environment.'
 
 compose_config() (
-  unset REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE
+  while IFS= read -r assignment; do
+    variable_name=${assignment%%=*}
+    case "$variable_name" in
+      [A-Za-z_][A-Za-z0-9_]*) unset "$variable_name" ;;
+    esac
+  done < "$validation_env_file"
+  unset COMPOSE_FILE COMPOSE_PROFILES COMPOSE_PROJECT_NAME
   docker compose -f "$compose_file" --env-file "$validation_env_file" "$@"
 )
 
