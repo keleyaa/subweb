@@ -9,7 +9,13 @@ const releaseImageLibrary = new URL('scripts/lib/release-image.sh', repositoryRo
 const temporaryDirectories = [];
 const validVersion = 'v1.2.3';
 const validDigest = 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+const otherDigest = 'sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
+const releasePredicateType = 'https://keleyaa.dev/subweb/release/v1';
 const expectedReference = `ghcr.io/keleyaa/subweb:${validVersion}`;
+const expectedImmutableReference = `ghcr.io/keleyaa/subweb@${validDigest}`;
+
+const makeAttestationOutput = ({ version = validVersion, digest = validDigest } = {}) =>
+  [version, `refs/tags/${version}`, digest].join('\t');
 
 const makeFixture = async () => {
   const root = await mkdtemp(join(tmpdir(), 'subweb-release-image-'));
@@ -34,6 +40,22 @@ const makeFixture = async () => {
     '',
   ].join('\n'));
   await chmod(docker, 0o755);
+
+  const gh = join(bin, 'gh');
+  await writeFile(gh, [
+    '#!/bin/sh',
+    'set -eu',
+    'printf \'%s\\n\' "$*" >> "$GH_LOG"',
+    'case "$*" in',
+    "  'attestation verify '*)",
+    '    [ "${ATTESTATION_STATUS:-0}" -eq 0 ] || exit "$ATTESTATION_STATUS"',
+    '    printf \'%s\' "${ATTESTATION_OUTPUT-}"',
+    '    ;;',
+    '  *) exit 64 ;;',
+    'esac',
+    '',
+  ].join('\n'));
+  await chmod(gh, 0o755);
   return root;
 };
 
@@ -59,6 +81,9 @@ const runResolver = (root, version, environment = {}) => {
       ...process.env,
       PATH: `${join(root, 'bin')}:${process.env.PATH}`,
       DOCKER_LOG: join(root, 'docker.log'),
+      GH_LOG: join(root, 'gh.log'),
+      INSPECT_DIGEST: validDigest,
+      ATTESTATION_OUTPUT: makeAttestationOutput(),
       ...environment,
     },
   });
@@ -67,6 +92,15 @@ const runResolver = (root, version, environment = {}) => {
 const readDockerLog = async (root) => {
   try {
     return await readFile(join(root, 'docker.log'), 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return '';
+    throw error;
+  }
+};
+
+const readGhLog = async (root) => {
+  try {
+    return await readFile(join(root, 'gh.log'), 'utf8');
   } catch (error) {
     if (error.code === 'ENOENT') return '';
     throw error;
@@ -99,6 +133,38 @@ describe('release image resolver', () => {
       `buildx imagetools inspect ${expectedReference} --format {{.Manifest.Digest}}`,
       '',
     ].join('\n'));
+    expect(await readGhLog(root)).toContain(
+      `attestation verify oci://${expectedImmutableReference} --repo keleyaa/subweb --signer-workflow keleyaa/subweb/.github/workflows/docker-build-release.yml --predicate-type ${releasePredicateType} --format json --jq`,
+    );
+  });
+
+  it('rejects a valid digest when signed release provenance verification fails', async () => {
+    const root = await makeFixture();
+
+    const result = runResolver(root, validVersion, {
+      ATTESTATION_STATUS: '17',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Unable to verify release provenance');
+    expect(result.stdout).toBe('');
+    await expectNoDeploymentCommands(root);
+  });
+
+  it.each([
+    ['version', { version: 'v1.2.4' }],
+    ['digest', { digest: otherDigest }],
+  ])('rejects signed provenance for a different %s', async (_name, attestation) => {
+    const root = await makeFixture();
+
+    const result = runResolver(root, validVersion, {
+      ATTESTATION_OUTPUT: makeAttestationOutput(attestation),
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('does not match the requested release');
+    expect(result.stdout).toBe('');
+    await expectNoDeploymentCommands(root);
   });
 
   it('resolves a manifest digest with one terminal newline', async () => {
@@ -241,7 +307,9 @@ describe('release image resolver', () => {
         ...process.env,
         PATH: `${join(root, 'bin')}:${process.env.PATH}`,
         DOCKER_LOG: join(root, 'docker.log'),
+        GH_LOG: join(root, 'gh.log'),
         INSPECT_DIGEST: validDigest,
+        ATTESTATION_OUTPUT: makeAttestationOutput(),
       },
     });
 

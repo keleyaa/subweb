@@ -176,6 +176,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -250,6 +252,41 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
+
+      - name: Create signed release provenance
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          RELEASE_TAG: ${{ steps.tag.outputs.version }}
+          SOURCE_SHA: ${{ steps.tag.outputs.source_sha }}
+        shell: bash
+        run: |
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "Docker image digest is missing or malformed" >&2
+            exit 1
+          }
+          jq -n \
+            --arg release_tag "$RELEASE_TAG" \
+            --arg release_ref "refs/tags/$RELEASE_TAG" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg image_digest "$IMAGE_DIGEST" \
+            '{
+              schemaVersion: "1",
+              releaseTag: $release_tag,
+              releaseRef: $release_ref,
+              sourceSha: $source_sha,
+              imageDigest: $image_digest
+            }' > "$RUNNER_TEMP/release-provenance.json"
+
+      - name: Attest release candidate
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-name: ghcr.io/${{ env.GHCR_IMAGE }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          predicate-type: https://keleyaa.dev/subweb/release/v1
+          predicate-path: ${{ runner.temp }}/release-provenance.json
+          push-to-registry: true
+          create-storage-record: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Remove failed release candidate package version
         if: failure()

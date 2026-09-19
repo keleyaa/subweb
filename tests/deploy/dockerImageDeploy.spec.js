@@ -188,6 +188,19 @@ case "$*" in
 esac
 `);
   await chmod(docker, 0o755);
+
+  const gh = join(root, 'bin/gh');
+  await writeFile(gh, `#!/bin/sh
+set -eu
+printf '%s\\n' "$*" >> "$GH_LOG"
+case "$*" in
+  'attestation verify '*)
+    printf '%s\\trefs/tags/%s\\tsha256:%s' '${releaseVersion}' '${releaseVersion}' '${releaseDigest}'
+    ;;
+  *) exit 64 ;;
+esac
+`);
+  await chmod(gh, 0o755);
   return root;
 };
 
@@ -203,11 +216,12 @@ const runDeploy = (root, extraArgs = [], env = {}, input = 'test-secret-key\n') 
     cwd: root,
     encoding: 'utf8',
     input,
-    env: {
+      env: {
         ...process.env,
-      PATH: `${join(root, 'bin')}:${process.env.PATH}`,
-      DOCKER_LOG: join(root, 'docker.log'),
-      COMPOSE_JSON_ENABLED: join(root, 'compose-enabled.json'),
+        PATH: `${join(root, 'bin')}:${process.env.PATH}`,
+        DOCKER_LOG: join(root, 'docker.log'),
+        GH_LOG: join(root, 'gh.log'),
+        COMPOSE_JSON_ENABLED: join(root, 'compose-enabled.json'),
       COMPOSE_JSON_DISABLED: join(root, 'compose-disabled.json'),
       ...env,
     },

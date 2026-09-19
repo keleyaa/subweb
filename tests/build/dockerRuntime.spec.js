@@ -158,7 +158,11 @@ describe('Docker runtime contract', () => {
     }
     expect(workflow).toContain('needs: quality');
     expect(workflow).toContain('packages: write');
-    expect(workflow).not.toContain('id-token: write');
+    expect(workflow).toContain('id-token: write');
+    expect(workflow).toContain('attestations: write');
+    expect(workflow).toContain('uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6');
+    expect(workflow).toContain('predicate-path: ${{ runner.temp }}/release-provenance.json');
+    expect(workflow).toContain('create-storage-record: false');
     expect(workflow).toContain('group: docker-release-${{ github.ref }}');
     expect(workflow).toContain('cancel-in-progress: false');
     expect(workflow).toContain('provenance: mode=max');
@@ -172,6 +176,8 @@ describe('Docker runtime contract', () => {
     expect(workflow).toContain('image-ref: ${{ env.MYURLS_IMAGE }}');
     expect(workflow).toContain('Scan release candidate');
     expect(workflow).toContain('docker buildx imagetools create');
+    expect(workflow).toContain('releaseRef: $release_ref');
+    expect(workflow).toContain('imageDigest: $image_digest');
     expect(workflow).toContain('"ghcr.io/${GHCR_IMAGE}:${RELEASE_TAG}"\n          do');
     expect(workflow).not.toContain('Static verification only');
   });
