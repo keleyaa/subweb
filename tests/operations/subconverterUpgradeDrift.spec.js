@@ -11,6 +11,11 @@ const image = `ghcr.io/aethersailor/subconverter-extended:v1.9.4@${imageDigest}`
 const imageTemplateDigest = 'a'.repeat(64);
 const driftingVolumeDigest = 'c'.repeat(64);
 
+const normalizeComposeSnapshot = (log) => log.replace(
+  /--env-file \S*subweb-env\.[^ ]+/gu,
+  '--env-file <private-snapshot>',
+);
+
 const makeFixture = async ({ volumeDigest }) => {
   const root = await mkdtemp(join(tmpdir(), 'subweb-subconverter-upgrade-'));
   temporaryDirectories.push(root);
@@ -79,12 +84,12 @@ describe('SubConverter upgrade runtime volume gate', () => {
     const result = runUpgrade(root);
 
     expect(result.status, result.stderr).toBe(0);
-    const log = await readFile(join(root, 'docker.log'), 'utf8');
-    expect(log).toContain(`compose --env-file ${join(root, '.env')} -f compose.yaml pull gateway subconverter myurls redis\n`);
-    expect(log).toContain(`compose --env-file ${join(root, '.env')} -f compose.yaml up -d --no-build --pull never --remove-orphans --wait\n`);
-    expect(log).toContain(`compose --env-file ${join(root, '.env')} config --format json\n`);
-    expect(log).toContain(`compose --env-file ${join(root, '.env')} ps -q subconverter\n`);
-    expect(log).toContain(`compose --env-file ${join(root, '.env')} exec -T subconverter sh -eu -c`);
+    const log = normalizeComposeSnapshot(await readFile(join(root, 'docker.log'), 'utf8'));
+    expect(log).toContain('compose --env-file <private-snapshot> -f compose.yaml pull gateway subconverter myurls redis\n');
+    expect(log).toContain('compose --env-file <private-snapshot> -f compose.yaml up -d --no-build --pull never --remove-orphans --wait\n');
+    expect(log).toContain('compose --env-file <private-snapshot> config --format json\n');
+    expect(log).toContain('compose --env-file <private-snapshot> ps -q subconverter\n');
+    expect(log).toContain('compose --env-file <private-snapshot> exec -T subconverter sh -eu -c');
   });
 
   it('fails the upgrade with remediation when the volume keeps the previous image content', async () => {

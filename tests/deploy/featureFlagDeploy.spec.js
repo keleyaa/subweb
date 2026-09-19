@@ -7,6 +7,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 const repositoryRoot = new URL('../../', import.meta.url);
 const temporaryDirectories = [];
 
+const normalizeComposeSnapshot = (log) => log.replace(
+  /--env-file \S*subweb-env\.[^ ]+/gu,
+  '--env-file <private-snapshot>',
+);
+
 const makeFixture = async (shortLinksEnabled) => {
   const root = await mkdtemp(join(tmpdir(), 'subweb-feature-deploy-'));
   temporaryDirectories.push(root);
@@ -65,12 +70,12 @@ afterEach(async () => {
 describe('feature-flag deployment entrypoint', () => {
   it('selects the disabled short-link Compose file for lifecycle commands', async () => {
     const root = await makeFixture('false');
-    const compose = (file, args) => `compose --env-file ${join(root, '.env')} -f ${file} ${args}`;
+    const compose = (file, args) => `compose --env-file <private-snapshot> -f ${file} ${args}`;
     for (const command of ['up', 'down', 'status', 'logs']) {
       const result = runCLI(root, [command]);
       expect(result.status, result.stderr).toBe(0);
     }
-    expect(await readFile(join(root, 'docker.log'), 'utf8')).toBe([
+    expect(normalizeComposeSnapshot(await readFile(join(root, 'docker.log'), 'utf8'))).toBe([
       'compose version',
       'validate',
       compose('compose.disabled-short-links.yaml', 'up -d --build --pull missing --remove-orphans --wait'),
@@ -88,8 +93,8 @@ describe('feature-flag deployment entrypoint', () => {
     const root = await makeFixture('true');
     const result = runCLI(root, ['up']);
     expect(result.status, result.stderr).toBe(0);
-    expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain(
-      `compose --env-file ${join(root, '.env')} -f compose.yaml up -d --build --pull missing --remove-orphans --wait\n`,
+    expect(normalizeComposeSnapshot(await readFile(join(root, 'docker.log'), 'utf8'))).toContain(
+      'compose --env-file <private-snapshot> -f compose.yaml up -d --build --pull missing --remove-orphans --wait\n',
     );
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain('validate\n');
   });
@@ -99,8 +104,8 @@ describe('feature-flag deployment entrypoint', () => {
     await writeFile(join(root, '.env'), 'SHORT_LINKS_ENABLED=false\nSUBWEB_IMAGE=ghcr.io/example/subweb:sha-abcdef1\n');
     const result = runCLI(root, ['up'], { SUBWEB_IMAGE: 'ghcr.io/example/subweb:sha-abcdef1' });
     expect(result.status, result.stderr).toBe(0);
-    expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain(
-      `compose --env-file ${join(root, '.env')} -f compose.disabled-short-links.yaml up -d --no-build --pull never --remove-orphans --wait\n`,
+    expect(normalizeComposeSnapshot(await readFile(join(root, 'docker.log'), 'utf8'))).toContain(
+      'compose --env-file <private-snapshot> -f compose.disabled-short-links.yaml up -d --no-build --pull never --remove-orphans --wait\n',
     );
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain('validate\n');
   });
@@ -122,8 +127,8 @@ describe('feature-flag deployment entrypoint', () => {
     await writeFile(join(root, '.env'), 'SHORT_LINKS_ENABLED=false\nSUBWEB_IMAGE=ghcr.io/example/subweb:sha-abcdef1\n');
     const result = runCLI(root, ['up'], { SUBWEB_IMAGE: '' });
     expect(result.status, result.stderr).toBe(0);
-    expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain(
-      `compose --env-file ${join(root, '.env')} -f compose.disabled-short-links.yaml up -d --build --pull missing --remove-orphans --wait\n`,
+    expect(normalizeComposeSnapshot(await readFile(join(root, 'docker.log'), 'utf8'))).toContain(
+      'compose --env-file <private-snapshot> -f compose.disabled-short-links.yaml up -d --build --pull missing --remove-orphans --wait\n',
     );
   });
 
