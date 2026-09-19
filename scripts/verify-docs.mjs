@@ -99,6 +99,8 @@ export function verifyDocs({ root }) {
     ['docs/deployment-vps.md', 'subweb-backup-verify.timer'],
     ['docs/deployment-vps.md', 'BACKUP_REMOTE_MOUNT'],
     ['docs/deployment-vps.md', 'systemctl daemon-reload'],
+    ['.env.example', 'configure.sh generates REDIS_IMAGE, SUBCONVERTER_IMAGE, and MYURLS_IMAGE'],
+    ['.env.example', '# SUBWEB_IMAGE=docker.io/keleyaa/subweb@sha256:<64-hex-digest>'],
   ];
   for (const [relativeFile, expectedText] of requiredContracts) {
     const absoluteFile = path.join(root, relativeFile);
@@ -120,6 +122,27 @@ export function verifyDocs({ root }) {
     const architecturePrd = fs.readFileSync(architecturePrdPath, 'utf8');
     if (!architecturePrd.includes('Go race、Go vet、构建和 `git diff --check` 是需要另行执行')) {
       errors.push('missing current release contract: docs/architecture-prd.md');
+    }
+  }
+
+  const envExamplePath = path.join(root, '.env.example');
+  if (fs.existsSync(envExamplePath)) {
+    const envExample = fs.readFileSync(envExamplePath, 'utf8');
+    if (/^#?\s*SUBWEB_IMAGE=.*:sha-/mu.test(envExample)) {
+      errors.push('env example uses a mutable Gateway image tag');
+    }
+    for (const variable of ['REDIS_IMAGE', 'SUBCONVERTER_IMAGE', 'MYURLS_IMAGE']) {
+      if (new RegExp(`^#?\\s*${variable}=`, 'mu').test(envExample)) {
+        errors.push(`env example exposes managed runtime override: ${variable}`);
+      }
+    }
+  }
+
+  const vpsDeploymentPath = path.join(root, 'docs/deployment-vps.md');
+  if (fs.existsSync(vpsDeploymentPath)) {
+    const vpsDeployment = fs.readFileSync(vpsDeploymentPath, 'utf8');
+    if (vpsDeployment.includes('/srv/releases/subweb-v1.0.4')) {
+      errors.push('VPS deployment guide uses an obsolete v1.0.4 release path');
     }
   }
 

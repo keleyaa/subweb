@@ -13,8 +13,8 @@
 主机安装由 checkout 中的以下命令完成。命令不会生成 `.env`，也不会删除现有 Compose volume：
 
 ```sh
-sudo SUBWEB_SOURCE=/srv/releases/subweb-v1.0.4 \
-  /srv/releases/subweb-v1.0.4/scripts/vps/install.sh
+sudo SUBWEB_SOURCE=/srv/releases/subweb-vX.Y.Z \
+  /srv/releases/subweb-vX.Y.Z/scripts/vps/install.sh
 sudo /opt/subweb/scripts/vps/check-host.sh
 ```
 

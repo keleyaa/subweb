@@ -182,10 +182,15 @@ describe('release evidence and command gate', () => {
     expect(workflow).not.toContain('RUN_DOCKER_INTEGRATION: "1"');
   });
 
-  it('does not offer an interface-incompatible Node MyUrls override', () => {
+  it('does not offer unmanaged runtime image overrides', () => {
     const environmentTemplate = fs.readFileSync(path.join(root, '.env.example'), 'utf8');
 
-    expect(environmentTemplate).toContain('only a Rust MyUrls image compatible with /api/links');
+    expect(environmentTemplate).toContain(
+      'configure.sh generates REDIS_IMAGE, SUBCONVERTER_IMAGE, and MYURLS_IMAGE',
+    );
+    for (const variable of ['REDIS_IMAGE', 'SUBCONVERTER_IMAGE', 'MYURLS_IMAGE']) {
+      expect(environmentTemplate).not.toMatch(new RegExp(`^#?\\s*${variable}=`, 'mu'));
+    }
     expect(environmentTemplate).not.toContain('myurls:v1.13.0');
   });
 

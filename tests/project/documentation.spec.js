@@ -149,6 +149,20 @@ describe("documentation contract", () => {
     expect(maintenance).toContain("runtime-image-contract.mjs");
   });
 
+  it("keeps version examples aligned with the current immutable image contract", () => {
+    const envExample = read(".env.example");
+    const vps = read("docs/deployment-vps.md");
+
+    expect(envExample).toContain("# SUBWEB_IMAGE=docker.io/keleyaa/subweb@sha256:<64-hex-digest>");
+    expect(envExample).not.toMatch(/^#?\s*SUBWEB_IMAGE=.*:sha-/mu);
+    for (const variable of ["REDIS_IMAGE", "SUBCONVERTER_IMAGE", "MYURLS_IMAGE"]) {
+      expect(envExample).not.toMatch(new RegExp(`^#?\\s*${variable}=`, "mu"));
+    }
+    expect(envExample).toContain("configure.sh generates REDIS_IMAGE, SUBCONVERTER_IMAGE, and MYURLS_IMAGE");
+    expect(vps).toContain("/srv/releases/subweb-vX.Y.Z");
+    expect(vps).not.toContain("/srv/releases/subweb-v1.0.4");
+  });
+
   it("documents exactly the approved deployment families and source lineage", () => {
     const readme = read("README.md");
     for (const name of ["本机源码", "Docker"]) expect(readme).toContain(name);
