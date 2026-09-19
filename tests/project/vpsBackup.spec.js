@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,6 +40,110 @@ esac
 `);
 
   return directory;
+};
+
+const makeBackupRetentionFixture = async () => {
+  const fixture = await mkdtemp(join(tmpdir(), 'subweb-vps-retention-'));
+  const backupDirectory = join(fixture, 'backups');
+  const scriptsDirectory = join(fixture, 'scripts', 'vps');
+  const projectRoot = join(fixture, 'project');
+  const backupPathSource = await readFile(backupPathScript, 'utf8');
+  const backupSource = await readFile(backupScript, 'utf8');
+
+  temporaryDirectories.push(fixture);
+  await mkdir(backupDirectory, { recursive: true });
+  await mkdir(scriptsDirectory, { recursive: true });
+  await mkdir(join(projectRoot, 'scripts'), { recursive: true });
+  await writeExecutable(join(scriptsDirectory, 'backup-path.sh'), backupPathSource
+    .replaceAll('/var/lib/subweb-backups', backupDirectory)
+    .replaceAll('/mnt/subweb-backups', join(fixture, 'other-managed-root')));
+  await writeExecutable(join(scriptsDirectory, 'backup.sh'), backupSource);
+  await writeExecutable(join(projectRoot, 'scripts', 'subweb.sh'), `#!/bin/sh
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output) printf 'backup' >"$2"; exit 0 ;;
+  esac
+  shift
+done
+exit 1
+`);
+  await writeExecutable(join(fixture, 'age'), `#!/bin/sh
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -r) shift 2 ;;
+    -o) output=$2; shift 2 ;;
+    *) input=$1; shift ;;
+  esac
+done
+cp "$input" "$output"
+`);
+  await writeExecutable(join(fixture, 'df'), `#!/bin/sh
+printf '%s\\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on'
+printf '%s\\n' '/dev/test 100000 1 99999999 1% /'
+`);
+  await writeExecutable(join(fixture, 'find'), `#!/usr/bin/env node
+import { readdirSync, statSync } from 'node:fs';
+
+const directory = process.argv[2];
+const format = process.argv.at(-1);
+const separator = format.endsWith('\\\\0') ? String.fromCharCode(0) : String.fromCharCode(10);
+for (const name of readdirSync(directory)) {
+  if (!/^subweb-redis-.*\\.rdb(?:\\.age)?$/s.test(name)) continue;
+  const path = directory + '/' + name;
+  process.stdout.write(String(statSync(path).mtimeMs) + ' ' + path + separator);
+}
+`);
+  await writeExecutable(join(fixture, 'flock'), '#!/bin/sh\nexit 0\n');
+  await writeExecutable(join(fixture, 'sha256sum'), `#!/bin/sh
+printf 'digest  %s\\n' "$1"
+`);
+  await writeExecutable(join(fixture, 'sort'), `#!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+
+const arguments_ = process.argv.slice(2);
+const input = readFileSync(0);
+if (!arguments_.some((argument) => argument.includes('z'))) {
+  const result = spawnSync('/usr/bin/sort', arguments_, { input });
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  process.exit(result.status ?? 1);
+}
+const separator = String.fromCharCode(0);
+const records = input.toString('utf8').split(separator).filter(Boolean);
+records.sort((left, right) => Number(right.split(' ', 1)[0]) - Number(left.split(' ', 1)[0]));
+process.stdout.write(Buffer.from(records.join(separator) + (records.length ? separator : ''), 'utf8'));
+`);
+  await writeExecutable(join(fixture, 'tail'), `#!/usr/bin/env node
+import { readFileSync } from 'node:fs';
+
+const separator = String.fromCharCode(0);
+const arguments_ = process.argv.slice(2);
+const start = Number(arguments_[arguments_.indexOf('-n') + 1].slice(1)) - 1;
+const records = readFileSync(0).toString('utf8').split(separator).filter(Boolean).slice(start);
+process.stdout.write(Buffer.from(records.join(separator) + (records.length ? separator : ''), 'utf8'));
+`);
+  await writeExecutable(join(fixture, 'cut'), `#!/usr/bin/env node
+import { readFileSync } from 'node:fs';
+
+const separator = String.fromCharCode(0);
+const records = readFileSync(0).toString('utf8').split(separator).filter(Boolean)
+  .map((record) => record.slice(record.indexOf(' ') + 1));
+process.stdout.write(Buffer.from(records.join(separator) + (records.length ? separator : ''), 'utf8'));
+`);
+  await writeExecutable(join(fixture, 'xargs'), `#!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+
+const separator = String.fromCharCode(0);
+const paths = readFileSync(0).toString('utf8').split(separator).filter(Boolean);
+for (const path of paths) {
+  const result = spawnSync('/bin/rm', ['-f', '--', path, path + '.sha256']);
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+`);
+
+  return { backupDirectory, fixture, projectRoot, script: join(scriptsDirectory, 'backup.sh') };
 };
 
 afterEach(async () => {
@@ -224,5 +328,47 @@ describe('VPS backup mount safety', () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('backup must resolve inside BACKUP_DIRECTORY');
     await expect(readFile(marker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
+
+
+describe('VPS backup retention', () => {
+  it('does not delete a forged path outside the backup directory from a newline-bearing matching filename', async () => {
+    const { backupDirectory, fixture, projectRoot, script } = await makeBackupRetentionFixture();
+    const retainedBackup = join(backupDirectory, 'subweb-redis-20250101T000000Z-ABC123.rdb');
+    const staleBackup = join(backupDirectory, 'subweb-redis-20240101T000000Z-DEF456.rdb');
+    const forgedTarget = join(fixture, 'forged-target.rdb');
+    const malformedBackup = join(backupDirectory, 'subweb-redis-20230101T000000Z-GHI789\nforged-target.rdb');
+
+    await writeFile(retainedBackup, 'retain');
+    await writeFile(staleBackup, 'prune');
+    await writeFile(`${staleBackup}.sha256`, 'stale checksum');
+    await writeFile(malformedBackup, 'malformed');
+    await writeFile(forgedTarget, 'must remain');
+    await writeFile(join(fixture, 'production.env'), '');
+    await utimes(retainedBackup, new Date('2025-01-01T00:00:00Z'), new Date('2025-01-01T00:00:00Z'));
+    await utimes(staleBackup, new Date('2024-01-01T00:00:00Z'), new Date('2024-01-01T00:00:00Z'));
+    await utimes(malformedBackup, new Date('2023-01-01T00:00:00Z'), new Date('2023-01-01T00:00:00Z'));
+
+    const result = spawnSync('sh', [script], {
+      cwd: fixture,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${fixture}:${process.env.PATH}`,
+        AGE_RECIPIENT: 'age1testrecipient',
+        BACKUP_DIRECTORY: backupDirectory,
+        BACKUP_REMOTE_MOUNT: '',
+        BACKUP_RETENTION: '2',
+        SUBWEB_ENV_FILE: join(fixture, 'production.env'),
+        SUBWEB_ROOT: projectRoot,
+      },
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    await expect(readFile(forgedTarget, 'utf8')).resolves.toBe('must remain');
+    await expect(readFile(retainedBackup, 'utf8')).resolves.toBe('retain');
+    await expect(readFile(staleBackup, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(`${staleBackup}.sha256`, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
