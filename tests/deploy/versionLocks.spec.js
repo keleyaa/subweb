@@ -312,13 +312,23 @@ describe('integrated service artifact locks', () => {
     },
   );
 
-  it.each(['', '   ', 'v1\n', 'LATEST', 'v2.01.0', 'v2.1.00', 'v2.00.1'])(
+  it.each(['', '   ', 'v1\n', 'LATEST'])(
     'rejects the invalid source tag %j',
     (tag) => {
       const candidate = structuredClone(lock);
       candidate.services.myurls.source.tag = tag;
 
       expect(validateVersionLocks(candidate)).toContain(sourceTagError);
+    },
+  );
+
+  it.each(['v2.01.0', 'v2.1.00', 'v2.00.1'])(
+    'rejects the non-canonical Rust MyUrls release tag %j',
+    (tag) => {
+      const candidate = structuredClone(lock);
+      candidate.services.myurls.source.tag = tag;
+
+      expect(validateVersionLocks(candidate)).toContain(myurlsReleaseError);
     },
   );
 

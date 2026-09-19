@@ -9,7 +9,12 @@ const runtimeImageServices = [
   ['MYURLS_IMAGE', 'myurls'],
 ];
 const runtimeImageVariableNames = runtimeImageServices.map(([variable]) => variable);
-const immutableImageReferencePattern = /^[^@\s\u0000-\u001f\u007f]+@sha256:[0-9a-f]{64}$/u;
+const immutableImageReferencePattern = /^[^@\s]+@sha256:[0-9a-f]{64}$/u;
+const containsControlCharacter = (value) =>
+  [...value].some((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint < 0x20 || codePoint === 0x7f;
+  });
 
 const defaultLockPath = fileURLToPath(
   new URL('../deploy/versions.lock.json', import.meta.url),
@@ -53,7 +58,11 @@ export function renderRuntimeImageEnv(images) {
   return `${runtimeImageServices
     .map(([variable]) => {
       const image = images[variable];
-      if (typeof image !== 'string' || !immutableImageReferencePattern.test(image)) {
+      if (
+        typeof image !== 'string' ||
+        containsControlCharacter(image) ||
+        !immutableImageReferencePattern.test(image)
+      ) {
         throw new Error(`${variable} must be an immutable sha256 image reference`);
       }
       return `${variable}=${image}`;
