@@ -48,8 +48,9 @@ describe('GitHub Actions workflow contract', () => {
   it('provides a deterministic local workflow verifier', async () => {
     const verifier = await readFile(new URL('../../scripts/verify-workflows.sh', import.meta.url), 'utf8');
 
-    expect(verifier).toContain('actionlint');
-    expect(verifier).toContain('workflow contracts=passed');
+     expect(verifier).toContain('actionlint');
+     expect(verifier).toMatch(/rhysd\/actionlint:1\.7\.7@sha256:[0-9a-f]{64}/u);
+     expect(verifier).toContain('workflow contracts=passed');
     expect(verifier).not.toContain('latest');
   });
 });

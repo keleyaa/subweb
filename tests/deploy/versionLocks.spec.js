@@ -18,6 +18,9 @@ const lockPath = fileURLToPath(
 const validatorPath = fileURLToPath(
   new URL('../../scripts/verify-version-locks.mjs', import.meta.url),
 );
+const runtimeContractPath = fileURLToPath(
+  new URL('../../scripts/runtime-image-contract.mjs', import.meta.url),
+);
 const lock = JSON.parse(await readFile(lockPath, 'utf8'));
 
 const digestPattern = /^sha256:[0-9a-f]{64}$/;
@@ -56,6 +59,13 @@ const runValidatorCli = (path) =>
   spawnSync(process.execPath, [validatorPath, path], {
     encoding: 'utf8',
   });
+
+const runRuntimeContractCli = (command, path) =>
+  spawnSync(
+    process.execPath,
+    [runtimeContractPath, command, '--lock', path],
+    { encoding: 'utf8' },
+  );
 
 describe('integrated service artifact locks', () => {
   it('uses the current schema and exact service inventory', () => {
@@ -178,14 +188,29 @@ describe('integrated service artifact locks', () => {
       SUBCONVERTER_IMAGE: `${lock.services.subconverter.image.reference}@${lock.services.subconverter.image.digest}`,
       MYURLS_IMAGE: `${lock.services.myurls.image.reference}@${lock.services.myurls.image.digest}`,
     });
-    expect(renderRuntimeImageEnv(images)).toBe(
-      `${Object.entries(images).map(([name, image]) => `${name}=${image}`).join('\n')}\n`,
-    );
+    expect(renderRuntimeImageEnv(images)).toBe([
+      `REDIS_IMAGE=${images.REDIS_IMAGE}`,
+      `SUBCONVERTER_IMAGE=${images.SUBCONVERTER_IMAGE}`,
+      `MYURLS_IMAGE=${images.MYURLS_IMAGE}`,
+      '',
+    ].join('\n')); 
     expect(runtimeImagesForRollback(lock)).toEqual({
       redis: lock.services.redis.image,
       subconverter: lock.services.subconverter.image,
       myurls: lock.services.myurls.image,
     });
+  });
+
+  it('rejects runtime environment keys and values outside the exact contract', () => {
+    const images = resolveRuntimeImages(lock);
+
+    expect(() => renderRuntimeImageEnv({ ...images, EXTRA_IMAGE: images.REDIS_IMAGE })).toThrow(
+      'Runtime image environment must contain exactly',
+    );
+    expect(() => renderRuntimeImageEnv({
+      ...images,
+      MYURLS_IMAGE: `${images.MYURLS_IMAGE}\nUNSAFE=value`,
+    })).toThrow('MYURLS_IMAGE must be an immutable sha256 image reference');
   });
 
   it('refuses to derive runtime images from an invalid lock', () => {
@@ -287,7 +312,7 @@ describe('integrated service artifact locks', () => {
     },
   );
 
-  it.each(['', '   ', 'v1\n', 'LATEST'])(
+  it.each(['', '   ', 'v1\n', 'LATEST', 'v2.01.0', 'v2.1.00', 'v2.00.1'])(
     'rejects the invalid source tag %j',
     (tag) => {
       const candidate = structuredClone(lock);
@@ -464,6 +489,23 @@ describe('integrated service artifact locks', () => {
     const missingLockPath = join(temporaryDirectory, 'missing.lock.json');
 
     const result = runValidatorCli(missingLockPath);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Unable to read version locks:');
+  });
+
+  it('renders the runtime environment through the CLI', () => {
+    const result = runRuntimeContractCli('env', lockPath);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe(renderRuntimeImageEnv(resolveRuntimeImages(lock)));
+    expect(result.stderr).toBe('');
+  });
+
+  it('fails the runtime-image CLI for a missing lock file', () => {
+    const missingLockPath = join(temporaryDirectory, 'missing-runtime.lock.json');
+
+    const result = runRuntimeContractCli('rollback', missingLockPath);
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('Unable to read version locks:');

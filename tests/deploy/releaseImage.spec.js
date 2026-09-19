@@ -121,7 +121,15 @@ describe('release image resolver', () => {
     await expectNoDeploymentCommands(root);
   });
 
-  it.each(['1.2.3', 'v1.2', 'v1.2.3-rc.1', 'latest'])('rejects invalid version %s before invoking Docker', async (version) => {
+  it.each([
+    '1.2.3',
+    'v1.2',
+    'v1.2.3-rc.1',
+    'v01.2.3',
+    'v1.02.3',
+    'v1.2.03',
+    'latest',
+  ])('rejects invalid version %s before invoking Docker', async (version) => {
     const root = await makeFixture();
 
     const result = runResolver(root, version);

@@ -11,7 +11,7 @@ validate_release_version() (
     *"$newline"*) return 1 ;;
   esac
 
-  printf '%s\n' "$release_version" | LC_ALL=C grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
+  printf '%s\n' "$release_version" | LC_ALL=C grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 )
 
 resolve_release_image() (
