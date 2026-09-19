@@ -1,8 +1,85 @@
-import { readFile } from 'node:fs/promises';
-import { describe, expect, it } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterEach, describe, expect, it } from 'vitest';
 
 const root = new URL('../../', import.meta.url);
+const repositoryRoot = fileURLToPath(root);
+const checkHostPath = fileURLToPath(new URL('scripts/vps/check-host.sh', root));
+const installPath = fileURLToPath(new URL('scripts/vps/install.sh', root));
+const temporaryDirectories = [];
 const read = (path) => readFile(new URL(path, root), 'utf8');
+
+const writeExecutable = async (path, source) => {
+  await writeFile(path, source, { mode: 0o755 });
+  await chmod(path, 0o755);
+};
+
+const makeShellFixture = async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'subweb-vps-runtime-'));
+  temporaryDirectories.push(directory);
+  const bin = join(directory, 'bin');
+  await mkdir(bin);
+
+  await writeExecutable(join(bin, 'id'), `#!/bin/sh
+[ "\${1-}" = '-u' ] && { printf '0\\n'; exit 0; }
+exit 1
+`);
+  await writeExecutable(join(bin, 'docker'), `#!/bin/sh
+[ "$*" = 'compose version' ]
+`);
+  await writeExecutable(join(bin, 'systemctl'), '#!/bin/sh\nexit 0\n');
+  await writeExecutable(join(bin, 'df'), `#!/bin/sh
+printf '%s\\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on' '/dev/test 100000 1 90000 1% /'
+`);
+  await writeExecutable(join(bin, 'getent'), '#!/bin/sh\nexit 1\n');
+  for (const command of ['groupadd', 'useradd', 'usermod']) {
+    await writeExecutable(join(bin, command), `#!/bin/sh
+printf '%s\\n' '${command}' >> "$CALL_LOG"
+`);
+  }
+
+  return directory;
+};
+
+const runCheckHost = (directory, environment = {}) => spawnSync('sh', [checkHostPath], {
+  encoding: 'utf8',
+  env: {
+    ...process.env,
+    PATH: `${join(directory, 'bin')}:${process.env.PATH}`,
+    SUBWEB_ROOT: join(directory, 'installation'),
+    ...environment,
+  },
+});
+
+const runInstaller = (directory, source, environment = {}) => spawnSync('sh', [installPath], {
+  cwd: repositoryRoot,
+  encoding: 'utf8',
+  env: {
+    ...process.env,
+    CALL_LOG: join(directory, 'calls.log'),
+    PATH: `${join(directory, 'bin')}:${process.env.PATH}`,
+    SUBWEB_ROOT: join(directory, 'installation'),
+    SUBWEB_SOURCE: source,
+    ...environment,
+  },
+});
+
+const readCalls = async (directory) => {
+  try {
+    return await readFile(join(directory, 'calls.log'), 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return '';
+    throw error;
+  }
+};
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((directory) =>
+    rm(directory, { recursive: true, force: true })));
+});
 
 describe('VPS runtime contract', () => {
   it('defines a hardened systemd application unit owned by the repository entrypoint', async () => {
@@ -10,7 +87,8 @@ describe('VPS runtime contract', () => {
 
     expect(unit).toContain('ExecStart=/opt/subweb/scripts/subweb.sh up');
     expect(unit).toContain('ExecStop=/opt/subweb/scripts/subweb.sh down');
-    expect(unit).toContain('User=subweb');
+    expect(unit).toContain('User=root');
+    expect(unit).not.toContain('User=subweb');
     expect(unit).toContain('Restart=on-failure');
     expect(unit).toContain('StartLimitBurst=3');
     expect(unit).toContain('NoNewPrivileges=true');
@@ -27,7 +105,8 @@ describe('VPS runtime contract', () => {
     const verifyBackup = await read('scripts/vps/verify-backup.sh');
 
     expect(service).toContain('ExecStart=/opt/subweb/scripts/vps/backup.sh');
-    expect(service).toContain('User=subweb');
+    expect(service).toContain('User=root');
+    expect(verifyService).toContain('User=root');
     expect(timer).toContain('OnCalendar=*-*-* 03:15:00');
     expect(timer).toContain('Persistent=true');
     expect(backup).toContain('AGE_RECIPIENT');
@@ -42,13 +121,76 @@ describe('VPS runtime contract', () => {
   it('provides host checks for supported tools, disk pressure, and protected env', async () => {
     const checker = await read('scripts/vps/check-host.sh');
     const installer = await read('scripts/vps/install.sh');
+    const documentation = await read('docs/deployment-vps.md');
 
     expect(checker).toContain('docker compose version');
-    expect(checker).toContain('MIN_FREE_KIB');
+    expect(checker).toContain('PROJECT_ROOT=${SUBWEB_ROOT:-/opt/subweb}');
+    expect(checker).toContain('MIN_FREE_KIB must be a non-negative decimal');
     expect(checker).toContain('mode 0600');
-    expect(installer).toContain('/opt/subweb');
+    expect(installer).toContain('SUBWEB_ROOT must be /opt/subweb');
+    expect(installer).toContain('release tree must not contain symbolic links');
+    expect(installer).toContain('installed .env must be a regular file');
+    expect(installer).toContain('install -d -o subweb -g subweb -m 0700 "$TARGET_DIRECTORY/.runtime" "$TARGET_DIRECTORY/.local"');
+    expect(installer).toContain('-path "$TARGET_DIRECTORY/.runtime" -o -path "$TARGET_DIRECTORY/.local"');
+    expect(installer).not.toContain('chown -R');
+    expect(installer).not.toContain('usermod -aG docker subweb');
     expect(installer).toContain('systemctl daemon-reload');
     expect(installer).toContain('systemctl enable subweb.service');
+    expect(documentation).not.toContain('Docker group');
+  });
+
+  it('uses the configured deployment root for host checks', async () => {
+    const fixture = await makeShellFixture();
+    const installation = join(fixture, 'installation');
+    await mkdir(installation);
+    await writeFile(join(installation, '.env'), 'SHORT_LINKS_ENABLED=true\n', { mode: 0o600 });
+    await chmod(join(installation, '.env'), 0o600);
+
+    const result = runCheckHost(fixture, { MIN_FREE_KIB: '1' });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain('free_kib=90000');
+  });
+
+  it('rejects a non-decimal minimum free-space threshold before comparing disk space', async () => {
+    const fixture = await makeShellFixture();
+    const installation = join(fixture, 'installation');
+    await mkdir(installation);
+    await writeFile(join(installation, '.env'), 'SHORT_LINKS_ENABLED=true\n', { mode: 0o600 });
+    await chmod(join(installation, '.env'), 0o600);
+
+    const result = runCheckHost(fixture, { MIN_FREE_KIB: '-1' });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('MIN_FREE_KIB must be a non-negative decimal');
+  });
+
+  it('rejects a non-default deployment root before creating service accounts', async () => {
+    const fixture = await makeShellFixture();
+    const source = join(fixture, 'release');
+    await mkdir(source);
+    await writeFile(join(source, 'compose.yaml'), 'services: {}\n');
+
+    const result = runInstaller(fixture, source);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('SUBWEB_ROOT must be /opt/subweb');
+    expect(await readCalls(fixture)).toBe('');
+  });
+
+  it('rejects release trees containing symlinks before creating service accounts', async () => {
+    const fixture = await makeShellFixture();
+    const source = join(fixture, 'release');
+    await mkdir(source);
+    await writeFile(join(source, 'compose.yaml'), 'services: {}\n');
+    await writeFile(join(fixture, 'outside'), 'outside\n');
+    await symlink(join(fixture, 'outside'), join(source, 'linked-file'));
+
+    const result = runInstaller(fixture, source);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('release tree must not contain symbolic links');
+    expect(await readCalls(fixture)).toBe('');
   });
 
   it('ships an external TLS proxy contract without exposing the container publicly', async () => {

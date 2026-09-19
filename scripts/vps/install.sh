@@ -16,28 +16,49 @@ SOURCE_DIRECTORY=${SUBWEB_SOURCE:-}
 TARGET_DIRECTORY=${SUBWEB_ROOT:-/opt/subweb}
 [ -n "$SOURCE_DIRECTORY" ] || fail 'SUBWEB_SOURCE must point to a checked-out release.'
 case "$SOURCE_DIRECTORY" in /*) ;; *) fail 'SUBWEB_SOURCE must be an absolute path.' ;; esac
-[ -d "$SOURCE_DIRECTORY" ] || fail 'SUBWEB_SOURCE must be a directory.'
+[ -d "$SOURCE_DIRECTORY" ] && [ ! -L "$SOURCE_DIRECTORY" ] \
+  || fail 'SUBWEB_SOURCE must be a directory and not a symlink.'
+if find "$SOURCE_DIRECTORY" -type l -print -quit | grep -q .; then
+  fail 'release tree must not contain symbolic links.'
+fi
+[ -f "$SOURCE_DIRECTORY/compose.yaml" ] || fail 'SUBWEB_SOURCE does not look like a Subweb release.'
+for state_directory in .runtime .local; do
+  [ ! -e "$SOURCE_DIRECTORY/$state_directory" ] && [ ! -L "$SOURCE_DIRECTORY/$state_directory" ] \
+    || fail "release tree must not include $state_directory state."
+done
 
-if ! getent group subweb >/dev/null 2>&1; then
-  groupadd --system subweb
+[ "$TARGET_DIRECTORY" = /opt/subweb ] \
+  || fail 'SUBWEB_ROOT must be /opt/subweb; custom deployment roots are not supported.'
+[ ! -L "$TARGET_DIRECTORY" ] || fail 'deployment root must not be a symlink.'
+if [ -e "$TARGET_DIRECTORY" ]; then
+  [ -d "$TARGET_DIRECTORY" ] || fail 'deployment root must be a directory.'
+  if find "$TARGET_DIRECTORY" -type l -print -quit | grep -q .; then
+    fail 'existing deployment tree must not contain symbolic links.'
+  fi
 fi
-if ! id subweb >/dev/null 2>&1; then
-  useradd --system --gid subweb --home-dir "$TARGET_DIRECTORY" --no-create-home --shell /usr/sbin/nologin subweb
+if [ -e "$TARGET_DIRECTORY/.env" ]; then
+  [ -f "$TARGET_DIRECTORY/.env" ] && [ ! -L "$TARGET_DIRECTORY/.env" ] \
+    || fail 'installed .env must be a regular file and not a symlink.'
 fi
-if ! id -nG subweb | tr ' ' '\n' | grep -qx docker; then
-  usermod -aG docker subweb
+if [ ! -f "$SOURCE_DIRECTORY/.env" ] && [ ! -f "$TARGET_DIRECTORY/.env" ]; then
+  fail 'installed .env must be a regular file before installation.'
 fi
+
+getent group subweb >/dev/null 2>&1 || groupadd --system subweb
+id subweb >/dev/null 2>&1 || useradd --system --gid subweb --home-dir "$TARGET_DIRECTORY" --no-create-home --shell /usr/sbin/nologin subweb
 
 install -d -o root -g subweb -m 0750 "$TARGET_DIRECTORY"
 install -d -o subweb -g subweb -m 0700 "$TARGET_DIRECTORY/.runtime" "$TARGET_DIRECTORY/.local"
 install -d -o subweb -g subweb -m 0700 /var/lib/subweb-backups
 cp -a "$SOURCE_DIRECTORY/." "$TARGET_DIRECTORY/"
-chown -R root:subweb "$TARGET_DIRECTORY"
+[ -f "$TARGET_DIRECTORY/.env" ] && [ ! -L "$TARGET_DIRECTORY/.env" ] \
+  || fail 'installed .env must be a regular file and not a symlink.'
+find "$TARGET_DIRECTORY" \
+  \( -path "$TARGET_DIRECTORY/.runtime" -o -path "$TARGET_DIRECTORY/.local" -o -path "$TARGET_DIRECTORY/.env" \) -prune -o \
+  -exec chown root:subweb {} +
+chown subweb:subweb "$TARGET_DIRECTORY/.env"
+chmod 0600 "$TARGET_DIRECTORY/.env"
 find "$TARGET_DIRECTORY/scripts" -type f -name '*.sh' -exec chmod 0750 {} +
-if [ -f "$TARGET_DIRECTORY/.env" ]; then
-  chown subweb:subweb "$TARGET_DIRECTORY/.env"
-  chmod 0600 "$TARGET_DIRECTORY/.env"
-fi
 
 install -d -o root -g root -m 0755 /etc/subweb
 install -m 0644 deploy/systemd/subweb.service /etc/systemd/system/subweb.service
