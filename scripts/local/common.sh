@@ -23,6 +23,73 @@ validate_local_port() {
   [ "$1" -ge 1024 ] 2>/dev/null && [ "$1" -le 65535 ]
 }
 
+validate_local_ipv4() (
+  address=${1-}
+  printf '%s\n' "$address" | awk -F. '
+    BEGIN { valid = 0 }
+    NR == 1 {
+      valid = (NF == 4)
+      for (octet = 1; octet <= 4; octet += 1) {
+        if ($octet !~ /^[0-9]+$/ || (length($octet) > 1 && substr($octet, 1, 1) == "0") || ($octet + 0) > 255) {
+          valid = 0
+        }
+      }
+    }
+    END { exit !(NR == 1 && valid) }
+  '
+)
+
+validate_local_ipv4_cidr() (
+  cidr=${1-}
+  printf '%s\n' "$cidr" | awk -F'[./]' '
+    BEGIN { valid = 0 }
+    NR == 1 {
+      valid = (NF == 5 && $5 ~ /^([0-9]|[12][0-9]|3[0-2])$/ && ($5 + 0) > 0)
+      for (octet = 1; octet <= 4 && valid; octet += 1) {
+        if ($octet !~ /^[0-9]+$/ || (length($octet) > 1 && substr($octet, 1, 1) == "0") || ($octet + 0) > 255) {
+          valid = 0
+        }
+      }
+      if (valid) {
+        prefix = $5 + 0
+        for (octet = 1; octet <= 4; octet += 1) {
+          if (prefix >= octet * 8) continue
+          if (prefix <= (octet - 1) * 8) {
+            expected = 0
+          } else {
+            block = 2 ^ (8 - (prefix - (octet - 1) * 8))
+            expected = int(($octet + 0) / block) * block
+          }
+          if (($octet + 0) != expected) valid = 0
+        }
+      }
+    }
+    END { exit !(NR == 1 && valid) }
+  '
+)
+
+validate_local_ipv4s_in_subnet() (
+  subnet=${1-}
+  gateway=${2-}
+  myurls=${3-}
+  awk -v subnet="$subnet" -v gateway="$gateway" -v myurls="$myurls" '
+    function ip_number(value, parts, position, number) {
+      split(value, parts, ".")
+      number = 0
+      for (position = 1; position <= 4; position += 1) number = number * 256 + parts[position]
+      return number
+    }
+    BEGIN {
+      split(subnet, subnet_parts, "/")
+      network_start = ip_number(subnet_parts[1])
+      network_end = network_start + (2 ^ (32 - subnet_parts[2])) - 1
+      gateway_number = ip_number(gateway)
+      myurls_number = ip_number(myurls)
+      exit !(gateway_number >= network_start && gateway_number <= network_end && myurls_number >= network_start && myurls_number <= network_end)
+    }
+  '
+)
+
 prepare_local_environment() {
   command -v docker >/dev/null 2>&1 || local_fail 'docker is required.'
   command -v node >/dev/null 2>&1 || local_fail 'node is required.'
@@ -34,6 +101,21 @@ prepare_local_environment() {
      && [ "$local_myurls_port" != "$local_vite_port" ] \
      && [ "$local_subweb_port" != "$local_vite_port" ] \
      || local_fail 'local ports must be distinct.'
+  validate_local_ipv4_cidr "$local_myurls_network_subnet" \
+    || local_fail 'LOCAL_MYURLS_NETWORK_SUBNET must be a canonical IPv4 subnet.'
+  validate_local_ipv4 "$local_myurls_gateway_ip" \
+    || local_fail 'LOCAL_MYURLS_GATEWAY_IP must be a valid IPv4 address.'
+  validate_local_ipv4 "$local_myurls_ip" \
+    || local_fail 'LOCAL_MYURLS_IP must be a valid IPv4 address.'
+  [ "$local_myurls_gateway_ip" != "$local_myurls_ip" ] \
+    || local_fail 'LOCAL_MYURLS_GATEWAY_IP and LOCAL_MYURLS_IP must be distinct.'
+  validate_local_ipv4s_in_subnet \
+    "$local_myurls_network_subnet" "$local_myurls_gateway_ip" "$local_myurls_ip" \
+    || local_fail 'LOCAL_MYURLS_GATEWAY_IP and LOCAL_MYURLS_IP must be inside LOCAL_MYURLS_NETWORK_SUBNET.'
+  validate_local_ipv4_cidr "$local_myurls_trust_proxy_cidr" \
+    || local_fail 'LOCAL_MYURLS_TRUST_PROXY_CIDR must be a canonical IPv4 CIDR.'
+  [ "$local_myurls_trust_proxy_cidr" = "$local_myurls_gateway_ip/32" ] \
+    || local_fail 'LOCAL_MYURLS_TRUST_PROXY_CIDR must exactly match LOCAL_MYURLS_GATEWAY_IP/32.'
 
   export LOCAL_MYURLS_PORT="$local_myurls_port"
   export LOCAL_SUBWEB_PORT="$local_subweb_port"

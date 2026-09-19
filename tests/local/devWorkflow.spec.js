@@ -102,8 +102,45 @@ printf '%s\\n' \\
           ...environment,
         },
       });
+      const validLocalNetwork = {
+        LOCAL_MYURLS_NETWORK_SUBNET: '172.30.255.0/29',
+        LOCAL_MYURLS_GATEWAY_IP: '172.30.255.2',
+        LOCAL_MYURLS_IP: '172.30.255.3',
+        LOCAL_MYURLS_TRUST_PROXY_CIDR: '172.30.255.2/32',
+      };
+      const invalidLocalNetworkCases = [
+        ['malformed subnet', { LOCAL_MYURLS_NETWORK_SUBNET: '172.30.255.0/33' }, 'LOCAL_MYURLS_NETWORK_SUBNET'],
+        ['broad subnet', { LOCAL_MYURLS_NETWORK_SUBNET: '0.0.0.0/0' }, 'LOCAL_MYURLS_NETWORK_SUBNET'],
+        ['subnet with host bits', { LOCAL_MYURLS_NETWORK_SUBNET: '172.30.255.1/29' }, 'LOCAL_MYURLS_NETWORK_SUBNET'],
+        ['malformed gateway', { LOCAL_MYURLS_GATEWAY_IP: '172.30.255.999' }, 'LOCAL_MYURLS_GATEWAY_IP'],
+        ['gateway outside subnet', { LOCAL_MYURLS_GATEWAY_IP: '172.30.254.2' }, 'inside LOCAL_MYURLS_NETWORK_SUBNET'],
+        ['duplicate endpoints', { LOCAL_MYURLS_IP: '172.30.255.2' }, 'distinct'],
+        ['broad trusted proxy', { LOCAL_MYURLS_TRUST_PROXY_CIDR: '172.30.255.0/29' }, 'LOCAL_MYURLS_TRUST_PROXY_CIDR'],
+        ['unrelated trusted proxy', { LOCAL_MYURLS_TRUST_PROXY_CIDR: '192.0.2.1/32' }, 'LOCAL_MYURLS_TRUST_PROXY_CIDR'],
+        ['malformed trusted proxy', { LOCAL_MYURLS_TRUST_PROXY_CIDR: '172.30.255.2/33' }, 'LOCAL_MYURLS_TRUST_PROXY_CIDR'],
+      ];
+      for (const [name, overrides, expectedMessage] of invalidLocalNetworkCases) {
+        const result = runPreparation({ ...validLocalNetwork, ...overrides });
+        expect(result.status, name).not.toBe(0);
+        expect(`${result.stdout}${result.stderr}`, name).toContain(expectedMessage);
+      }
+      await expect(readFile(localEnvPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+
+      const customNetworkRun = runPreparation({
+        ...validLocalNetwork,
+        LOCAL_MYURLS_NETWORK_SUBNET: '192.0.2.0/29',
+        LOCAL_MYURLS_GATEWAY_IP: '192.0.2.2',
+        LOCAL_MYURLS_IP: '192.0.2.3',
+        LOCAL_MYURLS_TRUST_PROXY_CIDR: '192.0.2.2/32',
+      });
+      expect(customNetworkRun.status).toBe(0);
+      expect(customNetworkRun.stdout).toContain('MYURLS_NETWORK_SUBNET=192.0.2.0/29');
+      expect(customNetworkRun.stdout).toContain('MYURLS_GATEWAY_IP=192.0.2.2');
+      expect(customNetworkRun.stdout).toContain('MYURLS_IP=192.0.2.3');
+      expect(customNetworkRun.stdout).toContain('MYURLS_TRUST_PROXY_CIDR=192.0.2.2/32');
 
       const contaminatedRun = runPreparation({
+        ...validLocalNetwork,
         REDIS_IMAGE: 'registry.invalid/redis:parent',
         SUBCONVERTER_IMAGE: 'registry.invalid/subconverter:parent',
         MYURLS_IMAGE: 'registry.invalid/myurls:parent',
