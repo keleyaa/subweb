@@ -53,8 +53,8 @@ backup_canonical_child_path() {
   backup_name=${backup_path##*/}
   backup_parent=${backup_path%/*}
   [ -n "$backup_name" ] && [ -n "$backup_parent" ] || return 1
-  backup_canonical_root=$(CDPATH= cd -- "$backup_root" && pwd -P) || return 1
-  backup_canonical_parent=$(CDPATH= cd -- "$backup_parent" && pwd -P) || return 1
+  backup_canonical_root=$(CDPATH='' cd -- "$backup_root" && pwd -P) || return 1
+  backup_canonical_parent=$(CDPATH='' cd -- "$backup_parent" && pwd -P) || return 1
   backup_canonical_path=$backup_canonical_parent/$backup_name
   backup_path_is_within "$backup_canonical_root" "$backup_canonical_path" || return 1
   printf '%s\n' "$backup_canonical_path"

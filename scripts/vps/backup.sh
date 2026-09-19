@@ -2,7 +2,7 @@
 set -eu
 umask 077
 
-SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+SCRIPT_DIRECTORY=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 PROJECT_ROOT=${SUBWEB_ROOT:-/opt/subweb}
 BACKUP_DIRECTORY=${BACKUP_DIRECTORY:-/var/lib/subweb-backups}
 BACKUP_REMOTE_MOUNT=${BACKUP_REMOTE_MOUNT:-}
