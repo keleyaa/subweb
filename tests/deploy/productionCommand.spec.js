@@ -20,9 +20,16 @@ const makeFixture = async () => {
   await writeFile(docker, `#!/bin/sh
 set -eu
 printf '%s\\n' "$*" >> "$DOCKER_LOG"
-case "$*" in
-  'compose version') exit 0 ;;
-  'compose -f compose.disabled-short-links.yaml ps') exit 0 ;;
+if [ "$1" = compose ] && [ "$2" = version ]; then exit 0; fi
+[ "$1" = compose ] || exit 64
+shift
+[ "$1" = --env-file ] || exit 64
+shift 2
+[ "$1" = -f ] || exit 64
+compose_file=$2
+shift 2
+case "$compose_file:$*" in
+  'compose.disabled-short-links.yaml:ps') exit 0 ;;
   *) exit 64 ;;
 esac
 `);
@@ -30,13 +37,14 @@ esac
   return root;
 };
 
-const run = (root, command = 'up') => spawnSync('sh', [join(root, 'scripts/subweb.sh'), command], {
+const run = (root, command = 'up', environment = {}) => spawnSync('sh', [join(root, 'scripts/subweb.sh'), command], {
   cwd: root,
   encoding: 'utf8',
   env: {
     ...process.env,
     DOCKER_LOG: join(root, 'docker.log'),
     PATH: `${join(root, 'bin')}:${process.env.PATH}`,
+    ...environment,
   },
 });
 
@@ -79,14 +87,15 @@ describe('production command configuration contract', () => {
 
   it('allows non-install commands to proceed with a private regular environment file', async () => {
     const root = await makeFixture();
-    await writeFile(join(root, '.env'), 'SHORT_LINKS_ENABLED=false\n', { mode: 0o600 });
+    const envFile = join(root, 'private.env');
+    await writeFile(envFile, 'SHORT_LINKS_ENABLED=false\n', { mode: 0o600 });
 
-    const result = run(root, 'status');
+    const result = run(root, 'status', { SUBWEB_ENV_FILE: envFile });
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(await readDockerLog(root)).toBe([
       'compose version',
-      'compose -f compose.disabled-short-links.yaml ps',
+      `compose --env-file ${envFile} -f compose.disabled-short-links.yaml ps`,
       '',
     ].join('\n'));
   });

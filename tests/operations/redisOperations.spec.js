@@ -46,9 +46,15 @@ describe('Redis operations safety contracts', () => {
   it('keeps secrets out of host command arguments and requires explicit restore confirmation', () => {
     const backup = fs.readFileSync(operation('backup-redis.sh'), 'utf8');
     const restore = fs.readFileSync(operation('restore-redis.sh'), 'utf8');
+    const library = fs.readFileSync(operation('lib.sh'), 'utf8');
     const verifier = fs.readFileSync(operationsVerifier, 'utf8');
     expect(backup).toContain('REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning --raw SAVE');
     expect(backup).not.toContain('-a "$REDIS_PASSWORD"');
+    expect(library).toContain('docker compose --env-file "$SUBWEB_ENV_FILE" "$@"');
+    expect(backup).toContain('compose ps -q redis');
+    expect(backup).toContain('compose exec -T redis');
+    expect(restore).toContain('compose stop redis');
+    expect(restore).toContain('compose up -d --wait');
     expect(backup).not.toMatch(/docker compose exec[^\n]*REDIS_PASSWORD/u);
     expect(verifier).not.toContain('inventory-myurls-v1.sh');
     expect(verifier).not.toContain('migrate-myurls-v1.sh');

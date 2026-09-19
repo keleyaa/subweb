@@ -32,13 +32,13 @@ restore_staging=$(mktemp "$runtime_backup_directory/.restore-staging.XXXXXX") \
 trap 'rm -f "$restore_staging"' EXIT HUP INT TERM
 
 cd "$operations_project_root"
-docker compose stop gateway myurls >/dev/null 2>&1 || true
-docker compose stop redis >/dev/null
+compose stop gateway myurls >/dev/null 2>&1 || true
+compose stop redis >/dev/null
 
 install_snapshot() {
   snapshot=$1
   install -m 0644 "$snapshot" "$restore_staging" || return 1
-  if docker compose run --rm --no-deps \
+  if compose run --rm --no-deps \
     -v "$restore_staging:/restore.rdb:ro" \
     --entrypoint sh redis -eu -c \
     'rm -rf /data/appendonlydir
@@ -72,11 +72,11 @@ install_snapshot() {
   return "$result"
 }
 
-if ! install_snapshot "$backup" || ! docker compose up -d --wait; then
+if ! install_snapshot "$backup" || ! compose up -d --wait; then
   printf '%s\n' 'Restore failed; attempting rollback to the pre-restore snapshot.' >&2
-  docker compose stop gateway myurls redis >/dev/null 2>&1 || true
+  compose stop gateway myurls redis >/dev/null 2>&1 || true
   install_snapshot "$rollback_backup" || operations_fail "rollback snapshot installation failed; writes remain stopped. Backup: $rollback_backup"
-  docker compose up -d --wait || operations_fail "rollback startup failed; writes remain stopped. Backup: $rollback_backup"
+  compose up -d --wait || operations_fail "rollback startup failed; writes remain stopped. Backup: $rollback_backup"
   operations_fail "restore failed and the previous snapshot was reloaded. Backup retained: $rollback_backup"
 fi
 

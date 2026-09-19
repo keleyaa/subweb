@@ -31,14 +31,26 @@ const makeFixture = async ({ volumeDigest }) => {
   await writeFile(join(bin, 'docker'), `#!/bin/sh
 set -eu
 printf '%s\\n' "$*" >> "$DOCKER_LOG"
-case "$*" in
-  'compose version') exit 0 ;;
-  'compose -f compose.yaml pull gateway subconverter myurls redis') exit 0 ;;
-  'compose -f compose.yaml up -d --no-build --pull never --remove-orphans --wait') exit 0 ;;
-  'compose config --format json') printf '{"services":{"subconverter":{"image":"${image}"}}}\\n' ;;
-  'compose ps -q subconverter') printf 'container-id\\n' ;;
-  'run --rm --entrypoint sh'*) printf '%s\\n' '${imageTemplateDigest}' ;;
-  'compose exec -T subconverter sh -eu -c'*) printf '%s\\n' '${volumeDigest}' ;;
+if [ "$1" = compose ] && [ "$2" = version ]; then exit 0; fi
+if [ "$1" = run ]; then
+  printf '%s\\n' '${imageTemplateDigest}'
+  exit 0
+fi
+[ "$1" = compose ] || exit 64
+shift
+[ "$1" = --env-file ] || exit 64
+shift 2
+compose_file=common
+if [ "$1" = -f ]; then
+  compose_file=$2
+  shift 2
+fi
+case "$compose_file:$*" in
+  'compose.yaml:pull gateway subconverter myurls redis') exit 0 ;;
+  'compose.yaml:up -d --no-build --pull never --remove-orphans --wait') exit 0 ;;
+  'common:config --format json') printf '{"services":{"subconverter":{"image":"${image}"}}}\\n' ;;
+  'common:ps -q subconverter') printf 'container-id\\n' ;;
+  'common:exec -T subconverter sh -eu -c'*) printf '%s\\n' '${volumeDigest}' ;;
   *) exit 64 ;;
 esac
 `);
@@ -68,11 +80,11 @@ describe('SubConverter upgrade runtime volume gate', () => {
 
     expect(result.status, result.stderr).toBe(0);
     const log = await readFile(join(root, 'docker.log'), 'utf8');
-    expect(log).toContain('compose -f compose.yaml pull gateway subconverter myurls redis\n');
-    expect(log).toContain('compose -f compose.yaml up -d --no-build --pull never --remove-orphans --wait\n');
-    expect(log).toContain('compose config --format json\n');
-    expect(log).toContain('compose ps -q subconverter\n');
-    expect(log).toContain('compose exec -T subconverter sh -eu -c');
+    expect(log).toContain(`compose --env-file ${join(root, '.env')} -f compose.yaml pull gateway subconverter myurls redis\n`);
+    expect(log).toContain(`compose --env-file ${join(root, '.env')} -f compose.yaml up -d --no-build --pull never --remove-orphans --wait\n`);
+    expect(log).toContain(`compose --env-file ${join(root, '.env')} config --format json\n`);
+    expect(log).toContain(`compose --env-file ${join(root, '.env')} ps -q subconverter\n`);
+    expect(log).toContain(`compose --env-file ${join(root, '.env')} exec -T subconverter sh -eu -c`);
   });
 
   it('fails the upgrade with remediation when the volume keeps the previous image content', async () => {

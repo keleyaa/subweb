@@ -4,6 +4,7 @@ set -eu
 SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_DIRECTORY=$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd)
 ENV_FILE=${SUBWEB_ENV_FILE:-$PROJECT_DIRECTORY/.env}
+export SUBWEB_ENV_FILE=$ENV_FILE
 
 fail() {
   printf 'Subweb error: %s\n' "$1" >&2
@@ -136,7 +137,7 @@ case "$command_name" in
     # empty, so an upgraded SubConverter keeps the previous image's /base tree
     # unless the operator removes the volume. Fail the upgrade instead of
     # leaving a running container that silently uses stale preferences.
-    if ! COMPOSE_FILE=$compose_file "$SCRIPT_DIRECTORY/verify-subconverter-runtime.sh"; then
+    if ! COMPOSE_FILE=$compose_file SUBWEB_ENV_FILE=$ENV_FILE "$SCRIPT_DIRECTORY/verify-subconverter-runtime.sh"; then
       printf '\n%s\n' \
         'SubConverter upgrade is incomplete: the running container still serves the previous image /base content.' \
         'Stop the stack, remove the stale runtime volume, then start it again:' \

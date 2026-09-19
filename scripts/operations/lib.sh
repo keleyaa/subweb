@@ -12,6 +12,14 @@ require_docker() {
   command -v docker >/dev/null 2>&1 || operations_fail 'docker is required.'
 }
 
+compose() {
+  if [ -n "${SUBWEB_ENV_FILE:-}" ]; then
+    docker compose --env-file "$SUBWEB_ENV_FILE" "$@"
+  else
+    docker compose "$@"
+  fi
+}
+
 require_absolute_regular_file() {
   case "$1" in /*) ;; *) operations_fail "$2 must be an absolute path." ;; esac
   [ -f "$1" ] && [ ! -L "$1" ] || operations_fail "$2 must be a regular file and not a symlink."

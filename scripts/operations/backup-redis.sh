@@ -22,7 +22,7 @@ require_private_directory "$output_directory"
 require_docker
 
 cd "$operations_project_root"
-redis_id=$(docker compose ps -q redis) || operations_fail 'unable to resolve the Redis container.'
+redis_id=$(compose ps -q redis) || operations_fail 'unable to resolve the Redis container.'
 [ -n "$redis_id" ] || operations_fail 'Redis is not running.'
 health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$redis_id") \
   || operations_fail 'unable to inspect Redis health.'
@@ -30,11 +30,11 @@ health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{
 
 temporary="$output.tmp.$$"
 trap 'rm -f "$temporary"' EXIT HUP INT TERM
-save_result=$(docker compose exec -T redis sh -eu -c \
+save_result=$(compose exec -T redis sh -eu -c \
   'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning --raw SAVE') \
   || operations_fail 'Redis SAVE failed.'
 [ "$save_result" = OK ] || operations_fail 'Redis SAVE did not return OK.'
-docker compose cp redis:/data/dump.rdb "$temporary" >/dev/null \
+compose cp redis:/data/dump.rdb "$temporary" >/dev/null \
   || operations_fail 'unable to copy Redis snapshot.'
 [ -s "$temporary" ] || operations_fail 'Redis snapshot is empty.'
 chmod 0600 "$temporary"
