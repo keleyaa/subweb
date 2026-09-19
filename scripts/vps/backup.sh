@@ -126,13 +126,12 @@ validate_backup_destination
 chmod 0600 "$final_file" "$checksum_file"
 
 validate_backup_destination
-find "$BACKUP_DIRECTORY" -maxdepth 1 -type f \( -name 'subweb-redis-*.rdb' -o -name 'subweb-redis-*.rdb.age' \) -printf '%T@ %p\n' \
-  | sort -nr \
-  | awk -v keep="$BACKUP_RETENTION" 'NR > keep { sub(/^[^ ]+ /, ""); print }' \
-  | while IFS= read -r old_file; do
-      [ -n "$old_file" ] || continue
-      rm -f -- "$old_file" "$old_file.sha256"
-    done
+# Debian 12 and Ubuntu 24.04 provide GNU findutils and Coreutils NUL-record support.
+find "$BACKUP_DIRECTORY" -maxdepth 1 -type f \( -name 'subweb-redis-*.rdb' -o -name 'subweb-redis-*.rdb.age' \) -printf '%T@ %p\0' \
+  | sort -znr \
+  | tail -z -n "+$((BACKUP_RETENTION + 1))" \
+  | cut -z -d ' ' -f 2- \
+  | xargs -0 -r -n 1 sh -c 'rm -f -- "$1" "$1.sha256"' sh
 
 completed=1
 printf 'Encrypted/off-host Redis backup retained: %s\n' "$final_file"
