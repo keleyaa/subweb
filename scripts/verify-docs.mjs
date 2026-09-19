@@ -25,6 +25,12 @@ export const requiredDocuments = [
 ];
 
 const markdownLinkPattern = /\[[^\]]*\]\(([^)]+)\)/g;
+const subwebImagePlaceholder = 'docker.io/keleyaa/subweb@sha256:<64-hex-digest>';
+const subwebImageExamplePattern = /^#?\s*SUBWEB_IMAGE=(?<value>.*)$/gmu;
+const immutableSubwebImageReferencePattern = /^(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?::[0-9]+)?\/)?(?:[a-z0-9]+(?:[._-][a-z0-9]+)*\/)*[a-z0-9]+(?:[._-][a-z0-9]+)*@sha256:[0-9a-f]{64}$/u;
+
+const isImmutableSubwebImageExample = (value) =>
+  value === subwebImagePlaceholder || immutableSubwebImageReferencePattern.test(value);
 
 function stripLinkTitle(target) {
   const trimmed = target.trim();
@@ -100,7 +106,7 @@ export function verifyDocs({ root }) {
     ['docs/deployment-vps.md', 'BACKUP_REMOTE_MOUNT'],
     ['docs/deployment-vps.md', 'systemctl daemon-reload'],
     ['.env.example', 'configure.sh generates REDIS_IMAGE, SUBCONVERTER_IMAGE, and MYURLS_IMAGE'],
-    ['.env.example', '# SUBWEB_IMAGE=docker.io/keleyaa/subweb@sha256:<64-hex-digest>'],
+    ['.env.example', `# SUBWEB_IMAGE=${subwebImagePlaceholder}`],
   ];
   for (const [relativeFile, expectedText] of requiredContracts) {
     const absoluteFile = path.join(root, relativeFile);
@@ -128,8 +134,10 @@ export function verifyDocs({ root }) {
   const envExamplePath = path.join(root, '.env.example');
   if (fs.existsSync(envExamplePath)) {
     const envExample = fs.readFileSync(envExamplePath, 'utf8');
-    if (/^#?\s*SUBWEB_IMAGE=.*:sha-/mu.test(envExample)) {
-      errors.push('env example uses a mutable Gateway image tag');
+    for (const imageExample of envExample.matchAll(subwebImageExamplePattern)) {
+      if (!isImmutableSubwebImageExample(imageExample.groups.value.trim())) {
+        errors.push('env example uses a mutable Gateway image tag');
+      }
     }
     for (const variable of ['REDIS_IMAGE', 'SUBCONVERTER_IMAGE', 'MYURLS_IMAGE']) {
       if (new RegExp(`^#?\\s*${variable}=`, 'mu').test(envExample)) {
