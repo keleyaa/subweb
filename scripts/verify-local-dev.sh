@@ -14,10 +14,10 @@ unset \
 
 test_network_subnet=$("$script_directory/select-test-network.sh")
 test_network_prefix=${test_network_subnet%.*}
-export MYURLS_NETWORK_SUBNET="$test_network_subnet"
-export MYURLS_GATEWAY_IP="$test_network_prefix.2"
-export MYURLS_IP="$test_network_prefix.3"
-export MYURLS_TRUST_PROXY_CIDR="$MYURLS_GATEWAY_IP/32"
+export LOCAL_MYURLS_NETWORK_SUBNET="$test_network_subnet"
+export LOCAL_MYURLS_GATEWAY_IP="$test_network_prefix.2"
+export LOCAL_MYURLS_IP="$test_network_prefix.3"
+export LOCAL_MYURLS_TRUST_PROXY_CIDR="$LOCAL_MYURLS_GATEWAY_IP/32"
 export SUBWEB_LOCAL_PROJECT_NAME="subweb-local-verify-$(openssl rand -hex 6)"
 cleanup() {
   if [ -n "${vite_pid:-}" ]; then
