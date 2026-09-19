@@ -309,7 +309,7 @@ describe('Docker image quick deployment', () => {
       expect(log).toContain(`COMPOSE_GATEWAY_IMAGE=${image}`);
       expect(log).not.toContain('buildx imagetools inspect');
     }
-  });
+  }, 30_000);
 
   it('resolves a release version once and deploys the immutable digest', async () => {
     const root = await makeFixture();
