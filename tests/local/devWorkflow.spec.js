@@ -1,5 +1,10 @@
-import { readFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
+
+import { resolveRuntimeImages } from '../../scripts/runtime-image-contract.mjs';
 
 const root = new URL('../../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
@@ -40,6 +45,60 @@ describe('Compose-first local development workflow', () => {
     expect(verifier).toContain('--max-time');
     for (const source of [start, dependencies]) {
       expect(source).not.toMatch(/go build|cmake|MYURLS_SOURCE_DIR|git clone/u);
+    }
+  });
+
+  it('derives locked external image references when creating local Compose state', async () => {
+    const fixture = await mkdtemp(path.join(tmpdir(), 'subweb-local-env-'));
+    const fixtureRoot = path.join(fixture, 'repo');
+    const scriptDirectory = path.join(fixtureRoot, 'scripts', 'local');
+    const binaryDirectory = path.join(fixture, 'bin');
+    const commonPath = path.join(scriptDirectory, 'common.sh');
+    const runnerPath = path.join(scriptDirectory, 'prepare-env.sh');
+    const localEnvPath = path.join(fixtureRoot, '.runtime', 'local', 'compose.env');
+    const lock = JSON.parse(await read('deploy/versions.lock.json'));
+
+    try {
+      await Promise.all([
+        mkdir(scriptDirectory, { recursive: true }),
+        mkdir(path.join(fixtureRoot, 'deploy'), { recursive: true }),
+        mkdir(binaryDirectory, { recursive: true }),
+      ]);
+      await Promise.all([
+        cp(new URL('../../scripts/local/common.sh', import.meta.url), commonPath),
+        writeFile(runnerPath, '#!/bin/sh\n. "$(dirname "$0")/common.sh"\nprepare_local_environment\n'),
+        cp(new URL('../../scripts/runtime-image-contract.mjs', import.meta.url), path.join(fixtureRoot, 'scripts', 'runtime-image-contract.mjs')),
+        cp(new URL('../../scripts/verify-version-locks.mjs', import.meta.url), path.join(fixtureRoot, 'scripts', 'verify-version-locks.mjs')),
+        cp(new URL('../../deploy/versions.lock.json', import.meta.url), path.join(fixtureRoot, 'deploy', 'versions.lock.json')),
+        writeFile(path.join(binaryDirectory, 'docker'), '#!/bin/sh\nexit 0\n'),
+        writeFile(path.join(binaryDirectory, 'openssl'), '#!/bin/sh\nprintf "%064d\\n" 0\n'),
+      ]);
+      await Promise.all([
+        chmod(path.join(binaryDirectory, 'docker'), 0o755),
+        chmod(path.join(binaryDirectory, 'openssl'), 0o755),
+        chmod(runnerPath, 0o755),
+      ]);
+
+      const runPreparation = () => spawnSync('sh', [runnerPath], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${path.dirname(process.execPath)}:${binaryDirectory}:${process.env.PATH}`,
+        },
+      });
+
+      expect(runPreparation().status).toBe(0);
+      const stale = await readFile(localEnvPath, 'utf8');
+      await writeFile(localEnvPath, `${stale}REDIS_IMAGE=stale\nSUBCONVERTER_IMAGE=stale\nMYURLS_IMAGE=stale\n`);
+      expect(runPreparation().status).toBe(0);
+
+      const environment = await readFile(localEnvPath, 'utf8');
+      for (const [name, image] of Object.entries(resolveRuntimeImages(lock))) {
+        expect(environment.match(new RegExp(`^${name}=`, 'gmu'))).toHaveLength(1);
+        expect(environment).toContain(`${name}=${image}`);
+      }
+    } finally {
+      await rm(fixture, { recursive: true, force: true });
     }
   });
 

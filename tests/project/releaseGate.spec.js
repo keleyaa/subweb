@@ -9,8 +9,62 @@ import {
   verifyDockerfile,
   verifyRenderedCompose,
 } from '../../scripts/verify-production-readiness.mjs';
+import { resolveRuntimeImages } from '../../scripts/runtime-image-contract.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
+const lock = JSON.parse(fs.readFileSync(path.join(root, 'deploy/versions.lock.json'), 'utf8'));
+const secureService = (service) => ({
+  read_only: true,
+  cap_drop: ['ALL'],
+  security_opt: ['no-new-privileges:true'],
+  ...service,
+});
+const renderedProfile = (shortLinksEnabled) => {
+  const images = resolveRuntimeImages(lock);
+  const gateway = secureService({
+    build: { dockerfile: 'Dockerfile' },
+    ports: [{ host_ip: '127.0.0.1', target: 8080 }],
+    networks: shortLinksEnabled
+      ? { default: {}, 'myurls-edge': {}, 'redis-policy': {}, 'subconverter-egress': {} }
+      : { default: {}, 'subconverter-egress': {} },
+    environment: shortLinksEnabled
+      ? {
+        EGRESS_LISTEN_ADDR: '0.0.0.0:25502', EGRESS_RESTRICTED_LISTEN_ADDR: '0.0.0.0:25503',
+        SHORT_LINKS_ENABLED: 'true', APP_DOMAIN: 'app.example.test', SHORT_DOMAIN: 'short.example.test',
+        MYURLS_UPSTREAM: 'http://myurls-edge:3000', REDIS_URL: 'redis://redis:6379/1',
+      }
+      : { EGRESS_LISTEN_ADDR: '0.0.0.0:25502', SHORT_LINKS_ENABLED: 'false' },
+  });
+  const services = shortLinksEnabled
+    ? {
+      gateway,
+      myurls: secureService({ image: images.MYURLS_IMAGE, networks: { 'myurls-data': {}, 'myurls-edge': {} }, environment: { HTTPS_PROXY: 'http://gateway:25503', PUBLIC_BASE_URL: 'https://short.example.test', REDIS_URL: 'redis://redis:6379/0', TURNSTILE_HOSTNAME: 'app.example.test' } }),
+      redis: secureService({ image: images.REDIS_IMAGE, networks: { 'myurls-data': {}, 'redis-policy': {} } }),
+      subconverter: secureService({ image: images.SUBCONVERTER_IMAGE, networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' } }),
+    }
+    : { gateway, subconverter: secureService({ image: images.SUBCONVERTER_IMAGE, networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' } }) };
+  return {
+    services,
+    networks: shortLinksEnabled
+      ? { 'myurls-data': { internal: true }, 'myurls-edge': { internal: true }, 'redis-policy': { internal: true }, 'subconverter-egress': { internal: true } }
+      : { 'subconverter-egress': { internal: true } },
+  };
+};
+const withEnvironmentValue = (rendered, serviceName, name, value) => ({
+  ...rendered,
+  services: {
+    ...rendered.services,
+    [serviceName]: {
+      ...rendered.services[serviceName],
+      environment: { ...rendered.services[serviceName].environment, [name]: value },
+    },
+  },
+});
+const renderedErrors = (rendered, profile) => {
+  const errors = [];
+  verifyRenderedCompose(rendered, profile, lock, errors);
+  return errors;
+};
 
 describe('release evidence and command gate', () => {
   it('accepts only truthful deployment evidence states', () => {
@@ -104,6 +158,36 @@ describe('release evidence and command gate', () => {
     );
 
     expect(errors).toContain('gateway must set read_only to true');
+  });
+
+  it.each([
+    ['gateway SHORT_DOMAIN', (rendered) => withEnvironmentValue(rendered, 'gateway', 'SHORT_DOMAIN', 'wrong.example.test'), 'MyUrls public base URL must match gateway SHORT_DOMAIN'],
+    ['Gateway Redis database', (rendered) => withEnvironmentValue(rendered, 'gateway', 'REDIS_URL', 'redis://redis:6379/0'), 'gateway Redis URL must use database 1'],
+    ['MyUrls public base URL', (rendered) => withEnvironmentValue(rendered, 'myurls', 'PUBLIC_BASE_URL', 'https://wrong.example.test'), 'MyUrls public base URL must match gateway SHORT_DOMAIN'],
+    ['MyUrls Redis database', (rendered) => withEnvironmentValue(rendered, 'myurls', 'REDIS_URL', 'redis://redis:6379/1'), 'MyUrls Redis URL must use database 0'],
+    ['Turnstile hostname', (rendered) => withEnvironmentValue(rendered, 'myurls', 'TURNSTILE_HOSTNAME', 'short.example.test'), 'MyUrls Turnstile hostname must match gateway APP_DOMAIN'],
+  ])('rejects rendered %s contract drift', (_label, drift, expectedError) => {
+    const fullProfile = { composeFile: 'compose.yaml', services: ['gateway', 'myurls', 'redis', 'subconverter'], shortLinksEnabled: true };
+    expect(renderedErrors(renderedProfile(true), fullProfile)).toEqual([]);
+    expect(renderedErrors(drift(renderedProfile(true)), fullProfile)).toContain(expectedError);
+  });
+
+  it.each([
+    'EGRESS_RESTRICTED_LISTEN_ADDR', 'IP_HASH_SECRET', 'MYURLS_UPSTREAM',
+    'REDIS_PASSWORD', 'REDIS_URL', 'SHORT_DOMAIN', 'TURNSTILE_SECRET_KEY',
+    'TURNSTILE_SITE_KEY',
+  ])('rejects %s in the disabled rendered profile', (name) => {
+    const profile = { composeFile: 'compose.disabled-short-links.yaml', services: ['gateway', 'subconverter'], shortLinksEnabled: false };
+    expect(renderedErrors(renderedProfile(false), profile)).toEqual([]);
+    const drifted = withEnvironmentValue(renderedProfile(false), 'gateway', name, 'unexpected');
+    expect(renderedErrors(drifted, profile)).toContain(`disabled short-link profile must not set ${name}`);
+  });
+
+  it('requires subconverter egress to remain internal when short links are disabled', () => {
+    const profile = { composeFile: 'compose.disabled-short-links.yaml', services: ['gateway', 'subconverter'], shortLinksEnabled: false };
+    const rendered = renderedProfile(false);
+    const drifted = { ...rendered, networks: { ...rendered.networks, 'subconverter-egress': { internal: false } } };
+    expect(renderedErrors(drifted, profile)).toContain('subconverter-egress must be an internal network');
   });
 
   it('rejects a Dockerfile that does not declare every locked internal port', async () => {
