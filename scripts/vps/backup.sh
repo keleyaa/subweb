@@ -37,10 +37,14 @@ esac
 
 if [ -n "$BACKUP_REMOTE_MOUNT" ]; then
   command -v findmnt >/dev/null 2>&1 || fail 'findmnt is required for BACKUP_REMOTE_MOUNT.'
-  findmnt -rn --target "$BACKUP_REMOTE_MOUNT" >/dev/null \
-    || fail 'BACKUP_REMOTE_MOUNT is not mounted; refusing retention.'
+  backup_mount_is_distinct "$BACKUP_REMOTE_MOUNT" \
+    || fail 'BACKUP_REMOTE_MOUNT must be a distinct mounted filesystem; refusing retention.'
+  backup_mount_root=$BACKUP_REMOTE_MOUNT
+  while [ "$backup_mount_root" != / ] && [ "${backup_mount_root%/}" != "$backup_mount_root" ]; do
+    backup_mount_root=${backup_mount_root%/}
+  done
   case "$BACKUP_DIRECTORY" in
-    "$BACKUP_REMOTE_MOUNT"|"$BACKUP_REMOTE_MOUNT"/*) ;;
+    "$backup_mount_root"|"$backup_mount_root"/*) ;;
     *) fail 'BACKUP_DIRECTORY must be under BACKUP_REMOTE_MOUNT; refusing retention.' ;;
   esac
 fi

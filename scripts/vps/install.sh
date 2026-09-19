@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+
 fail() {
   printf 'VPS install failed: %s\n' "$1" >&2
   exit 1
@@ -11,6 +13,10 @@ command -v install >/dev/null 2>&1 || fail 'install is required.'
 command -v systemctl >/dev/null 2>&1 || fail 'systemd is required.'
 command -v docker >/dev/null 2>&1 || fail 'Docker Engine is required.'
 docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
+command -v rsync >/dev/null 2>&1 || fail 'rsync is required.'
+
+# shellcheck source=reconcile-release.sh
+. "$SCRIPT_DIRECTORY/reconcile-release.sh"
 
 SOURCE_DIRECTORY=${SUBWEB_SOURCE:-}
 TARGET_DIRECTORY=${SUBWEB_ROOT:-/opt/subweb}
@@ -50,7 +56,11 @@ id subweb >/dev/null 2>&1 || useradd --system --gid subweb --home-dir "$TARGET_D
 install -d -o root -g subweb -m 0750 "$TARGET_DIRECTORY"
 install -d -o subweb -g subweb -m 0700 "$TARGET_DIRECTORY/.runtime" "$TARGET_DIRECTORY/.local"
 install -d -o subweb -g subweb -m 0700 /var/lib/subweb-backups
-cp -a "$SOURCE_DIRECTORY/." "$TARGET_DIRECTORY/"
+reconcile_release_tree "$SOURCE_DIRECTORY" "$TARGET_DIRECTORY" \
+  || fail 'unable to reconcile the installed release tree.'
+if find "$TARGET_DIRECTORY" -type l -print -quit | grep -q .; then
+  fail 'reconciled deployment tree must not contain symbolic links.'
+fi
 [ -f "$TARGET_DIRECTORY/.env" ] && [ ! -L "$TARGET_DIRECTORY/.env" ] \
   || fail 'installed .env must be a regular file and not a symlink.'
 find "$TARGET_DIRECTORY" \
