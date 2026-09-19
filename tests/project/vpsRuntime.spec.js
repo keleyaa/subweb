@@ -103,6 +103,8 @@ describe('VPS runtime contract', () => {
     const verifyTimer = await read('deploy/systemd/subweb-backup-verify.timer');
     const backup = await read('scripts/vps/backup.sh');
     const verifyBackup = await read('scripts/vps/verify-backup.sh');
+    const backupPath = await read('scripts/vps/backup-path.sh');
+    const subweb = await read('scripts/subweb.sh');
 
     expect(service).toContain('ExecStart=/opt/subweb/scripts/vps/backup.sh');
     expect(service).toContain('User=root');
@@ -116,9 +118,20 @@ describe('VPS runtime contract', () => {
     expect(verifyService).toContain('ExecStart=/bin/sh -eu -c');
     expect(verifyTimer).toContain('OnCalendar=Sun *-*-01..07 04:15:00');
     expect(verifyBackup).toContain('verify-redis-backup.sh');
-  });
+    expect(backup).toContain('flock -n 9');
+    expect(backup).toContain('mktemp -d "$BACKUP_DIRECTORY/.subweb-backup.XXXXXX"');
+    expect(backup.indexOf('mkdir -p "$BACKUP_DIRECTORY"')).toBeLessThan(backup.indexOf('df -Pk "$BACKUP_DIRECTORY"'));
+    expect(backup).toContain("''|*[!0-9]*) fail 'MIN_FREE_KIB must be a non-negative decimal integer.'");
+    expect(subweb).toContain('ENV_FILE=${SUBWEB_ENV_FILE:-$PROJECT_DIRECTORY/.env}');
+    expect(subweb).toContain('docker compose --env-file "$ENV_FILE"');
+    expect(backupPath).toContain('$path_label must be under a systemd ReadWritePaths entry.');
+    expect(backup).toContain('require_supported_backup_path BACKUP_DIRECTORY');
+    expect(verifyBackup).toContain('require_supported_backup_path BACKUP_DIRECTORY');
+    expect(service).toContain('ReadWritePaths=/opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups');
+    expect(verifyService).toContain('ReadWritePaths=/opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups');
+    });
 
-  it('provides host checks for supported tools, disk pressure, and protected env', async () => {
+    it('provides host checks for supported tools, disk pressure, and protected env', async () => {
     const checker = await read('scripts/vps/check-host.sh');
     const installer = await read('scripts/vps/install.sh');
     const documentation = await read('docs/deployment-vps.md');

@@ -2,6 +2,7 @@
 set -eu
 umask 077
 
+SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 PROJECT_ROOT=${SUBWEB_ROOT:-/opt/subweb}
 BACKUP_DIRECTORY=${BACKUP_DIRECTORY:-/var/lib/subweb-backups}
 BACKUP_REMOTE_MOUNT=${BACKUP_REMOTE_MOUNT:-}
@@ -15,10 +16,21 @@ fail() {
   exit 1
 }
 
+# shellcheck source=backup-path.sh
+. "$SCRIPT_DIRECTORY/backup-path.sh"
+
+require_supported_backup_path BACKUP_DIRECTORY "$BACKUP_DIRECTORY"
+if [ -n "$BACKUP_REMOTE_MOUNT" ]; then
+  require_supported_backup_path BACKUP_REMOTE_MOUNT "$BACKUP_REMOTE_MOUNT"
+fi
+
 case "$BACKUP_RETENTION" in
   ''|*[!0-9]*) fail 'BACKUP_RETENTION must be a positive integer.' ;;
 esac
 [ "$BACKUP_RETENTION" -ge 1 ] || fail 'BACKUP_RETENTION must be at least 1.'
+case "$MIN_FREE_KIB" in
+  ''|*[!0-9]*) fail 'MIN_FREE_KIB must be a non-negative decimal integer.' ;;
+esac
 [ -n "$AGE_RECIPIENT" ] || [ -n "$BACKUP_REMOTE_MOUNT" ] \
   || fail 'retention is refused until AGE_RECIPIENT or BACKUP_REMOTE_MOUNT is configured.'
 [ -f "$ENV_FILE" ] && [ ! -L "$ENV_FILE" ] || fail 'production .env must be a regular file.'
@@ -27,30 +39,49 @@ if [ -n "$BACKUP_REMOTE_MOUNT" ]; then
   command -v findmnt >/dev/null 2>&1 || fail 'findmnt is required for BACKUP_REMOTE_MOUNT.'
   findmnt -rn --target "$BACKUP_REMOTE_MOUNT" >/dev/null \
     || fail 'BACKUP_REMOTE_MOUNT is not mounted; refusing retention.'
-  case "$BACKUP_DIRECTORY/" in
-    "$BACKUP_REMOTE_MOUNT"/*) ;;
+  case "$BACKUP_DIRECTORY" in
+    "$BACKUP_REMOTE_MOUNT"|"$BACKUP_REMOTE_MOUNT"/*) ;;
     *) fail 'BACKUP_DIRECTORY must be under BACKUP_REMOTE_MOUNT; refusing retention.' ;;
   esac
 fi
+
+mkdir -p "$BACKUP_DIRECTORY"
+chmod 0700 "$BACKUP_DIRECTORY"
+command -v flock >/dev/null 2>&1 || fail 'flock is required to serialize backups.'
+exec 9>"$BACKUP_DIRECTORY/.backup.lock" || fail 'unable to open the backup lock.'
+flock -n 9 || fail 'another backup is already running.'
 
 command -v df >/dev/null 2>&1 || fail 'df is required.'
 free_kib=$(df -Pk "$BACKUP_DIRECTORY" 2>/dev/null | awk 'NR == 2 { print $4 }')
 case "$free_kib" in
   ''|*[!0-9]*) fail 'unable to determine backup filesystem free space.' ;;
 esac
-[ "$free_kib" -ge "$MIN_FREE_KIB" ] || fail "backup filesystem is below ${MIN_FREE_KIB} KiB."
+awk -v free_kib="$free_kib" -v min_free_kib="$MIN_FREE_KIB" \
+  'BEGIN { exit !(free_kib >= min_free_kib) }' \
+  || fail "backup filesystem is below ${MIN_FREE_KIB} KiB."
 
-mkdir -p "$BACKUP_DIRECTORY"
-chmod 0700 "$BACKUP_DIRECTORY"
+work_directory=$(mktemp -d "$BACKUP_DIRECTORY/.subweb-backup.XXXXXX") \
+  || fail 'unable to create a unique backup workspace.'
+chmod 0700 "$work_directory"
+run_id=${work_directory##*.subweb-backup.}
 timestamp=$(date -u '+%Y%m%dT%H%M%SZ')
-raw_file="$BACKUP_DIRECTORY/.subweb-redis-$timestamp.rdb"
+raw_file="$work_directory/raw.rdb"
 if [ -n "$AGE_RECIPIENT" ]; then
-  final_file="$BACKUP_DIRECTORY/subweb-redis-$timestamp.rdb.age"
+  final_file="$BACKUP_DIRECTORY/subweb-redis-$timestamp-$run_id.rdb.age"
 else
-  final_file="$BACKUP_DIRECTORY/subweb-redis-$timestamp.rdb"
+  final_file="$BACKUP_DIRECTORY/subweb-redis-$timestamp-$run_id.rdb"
 fi
 checksum_file="$final_file.sha256"
-cleanup() { rm -f "$raw_file" "$final_file.tmp" "$checksum_file.tmp"; }
+final_temporary="$work_directory/final"
+checksum_temporary="$work_directory/checksum"
+completed=0
+cleanup() {
+  if [ "$completed" -ne 1 ]; then
+    [ -z "${final_file:-}" ] || rm -f -- "$final_file"
+    [ -z "${checksum_file:-}" ] || rm -f -- "$checksum_file"
+  fi
+  [ -z "${work_directory:-}" ] || rm -rf -- "$work_directory"
+}
 trap cleanup EXIT HUP INT TERM
 
 SUBWEB_ENV_FILE="$ENV_FILE" COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-subweb} \
@@ -59,17 +90,16 @@ SUBWEB_ENV_FILE="$ENV_FILE" COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-subweb}
 
 if [ -n "$AGE_RECIPIENT" ]; then
   command -v age >/dev/null 2>&1 || fail 'age is required when AGE_RECIPIENT is configured.'
-  age -r "$AGE_RECIPIENT" -o "$final_file.tmp" "$raw_file" \
+  age -r "$AGE_RECIPIENT" -o "$final_temporary" "$raw_file" \
     || fail 'age encryption failed.'
-  mv "$final_file.tmp" "$final_file"
-  rm -f "$raw_file"
 else
-  mv "$raw_file" "$final_file"
+  mv "$raw_file" "$final_temporary"
 fi
+mv "$final_temporary" "$final_file"
 
-sha256sum "$final_file" >"$checksum_file.tmp" 2>/dev/null \
-  || shasum -a 256 "$final_file" >"$checksum_file.tmp"
-mv "$checksum_file.tmp" "$checksum_file"
+sha256sum "$final_file" >"$checksum_temporary" 2>/dev/null \
+  || shasum -a 256 "$final_file" >"$checksum_temporary"
+mv "$checksum_temporary" "$checksum_file"
 chmod 0600 "$final_file" "$checksum_file"
 
 find "$BACKUP_DIRECTORY" -maxdepth 1 -type f \( -name 'subweb-redis-*.rdb' -o -name 'subweb-redis-*.rdb.age' \) -printf '%T@ %p\n' \
@@ -80,4 +110,5 @@ find "$BACKUP_DIRECTORY" -maxdepth 1 -type f \( -name 'subweb-redis-*.rdb' -o -n
       rm -f -- "$old_file" "$old_file.sha256"
     done
 
+completed=1
 printf 'Encrypted/off-host Redis backup retained: %s\n' "$final_file"
