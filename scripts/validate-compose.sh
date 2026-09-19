@@ -6,7 +6,7 @@ fail() {
   exit 1
 }
 
-script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 source_env_file=
 if [ "${SUBWEB_ENV_FILE+x}" = x ]; then
   source_env_file=$SUBWEB_ENV_FILE
@@ -14,7 +14,7 @@ if [ "${SUBWEB_ENV_FILE+x}" = x ]; then
   case "$source_env_file" in
     /*) ;;
     *)
-      source_directory=$(CDPATH= cd -- "$(dirname -- "$source_env_file")" && pwd -P) \
+      source_directory=$(CDPATH='' cd -- "$(dirname -- "$source_env_file")" && pwd -P) \
         || fail 'SUBWEB_ENV_FILE parent directory is unavailable.'
       source_env_file=$source_directory/$(basename -- "$source_env_file")
       ;;

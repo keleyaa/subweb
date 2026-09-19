@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-PROJECT_DIRECTORY=$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd)
+SCRIPT_DIRECTORY=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+PROJECT_DIRECTORY=$(CDPATH='' cd -- "$SCRIPT_DIRECTORY/.." && pwd)
 DEFAULT_ENV_FILE=$PROJECT_DIRECTORY/.env
 ENV_FILE=${SUBWEB_ENV_FILE:-$DEFAULT_ENV_FILE}
 
@@ -14,7 +14,7 @@ fail() {
 case "$ENV_FILE" in
   /*) ;;
   *)
-    env_directory=$(CDPATH= cd -- "$(dirname -- "$ENV_FILE")" && pwd -P) \
+    env_directory=$(CDPATH='' cd -- "$(dirname -- "$ENV_FILE")" && pwd -P) \
       || fail 'production .env parent directory is unavailable.'
     ENV_FILE=$env_directory/$(basename -- "$ENV_FILE")
     ;;
