@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+SCRIPT_DIRECTORY=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
 fail() {
   printf 'VPS install failed: %s\n' "$1" >&2
@@ -52,6 +52,16 @@ getent group subweb >/dev/null 2>&1 || groupadd --system subweb
 id subweb >/dev/null 2>&1 || useradd --system --gid subweb --home-dir "$TARGET_DIRECTORY" --no-create-home --shell /usr/sbin/nologin subweb
 
 install -d -o root -g subweb -m 0750 "$TARGET_DIRECTORY"
+if release_trees_overlap "$SOURCE_DIRECTORY" "$TARGET_DIRECTORY"; then
+  fail 'SUBWEB_SOURCE must not overlap the deployment root.'
+else
+  release_overlap_status=$?
+  [ "$release_overlap_status" -eq 1 ] \
+    || fail 'unable to resolve the release source and deployment root.'
+fi
+pause_enabled_release_timers \
+  || fail 'unable to pause enabled backup or verification timers.'
+trap 'resume_paused_release_timers >/dev/null 2>&1 || true' 0
 install -d -o subweb -g subweb -m 0700 "$TARGET_DIRECTORY/.runtime" "$TARGET_DIRECTORY/.local"
 install -d -o subweb -g subweb -m 0700 /var/lib/subweb-backups
 reconcile_release_tree "$SOURCE_DIRECTORY" "$TARGET_DIRECTORY" \
@@ -69,18 +79,21 @@ chmod 0600 "$TARGET_DIRECTORY/.env"
 find "$TARGET_DIRECTORY/scripts" -type f -name '*.sh' -exec chmod 0750 {} +
 
 install -d -o root -g root -m 0755 /etc/subweb
-install -m 0644 deploy/systemd/subweb.service /etc/systemd/system/subweb.service
-install -m 0644 deploy/systemd/subweb-backup.service /etc/systemd/system/subweb-backup.service
-install -m 0644 deploy/systemd/subweb-backup.timer /etc/systemd/system/subweb-backup.timer
-install -m 0644 deploy/systemd/subweb-backup-verify.service /etc/systemd/system/subweb-backup-verify.service
-install -m 0644 deploy/systemd/subweb-backup-verify.timer /etc/systemd/system/subweb-backup-verify.timer
+install -m 0644 "$SOURCE_DIRECTORY/deploy/systemd/subweb.service" /etc/systemd/system/subweb.service
+install -m 0644 "$SOURCE_DIRECTORY/deploy/systemd/subweb-backup.service" /etc/systemd/system/subweb-backup.service
+install -m 0644 "$SOURCE_DIRECTORY/deploy/systemd/subweb-backup.timer" /etc/systemd/system/subweb-backup.timer
+install -m 0644 "$SOURCE_DIRECTORY/deploy/systemd/subweb-backup-verify.service" /etc/systemd/system/subweb-backup-verify.service
+install -m 0644 "$SOURCE_DIRECTORY/deploy/systemd/subweb-backup-verify.timer" /etc/systemd/system/subweb-backup-verify.timer
 install -d -m 0755 /etc/nginx/sites-available /etc/nginx/snippets
-install -m 0644 nginx/snippets/security-headers.conf /etc/nginx/snippets/security-headers.conf
-install -m 0644 deploy/logrotate/subweb.conf /etc/logrotate.d/subweb
-install -m 0644 deploy/nginx/subweb.conf /etc/nginx/sites-available/subweb
+install -m 0644 "$SOURCE_DIRECTORY/nginx/snippets/security-headers.conf" /etc/nginx/snippets/security-headers.conf
+install -m 0644 "$SOURCE_DIRECTORY/deploy/logrotate/subweb.conf" /etc/logrotate.d/subweb
+install -m 0644 "$SOURCE_DIRECTORY/deploy/nginx/subweb.conf" /etc/nginx/sites-available/subweb
 
 systemctl daemon-reload
 systemctl enable subweb.service
 systemctl enable subweb-backup.timer
 systemctl enable subweb-backup-verify.timer
+resume_paused_release_timers \
+  || fail 'unable to resume active backup or verification timers.'
+trap - 0
 printf 'VPS installation prepared at %s. Run scripts/vps/check-host.sh, then systemctl start subweb.service.\n' "$TARGET_DIRECTORY"
