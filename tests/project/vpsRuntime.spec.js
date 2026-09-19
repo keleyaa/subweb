@@ -133,7 +133,8 @@ describe('VPS runtime contract', () => {
     expect(backup).toContain('mktemp -d "$BACKUP_DIRECTORY/.subweb-backup.XXXXXX"');
     expect(backup.indexOf('mkdir -p "$BACKUP_DIRECTORY"')).toBeLessThan(backup.indexOf('df -Pk "$BACKUP_DIRECTORY"'));
     expect(backup).toContain("''|*[!0-9]*) fail 'MIN_FREE_KIB must be a non-negative decimal integer.'");
-    expect(subweb).toContain('ENV_FILE=${SUBWEB_ENV_FILE:-$PROJECT_DIRECTORY/.env}');
+    expect(subweb).toContain('DEFAULT_ENV_FILE=$PROJECT_DIRECTORY/.env');
+    expect(subweb).toContain('ENV_FILE=${SUBWEB_ENV_FILE:-$DEFAULT_ENV_FILE}');
     expect(subweb).toContain('docker compose --env-file "$ENV_FILE"');
     expect(backupPath).toContain('$path_label must be under a systemd ReadWritePaths entry.');
     expect(backup).toContain('require_supported_backup_path BACKUP_DIRECTORY');
