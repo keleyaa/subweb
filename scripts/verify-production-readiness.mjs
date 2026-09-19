@@ -20,6 +20,7 @@ const disabledProfile = {
   services: ['gateway', 'subconverter'],
   shortLinksEnabled: false,
 };
+const readinessGatewayImage = 'subweb:readiness@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
 const isRecord = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -67,7 +68,7 @@ const readinessEnvironment = (profile, lock) => ({
   REDIS_PASSWORD: 'readiness-redis-password',
   SHORT_DOMAIN: 'short.readiness.test',
   SHORT_LINKS_ENABLED: String(profile.shortLinksEnabled),
-  SUBWEB_IMAGE: 'subweb:readiness',
+  SUBWEB_IMAGE: readinessGatewayImage,
   TURNSTILE_SECRET_KEY: 'readiness-turnstile-secret',
   TURNSTILE_SITE_KEY: 'readiness-turnstile-site-key',
   ...resolveRuntimeImages(lock),
@@ -234,6 +235,11 @@ export const verifyRenderedCompose = (rendered, profile, lock, errors, environme
     errors,
   );
   if (isRecord(environment)) {
+    check(
+      gateway?.image === environment.SUBWEB_IMAGE,
+      'gateway must use the generated SUBWEB_IMAGE',
+      errors,
+    );
     check(
       dependsOn(services.subconverter, 'gateway')?.condition === 'service_healthy',
       'SubConverter must depend on a healthy Gateway',
