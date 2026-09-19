@@ -288,10 +288,10 @@ esac
   });
 
   it('reconciles release files while preserving deployment state and rejecting symlinks', async () => {
-    const fixture = await mkdtemp(join(tmpdir(), 'subweb-release-reconcile-'));
-    temporaryDirectories.push(fixture);
+    const fixture = await makeShellFixture();
     const source = join(fixture, 'source');
     const target = join(fixture, 'target');
+    await writeExecutable(join(fixture, 'bin', 'findmnt'), '#!/bin/sh\nprintf \'/\\n\'\n');
     await mkdir(join(source, 'scripts'), { recursive: true });
     await mkdir(join(target, '.runtime'), { recursive: true });
     await mkdir(join(target, '.local'), { recursive: true });
@@ -306,6 +306,7 @@ esac
     const result = runShell(
       'set -eu; . "$1"; reconcile_release_tree "$2" "$3"',
       [reconcileReleaseScript, source, target],
+      { PATH: `${join(fixture, 'bin')}:${process.env.PATH}` },
     );
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(await readFile(join(target, 'compose.yaml'), 'utf8')).toBe('new release\n');
@@ -320,6 +321,7 @@ esac
     const unsafeResult = runShell(
       'set -eu; . "$1"; reconcile_release_tree "$2" "$3"',
       [reconcileReleaseScript, source, target],
+      { PATH: `${join(fixture, 'bin')}:${process.env.PATH}` },
     );
     expect(unsafeResult.status).not.toBe(0);
   });

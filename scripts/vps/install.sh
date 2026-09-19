@@ -51,7 +51,6 @@ fi
 getent group subweb >/dev/null 2>&1 || groupadd --system subweb
 id subweb >/dev/null 2>&1 || useradd --system --gid subweb --home-dir "$TARGET_DIRECTORY" --no-create-home --shell /usr/sbin/nologin subweb
 
-install -d -o root -g subweb -m 0750 "$TARGET_DIRECTORY"
 if release_trees_overlap "$SOURCE_DIRECTORY" "$TARGET_DIRECTORY"; then
   fail 'SUBWEB_SOURCE must not overlap the deployment root.'
 else
@@ -61,11 +60,11 @@ else
 fi
 pause_enabled_release_timers \
   || fail 'unable to pause enabled backup or verification timers.'
-trap 'resume_paused_release_timers >/dev/null 2>&1 || true' 0
-install -d -o subweb -g subweb -m 0700 "$TARGET_DIRECTORY/.runtime" "$TARGET_DIRECTORY/.local"
+trap 'reconcile_release_abort >/dev/null 2>&1 || true; resume_paused_release_timers >/dev/null 2>&1 || true' 0
 install -d -o subweb -g subweb -m 0700 /var/lib/subweb-backups
 reconcile_release_tree "$SOURCE_DIRECTORY" "$TARGET_DIRECTORY" \
   || fail 'unable to reconcile the installed release tree.'
+install -d -o subweb -g subweb -m 0700 "$TARGET_DIRECTORY/.runtime" "$TARGET_DIRECTORY/.local"
 if find "$TARGET_DIRECTORY" -type l -print -quit | grep -q .; then
   fail 'reconciled deployment tree must not contain symbolic links.'
 fi
