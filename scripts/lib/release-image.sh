@@ -107,12 +107,67 @@ resolve_release_image() (
   case "$attestation_predicate" in
     *"$newline") attestation_predicate=${attestation_predicate%"$newline"} ;;
   esac
+  case "$attestation_predicate" in
+    ''|*"$newline")
+      printf 'Signed release provenance does not match the requested release: %s\n' "$release_version" >&2
+      return 1
+      ;;
+  esac
+
   tab=$(printf '\t')
   expected_attestation_predicate="$release_version${tab}refs/tags/$release_version${tab}$manifest_digest"
-  if [ "$attestation_predicate" != "$expected_attestation_predicate" ]; then
+  remaining_predicates=$attestation_predicate
+  matching_predicate_found=0
+  while [ -n "$remaining_predicates" ]; do
+    case "$remaining_predicates" in
+      *"$newline"*)
+        attestation_predicate=${remaining_predicates%%"$newline"*}
+        remaining_predicates=${remaining_predicates#*"$newline"}
+        ;;
+      *)
+        attestation_predicate=$remaining_predicates
+        remaining_predicates=
+        ;;
+    esac
+
+    case "$attestation_predicate" in
+      *"$tab"*) ;;
+      *)
+        printf 'Signed release provenance does not match the requested release: %s\n' "$release_version" >&2
+        return 1
+        ;;
+    esac
+    release_tag=${attestation_predicate%%"$tab"*}
+    remaining_fields=${attestation_predicate#*"$tab"}
+    case "$remaining_fields" in
+      *"$tab"*) ;;
+      *)
+        printf 'Signed release provenance does not match the requested release: %s\n' "$release_version" >&2
+        return 1
+        ;;
+    esac
+    release_ref=${remaining_fields%%"$tab"*}
+    image_digest=${remaining_fields#*"$tab"}
+    if [ -z "$release_tag" ] || [ -z "$release_ref" ] || [ -z "$image_digest" ]; then
+      printf 'Signed release provenance does not match the requested release: %s\n' "$release_version" >&2
+      return 1
+    fi
+    case "$image_digest" in
+      *"$tab"*)
+        printf 'Signed release provenance does not match the requested release: %s\n' "$release_version" >&2
+        return 1
+        ;;
+    esac
+
+    if [ "$attestation_predicate" = "$expected_attestation_predicate" ]; then
+      matching_predicate_found=1
+    fi
+  done
+
+  [ "$matching_predicate_found" -eq 1 ] || {
     printf 'Signed release provenance does not match the requested release: %s\n' "$release_version" >&2
     return 1
-  fi
+  }
 
   printf '%s\n' "$immutable_reference"
 )

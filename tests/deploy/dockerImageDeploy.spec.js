@@ -133,6 +133,10 @@ const makeFixture = async () => {
   await writeFile(docker, `#!/bin/sh
 set -eu
 printf '%s\\n' "$*" >> "$DOCKER_LOG"
+if [ "\${CAPTURE_COMPOSE_IMAGE_ENV-}" = 1 ] && [ "\${1-}" = compose ]; then
+  printf 'COMPOSE_IMAGE_ENV=REDIS_IMAGE:%s;SUBCONVERTER_IMAGE:%s;MYURLS_IMAGE:%s\\n' "\${REDIS_IMAGE-unset}" "\${SUBCONVERTER_IMAGE-unset}" "\${MYURLS_IMAGE-unset}" >> "$DOCKER_LOG"
+  printf 'COMPOSE_HOST_ENV=DOCKER_HOST:%s;DOCKER_CONFIG:%s;HTTPS_PROXY:%s\\n' "\${DOCKER_HOST-unset}" "\${DOCKER_CONFIG-unset}" "\${HTTPS_PROXY-unset}" >> "$DOCKER_LOG"
+fi
 case "$*" in
   'compose -f '*)
     if [ "\${CAPTURE_SUBWEB_IMAGE-}" = 1 ]; then
@@ -278,6 +282,33 @@ describe('Docker image quick deployment', () => {
 
     expect(result.status, result.stderr).toBe(0);
     expect(JSON.parse(result.stdout).services.subconverter.image).toBe(lockedImages.subconverter);
+  });
+
+  it('clears inherited runtime image variables for every Compose subprocess', async () => {
+    const root = await makeFixture();
+
+    const result = runDeploy(root, ['--image', dockerHubImage], {
+      CAPTURE_COMPOSE_IMAGE_ENV: '1',
+      REDIS_IMAGE: 'registry.example/attacker/redis@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      SUBCONVERTER_IMAGE: 'registry.example/attacker/subconverter@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      MYURLS_IMAGE: 'registry.example/attacker/myurls@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+      DOCKER_HOST: 'tcp://docker.example:2376',
+      DOCKER_CONFIG: '/tmp/docker-config',
+      HTTPS_PROXY: 'http://proxy.example:3128',
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    const logLines = (await readDockerLog(root)).trim().split('\n');
+    const imageEnvironmentLines = logLines.filter((line) => line.startsWith('COMPOSE_IMAGE_ENV='));
+    const hostEnvironmentLines = logLines.filter((line) => line.startsWith('COMPOSE_HOST_ENV='));
+
+    expect(imageEnvironmentLines).toHaveLength(6);
+    expect(imageEnvironmentLines).toEqual(Array(6).fill(
+      'COMPOSE_IMAGE_ENV=REDIS_IMAGE:unset;SUBCONVERTER_IMAGE:unset;MYURLS_IMAGE:unset',
+    ));
+    expect(hostEnvironmentLines).toEqual(Array(6).fill(
+      'COMPOSE_HOST_ENV=DOCKER_HOST:tcp://docker.example:2376;DOCKER_CONFIG:/tmp/docker-config;HTTPS_PROXY:http://proxy.example:3128',
+    ));
   });
 
   it('persists the selected image and pulls the three default services', async () => {
@@ -501,6 +532,7 @@ EOF
     ['malformed registry port', `registry.example:not-a-port/repository@sha256:${releaseDigest}`],
     ['registry port 0', `registry.example:0/repository@sha256:${releaseDigest}`],
     ['registry port 65536', `registry.example:65536/repository@sha256:${releaseDigest}`],
+    ['control whitespace', `${dockerHubImage}\ntrailing`],
   ])('rejects a %s before reading Turnstile input or starting deployment', async (_kind, image) => {
     const root = await makeFixture();
 

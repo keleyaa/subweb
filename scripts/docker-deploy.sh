@@ -124,6 +124,11 @@ if [ "$version_seen" -eq 1 ]; then
   image_seen=1
 fi
 
+newline='
+'
+case "$image" in
+  *"$newline"*) fail '--image must use an immutable sha256 digest.' ;;
+esac
 printf '%s\n' "$image" | LC_ALL=C grep -Eq '^[^[:space:]@/:]+(:[0-9]+)?(/[^[:space:]@/:]+)+(:[^[:space:]@/:]+)?@sha256:[0-9a-f]{64}$' \
   || fail '--image must use an immutable sha256 digest.'
 
@@ -143,8 +148,13 @@ if [ "$short_links_enabled_seen" -eq 1 ] && [ "$short_links_enabled" = false ]; 
   turnstile_secret_key_stdin=0
 fi
 
+compose_docker() (
+  unset REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE
+  docker compose "$@"
+)
+
 command -v docker >/dev/null 2>&1 || fail 'Docker is not installed or not available in PATH.'
-docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
+compose_docker version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
 
 cd "$PROJECT_DIRECTORY"
 
@@ -179,7 +189,7 @@ if [ "$short_links_enabled" = false ]; then
   compose_file=compose.disabled-short-links.yaml
 fi
 compose() {
-  docker compose -f "$compose_file" "$@"
+  compose_docker -f "$compose_file" "$@"
 }
 
 SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \

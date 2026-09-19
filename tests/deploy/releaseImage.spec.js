@@ -14,8 +14,11 @@ const releasePredicateType = 'https://keleyaa.dev/subweb/release/v1';
 const expectedReference = `ghcr.io/keleyaa/subweb:${validVersion}`;
 const expectedImmutableReference = `ghcr.io/keleyaa/subweb@${validDigest}`;
 
-const makeAttestationOutput = ({ version = validVersion, digest = validDigest } = {}) =>
-  [version, `refs/tags/${version}`, digest].join('\t');
+const makeAttestationOutput = ({
+  version = validVersion,
+  ref = `refs/tags/${version}`,
+  digest = validDigest,
+} = {}) => [version, ref, digest].join('\t');
 
 const makeFixture = async () => {
   const root = await mkdtemp(join(tmpdir(), 'subweb-release-image-'));
@@ -151,8 +154,24 @@ describe('release image resolver', () => {
     await expectNoDeploymentCommands(root);
   });
 
+  it('accepts a matching predicate among multiple verified statements', async () => {
+    const root = await makeFixture();
+
+    const result = runResolver(root, validVersion, {
+      ATTESTATION_OUTPUT: [
+        makeAttestationOutput({ version: 'v1.2.4' }),
+        makeAttestationOutput(),
+      ].join('\n'),
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe(`${expectedImmutableReference}\n`);
+    await expectNoDeploymentCommands(root);
+  });
+
   it.each([
     ['version', { version: 'v1.2.4' }],
+    ['ref', { ref: 'refs/tags/v1.2.4' }],
     ['digest', { digest: otherDigest }],
   ])('rejects signed provenance for a different %s', async (_name, attestation) => {
     const root = await makeFixture();
@@ -165,6 +184,51 @@ describe('release image resolver', () => {
     expect(result.stderr).toContain('does not match the requested release');
     expect(result.stdout).toBe('');
     await expectNoDeploymentCommands(root);
+  });
+
+  it.each([
+    'not-tsv',
+    `${makeAttestationOutput()}\textra-field`,
+    `${validVersion}\t\t${validDigest}`,
+    `${makeAttestationOutput()}\nnot-tsv`,
+    `${makeAttestationOutput()}\n\n`,
+  ])('rejects malformed attestation TSV output', async (attestationOutput) => {
+    const root = await makeFixture();
+
+    const result = runResolver(root, validVersion, { ATTESTATION_OUTPUT: attestationOutput });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('does not match the requested release');
+    expect(result.stdout).toBe('');
+    await expectNoDeploymentCommands(root);
+  });
+
+  it('rejects a missing GitHub CLI before resolving the image', async () => {
+    const root = await makeFixture();
+    await rm(join(root, 'bin', 'gh'));
+
+    const result = spawnSync('sh', [
+      '-c',
+      '. "$1"; resolve_release_image "$2"',
+      'sh',
+      releaseImageLibrary.pathname,
+      validVersion,
+    ], {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${join(root, 'bin')}:/usr/bin:/bin`,
+        DOCKER_LOG: join(root, 'docker.log'),
+        GH_LOG: join(root, 'gh.log'),
+        INSPECT_DIGEST: validDigest,
+      },
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toBe('GitHub CLI is required to verify release provenance.\n');
+    expect(result.stdout).toBe('');
+    expect(await readDockerLog(root)).toBe('buildx version\n');
   });
 
   it('resolves a manifest digest with one terminal newline', async () => {
