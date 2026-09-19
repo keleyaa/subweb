@@ -8,10 +8,14 @@ const runtimeImageServices = [
   ['SUBCONVERTER_IMAGE', 'subconverter'],
   ['MYURLS_IMAGE', 'myurls'],
 ];
+const runtimeImageVariableNames = runtimeImageServices.map(([variable]) => variable);
+const immutableImageReferencePattern = /^[^@\s\u0000-\u001f\u007f]+@sha256:[0-9a-f]{64}$/u;
 
 const defaultLockPath = fileURLToPath(
   new URL('../deploy/versions.lock.json', import.meta.url),
 );
+const isRecord = (value) =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
 
 const validatedLock = (lock) => {
   const errors = validateVersionLocks(lock);
@@ -36,8 +40,24 @@ export function resolveRuntimeImages(lock) {
 }
 
 export function renderRuntimeImageEnv(images) {
-  return `${Object.entries(images)
-    .map(([variable, image]) => `${variable}=${image}`)
+  if (
+    !isRecord(images) ||
+    JSON.stringify(Object.keys(images).sort()) !==
+      JSON.stringify([...runtimeImageVariableNames].sort())
+  ) {
+    throw new Error(
+      `Runtime image environment must contain exactly: ${runtimeImageVariableNames.join(', ')}`,
+    );
+  }
+
+  return `${runtimeImageServices
+    .map(([variable]) => {
+      const image = images[variable];
+      if (typeof image !== 'string' || !immutableImageReferencePattern.test(image)) {
+        throw new Error(`${variable} must be an immutable sha256 image reference`);
+      }
+      return `${variable}=${image}`;
+    })
     .join('\n')}\n`;
 }
 

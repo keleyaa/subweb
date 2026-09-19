@@ -11,7 +11,7 @@ elif command -v docker >/dev/null 2>&1; then
   docker run --rm \
     --volume "$project_root:/repo:ro" \
     --workdir /repo \
-    rhysd/actionlint:1.7.7 \
+     rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 \
     .github/workflows/*.yml
 else
   printf '%s\n' 'workflow verification requires actionlint or Docker.' >&2

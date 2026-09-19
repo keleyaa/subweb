@@ -25,6 +25,7 @@ env:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     outputs:
       source_sha: ${{ steps.source.outputs.source_sha }}
     steps:
@@ -39,7 +40,7 @@ jobs:
           VERSION: ${{ inputs.version || github.ref_name }}
         shell: bash
         run: |
-          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+          [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
             echo 'version must match vX.Y.Z' >&2
             exit 1
           }
@@ -167,6 +168,7 @@ jobs:
 
   release:
     needs: quality
+    timeout-minutes: 45
     # Publishing only happens for semantic-version tag pushes or an explicit
     # manual run; ordinary branch pushes and pull requests do not trigger this workflow.
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -188,7 +190,7 @@ jobs:
         shell: bash
         run: |
           version="$VERSION"
-          [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+          [[ "$version" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
             echo 'version must match vX.Y.Z' >&2
             exit 1
           }
@@ -339,14 +341,26 @@ jobs:
                 }
               }
             }' > "$manifest_path"
-          jq -e '
-            .release_identity.source_sha and
-            .release_identity.source_digest and
-            .release_identity.rollback_target.registry_references.docker_hub and
-            .release_identity.rollback_target.registry_references.ghcr and
-            (.release_identity.runtime_images | has("redis") and has("subconverter") and has("myurls")) and
-            (.release_identity.runtime_images | all(.[]; .reference and (.digest | test("^sha256:[0-9a-f]{64}$"))))
-          ' "$manifest_path" >/dev/null
+           jq -e '
+             .release_identity.source_sha and
+             .release_identity.source_digest and
+             .release_identity.rollback_target.registry_references.docker_hub and
+             .release_identity.rollback_target.registry_references.ghcr and
+             (.release_identity.runtime_images |
+               (keys | sort) == ["myurls", "redis", "subconverter"] and
+               all(.[]; (
+                 (keys | sort) == ["digest", "platforms", "reference"] and
+                 ((.reference | type) == "string") and
+                 (.reference | test("@sha256:[0-9a-f]{64}$")) and
+                 (.digest | test("^sha256:[0-9a-f]{64}$")) and
+                 ((.platforms | type) == "object") and
+                 (.platforms |
+                   has("linux/amd64") and
+                   has("linux/arm64") and
+                   all(.[]; (type == "string" and test("^sha256:[0-9a-f]{64}$"))))
+               ))
+             )
+           ' "$manifest_path" >/dev/null
           echo "manifest_path=${manifest_path}" >> "$GITHUB_OUTPUT"
           echo "digest_suffix=${IMAGE_DIGEST#sha256:}" >> "$GITHUB_OUTPUT"
           {
