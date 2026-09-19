@@ -124,7 +124,7 @@ if [ "$version_seen" -eq 1 ]; then
   image_seen=1
 fi
 
-printf '%s\n' "$image" | LC_ALL=C grep -Eq '^[^[:space:]@/:]+(:[0-9]+)?(/[^[:space:]@/:]+)+@sha256:[0-9a-f]{64}$' \
+printf '%s\n' "$image" | LC_ALL=C grep -Eq '^[^[:space:]@/:]+(:[0-9]+)?(/[^[:space:]@/:]+)+(:[^[:space:]@/:]+)?@sha256:[0-9a-f]{64}$' \
   || fail '--image must use an immutable sha256 digest.'
 
 registry=${image%%/*}

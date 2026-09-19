@@ -79,6 +79,43 @@ const controlledEnvironment = () => {
   return environment;
 };
 
+export const dockerComposeConfigTimeoutMs = 30_000;
+
+export const runDockerComposeConfig = (spawn, {
+  composeFile,
+  cwd,
+  envFile,
+  environment,
+}) => {
+  const result = spawn(
+    'docker',
+    ['compose', '-f', composeFile, '--env-file', envFile, 'config', '--format', 'json'],
+    {
+      cwd,
+      encoding: 'utf8',
+      env: environment,
+      timeout: dockerComposeConfigTimeoutMs,
+    },
+  );
+
+  if (result.error?.code === 'ETIMEDOUT') {
+    throw new Error(`docker compose config timed out after ${dockerComposeConfigTimeoutMs}ms`);
+  }
+  if (result.error) {
+    throw new Error(`unable to start docker compose config: ${result.error.message}`);
+  }
+  if (result.signal) {
+    throw new Error(`docker compose config was terminated by ${result.signal}`);
+  }
+  if (result.status !== 0) {
+    const stderr = String(result.stderr ?? '').trim();
+    const status = result.status ?? 'unknown';
+    throw new Error(`docker compose config failed with exit status ${status}${stderr ? `: ${stderr}` : ''}`);
+  }
+
+  return JSON.parse(result.stdout);
+};
+
 const dockerfileReference = (reference) =>
   reference.replace(/^docker\.io\/library\//u, '');
 
@@ -300,18 +337,12 @@ const renderCompose = async (profile, lock) => {
   );
 
   try {
-    const result = spawnSync(
-      'docker',
-      ['compose', '-f', profile.composeFile, '--env-file', envFile, 'config', '--format', 'json'],
-      {
-        cwd: fileURLToPath(new URL('../', import.meta.url)),
-        encoding: 'utf8',
-        env: controlledEnvironment(),
-      },
-    );
-    if (result.error) throw result.error;
-    if (result.status !== 0) throw new Error(result.stderr || 'docker compose config failed');
-    return JSON.parse(result.stdout);
+    return runDockerComposeConfig(spawnSync, {
+      composeFile: profile.composeFile,
+      cwd: fileURLToPath(new URL('../', import.meta.url)),
+      envFile,
+      environment: controlledEnvironment(),
+    });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

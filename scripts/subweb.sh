@@ -4,13 +4,21 @@ set -eu
 SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_DIRECTORY=$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd)
 ENV_FILE=${SUBWEB_ENV_FILE:-$PROJECT_DIRECTORY/.env}
-export SUBWEB_ENV_FILE=$ENV_FILE
 
 fail() {
   printf 'Subweb error: %s\n' "$1" >&2
   exit 1
 }
 
+case "$ENV_FILE" in
+  /*) ;;
+  *)
+    env_directory=$(CDPATH= cd -- "$(dirname -- "$ENV_FILE")" && pwd -P) \
+      || fail 'production .env parent directory is unavailable.'
+    ENV_FILE=$env_directory/$(basename -- "$ENV_FILE")
+    ;;
+esac
+export SUBWEB_ENV_FILE=$ENV_FILE
 read_env_value() {
   key=$1
   [ -f "$ENV_FILE" ] || return 1

@@ -25,11 +25,18 @@ if [ -z "$compose_file" ]; then
 fi
 version_lock_file=${VERSION_LOCK_FILE:-$script_directory/../deploy/versions.lock.json}
 [ -f "$version_lock_file" ] || fail "version lock file is missing: $version_lock_file"
-validation_env_file=""
-if [ ! -f .env ]; then
-  validation_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-compose-validation.XXXXXX")
-  chmod 600 "$validation_env_file"
-  trap 'rm -f "$validation_env_file"' EXIT HUP INT TERM
+validation_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-compose-validation.XXXXXX")
+chmod 600 "$validation_env_file"
+trap 'rm -f "$validation_env_file"' EXIT HUP INT TERM
+
+if [ -f .env ]; then
+  sed \
+    -e '/^REDIS_IMAGE=/d' \
+    -e '/^SUBCONVERTER_IMAGE=/d' \
+    -e '/^MYURLS_IMAGE=/d' \
+    .env > "$validation_env_file" \
+    || fail 'could not prepare a Compose validation environment.'
+else
   {
     printf '%s\n' \
       'APP_DOMAIN=app.validation.test' \
@@ -43,17 +50,21 @@ if [ ! -f .env ]; then
       'TURNSTILE_SITE_KEY=compose-validation-site-key' \
       'TURNSTILE_SECRET_KEY=compose-validation-secret-key'
   } > "$validation_env_file"
-  node "$script_directory/runtime-image-contract.mjs" env >> "$validation_env_file" \
-    || fail 'could not derive external runtime images from deploy/versions.lock.json'
 fi
 
-compose_config() {
-  if [ -n "$validation_env_file" ]; then
-    docker compose -f "$compose_file" --env-file "$validation_env_file" "$@"
-  else
-    docker compose -f "$compose_file" "$@"
-  fi
-}
+runtime_image_env=$(node "$script_directory/runtime-image-contract.mjs" env) \
+  || fail 'could not derive external runtime images from deploy/versions.lock.json'
+for name in REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE; do
+  printf '%s\n' "$runtime_image_env" | grep -q "^$name=" \
+    || fail 'runtime image contract is incomplete.'
+done
+printf '%s\n' "$runtime_image_env" >> "$validation_env_file" \
+  || fail 'could not write locked runtime images to Compose validation environment.'
+
+compose_config() (
+  unset REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE
+  docker compose -f "$compose_file" --env-file "$validation_env_file" "$@"
+)
 
 compose_config config --quiet
 compose_json=$(compose_config config --format json)
