@@ -186,6 +186,12 @@ const environmentValue = (service, name) =>
 const serviceNetworks = (service) =>
   isRecord(service?.networks) ? Object.keys(service.networks).sort() : [];
 
+const dependsOn = (service, dependency) => {
+  const dependencies = service?.depends_on;
+  if (Array.isArray(dependencies)) return dependencies.includes(dependency) ? {} : undefined;
+  return isRecord(dependencies) ? dependencies[dependency] : undefined;
+};
+
 const expectedNetworks = (profile) => (profile.shortLinksEnabled
   ? {
     gateway: ['default', 'myurls-edge', 'redis-policy', 'subconverter-egress'],
@@ -198,7 +204,7 @@ const expectedNetworks = (profile) => (profile.shortLinksEnabled
     subconverter: ['subconverter-egress'],
   });
 
-export const verifyRenderedCompose = (rendered, profile, lock, errors) => {
+export const verifyRenderedCompose = (rendered, profile, lock, errors, environment) => {
   const services = isRecord(rendered?.services) ? rendered.services : {};
   const expectedServices = [...profile.services].sort();
   check(
@@ -227,6 +233,18 @@ export const verifyRenderedCompose = (rendered, profile, lock, errors) => {
     'gateway short-link profile is invalid',
     errors,
   );
+  if (isRecord(environment)) {
+    check(
+      dependsOn(services.subconverter, 'gateway')?.condition === 'service_healthy',
+      'SubConverter must depend on a healthy Gateway',
+      errors,
+    );
+    check(
+      dependsOn(gateway, 'subconverter') === undefined,
+      'gateway must not depend on SubConverter',
+      errors,
+    );
+  }
 
   for (const [serviceName, networks] of Object.entries(expectedNetworks(profile))) {
     const service = services[serviceName];
@@ -286,6 +304,28 @@ export const verifyRenderedCompose = (rendered, profile, lock, errors) => {
       'MyUrls Turnstile hostname must match gateway APP_DOMAIN',
       errors,
     );
+    if (isRecord(environment)) {
+      check(
+        environmentValue(services.myurls, 'TURNSTILE_ENABLED') === 'true',
+        'MyUrls Turnstile must be enabled',
+        errors,
+      );
+      check(
+        environmentValue(services.myurls, 'TURNSTILE_MODE') === 'cloudflare',
+        'MyUrls Turnstile mode must be cloudflare',
+        errors,
+      );
+      check(
+        environmentValue(services.myurls, 'TURNSTILE_SITE_KEY') === environment.TURNSTILE_SITE_KEY,
+        'MyUrls Turnstile site key must match the generated environment',
+        errors,
+      );
+      check(
+        environmentValue(services.myurls, 'TURNSTILE_SECRET_KEY') === environment.TURNSTILE_SECRET_KEY,
+        'MyUrls Turnstile secret key must match the generated environment',
+        errors,
+      );
+    }
     expectedImages.myurls = images.MYURLS_IMAGE;
     expectedImages.redis = images.REDIS_IMAGE;
     check(
@@ -327,10 +367,9 @@ export const verifyRenderedCompose = (rendered, profile, lock, errors) => {
   );
 };
 
-const renderCompose = async (profile, lock) => {
+const renderCompose = async (profile, environment) => {
   const directory = await mkdtemp(join(tmpdir(), 'subweb-readiness-'));
   const envFile = join(directory, 'compose.env');
-  const environment = readinessEnvironment(profile, lock);
   await writeFile(
     envFile,
     `${Object.entries(environment).map(([name, value]) => `${name}=${value}`).join('\n')}\n`,
@@ -378,16 +417,17 @@ async function runCli() {
     return;
   }
 
+  const environment = readinessEnvironment(parsed.profile, lock);
   let rendered;
   try {
-    rendered = await renderCompose(parsed.profile, lock);
+    rendered = await renderCompose(parsed.profile, environment);
   } catch (error) {
     console.error(`Production readiness blocked: ${error.message}`);
     process.exitCode = 1;
     return;
   }
 
-  verifyRenderedCompose(rendered, parsed.profile, lock, errors);
+  verifyRenderedCompose(rendered, parsed.profile, lock, errors, environment);
   if (errors.length > 0) {
     console.error('Production readiness blocked: unified deployment contract is invalid.');
     for (const error of errors) console.error(`- ${error}`);
