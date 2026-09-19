@@ -27,14 +27,39 @@ backup_path_has_symlink_component() {
   return 1
 }
 
-backup_mount_is_distinct() {
-  backup_mount_path=$1
-  while [ "$backup_mount_path" != / ] && [ "${backup_mount_path%/}" != "$backup_mount_path" ]; do
-    backup_mount_path=${backup_mount_path%/}
+backup_path_without_trailing_slashes() {
+  backup_normalized_path=$1
+  while [ "$backup_normalized_path" != / ] \
+    && [ "${backup_normalized_path%/}" != "$backup_normalized_path" ]; do
+    backup_normalized_path=${backup_normalized_path%/}
   done
+  printf '%s\n' "$backup_normalized_path"
+}
+
+backup_mount_is_distinct() {
+  backup_mount_path=$(backup_path_without_trailing_slashes "$1") || return 1
   [ "$backup_mount_path" != / ] || return 1
   backup_mount_target=$(findmnt -rn --mountpoint "$backup_mount_path" -o TARGET 2>/dev/null) || return 1
   [ "$backup_mount_target" = "$backup_mount_path" ]
+}
+
+backup_mount_identity() {
+  backup_mount_path=$(backup_path_without_trailing_slashes "$1") || return 1
+  [ "$backup_mount_path" != / ] || return 1
+  backup_mount_source=$(findmnt -rn --mountpoint "$backup_mount_path" -o SOURCE 2>/dev/null) || return 1
+  backup_mount_fstype=$(findmnt -rn --mountpoint "$backup_mount_path" -o FSTYPE 2>/dev/null) || return 1
+  backup_mount_device=$(findmnt -rn --mountpoint "$backup_mount_path" -o MAJ:MIN 2>/dev/null) || return 1
+  [ -n "$backup_mount_source" ] && [ -n "$backup_mount_fstype" ] && [ -n "$backup_mount_device" ] || return 1
+  printf '%s|%s|%s\n' "$backup_mount_source" "$backup_mount_fstype" "$backup_mount_device"
+}
+
+backup_path_is_within() {
+  backup_parent_path=$(backup_path_without_trailing_slashes "$1") || return 1
+  backup_child_path=$(backup_path_without_trailing_slashes "$2") || return 1
+  case "$backup_child_path" in
+    "$backup_parent_path"|"$backup_parent_path"/*) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 backup_path_is_supported() {

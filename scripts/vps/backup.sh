@@ -19,10 +19,30 @@ fail() {
 # shellcheck source=backup-path.sh
 . "$SCRIPT_DIRECTORY/backup-path.sh"
 
-require_supported_backup_path BACKUP_DIRECTORY "$BACKUP_DIRECTORY"
-if [ -n "$BACKUP_REMOTE_MOUNT" ]; then
+backup_expected_mount_identity=
+
+validate_backup_destination() {
+  require_supported_backup_path BACKUP_DIRECTORY "$BACKUP_DIRECTORY"
+  if [ -z "$BACKUP_REMOTE_MOUNT" ]; then
+    return 0
+  fi
+
   require_supported_backup_path BACKUP_REMOTE_MOUNT "$BACKUP_REMOTE_MOUNT"
-fi
+  command -v findmnt >/dev/null 2>&1 || fail 'findmnt is required for BACKUP_REMOTE_MOUNT.'
+  backup_mount_is_distinct "$BACKUP_REMOTE_MOUNT" \
+    || fail 'BACKUP_REMOTE_MOUNT must be a distinct mounted filesystem; refusing retention.'
+  backup_observed_mount_identity=$(backup_mount_identity "$BACKUP_REMOTE_MOUNT") \
+    || fail 'unable to determine BACKUP_REMOTE_MOUNT identity.'
+  case "$backup_expected_mount_identity" in
+    '') backup_expected_mount_identity=$backup_observed_mount_identity ;;
+    "$backup_observed_mount_identity") ;;
+    *) fail 'BACKUP_REMOTE_MOUNT identity changed; refusing backup.' ;;
+  esac
+  backup_path_is_within "$BACKUP_REMOTE_MOUNT" "$BACKUP_DIRECTORY" \
+    || fail 'BACKUP_DIRECTORY must be under BACKUP_REMOTE_MOUNT; refusing retention.'
+}
+
+validate_backup_destination
 
 case "$BACKUP_RETENTION" in
   ''|*[!0-9]*) fail 'BACKUP_RETENTION must be a positive integer.' ;;
@@ -35,23 +55,11 @@ esac
   || fail 'retention is refused until AGE_RECIPIENT or BACKUP_REMOTE_MOUNT is configured.'
 [ -f "$ENV_FILE" ] && [ ! -L "$ENV_FILE" ] || fail 'production .env must be a regular file.'
 
-if [ -n "$BACKUP_REMOTE_MOUNT" ]; then
-  command -v findmnt >/dev/null 2>&1 || fail 'findmnt is required for BACKUP_REMOTE_MOUNT.'
-  backup_mount_is_distinct "$BACKUP_REMOTE_MOUNT" \
-    || fail 'BACKUP_REMOTE_MOUNT must be a distinct mounted filesystem; refusing retention.'
-  backup_mount_root=$BACKUP_REMOTE_MOUNT
-  while [ "$backup_mount_root" != / ] && [ "${backup_mount_root%/}" != "$backup_mount_root" ]; do
-    backup_mount_root=${backup_mount_root%/}
-  done
-  case "$BACKUP_DIRECTORY" in
-    "$backup_mount_root"|"$backup_mount_root"/*) ;;
-    *) fail 'BACKUP_DIRECTORY must be under BACKUP_REMOTE_MOUNT; refusing retention.' ;;
-  esac
-fi
-
 mkdir -p "$BACKUP_DIRECTORY"
+validate_backup_destination
 chmod 0700 "$BACKUP_DIRECTORY"
 command -v flock >/dev/null 2>&1 || fail 'flock is required to serialize backups.'
+validate_backup_destination
 exec 9>"$BACKUP_DIRECTORY/.backup.lock" || fail 'unable to open the backup lock.'
 flock -n 9 || fail 'another backup is already running.'
 
@@ -64,6 +72,7 @@ awk -v free_kib="$free_kib" -v min_free_kib="$MIN_FREE_KIB" \
   'BEGIN { exit !(free_kib >= min_free_kib) }' \
   || fail "backup filesystem is below ${MIN_FREE_KIB} KiB."
 
+validate_backup_destination
 work_directory=$(mktemp -d "$BACKUP_DIRECTORY/.subweb-backup.XXXXXX") \
   || fail 'unable to create a unique backup workspace.'
 chmod 0700 "$work_directory"
@@ -99,13 +108,17 @@ if [ -n "$AGE_RECIPIENT" ]; then
 else
   mv "$raw_file" "$final_temporary"
 fi
+validate_backup_destination
 mv "$final_temporary" "$final_file"
 
 sha256sum "$final_file" >"$checksum_temporary" 2>/dev/null \
   || shasum -a 256 "$final_file" >"$checksum_temporary"
+validate_backup_destination
 mv "$checksum_temporary" "$checksum_file"
+validate_backup_destination
 chmod 0600 "$final_file" "$checksum_file"
 
+validate_backup_destination
 find "$BACKUP_DIRECTORY" -maxdepth 1 -type f \( -name 'subweb-redis-*.rdb' -o -name 'subweb-redis-*.rdb.age' \) -printf '%T@ %p\n' \
   | sort -nr \
   | awk -v keep="$BACKUP_RETENTION" 'NR > keep { sub(/^[^ ]+ /, ""); print }' \

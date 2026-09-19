@@ -1,0 +1,160 @@
+import { spawnSync } from 'node:child_process';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterEach, describe, expect, it } from 'vitest';
+
+const root = new URL('../../', import.meta.url);
+const backupPathScript = fileURLToPath(new URL('scripts/vps/backup-path.sh', root));
+const backupScript = fileURLToPath(new URL('scripts/vps/backup.sh', root));
+const verifyBackupScript = fileURLToPath(new URL('scripts/vps/verify-backup.sh', root));
+const temporaryDirectories = [];
+
+const writeExecutable = async (path, source) => {
+  await writeFile(path, source, { mode: 0o755 });
+  await chmod(path, 0o755);
+};
+
+const runShell = (script, args, environment = {}) => spawnSync('sh', [
+  '-c', script,
+  'sh',
+  ...args,
+], {
+  encoding: 'utf8',
+  env: { ...process.env, ...environment },
+});
+
+const makeFindmntFixture = async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'subweb-vps-backup-'));
+  temporaryDirectories.push(directory);
+  const findmnt = join(directory, 'findmnt');
+
+  await writeExecutable(findmnt, `#!/bin/sh
+case "$*" in
+  *' -o TARGET') printf '%s\\n' "${'${BACKUP_MOUNT_TARGET:-/}'}" ;;
+  *' -o SOURCE') printf '%s\\n' "${'${BACKUP_MOUNT_SOURCE:-}'}" ;;
+  *' -o FSTYPE') printf '%s\\n' "${'${BACKUP_MOUNT_FSTYPE:-}'}" ;;
+  *' -o MAJ:MIN') printf '%s\\n' "${'${BACKUP_MOUNT_DEVICE:-}'}" ;;
+esac
+`);
+
+  return directory;
+};
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((directory) =>
+    rm(directory, { recursive: true, force: true })));
+});
+
+describe('VPS backup mount safety', () => {
+  it('captures a stable identity only for a distinct configured remote mount', async () => {
+    const fixture = await makeFindmntFixture();
+    const mountPath = join(fixture, 'remote');
+    await mkdir(mountPath);
+    const environment = {
+      PATH: `${fixture}:${process.env.PATH}`,
+      BACKUP_MOUNT_TARGET: mountPath,
+      BACKUP_MOUNT_SOURCE: 'backup.example:/subweb',
+      BACKUP_MOUNT_FSTYPE: 'nfs4',
+      BACKUP_MOUNT_DEVICE: '0:42',
+    };
+
+    const result = runShell(
+      'set -eu; . "$1"; backup_mount_is_distinct "$2"; backup_mount_identity "$2"',
+      [backupPathScript, mountPath],
+      environment,
+    );
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toBe('backup.example:/subweb|nfs4|0:42\n');
+  });
+
+  it('rejects a path whose mountpoint resolves to the local root filesystem', async () => {
+    const fixture = await makeFindmntFixture();
+    const mountPath = join(fixture, 'remote');
+    await mkdir(mountPath);
+
+    const result = runShell(
+      'set -eu; . "$1"; backup_mount_is_distinct "$2"',
+      [backupPathScript, mountPath],
+      { PATH: `${fixture}:${process.env.PATH}`, BACKUP_MOUNT_TARGET: '/' },
+    );
+
+    expect(result.status).not.toBe(0);
+  });
+
+  it('revalidates the destination identity after mkdir before lock, workspace, and output operations', async () => {
+    const backup = await readFile(backupScript, 'utf8');
+    const revalidate = 'validate_backup_destination';
+    const mkdir = backup.indexOf('mkdir -p "$BACKUP_DIRECTORY"');
+    const firstRevalidation = backup.indexOf(revalidate, mkdir);
+    const lock = backup.indexOf('exec 9>"$BACKUP_DIRECTORY/.backup.lock"');
+    const workspace = backup.indexOf('mktemp -d "$BACKUP_DIRECTORY/.subweb-backup.XXXXXX"');
+    const finalOutput = backup.indexOf('mv "$final_temporary" "$final_file"');
+    const checksumOutput = backup.indexOf('mv "$checksum_temporary" "$checksum_file"');
+
+    expect(mkdir).toBeGreaterThanOrEqual(0);
+    expect(firstRevalidation).toBeGreaterThan(mkdir);
+    expect(firstRevalidation).toBeLessThan(lock);
+    expect(backup.lastIndexOf(revalidate, workspace)).toBeGreaterThan(lock);
+    expect(backup.lastIndexOf(revalidate, finalOutput)).toBeGreaterThan(workspace);
+    expect(backup.lastIndexOf(revalidate, checksumOutput)).toBeGreaterThan(finalOutput);
+    expect(backup).toContain('backup_expected_mount_identity');
+  });
+
+  it.each([
+    {
+      name: 'the configured remote mount is missing',
+      backupDirectory: 'remote/backups',
+      remoteMount: 'remote',
+      mountTarget: '/',
+      expectedError: 'BACKUP_REMOTE_MOUNT must be a distinct mounted filesystem',
+    },
+    {
+      name: 'the backup directory is outside the configured remote mount',
+      backupDirectory: 'local-backups',
+      remoteMount: 'remote',
+      mountTarget: 'remote',
+      expectedError: 'BACKUP_DIRECTORY must be under BACKUP_REMOTE_MOUNT',
+    },
+  ])('refuses verification when $name', async ({ backupDirectory, remoteMount, mountTarget, expectedError }) => {
+    const fixture = await makeFindmntFixture();
+    const scriptsDirectory = join(fixture, 'scripts', 'vps');
+    const projectRoot = join(fixture, 'project');
+    const backupDirectoryPath = join(fixture, backupDirectory);
+    const remoteMountPath = join(fixture, remoteMount);
+    const otherManagedRoot = remoteMountPath;
+    const backupFile = join(backupDirectoryPath, 'subweb-redis.rdb');
+    const backupPathSource = await readFile(backupPathScript, 'utf8');
+    const verifyBackupSource = await readFile(verifyBackupScript, 'utf8');
+
+    await mkdir(scriptsDirectory, { recursive: true });
+    await mkdir(join(projectRoot, 'scripts', 'operations'), { recursive: true });
+    await mkdir(backupDirectoryPath, { recursive: true });
+    await mkdir(remoteMountPath, { recursive: true });
+    await writeFile(backupFile, 'backup');
+    await writeFile(`${backupFile}.sha256`, 'checksum');
+    await writeExecutable(join(scriptsDirectory, 'backup-path.sh'), backupPathSource
+      .replaceAll('/var/lib/subweb-backups', backupDirectoryPath)
+      .replaceAll('/mnt/subweb-backups', otherManagedRoot));
+    await writeExecutable(join(scriptsDirectory, 'verify-backup.sh'), verifyBackupSource);
+    await writeExecutable(join(projectRoot, 'scripts', 'operations', 'verify-redis-backup.sh'), '#!/bin/sh\nexit 0\n');
+    await writeExecutable(join(fixture, 'sha256sum'), '#!/bin/sh\nexit 0\n');
+
+    const result = spawnSync('sh', [join(scriptsDirectory, 'verify-backup.sh'), backupFile], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${fixture}:${process.env.PATH}`,
+        PROJECT_ROOT: projectRoot,
+        BACKUP_DIRECTORY: backupDirectoryPath,
+        BACKUP_REMOTE_MOUNT: remoteMountPath,
+        BACKUP_MOUNT_TARGET: mountTarget === '/' ? '/' : remoteMountPath,
+      },
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(expectedError);
+  });
+});
