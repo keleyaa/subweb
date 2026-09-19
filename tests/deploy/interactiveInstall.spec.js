@@ -27,6 +27,11 @@ const makeFixture = async () => {
   await writeFile(join(root, 'scripts/docker-deploy.sh'), `#!/bin/sh
 set -eu
 printf '<%s>\\n' "$@" > "$DEPLOY_ARGS_LOG"
+if [ -t 0 ]; then
+  printf '<tty>\\n' > "$DEPLOY_STDIN_LOG"
+else
+  cat > "$DEPLOY_STDIN_LOG"
+fi
 `);
   await chmod(join(root, 'scripts/docker-deploy.sh'), 0o755);
 
@@ -60,6 +65,7 @@ const runScript = (root, script, args, input, environment = {}) => spawnSync(
       PATH: `${join(root, 'bin')}:${process.env.PATH}`,
       DOCKER_LOG: join(root, 'docker.log'),
       DEPLOY_ARGS_LOG: join(root, 'deploy-args.log'),
+      DEPLOY_STDIN_LOG: join(root, 'deploy-stdin.log'),
       ...environment,
     },
   },
@@ -97,6 +103,7 @@ const runInteractiveInstall = async (root, input, environment = {}) => {
         PATH: `${join(root, 'bin')}:${process.env.PATH}`,
         DOCKER_LOG: join(root, 'docker.log'),
         DEPLOY_ARGS_LOG: join(root, 'deploy-args.log'),
+        DEPLOY_STDIN_LOG: join(root, 'deploy-stdin.log'),
         ...environment,
       },
     });
@@ -115,6 +122,8 @@ const readArgs = async (root) => (await readOptional(join(root, 'deploy-args.log
   .split('\n')
   .filter(Boolean)
   .map((line) => line.slice(1, -1));
+
+const readDeployStdin = async (root) => readOptional(join(root, 'deploy-stdin.log'));
 
 const disabledInput = (confirmation = 'yes', gatewayVersion = releaseVersion) => [
   'app.example.com',
@@ -173,10 +182,10 @@ describe('interactive deployment install', () => {
     expect(await readOptional(join(root, '.env'))).toBe('');
   }, 35_000);
 
-  it('forwards a confirmed enabled profile and resolves the release without consuming input', async () => {
+  it('forwards a confirmed enabled profile and its secret through the public installer', async () => {
     const root = await makeFixture();
-
-    const result = runWizard(root, [
+    const secret = 'test-turnstile-secret-key';
+    const input = [
       'app.example.com',
       'api.example.com',
       'maybe',
@@ -186,33 +195,45 @@ describe('interactive deployment install', () => {
       '10.0.0.0/8',
       releaseVersion,
       'yes',
+      secret,
       '',
-    ].join('\n'));
+    ].join('\n');
 
-    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
-    expect(await readArgs(root)).toEqual([
+    const result = await runInteractiveInstall(root, input);
+    const output = `${result.stdout}\n${result.stderr}`;
+    const deploymentOutput = output.slice(output.indexOf('Deployment summary'));
+
+    expect(result.status, output).toBe(0);
+    const args = await readArgs(root);
+    const deployLog = await readFile(join(root, 'deploy-args.log'), 'utf8');
+    expect(args).toEqual([
       '--app-domain', 'app.example.com',
       '--api-domain', 'api.example.com',
       '--short-links-enabled', 'true',
       '--short-domain', 'short.example.com',
       '--turnstile-site-key', 'site-key-not-secret',
+      '--turnstile-secret-key-stdin',
       '--trusted-proxy-cidr', '10.0.0.0/8',
       '--image', resolvedImage,
     ]);
-    expect(result.stderr).toContain('Invalid value: expected true or false.');
-    expect(result.stderr).toContain('Deployment summary');
-    expect(result.stderr).toContain('  APP domain: app.example.com');
-    expect(result.stderr).toContain('  API domain: api.example.com');
-    expect(result.stderr).toContain('  SHORT domain: short.example.com');
-    expect(result.stderr).toContain('  Profile: true');
-    expect(result.stderr).toContain('  Trusted proxy CIDR: 10.0.0.0/8');
-    expect(result.stderr).toContain(`  Gateway version: ${releaseVersion}`);
-    expect(result.stderr).toContain(`  Immutable image: ${resolvedImage}`);
-    expect(result.stderr).toContain('Continue with this deployment (yes/no): ');
-    expect(result.stderr).not.toContain('TURNSTILE_SECRET_KEY');
-    expect(result.stderr).not.toContain('secret key');
-    expect(result.stderr).not.toContain('site-key-not-secret');
+    expect(await readDeployStdin(root)).toBe(`${secret}\n`);
+    expect(deploymentOutput).not.toContain(secret);
+    expect(deployLog).not.toContain(secret);
+    expect(output).toContain('Invalid value: expected true or false.');
+    expect(deploymentOutput).toContain('Deployment summary');
+    expect(deploymentOutput).toContain('  APP domain: app.example.com');
+    expect(deploymentOutput).toContain('  API domain: api.example.com');
+    expect(deploymentOutput).toContain('  SHORT domain: short.example.com');
+    expect(deploymentOutput).toContain('  Profile: true');
+    expect(deploymentOutput).toContain('  Trusted proxy CIDR: 10.0.0.0/8');
+    expect(deploymentOutput).toContain(`  Gateway version: ${releaseVersion}`);
+    expect(deploymentOutput).toContain(`  Immutable image: ${resolvedImage}`);
+    expect(deploymentOutput).toContain('Continue with this deployment (yes/no): ');
+    expect(deploymentOutput).not.toContain('TURNSTILE_SECRET_KEY');
+    expect(deploymentOutput).not.toContain('secret key');
+    expect(deploymentOutput).not.toContain('site-key-not-secret');
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain('INSPECT_STDIN=<none>');
+    expect(await readFile(join(root, 'docker.log'), 'utf8')).not.toContain(secret);
     expect(await readOptional(join(root, '.env'))).toBe('');
   });
 

@@ -12,6 +12,40 @@ fail() {
   exit 1
 }
 
+restore_secret_tty() {
+  stty echo < "$secret_tty" 2>/dev/null || true
+}
+
+prompt_secret() {
+  secret_tty=/dev/tty
+  [ -r "$secret_tty" ] || fail 'Turnstile Secret Key requires an interactive terminal.'
+
+  printf 'Turnstile Secret Key (hidden): ' > "$secret_tty"
+  stty -echo < "$secret_tty" 2>/dev/null \
+    || fail 'Unable to hide Turnstile Secret Key input.'
+  trap 'restore_secret_tty' EXIT
+  trap 'restore_secret_tty; exit 1' HUP INT TERM
+
+  secret_read_status=0
+  if IFS= read -r turnstile_secret_key < "$secret_tty"; then
+    :
+  else
+    secret_read_status=$?
+  fi
+
+  if ! stty echo < "$secret_tty" 2>/dev/null; then
+    trap - HUP INT TERM
+    fail 'Unable to restore terminal echo after reading Turnstile Secret Key.'
+  fi
+  trap - EXIT HUP INT TERM
+  printf '\n' > "$secret_tty"
+
+  if [ "$secret_read_status" -ne 0 ] && [ -z "$turnstile_secret_key" ]; then
+    fail 'A Turnstile Secret Key is required.'
+  fi
+  [ -n "$turnstile_secret_key" ] || fail 'A Turnstile Secret Key is required.'
+}
+
 prompt_required() {
   prompt=$1
   value=
@@ -106,6 +140,11 @@ if [ "$confirmation" != yes ]; then
   exit 1
 fi
 
+turnstile_secret_key=
+if [ "$short_links_enabled" = true ]; then
+  prompt_secret
+fi
+
 set -- \
   --app-domain "$app_domain" \
   --api-domain "$api_domain" \
@@ -113,10 +152,16 @@ set -- \
 if [ "$short_links_enabled" = true ]; then
   set -- "$@" \
     --short-domain "$short_domain" \
-    --turnstile-site-key "$turnstile_site_key"
+    --turnstile-site-key "$turnstile_site_key" \
+    --turnstile-secret-key-stdin
 fi
 if [ -n "$trusted_proxy_cidr" ]; then
   set -- "$@" --trusted-proxy-cidr "$trusted_proxy_cidr"
 fi
 
-exec "$SCRIPT_DIRECTORY/docker-deploy.sh" "$@" --image "$resolved_image"
+if [ "$short_links_enabled" = true ]; then
+  printf '%s\n' "$turnstile_secret_key" \
+    | exec "$SCRIPT_DIRECTORY/docker-deploy.sh" "$@" --image "$resolved_image"
+else
+  exec "$SCRIPT_DIRECTORY/docker-deploy.sh" "$@" --image "$resolved_image"
+fi
