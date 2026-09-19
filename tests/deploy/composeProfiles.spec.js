@@ -31,6 +31,10 @@ case "$*" in
       grep -qx "REDIS_IMAGE=$LOCKED_REDIS_IMAGE" "$environment_file" || exit 94
       grep -qx "SUBCONVERTER_IMAGE=$LOCKED_SUBCONVERTER_IMAGE" "$environment_file" || exit 95
       grep -qx "MYURLS_IMAGE=$LOCKED_MYURLS_IMAGE" "$environment_file" || exit 96
+      if [ "\${PRESERVE_DOCKER_ENV-}" = 1 ]; then
+        [ "\${PATH-}" = "$EXPECTED_DOCKER_PATH" ] || exit 97
+        [ "\${DOCKER_HOST-}" = "$EXPECTED_DOCKER_HOST" ] || exit 98
+      fi
       cp "$environment_file" "$COMPOSE_ENV_CAPTURE"
     fi
     cat "$COMPOSE_JSON_FIXTURE"
@@ -210,6 +214,34 @@ describe('unified Compose validation', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('SUBWEB_ENV_FILE must be a regular, non-symlink file.');
+  });
+
+  it('preserves Docker host environment values when the selected .env contains unrelated keys', async () => {
+    const fixture = await createFixture(validCompose);
+    const sourceEnvironment = await readFile(fixture.envPath, 'utf8');
+    await writeFile(fixture.envPath, `${sourceEnvironment}PATH=/selected-env/path\nDOCKER_HOST=tcp://selected-env:2376\n`);
+    const capturePath = join(fixture.directory, 'validation.env');
+
+    const result = spawnSync('sh', [validatorPath], {
+      cwd: fixture.directory,
+      encoding: 'utf8',
+      env: {
+        ...fixture.env,
+        CAPTURE_VALIDATION_ENV_FILE: '1',
+        COMPOSE_ENV_CAPTURE: capturePath,
+        PRESERVE_DOCKER_ENV: '1',
+        EXPECTED_DOCKER_PATH: fixture.env.PATH,
+        EXPECTED_DOCKER_HOST: 'unix:///host-environment.sock',
+        DOCKER_HOST: 'unix:///host-environment.sock',
+        LOCKED_REDIS_IMAGE: validCompose.services.redis.image,
+        LOCKED_SUBCONVERTER_IMAGE: validCompose.services.subconverter.image,
+        LOCKED_MYURLS_IMAGE: validCompose.services.myurls.image,
+      },
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(await readFile(capturePath, 'utf8')).toContain('PATH=/selected-env/path\n');
+    expect(await readFile(capturePath, 'utf8')).toContain('DOCKER_HOST=tcp://selected-env:2376\n');
   });
 
   it('derives locked runtime images over stale existing environment values without changing .env', async () => {
