@@ -18,6 +18,7 @@ const makeFixture = async () => {
   await mkdir(join(root, 'scripts/lib'), { recursive: true });
   await mkdir(join(root, 'bin'), { recursive: true });
   await cp(new URL('scripts/subweb.sh', repositoryRoot), join(root, 'scripts/subweb.sh'));
+  await cp(new URL('scripts/lib/config.sh', repositoryRoot), join(root, 'scripts/lib/config.sh'));
   await cp(new URL('scripts/lib/release-image.sh', repositoryRoot), join(root, 'scripts/lib/release-image.sh'));
   await cp(new URL('scripts/install-wizard.sh', repositoryRoot), join(root, 'scripts/install-wizard.sh'));
   await chmod(join(root, 'scripts/subweb.sh'), 0o755);
@@ -231,6 +232,35 @@ describe('interactive deployment install', () => {
     expect(result.stderr).not.toContain('SHORT domain:');
     expect(result.stderr).toContain('  Profile: false');
     expect(result.stderr).toContain('  Trusted proxy CIDR: none');
+    expect(await readOptional(join(root, '.env'))).toBe('');
+  });
+
+  it.each([
+    ['an invalid APP domain', [
+      'https://app.example.com',
+      'api.example.com',
+    ], 'APP domain must be a plain hostname.'],
+    ['a duplicate API domain', [
+      'app.example.com',
+      'app.example.com',
+    ], 'APP and API domains must be different.'],
+    ['an invalid trusted-proxy CIDR', [
+      'app.example.com',
+      'api.example.com',
+      'true',
+      'short.example.com',
+      'site-key-not-secret',
+      '10.0.0.1/8',
+    ], 'TRUSTED_PROXY_CIDR must be a canonical IPv4 CIDR.'],
+  ])('stops before confirmation, secret handling, or deployment for %s', async (_scenario, lines, errorMessage) => {
+    const root = await makeFixture();
+
+    const result = runWizard(root, [...lines, 'test-turnstile-secret-key'].join('\n'));
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(errorMessage);
+    expect(result.stderr).not.toContain('Continue with this deployment (yes/no):');
+    expect(await readOptional(join(root, 'deploy-args.log'))).toBe('');
     expect(await readOptional(join(root, '.env'))).toBe('');
   });
 

@@ -1,6 +1,6 @@
 # 配置
 
-生产配置由 `scripts/configure.sh` 管理并写入根目录 `.env`。首次由人安装时，首选不带参数的 `./scripts/subweb.sh install`：它只在交互式终端打开向导，收集域名、短链开关、可选 `TRUSTED_PROXY_CIDR` 和明确的 `vX.Y.Z` Gateway 版本，并在解析为不可变 GHCR manifest digest、显示不含密钥的摘要且收到 `yes` 后才进入既有隐藏密钥流程。显式 `configure.sh` 保留给高级或手动操作。文件应为权限 `0600` 的普通文件，不应提交到 Git。Compose 会根据 `SHORT_LINKS_ENABLED` 选择生产入口：启用时使用 `compose.yaml`，关闭时使用 `compose.disabled-short-links.yaml`；两者都通过 `compose.common-services.yaml` 复用 Gateway 与 SubConverter 的公共服务合同。重复执行 `configure.sh` 会重写它校验的部署输入（域名、开关、Gateway 发布镜像、Turnstile 与密钥）以及从 `deploy/versions.lock.json` 生成的外部 runtime 镜像；`.env` 中其他键（`LOG_LEVEL`、转换调优、`EGRESS_ALLOWED_HOSTS`、`MYURLS_LOG_LEVEL` 等）会原样保留。
+生产配置由 `scripts/configure.sh` 管理并写入根目录 `.env`。首次由人安装时，首选不带参数的 `./scripts/subweb.sh install`：它只在交互式终端打开向导，收集并校验域名、短链开关、可选 `TRUSTED_PROXY_CIDR` 和明确的 `vX.Y.Z` Gateway 版本，并在解析为不可变 GHCR manifest digest、显示不含密钥的摘要且收到 `yes` 后才进入既有隐藏密钥流程。显式 `configure.sh` 保留给高级或手动操作。`configure.sh` 在读取标准输入或提示 Turnstile Secret Key 前需要 Node.js 24+ 来校验并生成锁定的 runtime 镜像设置；缺少或版本过低时先修复该前置条件。文件应为权限 `0600` 的普通文件，不应提交到 Git。Compose 会根据 `SHORT_LINKS_ENABLED` 选择生产入口：启用时使用 `compose.yaml`，关闭时使用 `compose.disabled-short-links.yaml`；两者都通过 `compose.common-services.yaml` 复用 Gateway 与 SubConverter 的公共服务合同。重复执行 `configure.sh` 会重写它校验的部署输入（域名、开关、Gateway 发布镜像、Turnstile 与密钥）以及从 `deploy/versions.lock.json` 生成的外部 runtime 镜像；`.env` 中其他键（`LOG_LEVEL`、转换调优、`EGRESS_ALLOWED_HOSTS`、`MYURLS_LOG_LEVEL` 等）会原样保留。
 
 ## 必填配置
 
