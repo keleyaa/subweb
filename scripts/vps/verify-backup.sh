@@ -18,6 +18,11 @@ fail() {
 require_supported_backup_path BACKUP_DIRECTORY "$BACKUP_DIRECTORY"
 if [ -n "$BACKUP_REMOTE_MOUNT" ]; then
   require_supported_backup_path BACKUP_REMOTE_MOUNT "$BACKUP_REMOTE_MOUNT"
+  command -v findmnt >/dev/null 2>&1 || fail 'findmnt is required for BACKUP_REMOTE_MOUNT.'
+  backup_mount_is_distinct "$BACKUP_REMOTE_MOUNT" \
+    || fail 'BACKUP_REMOTE_MOUNT must be a distinct mounted filesystem; refusing verification.'
+  backup_path_is_within "$BACKUP_REMOTE_MOUNT" "$BACKUP_DIRECTORY" \
+    || fail 'BACKUP_DIRECTORY must be under BACKUP_REMOTE_MOUNT; refusing verification.'
 fi
 
 case "$backup" in /*) ;; *) fail 'backup path must be absolute.' ;; esac
