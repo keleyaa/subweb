@@ -25,6 +25,7 @@ const disabledProfile = {
   shortLinksEnabled: false,
 };
 const generatedEnvironment = {
+  SUBWEB_IMAGE: 'subweb:readiness@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   MYURLS_IMAGE: resolveRuntimeImages(lock).MYURLS_IMAGE,
   REDIS_IMAGE: resolveRuntimeImages(lock).REDIS_IMAGE,
   SUBCONVERTER_IMAGE: resolveRuntimeImages(lock).SUBCONVERTER_IMAGE,
@@ -43,6 +44,7 @@ const renderedProfile = (profile) => {
   const images = resolveRuntimeImages(lock);
   const gateway = secureService({
     build: { dockerfile: 'Dockerfile' },
+    image: generatedEnvironment.SUBWEB_IMAGE,
     ports: [{ host_ip: '127.0.0.1', target: 8080 }],
     networks: profile.shortLinksEnabled
       ? { default: {}, 'myurls-edge': {}, 'redis-policy': {}, 'subconverter-egress': {} }
@@ -109,6 +111,14 @@ const renderedProfile = (profile) => {
       : { 'subconverter-egress': { internal: true } },
   };
 };
+
+const withServiceImage = (rendered, serviceName, image) => ({
+  ...rendered,
+  services: {
+    ...rendered.services,
+    [serviceName]: { ...rendered.services[serviceName], image },
+  },
+});
 
 const withEnvironmentValue = (rendered, serviceName, name, value) => ({
   ...rendered,
@@ -211,6 +221,22 @@ describe('production readiness verifier', () => {
     expect(renderedErrors(renderedProfile(fullProfile), fullProfile)).toEqual([]);
     expect(renderedErrors(drift(renderedProfile(fullProfile)), fullProfile)).toContain(expectedError);
   });
+
+  it.each([
+    ['enabled', fullProfile],
+    ['disabled', disabledProfile],
+  ])(
+    'rejects a mutable rendered gateway image for the %s profile',
+    (_name, profile) => {
+      expect(renderedErrors(renderedProfile(profile), profile)).toEqual([]);
+      expect(
+        renderedErrors(
+          withServiceImage(renderedProfile(profile), 'gateway', 'subweb:latest'),
+          profile,
+        ),
+      ).toContain('gateway must use the generated SUBWEB_IMAGE');
+    },
+  );
 
   it.each([
     ['enabled profile', [], fullProfile],
