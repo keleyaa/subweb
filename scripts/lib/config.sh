@@ -24,6 +24,22 @@ validate_domain() {
   done
 }
 
+validate_distinct_domains() (
+  [ "$#" -ge 2 ] || exit 1
+
+  for domain_value do
+    validate_domain "$domain_value" || exit 1
+  done
+
+  printf '%s\n' "$@" | LC_ALL=C awk '
+    {
+      normalized = tolower($0)
+      if (normalized in seen) exit 1
+      seen[normalized] = 1
+    }
+  '
+)
+
 validate_ipv4() {
   address=${1-}
 

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +14,16 @@ const makeDirectory = async () => {
   temporaryDirectories.push(directory);
   return directory;
 };
-const runConfigure = (cwd, args, input = 'test-secret-key\n') => spawnSync('sh', [configurePath, ...args], { cwd, encoding: 'utf8', input });
+const runConfigure = (cwd, args, input = 'test-secret-key\n', environment = {}) => spawnSync(
+  'sh',
+  [configurePath, ...args],
+  {
+    cwd,
+    encoding: 'utf8',
+    input,
+    env: { ...process.env, ...environment },
+  },
+);
 const baseArgs = [
   '--app-domain', 'example.com', '--api-domain', 'api.example.com', '--short-domain', 'short.example.com',
   '--turnstile-site-key', 'test-site-key', '--turnstile-secret-key-stdin',
@@ -71,6 +80,30 @@ describe('single HTTP deployment configuration', () => {
     expect(result.status).not.toBe(0);
     await expect(readFile(join(cwd, '.env'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
     expect((await readdir(cwd)).filter((name) => name.includes('.tmp.'))).toEqual([]);
+  });
+
+  it('requires Node runtime-image validation before it reads a Turnstile secret', async () => {
+    const cwd = await makeDirectory();
+    const binDirectory = join(cwd, 'bin');
+    const nodePath = join(binDirectory, 'node');
+    const nodeLog = join(cwd, 'node.log');
+    await mkdir(binDirectory);
+    await writeFile(nodePath, `#!/bin/sh
+printf '%s\\n' "$*" > "$NODE_LOG"
+exit 23
+`);
+    await chmod(nodePath, 0o755);
+
+    const result = runConfigure(cwd, baseArgs, '', {
+      NODE_LOG: nodeLog,
+      PATH: `${binDirectory}:${process.env.PATH}`,
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Node.js 24 or newer is required to validate locked runtime images.');
+    expect(result.stderr).not.toContain('Turnstile secret key must be provided on stdin.');
+    expect(await readFile(nodeLog, 'utf8')).toBe('--version\n');
+    await expect(readFile(join(cwd, '.env'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('allows short links to be disabled without short-link domains or secrets', async () => {

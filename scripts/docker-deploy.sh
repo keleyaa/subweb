@@ -22,7 +22,6 @@ custom_backend_enabled=
 custom_backend_enabled_seen=0
 turnstile_site_key=
 turnstile_secret_key_stdin=0
-turnstile_secret_key=
 image=
 image_seen=0
 version=
@@ -142,12 +141,6 @@ esac
 
 if [ "$short_links_enabled_seen" -eq 1 ] && [ "$short_links_enabled" = false ]; then
   turnstile_secret_key_stdin=0
-elif [ "$turnstile_secret_key_stdin" -eq 1 ]; then
-  if IFS= read -r turnstile_secret_key || [ -n "$turnstile_secret_key" ]; then
-    :
-  else
-    fail 'Turnstile secret key must be provided on stdin.'
-  fi
 fi
 
 command -v docker >/dev/null 2>&1 || fail 'Docker is not installed or not available in PATH.'
@@ -167,12 +160,8 @@ run_configure() {
   [ -n "$subweb_port" ] && set -- "$@" --subweb-port "$subweb_port"
   [ -n "$trusted_proxy_cidr" ] && set -- "$@" --trusted-proxy-cidr "$trusted_proxy_cidr"
   [ -n "$turnstile_site_key" ] && set -- "$@" --turnstile-site-key "$turnstile_site_key"
-  if [ "$turnstile_secret_key_stdin" -eq 1 ]; then
-    set -- "$@" --turnstile-secret-key-stdin
-    printf '%s\n' "$turnstile_secret_key" | "$@"
-  else
-    "$@"
-  fi
+  [ "$turnstile_secret_key_stdin" -eq 0 ] || set -- "$@" --turnstile-secret-key-stdin
+  "$@"
 }
 run_configure
 

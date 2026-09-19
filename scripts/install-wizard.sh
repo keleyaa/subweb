@@ -2,7 +2,15 @@
 set -eu
 
 SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=lib/config.sh
+. "$SCRIPT_DIRECTORY/lib/config.sh"
+# shellcheck source=lib/release-image.sh
 . "$SCRIPT_DIRECTORY/lib/release-image.sh"
+
+fail() {
+  printf 'Installation error: %s\n' "$1" >&2
+  exit 1
+}
 
 prompt_required() {
   prompt=$1
@@ -24,6 +32,12 @@ prompt_required 'APP domain: '
 app_domain=$value
 prompt_required 'API domain: '
 api_domain=$value
+validate_domain "$app_domain" \
+  || fail 'APP domain must be a plain hostname.'
+validate_domain "$api_domain" \
+  || fail 'API domain must be a plain hostname.'
+validate_distinct_domains "$app_domain" "$api_domain" \
+  || fail 'APP and API domains must be different.'
 
 while :; do
   prompt_required 'Enable short links (true/false): '
@@ -39,6 +53,10 @@ turnstile_site_key=
 if [ "$short_links_enabled" = true ]; then
   prompt_required 'SHORT domain: '
   short_domain=$value
+  validate_domain "$short_domain" \
+    || fail 'SHORT domain must be a plain hostname.'
+  validate_distinct_domains "$app_domain" "$api_domain" "$short_domain" \
+    || fail 'SHORT, APP, and API domains must be different.'
   prompt_required 'Turnstile Site Key: '
   turnstile_site_key=$value
 fi
@@ -50,6 +68,8 @@ if IFS= read -r trusted_proxy_cidr || [ -n "$trusted_proxy_cidr" ]; then
 else
   trusted_proxy_cidr=
 fi
+[ -z "$trusted_proxy_cidr" ] || validate_ipv4_cidr "$trusted_proxy_cidr" \
+  || fail 'TRUSTED_PROXY_CIDR must be a canonical IPv4 CIDR.'
 
 prompt_required 'Gateway version (vX.Y.Z): '
 gateway_version=$value

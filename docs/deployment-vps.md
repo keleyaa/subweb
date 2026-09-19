@@ -96,7 +96,7 @@ sudo systemctl reload nginx
 ## 首次部署检查表
 
 1. DNS 已指向 VPS，SSH 仅允许密钥认证，防火墙只开放 SSH、80、443。
-2. Docker Engine、Compose v2、Nginx、systemd、`age`（若加密）和 `rsync` 已安装。
+2. Docker Engine、Compose v2、Node.js 24+、Nginx、systemd、`age`（若加密）和 `rsync` 已安装。`configure.sh` 必须先用本机 Node 校验 `deploy/versions.lock.json` 并生成受管 runtime 镜像设置，缺少或版本过低时会在请求 Turnstile Secret Key 前停止。
 3. `SUBWEB_SOURCE` 来自已审查的 release，Gateway 使用 release 对应的不可变 manifest digest。
 4. `.env` 已由 `configure.sh` 生成并通过 `check-host.sh` 的普通文件/`0600` 检查。
 5. Nginx `nginx -t`、`scripts/subweb.sh verify`、systemd status 和三域名 HTTPS smoke 均通过。

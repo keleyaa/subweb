@@ -143,6 +143,25 @@ validate_turnstile_key() {
   printf '%s\n' "$key_value" | LC_ALL=C grep -Eq '^[A-Za-z0-9._-]+$'
 }
 
+require_runtime_image_contract() {
+  if ! node_version=$(node --version 2>/dev/null); then
+    fail 'Node.js 24 or newer is required to validate locked runtime images.'
+  fi
+
+  case "$node_version" in
+    v[0-9]*.*.*) ;;
+    *) fail 'Node.js 24 or newer is required to validate locked runtime images.' ;;
+  esac
+  node_major=${node_version#v}
+  node_major=${node_major%%.*}
+  [ "$node_major" -ge 24 ] 2>/dev/null \
+    || fail 'Node.js 24 or newer is required to validate locked runtime images.'
+
+  if ! runtime_image_settings=$(node "$SCRIPT_DIRECTORY/runtime-image-contract.mjs" env); then
+    fail 'could not derive external runtime images from deploy/versions.lock.json'
+  fi
+}
+
 app_domain=
 app_domain_seen=0
 api_domain=
@@ -175,6 +194,8 @@ if [ "${1-}" = --help ] || [ "${1-}" = -h ]; then
   usage
   exit 0
 fi
+
+require_runtime_image_contract
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -326,14 +347,14 @@ fi
 [ "$subweb_image_seen" -eq 0 ] || validate_container_image "$subweb_image" \
   || fail 'Subweb image must be a safe registry/repository reference with a tag or sha256 digest.'
 
+validate_distinct_domains "$app_domain" "$api_domain" \
+  || fail 'APP and API domains must be different.'
+if [ -n "$short_domain" ]; then
+  validate_distinct_domains "$app_domain" "$api_domain" "$short_domain" \
+    || fail 'SHORT, APP, and API domains must be different.'
+fi
 normalized_app=$(printf '%s' "$app_domain" | tr '[:upper:]' '[:lower:]')
 normalized_api=$(printf '%s' "$api_domain" | tr '[:upper:]' '[:lower:]')
-[ "$normalized_app" != "$normalized_api" ] || fail 'APP and API domains must be different.'
-if [ -n "$short_domain" ]; then
-  normalized_short=$(printf '%s' "$short_domain" | tr '[:upper:]' '[:lower:]')
-  [ "$normalized_short" != "$normalized_app" ] || fail 'SHORT and APP domains must be different.'
-  [ "$normalized_short" != "$normalized_api" ] || fail 'SHORT and API domains must be different.'
-fi
 
 if [ "$api_url_seen" -eq 0 ]; then
   api_url=https://$normalized_api
@@ -362,10 +383,6 @@ fi
 [ -z "$trusted_proxy_cidr" ] || validate_ipv4_cidr "$trusted_proxy_cidr" \
   || fail 'TRUSTED_PROXY_CIDR must be one IPv4 CIDR, for example 172.18.0.1/32.'
 [ ! -d "$env_file" ] || fail '.env target must not be a directory or a symlink to a directory.'
-
-if ! runtime_image_settings=$(node "$SCRIPT_DIRECTORY/runtime-image-contract.mjs" env); then
-  fail "could not derive external runtime images from deploy/versions.lock.json"
-fi
 
 image_settings=
 
