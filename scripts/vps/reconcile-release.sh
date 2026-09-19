@@ -1,6 +1,6 @@
 #!/bin/sh
 
-PAUSED_RELEASE_ACTIVE_TIMERS=''
+PAUSED_RELEASE_ENABLED_TIMERS=''
 PAUSED_RELEASE_ACTIVE_SERVICES=''
 RECONCILE_RELEASE_STAGE=''
 RECONCILE_RELEASE_OLD=''
@@ -77,9 +77,9 @@ pause_enabled_release_timer() {
   reconcile_backup_service_was_active=0
 
   systemctl is-enabled --quiet "$reconcile_timer" || return 0
-  if systemctl is-active --quiet "$reconcile_timer"; then
-    PAUSED_RELEASE_ACTIVE_TIMERS="${PAUSED_RELEASE_ACTIVE_TIMERS}${PAUSED_RELEASE_ACTIVE_TIMERS:+ }${reconcile_timer}"
-  fi
+  # Enabled timers must be restarted after cutover even if currently inactive.
+  systemctl is-active --quiet "$reconcile_timer" || true
+  PAUSED_RELEASE_ENABLED_TIMERS="${PAUSED_RELEASE_ENABLED_TIMERS}${PAUSED_RELEASE_ENABLED_TIMERS:+ }${reconcile_timer}"
   if systemctl is-active --quiet "$reconcile_service"; then
     PAUSED_RELEASE_ACTIVE_SERVICES="${PAUSED_RELEASE_ACTIVE_SERVICES}${PAUSED_RELEASE_ACTIVE_SERVICES:+ }${reconcile_service}"
     reconcile_backup_service_was_active=1
@@ -98,10 +98,10 @@ resume_paused_release_timers() {
   for reconcile_service in $PAUSED_RELEASE_ACTIVE_SERVICES; do
     systemctl start "$reconcile_service" || return 1
   done
-  for reconcile_timer in $PAUSED_RELEASE_ACTIVE_TIMERS; do
+  for reconcile_timer in $PAUSED_RELEASE_ENABLED_TIMERS; do
     systemctl start "$reconcile_timer" || return 1
   done
-    PAUSED_RELEASE_ACTIVE_TIMERS=''
+  PAUSED_RELEASE_ENABLED_TIMERS=''
   PAUSED_RELEASE_ACTIVE_SERVICES=''
 }
 
