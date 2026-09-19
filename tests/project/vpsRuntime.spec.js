@@ -9,6 +9,8 @@ const root = new URL('../../', import.meta.url);
 const repositoryRoot = fileURLToPath(root);
 const checkHostPath = fileURLToPath(new URL('scripts/vps/check-host.sh', root));
 const installPath = fileURLToPath(new URL('scripts/vps/install.sh', root));
+const backupPathScript = fileURLToPath(new URL('scripts/vps/backup-path.sh', root));
+const reconcileReleaseScript = fileURLToPath(new URL('scripts/vps/reconcile-release.sh', root));
 const temporaryDirectories = [];
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
@@ -75,6 +77,15 @@ const readCalls = async (directory) => {
     throw error;
   }
 };
+
+const runShell = (script, args, environment = {}) => spawnSync('sh', [
+  '-c', script,
+  'sh',
+  ...args,
+], {
+  encoding: 'utf8',
+  env: { ...process.env, ...environment },
+});
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) =>
@@ -143,9 +154,11 @@ describe('VPS runtime contract', () => {
     expect(installer).toContain('SUBWEB_ROOT must be /opt/subweb');
     expect(installer).toContain('release tree must not contain symbolic links');
     expect(installer).toContain('installed .env must be a regular file');
-    expect(installer).toContain('install -d -o subweb -g subweb -m 0700 "$TARGET_DIRECTORY/.runtime" "$TARGET_DIRECTORY/.local"');
-    expect(installer).toContain('-path "$TARGET_DIRECTORY/.runtime" -o -path "$TARGET_DIRECTORY/.local"');
-    expect(installer).not.toContain('chown -R');
+     expect(installer).toContain('install -d -o subweb -g subweb -m 0700 "$TARGET_DIRECTORY/.runtime" "$TARGET_DIRECTORY/.local"');
+     expect(installer).toContain('reconcile_release_tree "$SOURCE_DIRECTORY" "$TARGET_DIRECTORY"');
+     expect(installer).not.toContain('cp -a "$SOURCE_DIRECTORY/." "$TARGET_DIRECTORY/"');
+     expect(installer).toContain('-path "$TARGET_DIRECTORY/.runtime" -o -path "$TARGET_DIRECTORY/.local"');
+     expect(installer).not.toContain('chown -R');
     expect(installer).not.toContain('usermod -aG docker subweb');
     expect(installer).toContain('systemctl daemon-reload');
     expect(installer).toContain('systemctl enable subweb.service');
@@ -204,6 +217,95 @@ describe('VPS runtime contract', () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('release tree must not contain symbolic links');
     expect(await readCalls(fixture)).toBe('');
+  });
+
+  it('rejects symlinked components before using an approved backup path', async () => {
+    const fixture = await mkdtemp(join(tmpdir(), 'subweb-backup-path-'));
+    temporaryDirectories.push(fixture);
+    const backupRoot = join(fixture, 'approved-root');
+    const nestedDirectory = join(backupRoot, 'nested');
+    const outside = join(fixture, 'outside');
+    await mkdir(nestedDirectory, { recursive: true });
+    await writeFile(outside, 'outside\n');
+
+    const safePath = join(nestedDirectory, 'future', 'backup.rdb');
+    const safeResult = runShell(
+      'set -eu; . "$1"; if backup_path_has_symlink_component "$2" "$3"; then exit 1; fi',
+      [backupPathScript, backupRoot, safePath],
+    );
+    expect(safeResult.status, `${safeResult.stdout}\n${safeResult.stderr}`).toBe(0);
+
+    await symlink(outside, join(nestedDirectory, 'linked'));
+    const unsafeResult = runShell(
+      'set -eu; . "$1"; if backup_path_has_symlink_component "$2" "$3"; then exit 0; fi; exit 1',
+      [backupPathScript, backupRoot, join(nestedDirectory, 'linked', 'backup.rdb')],
+    );
+    expect(unsafeResult.status, `${unsafeResult.stdout}\n${unsafeResult.stderr}`).toBe(0);
+  });
+
+  it('distinguishes a real remote mount from a directory on the root filesystem', async () => {
+    const fixture = await mkdtemp(join(tmpdir(), 'subweb-backup-mount-'));
+    temporaryDirectories.push(fixture);
+    const mountPath = join(fixture, 'remote');
+    await mkdir(mountPath);
+    const findmnt = join(fixture, 'findmnt');
+    await writeExecutable(findmnt, `#!/bin/sh
+case "${'${FINDMNT_MODE:-local}'}" in
+  local) printf '/\\n' ;;
+  mounted) printf '%s\\n' "${'${BACKUP_MOUNT_PATH}'}" ;;
+esac
+`);
+
+    const localResult = runShell(
+      'set -eu; . "$1"; backup_mount_is_distinct "$2"',
+      [backupPathScript, mountPath],
+      { PATH: `${fixture}:${process.env.PATH}`, FINDMNT_MODE: 'local', BACKUP_MOUNT_PATH: mountPath },
+    );
+    expect(localResult.status).not.toBe(0);
+
+    const mountedResult = runShell(
+      'set -eu; . "$1"; backup_mount_is_distinct "$2"',
+      [backupPathScript, mountPath],
+      { PATH: `${fixture}:${process.env.PATH}`, FINDMNT_MODE: 'mounted', BACKUP_MOUNT_PATH: mountPath },
+    );
+    expect(mountedResult.status, `${mountedResult.stdout}\n${mountedResult.stderr}`).toBe(0);
+  });
+
+  it('reconciles release files while preserving deployment state and rejecting symlinks', async () => {
+    const fixture = await mkdtemp(join(tmpdir(), 'subweb-release-reconcile-'));
+    temporaryDirectories.push(fixture);
+    const source = join(fixture, 'source');
+    const target = join(fixture, 'target');
+    await mkdir(join(source, 'scripts'), { recursive: true });
+    await mkdir(join(target, '.runtime'), { recursive: true });
+    await mkdir(join(target, '.local'), { recursive: true });
+    await writeFile(join(source, 'compose.yaml'), 'new release\n');
+    await writeFile(join(source, 'scripts', 'current.sh'), 'current\n');
+    await writeFile(join(target, 'compose.yaml'), 'old release\n');
+    await writeFile(join(target, 'stale.txt'), 'remove me\n');
+    await writeFile(join(target, '.env'), 'APP_DOMAIN=kept.example\n', { mode: 0o600 });
+    await writeFile(join(target, '.runtime', 'state'), 'runtime state\n');
+    await writeFile(join(target, '.local', 'state'), 'local state\n');
+
+    const result = runShell(
+      'set -eu; . "$1"; reconcile_release_tree "$2" "$3"',
+      [reconcileReleaseScript, source, target],
+    );
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(await readFile(join(target, 'compose.yaml'), 'utf8')).toBe('new release\n');
+    expect(await readFile(join(target, 'scripts', 'current.sh'), 'utf8')).toBe('current\n');
+    await expect(readFile(join(target, 'stale.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readFile(join(target, '.env'), 'utf8')).toBe('APP_DOMAIN=kept.example\n');
+    expect(await readFile(join(target, '.runtime', 'state'), 'utf8')).toBe('runtime state\n');
+    expect(await readFile(join(target, '.local', 'state'), 'utf8')).toBe('local state\n');
+
+    await writeFile(join(fixture, 'outside'), 'outside\n');
+    await symlink(join(fixture, 'outside'), join(source, 'unsafe-link'));
+    const unsafeResult = runShell(
+      'set -eu; . "$1"; reconcile_release_tree "$2" "$3"',
+      [reconcileReleaseScript, source, target],
+    );
+    expect(unsafeResult.status).not.toBe(0);
   });
 
   it('ships an external TLS proxy contract without exposing the container publicly', async () => {
