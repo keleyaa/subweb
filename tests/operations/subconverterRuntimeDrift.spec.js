@@ -12,7 +12,8 @@ describe('SubConverter runtime drift detection', () => {
     expect(script).toContain('docker run --rm --entrypoint sh "$image"');
     expect(script).toContain('/base/pref.example.toml');
     // 运行卷内容从运行容器读取，不直接操作宿主机卷路径。
-    expect(script).toContain('docker compose exec -T subconverter');
+    expect(script).toContain('docker compose --env-file "$SUBWEB_ENV_FILE" "$@"');
+    expect(script).toContain('compose exec -T subconverter');
     expect(script).toContain('sha256sum');
     // 不一致时给出可执行的修复指引而非仅报错。
     expect(script).toContain('subconverter-runtime volume');
