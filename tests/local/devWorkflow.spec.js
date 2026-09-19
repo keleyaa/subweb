@@ -49,7 +49,7 @@ describe('Compose-first local development workflow', () => {
     }
   });
 
-  it('derives locked external image references when creating local Compose state', async () => {
+  it('overrides parent Compose image and MyUrls network exports with local values', async () => {
     const fixture = await mkdtemp(path.join(tmpdir(), 'subweb-local-env-'));
     const fixtureRoot = path.join(fixture, 'repo');
     const scriptDirectory = path.join(fixtureRoot, 'scripts', 'local');
@@ -67,7 +67,21 @@ describe('Compose-first local development workflow', () => {
       ]);
       await Promise.all([
         cp(new URL('../../scripts/local/common.sh', import.meta.url), commonPath),
-        writeFile(runnerPath, '#!/bin/sh\n. "$(dirname "$0")/common.sh"\nprepare_local_environment\n'),
+        writeFile(
+          runnerPath,
+          `#!/bin/sh
+. "$(dirname "$0")/common.sh"
+prepare_local_environment
+printf '%s\\n' \\
+  "REDIS_IMAGE=$REDIS_IMAGE" \\
+  "SUBCONVERTER_IMAGE=$SUBCONVERTER_IMAGE" \\
+  "MYURLS_IMAGE=$MYURLS_IMAGE" \\
+  "MYURLS_NETWORK_SUBNET=$MYURLS_NETWORK_SUBNET" \\
+  "MYURLS_GATEWAY_IP=$MYURLS_GATEWAY_IP" \\
+  "MYURLS_IP=$MYURLS_IP" \\
+  "MYURLS_TRUST_PROXY_CIDR=$MYURLS_TRUST_PROXY_CIDR"
+`,
+        ),
         cp(new URL('../../scripts/runtime-image-contract.mjs', import.meta.url), path.join(fixtureRoot, 'scripts', 'runtime-image-contract.mjs')),
         cp(new URL('../../scripts/verify-version-locks.mjs', import.meta.url), path.join(fixtureRoot, 'scripts', 'verify-version-locks.mjs')),
         cp(new URL('../../deploy/versions.lock.json', import.meta.url), path.join(fixtureRoot, 'deploy', 'versions.lock.json')),
@@ -80,23 +94,50 @@ describe('Compose-first local development workflow', () => {
         chmod(runnerPath, 0o755),
       ]);
 
-      const runPreparation = () => spawnSync('sh', [runnerPath], {
+      const runPreparation = (environment = {}) => spawnSync('sh', [runnerPath], {
         encoding: 'utf8',
         env: {
           ...process.env,
           PATH: `${path.dirname(process.execPath)}:${binaryDirectory}:${process.env.PATH}`,
+          ...environment,
         },
       });
 
-      expect(runPreparation().status).toBe(0);
+      const contaminatedRun = runPreparation({
+        REDIS_IMAGE: 'registry.invalid/redis:parent',
+        SUBCONVERTER_IMAGE: 'registry.invalid/subconverter:parent',
+        MYURLS_IMAGE: 'registry.invalid/myurls:parent',
+        MYURLS_NETWORK_SUBNET: '198.51.100.0/29',
+        MYURLS_GATEWAY_IP: '198.51.100.2',
+        MYURLS_IP: '198.51.100.3',
+        MYURLS_TRUST_PROXY_CIDR: '198.51.100.2/32',
+      });
+      expect(contaminatedRun.status).toBe(0);
+
+      const composeVariables = Object.fromEntries(
+        contaminatedRun.stdout
+          .trim()
+          .split('\n')
+          .map((line) => line.split(/=(.*)/u)),
+      );
+      for (const [name, image] of Object.entries(resolveRuntimeImages(lock))) {
+        expect(composeVariables[name]).toBe(image);
+      }
+      expect(composeVariables).toMatchObject({
+        MYURLS_NETWORK_SUBNET: '172.30.255.0/29',
+        MYURLS_GATEWAY_IP: '172.30.255.2',
+        MYURLS_IP: '172.30.255.3',
+        MYURLS_TRUST_PROXY_CIDR: '172.30.255.2/32',
+      });
+
       const stale = await readFile(localEnvPath, 'utf8');
       await writeFile(localEnvPath, `${stale}REDIS_IMAGE=stale\nSUBCONVERTER_IMAGE=stale\nMYURLS_IMAGE=stale\n`);
       expect(runPreparation().status).toBe(0);
 
-      const environment = await readFile(localEnvPath, 'utf8');
+      const persistedEnvironment = await readFile(localEnvPath, 'utf8');
       for (const [name, image] of Object.entries(resolveRuntimeImages(lock))) {
-        expect(environment.match(new RegExp(`^${name}=`, 'gmu'))).toHaveLength(1);
-        expect(environment).toContain(`${name}=${image}`);
+        expect(persistedEnvironment.match(new RegExp(`^${name}=`, 'gmu'))).toHaveLength(1);
+        expect(persistedEnvironment).toContain(`${name}=${image}`);
       }
     } finally {
       await rm(fixture, { recursive: true, force: true });

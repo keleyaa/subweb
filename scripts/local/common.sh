@@ -8,6 +8,10 @@ local_project_name=${SUBWEB_LOCAL_PROJECT_NAME:-subweb-local}
 local_myurls_port=${LOCAL_MYURLS_PORT:-18082}
 local_subweb_port=${LOCAL_SUBWEB_PORT:-18081}
 local_vite_port=${LOCAL_VITE_PORT:-5173}
+local_myurls_network_subnet=${LOCAL_MYURLS_NETWORK_SUBNET:-172.30.255.0/29}
+local_myurls_gateway_ip=${LOCAL_MYURLS_GATEWAY_IP:-172.30.255.2}
+local_myurls_ip=${LOCAL_MYURLS_IP:-172.30.255.3}
+local_myurls_trust_proxy_cidr=${LOCAL_MYURLS_TRUST_PROXY_CIDR:-$local_myurls_gateway_ip/32}
 
 local_fail() {
   printf 'Local development error: %s\n' "$1" >&2
@@ -34,6 +38,10 @@ prepare_local_environment() {
   export LOCAL_MYURLS_PORT="$local_myurls_port"
   export LOCAL_SUBWEB_PORT="$local_subweb_port"
   export LOCAL_VITE_PORT="$local_vite_port"
+  export MYURLS_NETWORK_SUBNET="$local_myurls_network_subnet"
+  export MYURLS_GATEWAY_IP="$local_myurls_gateway_ip"
+  export MYURLS_IP="$local_myurls_ip"
+  export MYURLS_TRUST_PROXY_CIDR="$local_myurls_trust_proxy_cidr"
 
   mkdir -p "$local_runtime_directory"
   chmod 0700 "$local_runtime_directory"
@@ -64,9 +72,19 @@ prepare_local_environment() {
   runtime_image_env=$(node "$local_project_root/scripts/runtime-image-contract.mjs" env) \
     || local_fail 'unable to resolve locked runtime images.'
   for name in REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE; do
-    printf '%s\n' "$runtime_image_env" | grep -q "^$name=" \
+    [ "$(printf '%s\n' "$runtime_image_env" | grep -c "^$name=")" -eq 1 ] \
       || local_fail 'runtime image contract is incomplete.'
   done
+  local_redis_image=$(printf '%s\n' "$runtime_image_env" | sed -n 's/^REDIS_IMAGE=//p')
+  local_subconverter_image=$(printf '%s\n' "$runtime_image_env" | sed -n 's/^SUBCONVERTER_IMAGE=//p')
+  local_myurls_image=$(printf '%s\n' "$runtime_image_env" | sed -n 's/^MYURLS_IMAGE=//p')
+  [ -n "$local_redis_image" ] \
+    && [ -n "$local_subconverter_image" ] \
+    && [ -n "$local_myurls_image" ] \
+    || local_fail 'runtime image contract is incomplete.'
+  export REDIS_IMAGE="$local_redis_image"
+  export SUBCONVERTER_IMAGE="$local_subconverter_image"
+  export MYURLS_IMAGE="$local_myurls_image"
 
   temporary_env=$local_env_file.tmp.$$
   trap 'rm -f "$temporary_env"' EXIT HUP INT TERM
