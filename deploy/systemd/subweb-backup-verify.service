@@ -5,8 +5,8 @@ After=docker.service subweb-backup.service
 
 [Service]
 Type=oneshot
-User=subweb
-Group=subweb
+User=root
+Group=root
 WorkingDirectory=/opt/subweb
 EnvironmentFile=-/etc/subweb/backup.env
 ExecStart=/bin/sh -eu -c 'latest=$(find "${BACKUP_DIRECTORY:-/var/lib/subweb-backups}" -maxdepth 1 -type f \( -name "subweb-redis-*.rdb" -o -name "subweb-redis-*.rdb.age" \) -printf "%T@ %p\\n" | sort -nr | sed -n "1s/^[^ ]* //p"); [ -n "$latest" ] || { echo "No Redis backup available for verification." >&2; exit 1; }; /opt/subweb/scripts/vps/verify-backup.sh "$latest"'

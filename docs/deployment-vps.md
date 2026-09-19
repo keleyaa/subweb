@@ -10,7 +10,7 @@
 - `/var/lib/subweb-backups`：`subweb:subweb`、`0700`；若使用远端挂载，必须把它放在 `BACKUP_REMOTE_MOUNT` 之下。
 - `/etc/subweb/backup.env`：`root:root`、`0600`，只存备份策略和 age recipient/identity 路径，不存 Redis 密码。
 
-主机安装由 checkout 中的以下命令完成。命令不会生成 `.env`，也不会删除现有 Compose volume：
+主机安装只支持固定根目录 `/opt/subweb`；`SUBWEB_ROOT` 的其他值会被拒绝。安装命令不会生成 `.env`，也不会删除现有 Compose volume。首次安装前，release checkout 中必须已有普通非符号链接的 `.env`；升级可保留既有 `/opt/subweb/.env`：
 
 ```sh
 sudo SUBWEB_SOURCE=/srv/releases/subweb-vX.Y.Z \
@@ -18,11 +18,11 @@ sudo SUBWEB_SOURCE=/srv/releases/subweb-vX.Y.Z \
 sudo /opt/subweb/scripts/vps/check-host.sh
 ```
 
-`install.sh` 创建 `subweb` 系统用户并加入 Docker group，安装 systemd、logrotate 和 Nginx 配置，执行 `systemctl daemon-reload`，但不会自动启动服务。加入 Docker group 后需重新建立 systemd 服务进程的用户会话；systemd unit 使用 `User=subweb`，因此启动前必须确认 `id subweb` 已包含 `docker` group。
+`install.sh` 创建受限的 `subweb` 系统用户来持有 `.env`、运行时状态和备份目录，但绝不授予该长期账户 Docker 访问。Docker Compose 编排仅通过 root-owned 的 hardened systemd units 进行；这些 units 使用 `User=root`，安装 systemd、logrotate 和 Nginx 配置，执行 `systemctl daemon-reload`，但不会自动启动服务。
 
 ## systemd 生命周期
 
-`subweb.service` 是唯一的应用 owner：它调用 `/opt/subweb/scripts/subweb.sh up` 和 `down`，启动失败最多按 systemd 的 `StartLimitBurst=3` 保护，不会执行 `down --volumes`。普通停止、重启和升级均保留 Redis named volume。systemd 管理命令：
+`subweb.service` 是唯一的应用 owner：它作为 root-owned systemd 编排边界调用 `/opt/subweb/scripts/subweb.sh up` 和 `down`，启动失败最多按 systemd 的 `StartLimitBurst=3` 保护，不会执行 `down --volumes`。普通停止、重启和升级均保留 Redis named volume。systemd 管理命令：
 
 ```sh
 sudo systemctl enable --now subweb.service
@@ -36,13 +36,11 @@ sudo journalctl -u subweb.service -n 200 --no-pager
 
 ```sh
 sudo systemctl stop subweb.service
-sudo rsync -a --delete --exclude=.env --exclude=.runtime/ /srv/releases/subweb-vX.Y.Z/ /opt/subweb/
-sudo chown -R root:subweb /opt/subweb
-sudo chown subweb:subweb /opt/subweb/.env
-sudo chmod 0600 /opt/subweb/.env
+sudo SUBWEB_SOURCE=/srv/releases/subweb-vX.Y.Z \
+  /srv/releases/subweb-vX.Y.Z/scripts/vps/install.sh
 sudo /opt/subweb/scripts/vps/check-host.sh
 sudo systemctl start subweb.service
-sudo -u subweb sh -c 'cd /opt/subweb && npm run verify:integration'
+sudo sh -c 'cd /opt/subweb && npm run verify:integration'
 ```
 
 若新版本启动失败，保留旧 checkout 和 Redis volume，停止服务并把 `/opt/subweb` 恢复到上一个已验证 release；不要删除 volume 或重写 RDB。`subweb.sh upgrade` 的失败输出必须先被记录，再按 [维护与验证](maintenance.md) 的恢复边界处理。
@@ -74,7 +72,7 @@ sudo journalctl -u subweb-backup.service -u subweb-backup-verify.service --since
 恢复演练是非破坏性的 RDB 加载验证；真正恢复生产数据仍需显式停止写入并运行：
 
 ```sh
-sudo -u subweb /opt/subweb/scripts/subweb.sh restore \
+sudo /opt/subweb/scripts/subweb.sh restore \
   --backup /var/lib/subweb-backups/subweb-redis-YYYYMMDDTHHMMSSZ.rdb \
   --confirm-stop-writes
 ```
@@ -83,7 +81,7 @@ sudo -u subweb /opt/subweb/scripts/subweb.sh restore \
 
 ## 日志、磁盘和外部 TLS
 
-Compose 已为所有服务固定 `json-file`：每个容器 `10m`、最多 `3` 个文件。主机层的 `/etc/logrotate.d/subweb` 仅轮转可选的 `/var/log/subweb/*.log`，不直接操作 Docker 数据目录。管理员必须监控 `/var/lib/docker` 和备份文件系统；`check-host.sh` 默认要求 `/opt/subweb` 所在文件系统至少有 10 GiB 可用空间，可用 `MIN_FREE_KIB` 调整但不应低于发布容量需求。
+Compose 已为所有服务固定 `json-file`：每个容器 `10m`、最多 `3` 个文件。主机层的 `/etc/logrotate.d/subweb` 仅轮转可选的 `/var/log/subweb/*.log`，不直接操作 Docker 数据目录。管理员必须监控 `/var/lib/docker` 和备份文件系统；`check-host.sh` 默认检查 `/opt/subweb`，也会从 `SUBWEB_ROOT` 读取显式检查根目录。它要求该文件系统至少有 10 GiB 可用空间；`MIN_FREE_KIB` 只接受非负十进制整数，调整后不应低于发布容量需求。
 
 Nginx 模板位于 [`deploy/nginx/subweb.conf`](../deploy/nginx/subweb.conf)，只代理到 `127.0.0.1:18080`，保留 Host 和转发链，并把 HTTP 重定向到 HTTPS。启用前替换三个域名和证书路径，并按实际代理网段配置 `TRUSTED_PROXY_CIDR`；不要把容器端口绑定到公网。
 
@@ -97,8 +95,8 @@ sudo systemctl reload nginx
 
 1. DNS 已指向 VPS，SSH 仅允许密钥认证，防火墙只开放 SSH、80、443。
 2. Docker Engine、Compose v2、Node.js 24+、Nginx、systemd、`age`（若加密）和 `rsync` 已安装。`configure.sh` 必须先用本机 Node 校验 `deploy/versions.lock.json` 并生成受管 runtime 镜像设置，缺少或版本过低时会在请求 Turnstile Secret Key 前停止。
-3. `SUBWEB_SOURCE` 来自已审查的 release，Gateway 使用 release 对应的不可变 manifest digest。
-4. `.env` 已由 `configure.sh` 生成并通过 `check-host.sh` 的普通文件/`0600` 检查。
+3. `SUBWEB_SOURCE` 来自已审查且不含符号链接或运行时状态目录的 release，Gateway 使用 release 对应的不可变 manifest digest。
+4. `.env` 已由 `configure.sh` 生成，作为普通非符号链接文件存在于 release 或现有安装中，并通过 `check-host.sh` 的 `0600` 检查。
 5. Nginx `nginx -t`、`scripts/subweb.sh verify`、systemd status 和三域名 HTTPS smoke 均通过。
 6. 备份 timer、验证 timer、磁盘监控和证书续期监控均已启用。
 

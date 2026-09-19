@@ -9,8 +9,8 @@ StartLimitBurst=3
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-User=subweb
-Group=subweb
+User=root
+Group=root
 WorkingDirectory=/opt/subweb
 ExecStart=/opt/subweb/scripts/subweb.sh up
 ExecStop=/opt/subweb/scripts/subweb.sh down
