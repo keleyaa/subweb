@@ -16,8 +16,25 @@ const createFixture = async (composeJson, shortLinksEnabled = 'true') => {
   await writeFile(dockerPath, `#!/bin/sh
 printf '%s\\n' "$*" >> "$DOCKER_CALL_LOG"
 case "$*" in
-  'compose -f '*" config --quiet" | 'compose --env-file '*" config --quiet") exit 0 ;;
-  'compose -f '*" config --format json" | 'compose --env-file '*" config --format json") cat "$COMPOSE_JSON_FIXTURE" ;;
+  *'config --quiet') exit 0 ;;
+  *'config --format json')
+    if [ "\${CAPTURE_VALIDATION_ENV_FILE-}" = 1 ]; then
+      environment_file=
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          --env-file) environment_file=$2; shift 2 ;;
+          *) shift ;;
+        esac
+      done
+      [ -n "$environment_file" ] || exit 92
+      [ -z "\${REDIS_IMAGE-}" ] && [ -z "\${SUBCONVERTER_IMAGE-}" ] && [ -z "\${MYURLS_IMAGE-}" ] || exit 93
+      grep -qx "REDIS_IMAGE=$LOCKED_REDIS_IMAGE" "$environment_file" || exit 94
+      grep -qx "SUBCONVERTER_IMAGE=$LOCKED_SUBCONVERTER_IMAGE" "$environment_file" || exit 95
+      grep -qx "MYURLS_IMAGE=$LOCKED_MYURLS_IMAGE" "$environment_file" || exit 96
+      cp "$environment_file" "$COMPOSE_ENV_CAPTURE"
+    fi
+    cat "$COMPOSE_JSON_FIXTURE"
+    ;;
   *) exit 91 ;;
 esac
 `);
@@ -157,8 +174,40 @@ describe('unified Compose validation', () => {
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(await readFile(fixture.env.DOCKER_CALL_LOG, 'utf8')).toContain(
-      'compose -f compose.disabled-short-links.yaml config --format json',
+      'compose -f compose.disabled-short-links.yaml --env-file',
     );
+  });
+
+  it('derives locked runtime images over stale existing environment values without changing .env', async () => {
+    const fixture = await createFixture(validCompose);
+    const originalEnvironment = await readFile(fixture.envPath, 'utf8');
+    const staleImageEnvironment = `${originalEnvironment}REDIS_IMAGE=redis:latest\nSUBCONVERTER_IMAGE=registry.example/subconverter:latest\nMYURLS_IMAGE=registry.example/myurls:latest\n`;
+    const capturePath = join(fixture.directory, 'validation.env');
+    await writeFile(fixture.envPath, staleImageEnvironment);
+
+    const result = spawnSync('sh', [validatorPath], {
+      cwd: fixture.directory,
+      encoding: 'utf8',
+      env: {
+        ...fixture.env,
+        CAPTURE_VALIDATION_ENV_FILE: '1',
+        COMPOSE_ENV_CAPTURE: capturePath,
+        LOCKED_REDIS_IMAGE: validCompose.services.redis.image,
+        LOCKED_SUBCONVERTER_IMAGE: validCompose.services.subconverter.image,
+        LOCKED_MYURLS_IMAGE: validCompose.services.myurls.image,
+        REDIS_IMAGE: 'registry.example/attacker-redis:latest',
+        SUBCONVERTER_IMAGE: 'registry.example/attacker-subconverter:latest',
+        MYURLS_IMAGE: 'registry.example/attacker-myurls:latest',
+      },
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(await readFile(fixture.envPath, 'utf8')).toBe(staleImageEnvironment);
+    const validationEnvironment = await readFile(capturePath, 'utf8');
+    expect(validationEnvironment).toContain(`REDIS_IMAGE=${validCompose.services.redis.image}\n`);
+    expect(validationEnvironment).toContain(`SUBCONVERTER_IMAGE=${validCompose.services.subconverter.image}\n`);
+    expect(validationEnvironment).toContain(`MYURLS_IMAGE=${validCompose.services.myurls.image}\n`);
+    expect(validationEnvironment).not.toContain('attacker-');
   });
 
   it('rejects a four-service topology whose rendered Gateway disables short links', async () => {

@@ -41,6 +41,7 @@ describe('Compose-first local development workflow', () => {
     expect(vite).toContain("'/short-api'");
     expect(verifier).toContain('/short-api/links');
     expect(verifier).toContain('LOCAL_SUBWEB_PORT="$local_subweb_port"');
+    expect(verifier).toContain('REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE');
     expect(verifier).toContain('--connect-timeout');
     expect(verifier).toContain('--max-time');
     for (const source of [start, dependencies]) {

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmod, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -85,17 +85,17 @@ describe('production command configuration contract', () => {
     expect(await readDockerLog(root)).toBe('');
   });
 
-  it('allows non-install commands to proceed with a private regular environment file', async () => {
+  it('resolves a relative private environment path before changing directories', async () => {
     const root = await makeFixture();
     const envFile = join(root, 'private.env');
     await writeFile(envFile, 'SHORT_LINKS_ENABLED=false\n', { mode: 0o600 });
 
-    const result = run(root, 'status', { SUBWEB_ENV_FILE: envFile });
+    const result = run(root, 'status', { SUBWEB_ENV_FILE: 'private.env' });
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(await readDockerLog(root)).toBe([
       'compose version',
-      `compose --env-file ${envFile} -f compose.disabled-short-links.yaml ps`,
+      `compose --env-file ${await realpath(envFile)} -f compose.disabled-short-links.yaml ps`,
       '',
     ].join('\n'));
   });

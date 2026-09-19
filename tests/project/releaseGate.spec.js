@@ -6,6 +6,8 @@ import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { verifyEvidence } from '../../scripts/verify-evidence.mjs';
 import {
+  dockerComposeConfigTimeoutMs,
+  runDockerComposeConfig,
   verifyDockerfile,
   verifyRenderedCompose,
 } from '../../scripts/verify-production-readiness.mjs';
@@ -142,6 +144,34 @@ describe('release evidence and command gate', () => {
     expect(`${result.stdout}${result.stderr}`).toContain(
       'compose.disabled-short-links.yaml',
     );
+  });
+
+  it.each([
+    [
+      'times out',
+      { error: Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' }), status: null },
+      `docker compose config timed out after ${dockerComposeConfigTimeoutMs}ms`,
+    ],
+    [
+      'returns a nonzero status',
+      { status: 17, stderr: 'invalid Compose file', stdout: '' },
+      'docker compose config failed with exit status 17: invalid Compose file',
+    ],
+  ])('reports clearly when docker compose config %s', (_name, result, message) => {
+    const calls = [];
+    const spawn = (...argumentsList) => {
+      calls.push(argumentsList);
+      return result;
+    };
+
+    expect(() => runDockerComposeConfig(spawn, {
+      composeFile: 'compose.yaml',
+      cwd: root,
+      envFile: '/tmp/subweb-compose.env',
+      environment: {},
+    })).toThrow(message);
+    expect(calls).toHaveLength(1);
+    expect(calls[0][2]).toMatchObject({ timeout: dockerComposeConfigTimeoutMs });
   });
 
   it('rejects a security override in the rendered Compose profile', () => {

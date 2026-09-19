@@ -17,6 +17,7 @@ const releaseDigest = '0123456789abcdef0123456789abcdef0123456789abcdef012345678
 const dockerHubImage = `docker.io/keleyaa/subweb@sha256:${releaseDigest}`;
 const ghcrImage = `ghcr.io/keleyaa/subweb@sha256:${releaseDigest}`;
 const registryPortImage = `registry.example:5000/repository@sha256:${releaseDigest}`;
+const taggedDigestImage = `docker.io/keleyaa/subweb:sha-2bf1a9f@sha256:${releaseDigest}`;
 const immutableDigestError = 'Docker deployment error: --image must use an immutable sha256 digest.\n';
 const disabledProfileImage = `ghcr.io/keleyaa/subweb@sha256:${'1'.repeat(64)}`;
 const composeInterpolationVariables = [
@@ -169,13 +170,13 @@ case "$*" in
      printf 'sha256:%s' "\${DOCKER_RELEASE_DIGEST-}"
     ;;
   'compose version') exit 0 ;;
-  'compose -f compose.yaml config --quiet') exit 0 ;;
-   'compose -f compose.yaml config --format json')
+  'compose -f compose.yaml --env-file '*" config --quiet") exit 0 ;;
+   'compose -f compose.yaml --env-file '*" config --format json")
       render_compose "$COMPOSE_JSON_ENABLED"
       ;;
   'compose -f compose.yaml pull gateway subconverter myurls redis') exit "\${DOCKER_PULL_STATUS:-0}" ;;
-   'compose -f compose.disabled-short-links.yaml config --quiet') exit 0 ;;
-    'compose -f compose.disabled-short-links.yaml config --format json')
+   'compose -f compose.disabled-short-links.yaml --env-file '*" config --quiet") exit 0 ;;
+    'compose -f compose.disabled-short-links.yaml --env-file '*" config --format json")
       render_compose "$COMPOSE_JSON_DISABLED"
       ;;
   'compose -f compose.disabled-short-links.yaml pull gateway subconverter') exit "\${DOCKER_PULL_STATUS:-0}" ;;
@@ -277,22 +278,22 @@ describe('Docker image quick deployment', () => {
      expect(environment).toContain('REDIS_IMAGE=docker.io/library/redis:7.4.11-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7\n');
      expect(environment).toContain('SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423\n');
      expect(environment).toContain('MYURLS_IMAGE=ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36\n');
-     expect(await readFile(join(root, 'docker.log'), 'utf8')).toBe([
+    const dockerLog = await readFile(join(root, 'docker.log'), 'utf8');
+    expect(dockerLog.trim().split('\n')).toEqual([
       'compose version',
-      'compose -f compose.yaml config --quiet',
-      'compose -f compose.yaml config --format json',
+      expect.stringMatching(/^compose -f compose\.yaml --env-file .+ config --quiet$/u),
+      expect.stringMatching(/^compose -f compose\.yaml --env-file .+ config --format json$/u),
       'compose -f compose.yaml pull gateway subconverter myurls redis',
       'compose -f compose.yaml up -d --no-build --pull never --remove-orphans --wait',
       'compose -f compose.yaml ps',
-      '',
-    ].join('\n'));
+    ]);
   });
 
   it.each([
     ['with short links enabled', []],
     ['with short links disabled', ['--disable-short-links']],
   ])('renders each direct digest %s without release resolution', async (_profile, profileArgs) => {
-    const directImages = [dockerHubImage, ghcrImage, registryPortImage];
+    const directImages = [dockerHubImage, ghcrImage, registryPortImage, taggedDigestImage];
 
     for (const image of directImages) {
       const root = await makeFixture();
@@ -483,7 +484,7 @@ EOF
   it.each([
     ['sha tag', 'docker.io/keleyaa/subweb:sha-2bf1a9f'],
     ['latest tag', 'docker.io/keleyaa/subweb:latest'],
-    ['tagged digest', `docker.io/keleyaa/subweb:sha-2bf1a9f@sha256:${releaseDigest}`],
+    ['malformed registry port', `registry.example:not-a-port/repository@sha256:${releaseDigest}`],
     ['registry port 0', `registry.example:0/repository@sha256:${releaseDigest}`],
     ['registry port 65536', `registry.example:65536/repository@sha256:${releaseDigest}`],
   ])('rejects a %s before reading Turnstile input or starting deployment', async (_kind, image) => {
