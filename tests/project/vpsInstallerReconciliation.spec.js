@@ -460,8 +460,8 @@ exec /bin/cp "$@"
     expect(installer).toContain('"$SOURCE_DIRECTORY/deploy/systemd/subweb.service"');
     expect(installer).toContain('"$SOURCE_DIRECTORY/nginx/snippets/security-headers.conf"');
     expect(installer).toContain('"$SOURCE_DIRECTORY/deploy/logrotate/subweb.conf"');
-    expect(installer).toContain('reconcile_release_abort >/dev/null 2>&1 || true');
-    expect(installer).toContain('resume_paused_release_timers >/dev/null 2>&1 || true');
+    expect(installer).toContain("unable to restore the previous release");
+    expect(installer).toContain("unable to restore backup timers");
     expect(installer.lastIndexOf('reconcile_preflight_host_assets')).toBeLessThan(
       installer.lastIndexOf('reconcile_release_tree'),
     );

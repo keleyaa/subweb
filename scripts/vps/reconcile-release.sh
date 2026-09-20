@@ -267,6 +267,14 @@ reconcile_release_abort() {
   return "$reconcile_abort_status"
 }
 
+reconcile_release_abort_with_report() {
+  if reconcile_release_abort; then
+    return 0
+  fi
+  printf 'VPS release rollback failed; manual recovery is required.\n' >&2
+  return 1
+}
+
 reconcile_release_tree() {
   reconcile_source=$1
   reconcile_target=$2
@@ -296,19 +304,19 @@ reconcile_release_tree() {
     && reconcile_copy_runtime_state "$reconcile_source" "$reconcile_target" "$RECONCILE_RELEASE_STAGE" \
     && reconcile_tree_is_safe "$RECONCILE_RELEASE_STAGE" \
     && reconcile_validate_runtime_state "$RECONCILE_RELEASE_STAGE" || {
-      reconcile_release_abort || true
-      return 1
+reconcile_release_abort_with_report || true
+       return 1
     }
 
   if [ -e "$reconcile_target" ]; then
     reconcile_paths_share_filesystem "$reconcile_target" "$RECONCILE_RELEASE_STAGE" || {
-      reconcile_release_abort || true
-      return 1
+reconcile_release_abort_with_report || true
+       return 1
     }
   else
     reconcile_paths_share_filesystem "$reconcile_target_parent" "$RECONCILE_RELEASE_STAGE" || {
-      reconcile_release_abort || true
-      return 1
+reconcile_release_abort_with_report || true
+       return 1
     }
   fi
 
@@ -316,26 +324,26 @@ reconcile_release_tree() {
   if systemctl is-active --quiet subweb.service; then
     RECONCILE_RELEASE_SERVICE_WAS_ACTIVE=1
     systemctl stop subweb.service || {
-      reconcile_release_abort || true
-      return 1
+reconcile_release_abort_with_report || true
+       return 1
     }
   fi
 
   if [ -e "$reconcile_target" ]; then
     RECONCILE_RELEASE_OLD=$(reconcile_create_work_path "$reconcile_target_parent" "$reconcile_target_name" old) || {
-      reconcile_release_abort || true
-      return 1
+reconcile_release_abort_with_report || true
+       return 1
     }
     mv "$reconcile_target" "$RECONCILE_RELEASE_OLD" || {
-      reconcile_release_abort || true
-      return 1
+reconcile_release_abort_with_report || true
+       return 1
     }
     RECONCILE_RELEASE_OLD_IS_TREE=1
   fi
 
   mv "$RECONCILE_RELEASE_STAGE" "$reconcile_target" || {
-    reconcile_release_abort || true
-    return 1
+reconcile_release_abort_with_report || true
+       return 1
   }
   RECONCILE_RELEASE_STAGE=''
   RECONCILE_RELEASE_NEW_TREE_LIVE=1

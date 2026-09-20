@@ -123,10 +123,22 @@ cleanup_installation() {
   cleanup_status=$1
   trap - 0 HUP INT TERM
   if [ "$INSTALLATION_COMMITTED" -eq 0 ]; then
-    reconcile_restore_host_assets >/dev/null 2>&1 || true
-    systemctl daemon-reload >/dev/null 2>&1 || true
-    reconcile_release_abort >/dev/null 2>&1 || true
-    resume_paused_release_timers >/dev/null 2>&1 || true
+    if ! reconcile_restore_host_assets >/dev/null 2>&1; then
+      printf 'VPS install rollback failed: unable to restore host assets.\n' >&2
+      cleanup_status=1
+    fi
+    if ! systemctl daemon-reload >/dev/null 2>&1; then
+      printf 'VPS install rollback failed: unable to reload systemd.\n' >&2
+      cleanup_status=1
+    fi
+    if ! reconcile_release_abort >/dev/null 2>&1; then
+      printf 'VPS install rollback failed: unable to restore the previous release.\n' >&2
+      cleanup_status=1
+    fi
+    if ! resume_paused_release_timers >/dev/null 2>&1; then
+      printf 'VPS install rollback failed: unable to restore backup timers.\n' >&2
+      cleanup_status=1
+    fi
   fi
   reconcile_discard_host_asset_snapshot >/dev/null 2>&1 || true
   return "$cleanup_status"
