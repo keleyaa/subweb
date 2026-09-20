@@ -190,6 +190,12 @@ describe('VPS runtime contract', () => {
      expect(installer).not.toContain('chown -R');
     expect(installer).not.toContain('usermod -aG docker subweb');
     expect(installer).toContain('systemctl daemon-reload');
+    expect(installer).toContain('reconcile_snapshot_managed_unit_enablement');
+    expect(installer).toContain('reconcile_restore_managed_unit_enablement');
+    expect(installer.indexOf('reconcile_snapshot_managed_unit_enablement || fail')).toBeLessThan(
+      installer.indexOf('systemctl enable subweb.service'),
+    );
+    expect(installer).toContain('VPS install rollback failed: unable to restore unit enablement.');
     expect(installer).toContain('systemctl enable subweb.service');
     expect(documentation).not.toContain('Docker group');
   });
@@ -298,6 +304,21 @@ esac
       { PATH: `${fixture}:${process.env.PATH}`, FINDMNT_MODE: 'mounted', BACKUP_MOUNT_PATH: mountPath },
     );
     expect(mountedResult.status, `${mountedResult.stdout}\n${mountedResult.stderr}`).toBe(0);
+  });
+
+  it('preserves the prior-service recovery state until release commit succeeds', async () => {
+    const reconcile = await read('scripts/vps/reconcile-release.sh');
+
+    const startFunction = reconcile.slice(
+      reconcile.indexOf('reconcile_release_start_prior_service() {'),
+      reconcile.indexOf('reconcile_release_commit() {'),
+    );
+    expect(startFunction).not.toContain('RECONCILE_RELEASE_SERVICE_WAS_ACTIVE=0');
+    const commitFunction = reconcile.slice(
+      reconcile.indexOf('reconcile_release_commit() {'),
+      reconcile.indexOf('reconcile_release_abort() {'),
+    );
+    expect(commitFunction).toContain('RECONCILE_RELEASE_SERVICE_WAS_ACTIVE=0');
   });
 
   it('reconciles release files while preserving deployment state and rejecting symlinks', async () => {

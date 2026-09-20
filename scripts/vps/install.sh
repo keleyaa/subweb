@@ -53,6 +53,7 @@ id subweb >/dev/null 2>&1 || useradd --system --gid subweb --home-dir "$TARGET_D
 
 HOST_ASSET_BACKUP=''
 HOST_ASSET_MANIFEST=''
+UNIT_ENABLEMENT_SNAPSHOT=''
 INSTALLATION_COMMITTED=0
 
 reconcile_host_assets() {
@@ -72,6 +73,32 @@ reconcile_preflight_host_assets() {
     [ ! -e "$host_asset_target" ] && [ ! -L "$host_asset_target" ] && continue
     [ -f "$host_asset_target" ] && [ ! -L "$host_asset_target" ] || return 1
   done
+}
+
+reconcile_managed_units() {
+  printf '%s\n' subweb.service subweb-backup.timer subweb-backup-verify.timer
+}
+
+reconcile_snapshot_managed_unit_enablement() {
+  UNIT_ENABLEMENT_SNAPSHOT="$HOST_ASSET_BACKUP/unit-enablement"
+  reconcile_managed_units | while IFS= read -r managed_unit; do
+    if systemctl is-enabled --quiet "$managed_unit"; then
+      printf 'enabled|%s\n' "$managed_unit" >> "$UNIT_ENABLEMENT_SNAPSHOT" || return 1
+    else
+      printf 'disabled|%s\n' "$managed_unit" >> "$UNIT_ENABLEMENT_SNAPSHOT" || return 1
+    fi
+  done
+}
+
+reconcile_restore_managed_unit_enablement() {
+  [ -n "$UNIT_ENABLEMENT_SNAPSHOT" ] && [ -f "$UNIT_ENABLEMENT_SNAPSHOT" ] || return 0
+  while IFS='|' read -r unit_enablement managed_unit; do
+    case "$unit_enablement" in
+      enabled) systemctl enable "$managed_unit" || return 1 ;;
+      disabled) systemctl disable "$managed_unit" || return 1 ;;
+      *) return 1 ;;
+    esac
+  done < "$UNIT_ENABLEMENT_SNAPSHOT"
 }
 
 reconcile_snapshot_host_assets() {
@@ -131,6 +158,10 @@ cleanup_installation() {
       printf 'VPS install rollback failed: unable to reload systemd.\n' >&2
       cleanup_status=1
     fi
+    if ! reconcile_restore_managed_unit_enablement >/dev/null 2>&1; then
+      printf 'VPS install rollback failed: unable to restore unit enablement.\n' >&2
+      cleanup_status=1
+    fi
     if ! reconcile_release_abort >/dev/null 2>&1; then
       printf 'VPS install rollback failed: unable to restore the previous release.\n' >&2
       cleanup_status=1
@@ -155,6 +186,7 @@ reconcile_preflight_host_assets || fail 'selected release host assets are missin
 trap 'cleanup_installation "$?"' 0
 trap 'exit 1' HUP INT TERM
 reconcile_snapshot_host_assets || fail 'unable to snapshot existing host assets.'
+reconcile_snapshot_managed_unit_enablement || fail 'unable to snapshot unit enablement.'
 pause_enabled_release_timers \
   || fail 'unable to pause enabled backup or verification timers.'
 install -d -o subweb -g subweb -m 0700 /var/lib/subweb-backups

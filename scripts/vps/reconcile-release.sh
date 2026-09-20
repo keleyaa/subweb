@@ -276,8 +276,7 @@ reconcile_restore_prior_service() {
 }
 
 reconcile_release_start_prior_service() {
-  reconcile_restore_prior_service || return 1
-  RECONCILE_RELEASE_SERVICE_WAS_ACTIVE=0
+  reconcile_restore_prior_service
 }
 
 reconcile_release_commit() {

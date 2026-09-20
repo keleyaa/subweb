@@ -131,16 +131,19 @@ if [ -n "$AGE_RECIPIENT" ]; then
   age -r "$AGE_RECIPIENT" -o "$final_temporary" "$raw_file" \
     || fail 'age encryption failed.'
 else
-  mv "$raw_file" "$final_temporary"
+  cat "$raw_file" > "$final_temporary" \
+    || fail 'unable to prepare the unencrypted backup artifact.'
 fi
-validate_backup_destination
-mv "$final_temporary" "$final_file"
+[ -f "$final_temporary" ] && [ ! -L "$final_temporary" ] \
+  || fail 'backup artifact must be a regular file.'
+chmod 0600 "$final_temporary" \
+  || fail 'unable to protect the backup artifact.'
 
 if command -v sha256sum >/dev/null 2>&1; then
-  sha256sum "$final_file" >"$checksum_temporary" \
+  sha256sum "$final_temporary" >"$checksum_temporary" \
     || fail 'unable to calculate backup checksum.'
 elif command -v shasum >/dev/null 2>&1; then
-  shasum -a 256 "$final_file" >"$checksum_temporary" \
+  shasum -a 256 "$final_temporary" >"$checksum_temporary" \
     || fail 'unable to calculate backup checksum.'
 else
   fail 'sha256sum or shasum is required to calculate backup checksum.'
@@ -149,10 +152,14 @@ checksum_value=$(awk 'NR == 1 { print $1 }' "$checksum_temporary")
 printf '%s\n' "$checksum_value" | LC_ALL=C grep -Eq '^[0-9a-fA-F]{64}$' \
   || fail 'backup checksum tool returned an invalid SHA-256 digest.'
 printf '%s  %s\n' "$checksum_value" "$final_file" >"$checksum_temporary"
+chmod 0600 "$checksum_temporary" \
+  || fail 'unable to protect the backup checksum.'
+
+validate_backup_destination
+mv "$final_temporary" "$final_file"
 validate_backup_destination
 mv "$checksum_temporary" "$checksum_file"
 validate_backup_destination
-chmod 0600 "$final_file" "$checksum_file"
 
 validate_backup_destination
 # Debian 12 and Ubuntu 24.04 provide GNU findutils and Coreutils NUL-record support.
@@ -169,8 +176,22 @@ tail -z -n "+$((BACKUP_RETENTION + 1))" <"$retention_sorted" >"$retention_stale_
   || fail 'unable to select expired backups.'
 cut -z -d ' ' -f 2- <"$retention_stale_records" >"$retention_stale_paths" \
   || fail 'unable to extract expired backup paths.'
-xargs -0 -r -n 1 sh -c 'rm -f -- "$1" "$1.sha256"' sh <"$retention_stale_paths" \
-  || fail 'unable to remove expired backups.'
+if [ -n "$BACKUP_REMOTE_MOUNT" ]; then
+  xargs -0 -r -n 1 sh -c '
+    mount_path=$1
+    expected_mount_identity=$2
+    backup_path=$3
+    source=$(findmnt -rn --mountpoint "$mount_path" -o SOURCE 2>/dev/null) || exit 1
+    fstype=$(findmnt -rn --mountpoint "$mount_path" -o FSTYPE 2>/dev/null) || exit 1
+    device=$(findmnt -rn --mountpoint "$mount_path" -o MAJ:MIN 2>/dev/null) || exit 1
+    [ "$source|$fstype|$device" = "$expected_mount_identity" ] || exit 1
+    rm -f -- "$backup_path" "$backup_path.sha256"
+  ' sh "$BACKUP_REMOTE_MOUNT" "$backup_expected_mount_identity" <"$retention_stale_paths" \
+    || fail 'BACKUP_REMOTE_MOUNT changed before retained backups could be removed.'
+else
+  xargs -0 -r -n 1 sh -c 'rm -f -- "$1" "$1.sha256"' sh <"$retention_stale_paths" \
+    || fail 'unable to remove expired backups.'
+fi
 
 completed=1
 printf 'Encrypted/off-host Redis backup retained: %s\n' "$final_file"

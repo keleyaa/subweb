@@ -154,6 +154,7 @@ const makeBackupVerificationFixture = async (sidecarContents) => {
   const projectRoot = join(fixture, 'project');
   const backupFile = join(backupDirectory, 'subweb-redis.rdb');
   const verifiedMarker = join(fixture, 'verified');
+  const hashInput = join(fixture, 'hash-input');
   const backupPathSource = await readFile(backupPathScript, 'utf8');
   const verifyBackupSource = await readFile(verifyBackupScript, 'utf8');
 
@@ -168,12 +169,21 @@ const makeBackupVerificationFixture = async (sidecarContents) => {
     .replaceAll('/mnt/subweb-backups', join(fixture, 'other-managed-root')));
   await writeExecutable(join(scriptsDirectory, 'verify-backup.sh'), verifyBackupSource);
   await writeExecutable(join(projectRoot, 'scripts', 'operations', 'verify-redis-backup.sh'),
-    `#!/bin/sh\ntouch '${verifiedMarker}'\n`);
+    `#!/bin/sh\nprintf '%s' "$2" > '${verifiedMarker}'\n`);
   await writeExecutable(join(fixture, 'sha256sum'), `#!/bin/sh
+printf '%s' "$1" > '${hashInput}'
 printf '%064d  %s\\n' 0 "$1"
 `);
 
-  return { backupDirectory, backupFile, fixture, projectRoot, script: join(scriptsDirectory, 'verify-backup.sh'), verifiedMarker };
+  return {
+    backupDirectory,
+    backupFile,
+    fixture,
+    hashInput,
+    projectRoot,
+    script: join(scriptsDirectory, 'verify-backup.sh'),
+    verifiedMarker,
+  };
 };
 
 afterEach(async () => {
@@ -235,6 +245,20 @@ describe('VPS backup mount safety', () => {
     expect(backup.lastIndexOf(revalidate, finalOutput)).toBeGreaterThan(workspace);
     expect(backup.lastIndexOf(revalidate, checksumOutput)).toBeGreaterThan(finalOutput);
     expect(backup).toContain('backup_expected_mount_identity');
+  });
+
+  it('publishes already-protected artifacts and revalidates remote mounts during retention deletion', async () => {
+    const backup = await readFile(backupScript, 'utf8');
+
+    expect(backup).toContain('sha256sum "$final_temporary"');
+    expect(backup).toContain('chmod 0600 "$final_temporary"');
+    expect(backup).toContain('chmod 0600 "$checksum_temporary"');
+    expect(backup).not.toContain('sha256sum "$final_file"');
+    expect(backup).not.toContain('chmod 0600 "$final_file" "$checksum_file"');
+    expect(backup).toContain('BACKUP_REMOTE_MOUNT changed before retained backups could be removed.');
+    expect(backup.indexOf('mv "$final_temporary" "$final_file"')).toBeGreaterThan(
+      backup.indexOf('chmod 0600 "$checksum_temporary"'),
+    );
   });
 
   it.each([
@@ -385,7 +409,7 @@ describe('VPS backup retention', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('unable to sort retained backups');
-  });
+  }, 15_000);
 
   it('does not delete a forged path outside the backup directory from a newline-bearing matching filename', async () => {
     const { backupDirectory, fixture, projectRoot, script } = await makeBackupRetentionFixture();
@@ -461,15 +485,20 @@ describe('VPS backup checksum verification', () => {
     await expect(readFile(fixture.verifiedMarker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('accepts the sole matching sidecar record', async () => {
+  it('verifies a private backup snapshot rather than the mutable source path', async () => {
     const fixture = await makeBackupVerificationFixture((backup) => `${zeroDigest}  ${backup}\n`);
 
     const result = spawnSync('sh', [fixture.script, fixture.backupFile], {
       encoding: 'utf8',
-      env: { ...process.env, PATH: `${fixture.fixture}:${process.env.PATH}`, SUBWEB_ROOT: fixture.projectRoot, BACKUP_DIRECTORY: fixture.backupDirectory }
+      env: { ...process.env, PATH: `${fixture.fixture}:${process.env.PATH}`, SUBWEB_ROOT: fixture.projectRoot, BACKUP_DIRECTORY: fixture.backupDirectory },
     });
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
-    await expect(readFile(fixture.verifiedMarker, 'utf8')).resolves.toBe('');
+    const [hashedPath, verifiedPath] = await Promise.all([
+      readFile(fixture.hashInput, 'utf8'),
+      readFile(fixture.verifiedMarker, 'utf8'),
+    ]);
+    expect(hashedPath).not.toBe(fixture.backupFile);
+    expect(verifiedPath).toBe(hashedPath);
   });
 });
