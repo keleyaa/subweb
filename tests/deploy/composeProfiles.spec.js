@@ -14,34 +14,28 @@ const createFixture = async (composeJson, shortLinksEnabled = 'true') => {
   await (await import('node:fs/promises')).mkdir(binDirectory);
   const dockerPath = join(binDirectory, 'docker');
   await writeFile(dockerPath, `#!/bin/sh
-printf '%s\\n' "$*" >> "$DOCKER_CALL_LOG"
+set -eu
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+printf '%s\\n' "$*" >> "$root/docker-calls.log"
 case "$*" in
   *'config --quiet') exit 0 ;;
   *'config --format json')
-    if [ "\${CAPTURE_VALIDATION_ENV_FILE-}" = 1 ]; then
-      environment_file=
-      while [ "$#" -gt 0 ]; do
-        case "$1" in
-          --env-file) environment_file=$2; shift 2 ;;
-          *) shift ;;
-        esac
-      done
-      [ -n "$environment_file" ] || exit 92
-      [ -z "\${REDIS_IMAGE-}" ] && [ -z "\${SUBCONVERTER_IMAGE-}" ] && [ -z "\${MYURLS_IMAGE-}" ] || exit 93
-      grep -qx "REDIS_IMAGE=$LOCKED_REDIS_IMAGE" "$environment_file" || exit 94
-      grep -qx "SUBCONVERTER_IMAGE=$LOCKED_SUBCONVERTER_IMAGE" "$environment_file" || exit 95
-      grep -qx "MYURLS_IMAGE=$LOCKED_MYURLS_IMAGE" "$environment_file" || exit 96
-      if [ "\${PRESERVE_DOCKER_ENV-}" = 1 ]; then
-        [ "\${PATH-}" = "$EXPECTED_DOCKER_PATH" ] || exit 97
-        [ "\${DOCKER_HOST-}" = "$EXPECTED_DOCKER_HOST" ] || exit 98
-      fi
-      cp "$environment_file" "$COMPOSE_ENV_CAPTURE"
-    fi
-    cat "$COMPOSE_JSON_FIXTURE"
+    environment_file=
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --env-file) environment_file=$2; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    [ -n "$environment_file" ] || exit 92
+    [ -z "\${REDIS_IMAGE-}" ] && [ -z "\${SUBCONVERTER_IMAGE-}" ] && [ -z "\${MYURLS_IMAGE-}" ] || exit 93
+    if [ -f "$root/capture-validation-env" ]; then cp "$environment_file" "$root/validation.env"; fi
+    cat "$root/compose.json"
     ;;
   *) exit 91 ;;
 esac
 `);
+  await (await import('node:fs/promises')).chmod(dockerPath, 0o755);
   await (await import('node:fs/promises')).chmod(dockerPath, 0o755);
   const jsonPath = join(directory, 'compose.json');
   await writeFile(jsonPath, JSON.stringify(composeJson));
@@ -216,26 +210,19 @@ describe('unified Compose validation', () => {
     expect(result.stderr).toContain('SUBWEB_ENV_FILE must be a regular, non-symlink file.');
   });
 
-  it('preserves Docker host environment values when the selected .env contains unrelated keys', async () => {
+  it('preserves selected env values without exposing them to the Compose process', async () => {
     const fixture = await createFixture(validCompose);
     const sourceEnvironment = await readFile(fixture.envPath, 'utf8');
     await writeFile(fixture.envPath, `${sourceEnvironment}PATH=/selected-env/path\nDOCKER_HOST=tcp://selected-env:2376\n`);
     const capturePath = join(fixture.directory, 'validation.env');
+    await writeFile(join(fixture.directory, 'capture-validation-env'), '1\n');
 
     const result = spawnSync('sh', [validatorPath], {
       cwd: fixture.directory,
       encoding: 'utf8',
       env: {
         ...fixture.env,
-        CAPTURE_VALIDATION_ENV_FILE: '1',
-        COMPOSE_ENV_CAPTURE: capturePath,
-        PRESERVE_DOCKER_ENV: '1',
-        EXPECTED_DOCKER_PATH: fixture.env.PATH,
-        EXPECTED_DOCKER_HOST: 'unix:///host-environment.sock',
         DOCKER_HOST: 'unix:///host-environment.sock',
-        LOCKED_REDIS_IMAGE: validCompose.services.redis.image,
-        LOCKED_SUBCONVERTER_IMAGE: validCompose.services.subconverter.image,
-        LOCKED_MYURLS_IMAGE: validCompose.services.myurls.image,
       },
     });
 
@@ -250,17 +237,13 @@ describe('unified Compose validation', () => {
     const staleImageEnvironment = `${originalEnvironment}REDIS_IMAGE=redis:latest\nSUBCONVERTER_IMAGE=registry.example/subconverter:latest\nMYURLS_IMAGE=registry.example/myurls:latest\n`;
     const capturePath = join(fixture.directory, 'validation.env');
     await writeFile(fixture.envPath, staleImageEnvironment);
+    await writeFile(join(fixture.directory, 'capture-validation-env'), '1\n');
 
     const result = spawnSync('sh', [validatorPath], {
       cwd: fixture.directory,
       encoding: 'utf8',
       env: {
         ...fixture.env,
-        CAPTURE_VALIDATION_ENV_FILE: '1',
-        COMPOSE_ENV_CAPTURE: capturePath,
-        LOCKED_REDIS_IMAGE: validCompose.services.redis.image,
-        LOCKED_SUBCONVERTER_IMAGE: validCompose.services.subconverter.image,
-        LOCKED_MYURLS_IMAGE: validCompose.services.myurls.image,
         REDIS_IMAGE: 'registry.example/attacker-redis:latest',
         SUBCONVERTER_IMAGE: 'registry.example/attacker-subconverter:latest',
         MYURLS_IMAGE: 'registry.example/attacker-myurls:latest',
@@ -310,6 +293,24 @@ describe('unified Compose validation', () => {
   it('rejects a gateway binding that is not loopback port 8080', async () => {
     const composeJson = structuredClone(validCompose);
     composeJson.services.gateway.ports[0].host_ip = '0.0.0.0';
+    const { result } = await validateFixture(composeJson);
+    expect(result.status).not.toBe(0);
+  });
+
+  it.each([
+    ['a published internal service', (compose) => {
+      compose.services.redis.ports = [{ target: 6379, published: '6379' }];
+    }],
+    ['an unapproved Gateway capability', (compose) => {
+      compose.services.gateway.cap_add = ['NET_ADMIN'];
+    }],
+    ['an unapproved SubConverter capability', (compose) => {
+      compose.services.subconverter.cap_add = ['CHOWN', 'SETUID', 'SETGID', 'NET_ADMIN'];
+    }],
+  ])('rejects %s in the rendered security model', async (_name, mutate) => {
+    const composeJson = structuredClone(validCompose);
+    mutate(composeJson);
+
     const { result } = await validateFixture(composeJson);
     expect(result.status).not.toBe(0);
   });

@@ -9,6 +9,7 @@ RECONCILE_RELEASE_SERVICE_WAS_ACTIVE=0
 RECONCILE_RELEASE_OLD_IS_TREE=0
 RECONCILE_RELEASE_NEW_TREE_LIVE=0
 RECONCILE_RELEASE_CUTOVER_PENDING=0
+RECONCILE_RELEASE_SOURCE_FINGERPRINT=''
 
 reconcile_resolve_tree_path() {
   reconcile_path=$1
@@ -129,6 +130,46 @@ reconcile_validate_runtime_state() {
   if [ -e "$reconcile_tree/.env" ] || [ -L "$reconcile_tree/.env" ]; then
     [ -f "$reconcile_tree/.env" ] && [ ! -L "$reconcile_tree/.env" ] || return 1
   fi
+}
+
+reconcile_release_tree_fingerprint() {
+  reconcile_fingerprint_tree=$1
+  command -v sha256sum >/dev/null 2>&1 || return 1
+  reconcile_fingerprint_workspace=$(mktemp -d "${TMPDIR:-/tmp}/subweb-release-fingerprint.XXXXXX") || return 1
+  reconcile_fingerprint_records=$reconcile_fingerprint_workspace/records
+  reconcile_fingerprint_sorted=$reconcile_fingerprint_workspace/sorted
+  reconcile_fingerprint_hashes=$reconcile_fingerprint_workspace/hashes
+  reconcile_fingerprint_hashes_sorted=$reconcile_fingerprint_workspace/hashes-sorted
+  reconcile_fingerprint_digest=$reconcile_fingerprint_workspace/digest
+
+  reconcile_fingerprint_status=0
+  find "$reconcile_fingerprint_tree" \
+    \( -path "$reconcile_fingerprint_tree/.runtime" -o -path "$reconcile_fingerprint_tree/.local" \) -prune -o \
+    -type f -print0 > "$reconcile_fingerprint_records" \
+    || reconcile_fingerprint_status=1
+  [ -s "$reconcile_fingerprint_records" ] || reconcile_fingerprint_status=1
+  if [ "$reconcile_fingerprint_status" -eq 0 ]; then
+    LC_ALL=C sort -z "$reconcile_fingerprint_records" > "$reconcile_fingerprint_sorted" \
+      || reconcile_fingerprint_status=1
+  fi
+  if [ "$reconcile_fingerprint_status" -eq 0 ]; then
+    xargs -0 sha256sum -- < "$reconcile_fingerprint_sorted" > "$reconcile_fingerprint_hashes" \
+      || reconcile_fingerprint_status=1
+  fi
+  if [ "$reconcile_fingerprint_status" -eq 0 ]; then
+    LC_ALL=C sort "$reconcile_fingerprint_hashes" > "$reconcile_fingerprint_hashes_sorted" \
+      && sha256sum -- "$reconcile_fingerprint_hashes_sorted" > "$reconcile_fingerprint_digest" \
+      || reconcile_fingerprint_status=1
+  fi
+  if [ "$reconcile_fingerprint_status" -eq 0 ]; then
+    reconcile_fingerprint_value=$(awk 'NR == 1 { print $1; exit }' "$reconcile_fingerprint_digest") || reconcile_fingerprint_status=1
+    printf '%s\n' "$reconcile_fingerprint_value" | grep -Eq '^[0-9a-f]{64}$' || reconcile_fingerprint_status=1
+  fi
+  if [ "$reconcile_fingerprint_status" -eq 0 ]; then
+    printf '%s\n' "$reconcile_fingerprint_value"
+  fi
+  rm -rf -- "$reconcile_fingerprint_workspace"
+  return "$reconcile_fingerprint_status"
 }
 
 reconcile_copy_selected_release() {
@@ -294,6 +335,9 @@ reconcile_release_tree() {
   fi
   reconcile_target_has_nested_mount "$reconcile_target" && return 1
 
+  reconcile_source_fingerprint=$(reconcile_release_tree_fingerprint "$reconcile_source") || return 1
+  RECONCILE_RELEASE_SOURCE_FINGERPRINT=$reconcile_source_fingerprint
+
   reconcile_target=$(reconcile_resolve_tree_path "$reconcile_target") || return 1
   reconcile_target_parent=${reconcile_target%/*}
   reconcile_target_name=${reconcile_target##*/}
@@ -306,7 +350,16 @@ reconcile_release_tree() {
     && reconcile_validate_runtime_state "$RECONCILE_RELEASE_STAGE" || {
 reconcile_release_abort_with_report || true
        return 1
-    }
+     }
+
+  reconcile_source_fingerprint=$(reconcile_release_tree_fingerprint "$reconcile_source") || {
+    reconcile_release_abort_with_report || true
+    return 1
+  }
+  [ "$RECONCILE_RELEASE_SOURCE_FINGERPRINT" = "$reconcile_source_fingerprint" ] || {
+    reconcile_release_abort_with_report || true
+    return 1
+  }
 
   if [ -e "$reconcile_target" ]; then
     reconcile_paths_share_filesystem "$reconcile_target" "$RECONCILE_RELEASE_STAGE" || {

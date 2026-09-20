@@ -46,18 +46,6 @@ const parseArguments = (args) => {
   return { lockPath: lockPaths[0] ?? defaultLockPath, profile };
 };
 
-const composeEnvironmentNames = [
-  'API_DOMAIN', 'API_URL', 'APP_DOMAIN', 'CONVERSION_DNS_TIMEOUT_MS',
-  'CONVERSION_EGRESS_CONNECT_TIMEOUT_MS', 'CONVERSION_MAX_CONCURRENCY',
-  'CONVERSION_MAX_CONCURRENCY_PER_IP', 'CONVERSION_MAX_REQUEST_BYTES',
-  'CONVERSION_MAX_RESPONSE_BYTES', 'CONVERSION_RATE_LIMIT', 'CONVERSION_RATE_WINDOW_SECONDS',
-  'CONVERSION_REQUEST_TIMEOUT_MS', 'CUSTOM_BACKEND_ENABLED', 'EGRESS_ALLOWED_HOSTS',
-  'IP_HASH_SECRET', 'LOG_LEVEL', 'MYURLS_GATEWAY_IP', 'MYURLS_IMAGE', 'MYURLS_IP',
-  'MYURLS_LOG_LEVEL', 'MYURLS_NETWORK_SUBNET', 'MYURLS_TRUST_PROXY_CIDR', 'REDIS_IMAGE',
-  'REDIS_PASSWORD', 'SHORT_DOMAIN', 'SHORT_LINKS_ENABLED', 'SUBCONVERTER_IMAGE',
-  'SUBWEB_IMAGE', 'SUBWEB_PORT', 'TRUSTED_PROXY_CIDR', 'TURNSTILE_SECRET_KEY',
-  'TURNSTILE_SITE_KEY',
-];
 
 const readinessEnvironment = (profile, lock) => ({
   APP_DOMAIN: 'app.readiness.test',
@@ -74,11 +62,17 @@ const readinessEnvironment = (profile, lock) => ({
   ...resolveRuntimeImages(lock),
 });
 
-const controlledEnvironment = () => {
-  const environment = { ...process.env };
-  for (const name of composeEnvironmentNames) delete environment[name];
-  return environment;
-};
+const dockerConnectionEnvironmentNames = [
+  'DOCKER_API_VERSION', 'DOCKER_CERT_PATH', 'DOCKER_CONFIG', 'DOCKER_CONTEXT',
+  'DOCKER_HOST', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'HOME', 'PATH', 'SSH_AUTH_SOCK',
+  'TMPDIR',
+];
+
+const controlledEnvironment = () => Object.fromEntries(
+  dockerConnectionEnvironmentNames
+    .filter((name) => process.env[name] !== undefined)
+    .map((name) => [name, process.env[name]]),
+);
 
 export const dockerComposeConfigTimeoutMs = 30_000;
 
@@ -260,8 +254,25 @@ export const verifyRenderedCompose = (rendered, profile, lock, errors, environme
     );
   }
 
+  const authorizedSubconverterCapabilities = ['CHOWN', 'SETGID', 'SETUID'];
   for (const [serviceName, networks] of Object.entries(expectedNetworks(profile))) {
     const service = services[serviceName];
+    const capabilities = Array.isArray(service?.cap_add) ? [...service.cap_add].sort() : [];
+    const isAuthorizedSubconverterBootstrap = serviceName === 'subconverter'
+      && service?.user === '0:0'
+      && JSON.stringify(capabilities) === JSON.stringify(authorizedSubconverterCapabilities);
+    check(
+      capabilities.length === 0 || isAuthorizedSubconverterBootstrap,
+      `${serviceName} has unapproved capabilities`,
+      errors,
+    );
+    check(
+      serviceName === 'subconverter'
+        ? service?.user === '0:0'
+        : /^[1-9][0-9]*:[1-9][0-9]*$/u.test(String(service?.user ?? '')),
+      `${serviceName} runtime user is invalid`,
+      errors,
+    );
     check(isRecord(service), `${serviceName} service is missing`, errors);
     check(service?.read_only === true, `${serviceName} must set read_only to true`, errors);
     check(

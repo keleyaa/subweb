@@ -11,35 +11,38 @@ const temporaryDirectories = [];
 const makeFixture = async () => {
   const root = await mkdtemp(join(tmpdir(), 'subweb-production-command-'));
   temporaryDirectories.push(root);
-  await mkdir(join(root, 'scripts'), { recursive: true });
+  await mkdir(join(root, 'scripts/lib'), { recursive: true });
   await mkdir(join(root, 'bin'), { recursive: true });
   await cp(join(repositoryRoot, 'scripts/subweb.sh'), join(root, 'scripts/subweb.sh'));
   await cp(join(repositoryRoot, 'scripts/validate-compose.sh'), join(root, 'scripts/validate-compose.sh'));
+  await cp(join(repositoryRoot, 'scripts/lib/path-lock.sh'), join(root, 'scripts/lib/path-lock.sh'));
 
   const docker = join(root, 'bin/docker');
   await writeFile(docker, `#!/bin/sh
 set -eu
-printf '%s\\n' "$*" >> "$DOCKER_LOG"
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+printf '%s\\n' "$*" >> "$root/docker.log"
 if [ "$1" = compose ] && [ "$2" = version ]; then
-  if [ -n "\${MUTATE_ENV_FILE-}" ]; then printf '%s\\n' 'SHORT_LINKS_ENABLED=true' > "$MUTATE_ENV_FILE"; fi
-  if [ "\${SIGNAL_ENV_FILE-}" = 1 ]; then
-    printf '%s\\n' "$SUBWEB_ENV_FILE" > "$SNAPSHOT_LOG"
-    kill -TERM "$PPID"
-    exit 0
+  if [ -f "$DOCKER_CONFIG/mutate-env" ]; then
+    IFS= read -r mutation_target < "$DOCKER_CONFIG/mutate-env"
+    printf '%s\\n' 'SHORT_LINKS_ENABLED=true' > "$mutation_target"
   fi
   exit 0
-fi
-if [ "\${EXPECT_LOCKED_IMAGE_VARIABLES_CLEARED-}" = 1 ]; then
-  [ -z "\${REDIS_IMAGE-}" ] && [ -z "\${SUBCONVERTER_IMAGE-}" ] && [ -z "\${MYURLS_IMAGE-}" ] || exit 65
-  [ "\${SUBWEB_IMAGE-}" = "$EXPECTED_GATEWAY_IMAGE" ] || exit 66
 fi
 [ "$1" = compose ] || exit 64
 shift
 [ "$1" = --env-file ] || exit 64
+environment_file=$2
 shift 2
 [ "$1" = -f ] || exit 64
 compose_file=$2
 shift 2
+[ -z "\${REDIS_IMAGE-}" ] && [ -z "\${SUBCONVERTER_IMAGE-}" ] && [ -z "\${MYURLS_IMAGE-}" ] && [ -z "\${SUBWEB_IMAGE-}" ] || exit 65
+if [ -f "$DOCKER_CONFIG/signal" ]; then
+  printf '%s\\n' "$environment_file" > "$root/snapshot.log"
+  kill -TERM "$PPID"
+  exit 0
+fi
 case "$compose_file:$*" in
   'compose.disabled-short-links.yaml:ps') exit 0 ;;
   *) exit 64 ;;
@@ -54,8 +57,8 @@ const run = (root, command = 'up', environment = {}) => spawnSync('sh', [join(ro
   encoding: 'utf8',
   env: {
     ...process.env,
-    DOCKER_LOG: join(root, 'docker.log'),
     PATH: `${join(root, 'bin')}:${process.env.PATH}`,
+    DOCKER_CONFIG: root,
     ...environment,
   },
 });
@@ -110,14 +113,18 @@ describe('production command configuration contract', () => {
     );
   });
 
-  it('uses a source-identity-checked descriptor for the private environment snapshot', async () => {
+  it('uses a source-content-checked descriptor for the private environment snapshot', async () => {
     const source = await readFile(join(repositoryRoot, 'scripts/subweb.sh'), 'utf8');
 
     expect(source).toContain('exec 9< "$ENV_FILE"');
     expect(source).toContain('environment_file_identity /dev/fd/9');
     expect(source).toContain('cat <&9 > "$validated_env_file"');
+    expect(source).toContain('cmp -s "$validated_env_file" "$ENV_FILE"');
     expect(source.indexOf('opened_env_identity=$(environment_file_identity /dev/fd/9)')).toBeLessThan(
       source.indexOf('cat <&9 > "$validated_env_file"'),
+    );
+    expect(source.indexOf('cat <&9 > "$validated_env_file"')).toBeLessThan(
+      source.indexOf('cmp -s "$validated_env_file" "$ENV_FILE"'),
     );
   });
 
@@ -126,7 +133,8 @@ describe('production command configuration contract', () => {
     const envFile = join(root, '.env');
     await writeFile(envFile, 'SHORT_LINKS_ENABLED=false\n', { mode: 0o600 });
 
-    const result = run(root, 'status', { MUTATE_ENV_FILE: envFile });
+    await writeFile(join(root, 'mutate-env'), `${envFile}\n`);
+    const result = run(root, 'status');
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(await readDockerLog(root)).toMatch(/compose --env-file \S*subweb-env\.[^ ]+ -f compose\.disabled-short-links\.yaml ps/u);
@@ -137,8 +145,9 @@ describe('production command configuration contract', () => {
     const envFile = join(root, '.env');
     const snapshotLog = join(root, 'snapshot.log');
     await writeFile(envFile, 'SHORT_LINKS_ENABLED=false\n', { mode: 0o600 });
+    await writeFile(join(root, 'signal'), '1\n');
 
-    const result = run(root, 'status', { SIGNAL_ENV_FILE: '1', SNAPSHOT_LOG: snapshotLog });
+    const result = run(root, 'status');
 
     expect(result.status).not.toBe(0);
     const snapshotPath = (await readFile(snapshotLog, 'utf8')).trim();
@@ -151,12 +160,10 @@ describe('production command configuration contract', () => {
     await writeFile(envFile, 'SHORT_LINKS_ENABLED=false\n', { mode: 0o600 });
 
     const result = run(root, 'status', {
-      EXPECT_LOCKED_IMAGE_VARIABLES_CLEARED: '1',
       REDIS_IMAGE: 'registry.example/attacker-redis:latest',
       SUBCONVERTER_IMAGE: 'registry.example/attacker-subconverter:latest',
       MYURLS_IMAGE: 'registry.example/attacker-myurls:latest',
       SUBWEB_IMAGE: 'registry.example/subweb:2.0.0',
-      EXPECTED_GATEWAY_IMAGE: 'registry.example/subweb:2.0.0',
     });
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);

@@ -7,6 +7,23 @@ fail() {
 }
 
 script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+. "$script_directory/lib/path-lock.sh"
+
+validation_env_file=
+validation_source_env_file=
+validation_version_lock_snapshot=
+validation_env_lock_directory=
+validation_version_lock_directory=
+cleanup() {
+  [ -z "$validation_env_file" ] || rm -f "$validation_env_file"
+  [ -z "$validation_source_env_file" ] || rm -f "$validation_source_env_file"
+  [ -z "$validation_version_lock_snapshot" ] || rm -f "$validation_version_lock_snapshot"
+  release_path_lock "$validation_version_lock_directory" || true
+  release_path_lock "$validation_env_lock_directory" || true
+}
+trap cleanup 0
+trap 'cleanup; exit 1' HUP INT TERM
+
 source_env_file=
 if [ "${SUBWEB_ENV_FILE+x}" = x ]; then
   source_env_file=$SUBWEB_ENV_FILE
@@ -26,6 +43,42 @@ elif [ -e .env ]; then
   source_env_file=.env
 fi
 
+version_lock_file=${VERSION_LOCK_FILE:-$script_directory/../deploy/versions.lock.json}
+[ -f "$version_lock_file" ] && [ ! -L "$version_lock_file" ] \
+  || fail "version lock file must be a regular, non-symlink file: $version_lock_file"
+if [ "${SUBWEB_ENV_LOCK_HELD:-0}" != 1 ] && [ -n "$source_env_file" ]; then
+  acquire_path_lock "$source_env_file" || fail 'could not lock the Compose environment.'
+  validation_env_lock_directory=$PATH_LOCK_DIRECTORY
+fi
+if [ "${SUBWEB_VERSION_LOCK_HELD:-0}" != 1 ]; then
+  acquire_path_lock "$version_lock_file" || fail 'could not lock deploy/versions.lock.json.'
+  validation_version_lock_directory=$PATH_LOCK_DIRECTORY
+fi
+
+validation_version_lock_snapshot=$(mktemp "${TMPDIR:-/tmp}/subweb-version-lock.XXXXXX") \
+  || fail 'could not create a version lock snapshot.'
+chmod 600 "$validation_version_lock_snapshot" \
+  || fail 'could not protect the version lock snapshot.'
+cat "$version_lock_file" > "$validation_version_lock_snapshot" \
+  || fail 'could not snapshot deploy/versions.lock.json.'
+cmp -s "$validation_version_lock_snapshot" "$version_lock_file" \
+  || fail 'deploy/versions.lock.json changed while it was being snapshotted.'
+version_lock_file=$validation_version_lock_snapshot
+
+if [ -n "$source_env_file" ]; then
+  validation_source_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-compose-source.XXXXXX") \
+    || fail 'could not create a Compose environment snapshot.'
+  chmod 600 "$validation_source_env_file" \
+    || fail 'could not protect the Compose environment snapshot.'
+  exec 9< "$source_env_file" || fail 'could not open the Compose environment.'
+  cat <&9 > "$validation_source_env_file" \
+    || fail 'could not snapshot the Compose environment.'
+  cmp -s "$validation_source_env_file" "$source_env_file" \
+    || fail 'Compose environment changed while it was being snapshotted.'
+  exec 9<&-
+  source_env_file=$validation_source_env_file
+fi
+
 compose_file=${COMPOSE_VALIDATION_FILE:-}
 if [ -z "$compose_file" ]; then
   compose_file=compose.yaml
@@ -42,11 +95,9 @@ if [ -z "$compose_file" ]; then
     esac
   fi
 fi
-version_lock_file=${VERSION_LOCK_FILE:-$script_directory/../deploy/versions.lock.json}
-[ -f "$version_lock_file" ] || fail "version lock file is missing: $version_lock_file"
-validation_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-compose-validation.XXXXXX")
-chmod 600 "$validation_env_file"
-trap 'rm -f "$validation_env_file"' EXIT HUP INT TERM
+validation_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-compose-validation.XXXXXX") \
+  || fail 'could not create a Compose validation environment.'
+chmod 600 "$validation_env_file" || fail 'could not protect a Compose validation environment.'
 
 if [ -n "$source_env_file" ]; then
   sed \
@@ -82,19 +133,19 @@ printf '%s\n' "$runtime_image_env" >> "$validation_env_file" \
   || fail 'could not write locked runtime images to Compose validation environment.'
 
 compose_config() (
-  unset \
-    API_DOMAIN API_URL APP_DOMAIN \
-    CONVERSION_DNS_TIMEOUT_MS CONVERSION_EGRESS_CONNECT_TIMEOUT_MS \
-    CONVERSION_MAX_CONCURRENCY CONVERSION_MAX_CONCURRENCY_PER_IP \
-    CONVERSION_MAX_REQUEST_BYTES CONVERSION_MAX_RESPONSE_BYTES \
-    CONVERSION_RATE_LIMIT CONVERSION_RATE_WINDOW_SECONDS CONVERSION_REQUEST_TIMEOUT_MS \
-    CUSTOM_BACKEND_ENABLED EGRESS_ALLOWED_HOSTS IP_HASH_SECRET LOG_LEVEL \
-    MYURLS_GATEWAY_IP MYURLS_IMAGE MYURLS_IP MYURLS_LOG_LEVEL MYURLS_NETWORK_SUBNET \
-    MYURLS_TRUST_PROXY_CIDR REDIS_IMAGE REDIS_PASSWORD SHORT_DOMAIN \
-    SUBCONVERTER_IMAGE SUBWEB_IMAGE SUBWEB_PORT TRUSTED_PROXY_CIDR \
-    TURNSTILE_SECRET_KEY TURNSTILE_SITE_KEY
-  unset COMPOSE_FILE COMPOSE_PROFILES COMPOSE_PROJECT_NAME
-  docker compose -f "$compose_file" --env-file "$validation_env_file" "$@"
+  env -i \
+    PATH="$PATH" \
+    HOME="${HOME-}" \
+    TMPDIR="${TMPDIR-}" \
+    DOCKER_API_VERSION="${DOCKER_API_VERSION-}" \
+    DOCKER_CERT_PATH="${DOCKER_CERT_PATH-}" \
+    DOCKER_CONFIG="${DOCKER_CONFIG-}" \
+    DOCKER_CONTEXT="${DOCKER_CONTEXT-}" \
+    DOCKER_HOST="${DOCKER_HOST-}" \
+    DOCKER_TLS="${DOCKER_TLS-}" \
+    DOCKER_TLS_VERIFY="${DOCKER_TLS_VERIFY-}" \
+    SSH_AUTH_SOCK="${SSH_AUTH_SOCK-}" \
+    docker compose -f "$compose_file" --env-file "$validation_env_file" "$@"
 )
 
 compose_config config --quiet
@@ -182,6 +233,10 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
       && JSON.stringify(bootstrapCapabilities) === JSON.stringify(["CHOWN", "SETGID", "SETUID"]);
     if (!isSubconverterBootstrap && (service?.user === undefined || !/^[1-9][0-9]*:[1-9][0-9]*$/.test(String(service.user)))) {
       console.error(`Compose validation error: service ${name} must run as a non-root user.`);
+      process.exitCode = 1;
+    }
+    if (bootstrapCapabilities.length > 0 && !isSubconverterBootstrap) {
+      console.error(`Compose validation error: service ${name} has unapproved capabilities.`);
       process.exitCode = 1;
     }
     if (service?.read_only !== true || !service.cap_drop?.includes("ALL") || !service.security_opt?.includes("no-new-privileges:true")) {

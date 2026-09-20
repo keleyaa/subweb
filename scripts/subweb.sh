@@ -5,6 +5,16 @@ SCRIPT_DIRECTORY=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_DIRECTORY=$(CDPATH='' cd -- "$SCRIPT_DIRECTORY/.." && pwd)
 DEFAULT_ENV_FILE=$PROJECT_DIRECTORY/.env
 ENV_FILE=${SUBWEB_ENV_FILE:-$DEFAULT_ENV_FILE}
+. "$SCRIPT_DIRECTORY/lib/path-lock.sh"
+
+SUBWEB_ENV_LOCK_DIRECTORY=
+validated_env_file=
+cleanup() {
+  [ -z "$validated_env_file" ] || rm -f "$validated_env_file"
+  release_path_lock "$SUBWEB_ENV_LOCK_DIRECTORY" || true
+}
+trap cleanup 0
+trap 'cleanup; exit 1' HUP INT TERM
 
 fail() {
   printf 'Subweb error: %s\n' "$1" >&2
@@ -19,7 +29,7 @@ case "$ENV_FILE" in
     ENV_FILE=$env_directory/$(basename -- "$ENV_FILE")
     ;;
 esac
-export SUBWEB_ENV_FILE=$ENV_FILE
+export SUBWEB_ENV_FILE="$ENV_FILE"
 read_env_value() {
   key=$1
   [ -f "$ENV_FILE" ] || return 1
@@ -71,12 +81,12 @@ require_production_env() {
     || fail 'unable to identify the production .env file.'
 }
 
+acquire_path_lock "$ENV_FILE" || fail 'could not lock the production environment.'
+SUBWEB_ENV_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
 require_production_env
 
 validated_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-env.XXXXXX") \
   || fail 'unable to create a private production environment snapshot.'
-trap 'rm -f "$validated_env_file"' 0
-trap 'rm -f "$validated_env_file"; exit 1' HUP INT TERM
 chmod 0600 "$validated_env_file" \
   || fail 'unable to protect the production environment snapshot.'
 exec 9< "$ENV_FILE" || fail 'unable to open the production environment.'
@@ -86,6 +96,8 @@ opened_env_identity=$(environment_file_identity /dev/fd/9) \
   || fail 'production .env changed before it could be opened.'
 cat <&9 > "$validated_env_file" \
   || fail 'unable to snapshot the production environment.'
+cmp -s "$validated_env_file" "$ENV_FILE" \
+  || fail 'production .env changed while it was being snapshotted.'
 exec 9<&-
 current_env_identity=$(environment_file_identity "$ENV_FILE") \
   || fail 'unable to identify the production .env file after snapshotting.'
@@ -96,7 +108,7 @@ current_env_identity=$(environment_file_identity "$ENV_FILE") \
 chmod 0600 "$validated_env_file" \
   || fail 'unable to protect the production environment snapshot.'
 ENV_FILE=$validated_env_file
-export SUBWEB_ENV_FILE=$ENV_FILE
+export SUBWEB_ENV_FILE="$ENV_FILE"
 
 command -v docker >/dev/null 2>&1 || fail 'Docker is not installed or not available in PATH.'
 docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
@@ -116,18 +128,28 @@ esac
 
 cd "$PROJECT_DIRECTORY"
 compose() (
-  unset REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE
-  docker compose --env-file "$ENV_FILE" -f "$compose_file" "$@"
+  env -i \
+    PATH="$PATH" \
+    HOME="${HOME-}" \
+    TMPDIR="${TMPDIR-}" \
+    DOCKER_API_VERSION="${DOCKER_API_VERSION-}" \
+    DOCKER_CERT_PATH="${DOCKER_CERT_PATH-}" \
+    DOCKER_CONFIG="${DOCKER_CONFIG-}" \
+    DOCKER_CONTEXT="${DOCKER_CONTEXT-}" \
+    DOCKER_HOST="${DOCKER_HOST-}" \
+    DOCKER_TLS="${DOCKER_TLS-}" \
+    DOCKER_TLS_VERIFY="${DOCKER_TLS_VERIFY-}" \
+    SSH_AUTH_SOCK="${SSH_AUTH_SOCK-}" \
+    docker compose --env-file "$ENV_FILE" -f "$compose_file" "$@"
 )
 
 case "$command_name" in
   up)
     [ "$#" -eq 0 ] || fail 'up does not accept extra arguments.'
-    SUBWEB_ENV_FILE=$ENV_FILE SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
+    SUBWEB_ENV_LOCK_HELD=1 \
+      SUBWEB_ENV_FILE=$ENV_FILE SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
       "$SCRIPT_DIRECTORY/validate-compose.sh"
-    if [ "${SUBWEB_IMAGE+x}" = x ]; then
-      gateway_image=$SUBWEB_IMAGE
-    elif gateway_image=$(read_env_value SUBWEB_IMAGE); then
+    if gateway_image=$(read_env_value SUBWEB_IMAGE); then
       :
     else
       status=$?
@@ -153,7 +175,8 @@ case "$command_name" in
     ;;
   verify)
     [ "$#" -eq 0 ] || fail 'verify does not accept extra arguments.'
-    SUBWEB_ENV_FILE=$ENV_FILE SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
+    SUBWEB_ENV_LOCK_HELD=1 \
+      SUBWEB_ENV_FILE=$ENV_FILE SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
       "$SCRIPT_DIRECTORY/validate-compose.sh"
     compose ps
     ;;
@@ -179,7 +202,8 @@ case "$command_name" in
   upgrade)
     [ "$#" -eq 0 ] || fail 'upgrade does not accept extra arguments.'
     unset SUBWEB_IMAGE MYURLS_IMAGE REDIS_IMAGE SUBCONVERTER_IMAGE
-    SUBWEB_ENV_FILE=$ENV_FILE SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
+    SUBWEB_ENV_LOCK_HELD=1 \
+      SUBWEB_ENV_FILE=$ENV_FILE SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
       "$SCRIPT_DIRECTORY/validate-compose.sh"
     if [ "$short_links_enabled" = true ]; then
       compose pull gateway subconverter myurls redis

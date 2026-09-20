@@ -3,19 +3,28 @@ set -eu
 
 umask 077
 
-SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIRECTORY=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 # shellcheck source=lib/config.sh
 . "$SCRIPT_DIRECTORY/lib/config.sh"
+. "$SCRIPT_DIRECTORY/lib/path-lock.sh"
 
+CONFIG_ENV_LOCK_DIRECTORY=
+CONFIG_VERSION_LOCK_DIRECTORY=
+CONFIG_VERSION_LOCK_SNAPSHOT=
 CONFIG_TEMP_FILE=
 CONFIG_MOVED_FILE=
 cleanup() {
   if [ -n "$CONFIG_TEMP_FILE" ]; then
     rm -f "$CONFIG_TEMP_FILE"
   fi
+  if [ -n "$CONFIG_VERSION_LOCK_SNAPSHOT" ]; then
+    rm -f "$CONFIG_VERSION_LOCK_SNAPSHOT"
+  fi
   if [ -n "$CONFIG_MOVED_FILE" ]; then
     rm -f "$CONFIG_MOVED_FILE"
   fi
+  release_path_lock "$CONFIG_VERSION_LOCK_DIRECTORY" || true
+  release_path_lock "$CONFIG_ENV_LOCK_DIRECTORY" || true
 }
 trap cleanup 0
 trap 'cleanup; exit 1' HUP INT TERM
@@ -157,7 +166,7 @@ require_runtime_image_contract() {
   [ "$node_major" -ge 24 ] 2>/dev/null \
     || fail 'Node.js 24 or newer is required to validate locked runtime images.'
 
-  if ! runtime_image_settings=$(node "$SCRIPT_DIRECTORY/runtime-image-contract.mjs" env); then
+  if ! runtime_image_settings=$(node "$SCRIPT_DIRECTORY/runtime-image-contract.mjs" env --lock "$CONFIG_VERSION_LOCK_SNAPSHOT"); then
     fail 'could not derive external runtime images from deploy/versions.lock.json'
   fi
 }
@@ -194,8 +203,6 @@ if [ "${1-}" = --help ] || [ "${1-}" = -h ]; then
   usage
   exit 0
 fi
-
-require_runtime_image_contract
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -293,6 +300,29 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+if [ "${SUBWEB_ENV_LOCK_HELD:-0}" != 1 ]; then
+  acquire_path_lock "$env_file" || fail 'could not lock the deployment environment.'
+  CONFIG_ENV_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
+fi
+version_lock_file=$SCRIPT_DIRECTORY/../deploy/versions.lock.json
+[ -f "$version_lock_file" ] && [ ! -L "$version_lock_file" ] \
+  || fail 'deploy/versions.lock.json must be a regular, non-symlink file.'
+if [ "${SUBWEB_VERSION_LOCK_HELD:-0}" != 1 ]; then
+  acquire_path_lock "$version_lock_file" \
+    || fail 'could not lock deploy/versions.lock.json.'
+  CONFIG_VERSION_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
+fi
+CONFIG_VERSION_LOCK_SNAPSHOT=$(mktemp "${TMPDIR:-/tmp}/subweb-version-lock.XXXXXX") \
+  || fail 'could not create a version lock snapshot.'
+chmod 600 "$CONFIG_VERSION_LOCK_SNAPSHOT" \
+  || fail 'could not protect the version lock snapshot.'
+cat "$version_lock_file" > "$CONFIG_VERSION_LOCK_SNAPSHOT" \
+  || fail 'could not snapshot deploy/versions.lock.json.'
+cmp -s "$CONFIG_VERSION_LOCK_SNAPSHOT" "$version_lock_file" \
+  || fail 'deploy/versions.lock.json changed while it was being snapshotted.'
+
+require_runtime_image_contract
+
 if [ "$turnstile_secret_key_stdin" -eq 1 ]; then
   if IFS= read -r turnstile_secret_key || [ -n "$turnstile_secret_key" ]; then
     :
@@ -353,7 +383,6 @@ if [ -n "$short_domain" ]; then
   validate_distinct_domains "$app_domain" "$api_domain" "$short_domain" \
     || fail 'SHORT, APP, and API domains must be different.'
 fi
-normalized_app=$(printf '%s' "$app_domain" | tr '[:upper:]' '[:lower:]')
 normalized_api=$(printf '%s' "$api_domain" | tr '[:upper:]' '[:lower:]')
 
 if [ "$api_url_seen" -eq 0 ]; then

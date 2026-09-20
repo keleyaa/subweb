@@ -4,6 +4,16 @@ set -eu
 SCRIPT_DIRECTORY=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_DIRECTORY=$(CDPATH='' cd -- "$SCRIPT_DIRECTORY/.." && pwd)
 . "$SCRIPT_DIRECTORY/lib/release-image.sh"
+. "$SCRIPT_DIRECTORY/lib/path-lock.sh"
+
+DEPLOY_ENV_LOCK_DIRECTORY=
+DEPLOY_VERSION_LOCK_DIRECTORY=
+cleanup() {
+  release_path_lock "$DEPLOY_VERSION_LOCK_DIRECTORY" || true
+  release_path_lock "$DEPLOY_ENV_LOCK_DIRECTORY" || true
+}
+trap cleanup 0
+trap 'cleanup; exit 1' HUP INT TERM
 
 fail() {
   printf 'Docker deployment error: %s\n' "$1" >&2
@@ -149,14 +159,33 @@ if [ "$short_links_enabled_seen" -eq 1 ] && [ "$short_links_enabled" = false ]; 
 fi
 
 compose_docker() (
-  unset REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE
-  docker compose "$@"
+  # Docker connection settings are intentionally retained; Compose
+  # interpolation must come exclusively from the validated environment file.
+  env -i \
+    PATH="$PATH" \
+    HOME="${HOME-}" \
+    TMPDIR="${TMPDIR-}" \
+    DOCKER_API_VERSION="${DOCKER_API_VERSION-}" \
+    DOCKER_CERT_PATH="${DOCKER_CERT_PATH-}" \
+    DOCKER_CONFIG="${DOCKER_CONFIG-}" \
+    DOCKER_CONTEXT="${DOCKER_CONTEXT-}" \
+    DOCKER_HOST="${DOCKER_HOST-}" \
+    DOCKER_TLS="${DOCKER_TLS-}" \
+    DOCKER_TLS_VERIFY="${DOCKER_TLS_VERIFY-}" \
+    SSH_AUTH_SOCK="${SSH_AUTH_SOCK-}" \
+    docker compose "$@"
 )
 
 command -v docker >/dev/null 2>&1 || fail 'Docker is not installed or not available in PATH.'
 compose_docker version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
 
 cd "$PROJECT_DIRECTORY"
+acquire_path_lock "$PROJECT_DIRECTORY/.env" \
+  || fail 'could not lock the deployment environment.'
+DEPLOY_ENV_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
+acquire_path_lock "$PROJECT_DIRECTORY/deploy/versions.lock.json" \
+  || fail 'could not lock deploy/versions.lock.json.'
+DEPLOY_VERSION_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
 
 run_configure() {
   set -- "$SCRIPT_DIRECTORY/configure.sh" \
@@ -171,7 +200,7 @@ run_configure() {
   [ -n "$trusted_proxy_cidr" ] && set -- "$@" --trusted-proxy-cidr "$trusted_proxy_cidr"
   [ -n "$turnstile_site_key" ] && set -- "$@" --turnstile-site-key "$turnstile_site_key"
   [ "$turnstile_secret_key_stdin" -eq 0 ] || set -- "$@" --turnstile-secret-key-stdin
-  "$@"
+  SUBWEB_ENV_LOCK_HELD=1 SUBWEB_VERSION_LOCK_HELD=1 "$@"
 }
 run_configure
 
@@ -192,7 +221,8 @@ compose() {
   compose_docker -f "$compose_file" "$@"
 }
 
-SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
+SUBWEB_ENV_LOCK_HELD=1 SUBWEB_VERSION_LOCK_HELD=1 \
+  SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
   "$SCRIPT_DIRECTORY/validate-compose.sh"
 if [ "$short_links_enabled" = true ]; then
   compose pull gateway subconverter myurls redis

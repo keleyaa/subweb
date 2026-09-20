@@ -19,6 +19,7 @@ const secureService = (service) => ({
   read_only: true,
   cap_drop: ['ALL'],
   security_opt: ['no-new-privileges:true'],
+  user: '101:101',
   ...service,
 });
 const renderedProfile = (shortLinksEnabled) => {
@@ -42,9 +43,9 @@ const renderedProfile = (shortLinksEnabled) => {
       gateway,
       myurls: secureService({ image: images.MYURLS_IMAGE, networks: { 'myurls-data': {}, 'myurls-edge': {} }, environment: { HTTPS_PROXY: 'http://gateway:25503', PUBLIC_BASE_URL: 'https://short.example.test', REDIS_URL: 'redis://redis:6379/0', TURNSTILE_HOSTNAME: 'app.example.test' } }),
       redis: secureService({ image: images.REDIS_IMAGE, networks: { 'myurls-data': {}, 'redis-policy': {} } }),
-      subconverter: secureService({ image: images.SUBCONVERTER_IMAGE, networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' } }),
+      subconverter: secureService({ user: '0:0', cap_add: ['CHOWN', 'SETGID', 'SETUID'], image: images.SUBCONVERTER_IMAGE, networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' } }),
     }
-    : { gateway, subconverter: secureService({ image: images.SUBCONVERTER_IMAGE, networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' } }) };
+    : { gateway, subconverter: secureService({ user: '0:0', cap_add: ['CHOWN', 'SETGID', 'SETUID'], image: images.SUBCONVERTER_IMAGE, networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' } }) };
   return {
     services,
     networks: shortLinksEnabled

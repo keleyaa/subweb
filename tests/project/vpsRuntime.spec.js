@@ -93,6 +93,19 @@ afterEach(async () => {
 });
 
 describe('VPS runtime contract', () => {
+  it('rejects release staging when the selected source tree changes during acquisition', async () => {
+    const reconcile = await read('scripts/vps/reconcile-release.sh');
+
+    expect(reconcile).toContain('reconcile_release_tree_fingerprint');
+    const copyInvocation = 'reconcile_copy_selected_release "$reconcile_source" "$RECONCILE_RELEASE_STAGE"';
+    expect(reconcile.indexOf('reconcile_source_fingerprint=$(reconcile_release_tree_fingerprint')).toBeLessThan(
+      reconcile.indexOf(copyInvocation),
+    );
+    expect(reconcile.lastIndexOf('reconcile_release_tree_fingerprint')).toBeGreaterThan(
+      reconcile.indexOf(copyInvocation),
+    );
+  });
+
   it('defines a hardened systemd application unit owned by the repository entrypoint', async () => {
     const unit = await read('deploy/systemd/subweb.service');
 

@@ -14,6 +14,7 @@ const lockedImages = {
 };
 const releaseVersion = 'v1.2.3';
 const releaseDigest = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+const releaseSourceSha = 'a'.repeat(40);
 const dockerHubImage = `docker.io/keleyaa/subweb@sha256:${releaseDigest}`;
 const ghcrImage = `ghcr.io/keleyaa/subweb@sha256:${releaseDigest}`;
 const registryPortImage = `registry.example:5000/repository@sha256:${releaseDigest}`;
@@ -114,7 +115,8 @@ const makeFixture = async () => {
      'scripts/runtime-image-contract.mjs',
      'scripts/verify-version-locks.mjs',
        'scripts/lib/config.sh',
-       'scripts/lib/release-image.sh',
+        'scripts/lib/release-image.sh',
+        'scripts/lib/path-lock.sh',
       'compose.yaml',
       'compose.common-services.yaml',
       'compose.disabled-short-links.yaml',
@@ -132,23 +134,13 @@ const makeFixture = async () => {
   const docker = join(root, 'bin/docker');
   await writeFile(docker, `#!/bin/sh
 set -eu
-printf '%s\\n' "$*" >> "$DOCKER_LOG"
-if [ "\${CAPTURE_COMPOSE_IMAGE_ENV-}" = 1 ] && [ "\${1-}" = compose ]; then
-  printf 'COMPOSE_IMAGE_ENV=REDIS_IMAGE:%s;SUBCONVERTER_IMAGE:%s;MYURLS_IMAGE:%s\\n' "\${REDIS_IMAGE-unset}" "\${SUBCONVERTER_IMAGE-unset}" "\${MYURLS_IMAGE-unset}" >> "$DOCKER_LOG"
-  printf 'COMPOSE_HOST_ENV=DOCKER_HOST:%s;DOCKER_CONFIG:%s;HTTPS_PROXY:%s\\n' "\${DOCKER_HOST-unset}" "\${DOCKER_CONFIG-unset}" "\${HTTPS_PROXY-unset}" >> "$DOCKER_LOG"
-fi
-case "$*" in
-  'compose -f '*)
-    if [ "\${CAPTURE_SUBWEB_IMAGE-}" = 1 ]; then
-      printf 'SUBWEB_IMAGE=%s\\n' "\${SUBWEB_IMAGE-unset}" >> "$DOCKER_LOG"
-    fi
-    ;;
-esac
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+printf '%s\\n' "$*" >> "$root/docker.log"
 render_compose() {
   compose_json=$1
   gateway_image=$(awk -F= '$1 == "SUBWEB_IMAGE" { print substr($0, index($0, "=") + 1); exit }' .env)
-  if [ "\${CAPTURE_COMPOSE_GATEWAY_IMAGE-}" = 1 ]; then
-    printf 'COMPOSE_GATEWAY_IMAGE=%s\\n' "$gateway_image" >> "$DOCKER_LOG"
+  if [ -f "$root/capture-gateway-image" ]; then
+    printf 'COMPOSE_GATEWAY_IMAGE=%s\\n' "$gateway_image" >> "$root/docker.log"
   fi
   node -e '
 const { readFileSync } = require("node:fs");
@@ -163,27 +155,36 @@ process.stdout.write(JSON.stringify({
 }));
 ' "$compose_json" "$gateway_image"
 }
+if [ "$1" = compose ] && [ "$2" = version ]; then exit 0; fi
+if [ "$1" = compose ] && [ -f "$root/capture-compose-env" ]; then
+  printf 'COMPOSE_IMAGE_ENV=REDIS_IMAGE:%s;SUBCONVERTER_IMAGE:%s;MYURLS_IMAGE:%s\\n' "\${REDIS_IMAGE-unset}" "\${SUBCONVERTER_IMAGE-unset}" "\${MYURLS_IMAGE-unset}" >> "$root/docker.log"
+  printf 'COMPOSE_HOST_ENV=DOCKER_HOST:%s;DOCKER_CONFIG:%s;HTTPS_PROXY:%s\\n' "\${DOCKER_HOST-unset}" "\${DOCKER_CONFIG-unset}" "\${HTTPS_PROXY-unset}" >> "$root/docker.log"
+fi
+if [ "$1" = compose ] && [ -f "$root/capture-subweb-image" ]; then
+  printf 'SUBWEB_IMAGE=%s\\n' "\${SUBWEB_IMAGE-unset}" >> "$root/docker.log"
+fi
 case "$*" in
   'buildx version') exit "\${DOCKER_BUILDX_STATUS:-0}" ;;
   'buildx imagetools inspect ghcr.io/keleyaa/subweb:'*' --format {{.Manifest.Digest}}')
      if [ "\${DOCKER_INSPECT_READ_STDIN-}" = 1 ]; then
        inspect_stdin=$(cat)
-       printf 'BUILDX_INSPECT_STDIN=%s\\n' "\${inspect_stdin:-<none>}" >> "$DOCKER_LOG"
+       printf 'BUILDX_INSPECT_STDIN=%s\\n' "\${inspect_stdin:-<none>}" >> "$root/docker.log"
      fi
      [ "\${DOCKER_RESOLVE_STATUS:-0}" -eq 0 ] || exit "\${DOCKER_RESOLVE_STATUS}"
      printf 'sha256:%s' "\${DOCKER_RELEASE_DIGEST-}"
     ;;
-  'compose version') exit 0 ;;
   'compose -f compose.yaml --env-file '*" config --quiet") exit 0 ;;
-   'compose -f compose.yaml --env-file '*" config --format json")
-      render_compose "$COMPOSE_JSON_ENABLED"
-      ;;
-  'compose -f compose.yaml pull gateway subconverter myurls redis') exit "\${DOCKER_PULL_STATUS:-0}" ;;
-   'compose -f compose.disabled-short-links.yaml --env-file '*" config --quiet") exit 0 ;;
-    'compose -f compose.disabled-short-links.yaml --env-file '*" config --format json")
-      render_compose "$COMPOSE_JSON_DISABLED"
-      ;;
-  'compose -f compose.disabled-short-links.yaml pull gateway subconverter') exit "\${DOCKER_PULL_STATUS:-0}" ;;
+  'compose -f compose.yaml --env-file '*" config --format json") render_compose "$root/compose-enabled.json" ;;
+  'compose -f compose.yaml pull gateway subconverter myurls redis')
+    [ -f "$root/pull-status" ] && exit "$(cat "$root/pull-status")"
+    exit 0
+    ;;
+  'compose -f compose.disabled-short-links.yaml --env-file '*" config --quiet") exit 0 ;;
+  'compose -f compose.disabled-short-links.yaml --env-file '*" config --format json") render_compose "$root/compose-disabled.json" ;;
+  'compose -f compose.disabled-short-links.yaml pull gateway subconverter')
+    [ -f "$root/pull-status" ] && exit "$(cat "$root/pull-status")"
+    exit 0
+    ;;
   'compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --remove-orphans --wait') exit 0 ;;
   'compose -f compose.disabled-short-links.yaml ps') exit 0 ;;
   'compose -f compose.yaml up -d --no-build --pull never --remove-orphans --wait') exit 0 ;;
@@ -198,8 +199,11 @@ esac
 set -eu
 printf '%s\\n' "$*" >> "$GH_LOG"
 case "$*" in
+  'api repos/keleyaa/subweb/commits/'*' --jq .sha')
+    printf '%s' '${releaseSourceSha}'
+    ;;
   'attestation verify '*)
-    printf '%s\\trefs/tags/%s\\tsha256:%s' '${releaseVersion}' '${releaseVersion}' '${releaseDigest}'
+    printf '%s\\trefs/tags/%s\\t%s\\tsha256:%s' '${releaseVersion}' '${releaseVersion}' '${releaseSourceSha}' '${releaseDigest}'
     ;;
   *) exit 64 ;;
 esac
@@ -223,6 +227,7 @@ const runDeploy = (root, extraArgs = [], env = {}, input = 'test-secret-key\n') 
       env: {
         ...process.env,
         PATH: `${join(root, 'bin')}:${process.env.PATH}`,
+        DOCKER_CONFIG: root,
         DOCKER_LOG: join(root, 'docker.log'),
         GH_LOG: join(root, 'gh.log'),
         COMPOSE_JSON_ENABLED: join(root, 'compose-enabled.json'),
@@ -287,13 +292,13 @@ describe('Docker image quick deployment', () => {
   it('clears inherited runtime image variables for every Compose subprocess', async () => {
     const root = await makeFixture();
 
+    await writeFile(join(root, 'capture-compose-env'), '1\n');
     const result = runDeploy(root, ['--image', dockerHubImage], {
-      CAPTURE_COMPOSE_IMAGE_ENV: '1',
       REDIS_IMAGE: 'registry.example/attacker/redis@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       SUBCONVERTER_IMAGE: 'registry.example/attacker/subconverter@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       MYURLS_IMAGE: 'registry.example/attacker/myurls@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
       DOCKER_HOST: 'tcp://docker.example:2376',
-      DOCKER_CONFIG: '/tmp/docker-config',
+      DOCKER_CONFIG: root,
       HTTPS_PROXY: 'http://proxy.example:3128',
     });
 
@@ -302,12 +307,12 @@ describe('Docker image quick deployment', () => {
     const imageEnvironmentLines = logLines.filter((line) => line.startsWith('COMPOSE_IMAGE_ENV='));
     const hostEnvironmentLines = logLines.filter((line) => line.startsWith('COMPOSE_HOST_ENV='));
 
-    expect(imageEnvironmentLines).toHaveLength(6);
-    expect(imageEnvironmentLines).toEqual(Array(6).fill(
+    expect(imageEnvironmentLines).toHaveLength(5);
+    expect(imageEnvironmentLines).toEqual(Array(5).fill(
       'COMPOSE_IMAGE_ENV=REDIS_IMAGE:unset;SUBCONVERTER_IMAGE:unset;MYURLS_IMAGE:unset',
     ));
-    expect(hostEnvironmentLines).toEqual(Array(6).fill(
-      'COMPOSE_HOST_ENV=DOCKER_HOST:tcp://docker.example:2376;DOCKER_CONFIG:/tmp/docker-config;HTTPS_PROXY:http://proxy.example:3128',
+    expect(hostEnvironmentLines).toEqual(Array(5).fill(
+      `COMPOSE_HOST_ENV=DOCKER_HOST:tcp://docker.example:2376;DOCKER_CONFIG:${root};HTTPS_PROXY:unset`,
     ));
   });
 
@@ -342,9 +347,8 @@ describe('Docker image quick deployment', () => {
 
     for (const image of directImages) {
       const root = await makeFixture();
-      const result = runDeploy(root, ['--image', image, ...profileArgs], {
-        CAPTURE_COMPOSE_GATEWAY_IMAGE: '1',
-      });
+      await writeFile(join(root, 'capture-gateway-image'), '1\n');
+      const result = runDeploy(root, ['--image', image, ...profileArgs]);
 
       expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
       expect(await readFile(join(root, '.env'), 'utf8')).toContain(
@@ -359,8 +363,8 @@ describe('Docker image quick deployment', () => {
   it('resolves a release version once and deploys the immutable digest', async () => {
     const root = await makeFixture();
 
+    await writeFile(join(root, 'capture-gateway-image'), '1\n');
     const result = runDeploy(root, ['--version', releaseVersion], {
-      CAPTURE_COMPOSE_GATEWAY_IMAGE: '1',
       DOCKER_RELEASE_DIGEST: releaseDigest,
     });
 
@@ -492,8 +496,8 @@ EOF
   it('does not let an inherited Gateway image override the selected deployment image', async () => {
     const root = await makeFixture();
     const selectedImage = dockerHubImage;
+    await writeFile(join(root, 'capture-subweb-image'), '1\n');
     const result = runDeploy(root, ['--image', selectedImage], {
-      CAPTURE_SUBWEB_IMAGE: '1',
       SUBWEB_IMAGE: 'docker.io/attacker/subweb:sha-deadbee',
     });
 
@@ -602,7 +606,8 @@ EOF
   it('does not start containers when pulling an image fails', async () => {
     const root = await makeFixture();
 
-    const result = runDeploy(root, ['--image', dockerHubImage], { DOCKER_PULL_STATUS: '23' });
+    await writeFile(join(root, 'pull-status'), '23\n');
+    const result = runDeploy(root, ['--image', dockerHubImage]);
 
     expect(result.status).not.toBe(0);
     const log = await readFile(join(root, 'docker.log'), 'utf8');
