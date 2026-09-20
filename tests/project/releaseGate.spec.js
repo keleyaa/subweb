@@ -25,7 +25,7 @@ const renderedProfile = (shortLinksEnabled) => {
   const images = resolveRuntimeImages(lock);
   const gateway = secureService({
     build: { dockerfile: 'Dockerfile' },
-    ports: [{ host_ip: '127.0.0.1', target: 8080 }],
+    ports: [{ host_ip: '127.0.0.1', target: 8080, published: 8080 }],
     networks: shortLinksEnabled
       ? { default: {}, 'myurls-edge': {}, 'redis-policy': {}, 'subconverter-egress': {} }
       : { default: {}, 'subconverter-egress': {} },
