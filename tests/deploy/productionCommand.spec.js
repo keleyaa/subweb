@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmod, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +16,7 @@ const makeFixture = async () => {
   await cp(join(repositoryRoot, 'scripts/subweb.sh'), join(root, 'scripts/subweb.sh'));
   await cp(join(repositoryRoot, 'scripts/validate-compose.sh'), join(root, 'scripts/validate-compose.sh'));
   await cp(join(repositoryRoot, 'scripts/lib/path-lock.sh'), join(root, 'scripts/lib/path-lock.sh'));
+  await cp(join(repositoryRoot, 'scripts/lib/docker-environment.sh'), join(root, 'scripts/lib/docker-environment.sh'));
 
   const docker = join(root, 'bin/docker');
   await writeFile(docker, `#!/bin/sh
@@ -43,16 +44,17 @@ if [ -f "$DOCKER_CONFIG/signal" ]; then
   kill -TERM "$PPID"
   exit 0
 fi
-case "$compose_file:$*" in
-  'compose.disabled-short-links.yaml:ps') exit 0 ;;
-  *) exit 64 ;;
-esac
+  case "$compose_file:$*" in
+    'compose.disabled-short-links.yaml:ps') exit 0 ;;
+    'compose.yaml:ps --services --filter status=running') printf '%s\\n' redis ;;
+    *) exit 64 ;;
+  esac
 `);
   await chmod(docker, 0o755);
   return root;
 };
 
-const run = (root, command = 'up', environment = {}) => spawnSync('sh', [join(root, 'scripts/subweb.sh'), command], {
+const run = (root, command = 'up', environment = {}, args = []) => spawnSync('sh', [join(root, 'scripts/subweb.sh'), command, ...args], {
   cwd: root,
   encoding: 'utf8',
   env: {
@@ -152,6 +154,72 @@ describe('production command configuration contract', () => {
     expect(result.status).not.toBe(0);
     const snapshotPath = (await readFile(snapshotLog, 'utf8')).trim();
     await expect(readFile(snapshotPath)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('does not release a lock reacquired after signal cleanup', async () => {
+    const root = await makeFixture();
+    const envFile = join(root, '.env');
+    const lockPath = `${envFile}.lock`;
+    await writeFile(envFile, 'SHORT_LINKS_ENABLED=false\n', { mode: 0o600 });
+    await writeFile(join(root, 'signal'), '1\n');
+    await writeFile(join(root, 'bin/rmdir'), `#!/bin/sh
+if [ "$1" = "$RACE_LOCK" ] && [ ! -e "$RACE_OWNER" ]; then
+  /bin/rmdir "$1"
+  mkdir "$1"
+  : > "$RACE_OWNER"
+  exit 0
+fi
+exec /bin/rmdir "$@"
+`);
+    await chmod(join(root, 'bin/rmdir'), 0o755);
+
+    const result = run(root, 'status', {
+      RACE_LOCK: lockPath,
+      RACE_OWNER: join(root, 'reacquired'),
+    });
+
+    expect(result.status).not.toBe(0);
+    await expect(stat(join(root, 'reacquired'))).resolves.toBeDefined();
+    expect((await stat(lockPath)).isDirectory()).toBe(true);
+  });
+
+  it('runs backup and restore children with only the selected Compose environment', async () => {
+    const root = await makeFixture();
+    const envFile = join(root, '.env');
+    const operationsDirectory = join(root, 'scripts/operations');
+    const operationLog = join(root, 'operations.log');
+    const backup = join(root, 'verified.rdb');
+    await writeFile(envFile, 'SHORT_LINKS_ENABLED=true\n', { mode: 0o600 });
+    await writeFile(backup, 'verified backup');
+    await mkdir(operationsDirectory, { recursive: true });
+    for (const name of ['backup-redis.sh', 'restore-redis.sh']) {
+      await writeFile(join(operationsDirectory, name), `#!/bin/sh
+printf '%s compose=%s snapshot=%s project=%s app=%s api=%s image=%s\\n' \\
+  "$(basename "$0")" "\${COMPOSE_FILE-}" "\${SUBWEB_ENV_FILE-}" \\
+  "\${COMPOSE_PROJECT_NAME-}" "\${APP_DOMAIN-}" "\${API_URL-}" "\${SUBWEB_IMAGE-}" >> "${operationLog}"
+`);
+      await chmod(join(operationsDirectory, name), 0o755);
+    }
+    const hostileEnvironment = {
+      COMPOSE_PROJECT_NAME: 'attacker-project',
+      APP_DOMAIN: 'attacker.example',
+      API_URL: 'https://attacker.example/sub',
+      SUBWEB_IMAGE: 'registry.example/attacker:latest',
+    };
+
+    const backupResult = run(root, 'backup', hostileEnvironment);
+    const restoreResult = run(
+      root,
+      'restore',
+      hostileEnvironment,
+      ['--backup', backup, '--confirm-stop-writes'],
+    );
+
+    expect(backupResult.status, backupResult.stderr).toBe(0);
+    expect(restoreResult.status, restoreResult.stderr).toBe(0);
+    const log = await readFile(operationLog, 'utf8');
+    expect(log).toMatch(/backup-redis\.sh compose=compose\.yaml snapshot=\S*subweb-env\.\S+ project= app= api= image=\n/u);
+    expect(log).toMatch(/restore-redis\.sh compose=compose\.yaml snapshot=\S*subweb-env\.\S+ project= app= api= image=\n/u);
   });
 
   it('clears inherited locked external image variables before invoking Compose', async () => {

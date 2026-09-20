@@ -6,10 +6,14 @@ PROJECT_DIRECTORY=$(CDPATH='' cd -- "$SCRIPT_DIRECTORY/.." && pwd)
 DEFAULT_ENV_FILE=$PROJECT_DIRECTORY/.env
 ENV_FILE=${SUBWEB_ENV_FILE:-$DEFAULT_ENV_FILE}
 . "$SCRIPT_DIRECTORY/lib/path-lock.sh"
+. "$SCRIPT_DIRECTORY/lib/docker-environment.sh"
 
 SUBWEB_ENV_LOCK_DIRECTORY=
 validated_env_file=
+cleanup_complete=0
 cleanup() {
+  [ "$cleanup_complete" -eq 0 ] || return 0
+  cleanup_complete=1
   [ -z "$validated_env_file" ] || rm -f "$validated_env_file"
   release_path_lock "$SUBWEB_ENV_LOCK_DIRECTORY" || true
 }
@@ -111,7 +115,7 @@ ENV_FILE=$validated_env_file
 export SUBWEB_ENV_FILE="$ENV_FILE"
 
 command -v docker >/dev/null 2>&1 || fail 'Docker is not installed or not available in PATH.'
-docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
+run_docker_environment docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
 
 short_links_enabled=true
 if value=$(read_env_value SHORT_LINKS_ENABLED); then
@@ -128,19 +132,17 @@ esac
 
 cd "$PROJECT_DIRECTORY"
 compose() (
-  env -i \
-    PATH="$PATH" \
-    HOME="${HOME-}" \
-    TMPDIR="${TMPDIR-}" \
-    DOCKER_API_VERSION="${DOCKER_API_VERSION-}" \
-    DOCKER_CERT_PATH="${DOCKER_CERT_PATH-}" \
-    DOCKER_CONFIG="${DOCKER_CONFIG-}" \
-    DOCKER_CONTEXT="${DOCKER_CONTEXT-}" \
-    DOCKER_HOST="${DOCKER_HOST-}" \
-    DOCKER_TLS="${DOCKER_TLS-}" \
-    DOCKER_TLS_VERIFY="${DOCKER_TLS_VERIFY-}" \
-    SSH_AUTH_SOCK="${SSH_AUTH_SOCK-}" \
-    docker compose --env-file "$ENV_FILE" -f "$compose_file" "$@"
+  COMPOSE_FILE=$compose_file
+  SUBWEB_ENV_FILE=$ENV_FILE
+  export COMPOSE_FILE SUBWEB_ENV_FILE
+  run_docker_environment docker compose --env-file "$ENV_FILE" -f "$compose_file" "$@"
+)
+
+run_operation() (
+  COMPOSE_FILE=$compose_file
+  SUBWEB_ENV_FILE=$ENV_FILE
+  export COMPOSE_FILE SUBWEB_ENV_FILE
+  run_docker_environment "$@"
 )
 
 case "$command_name" in
@@ -184,8 +186,7 @@ case "$command_name" in
     [ "$short_links_enabled" = true ] || fail 'backup requires SHORT_LINKS_ENABLED=true.'
     compose ps --services --filter status=running | grep -qx redis \
       || fail 'Redis must be running before backup.'
-    export COMPOSE_FILE=$compose_file
-    "$SCRIPT_DIRECTORY/operations/backup-redis.sh" "$@"
+    run_operation "$SCRIPT_DIRECTORY/operations/backup-redis.sh" "$@"
     ;;
   restore)
     [ "$short_links_enabled" = true ] || fail 'restore requires SHORT_LINKS_ENABLED=true.'
@@ -196,8 +197,7 @@ case "$command_name" in
       *) fail 'restore backup must be an absolute path.' ;;
     esac
     [ -f "$2" ] && [ ! -L "$2" ] || fail 'restore backup must be a regular file and not a symlink.'
-    export COMPOSE_FILE=$compose_file
-    "$SCRIPT_DIRECTORY/operations/restore-redis.sh" --backup "$2" --confirm-stop-writes
+    run_operation "$SCRIPT_DIRECTORY/operations/restore-redis.sh" --backup "$2" --confirm-stop-writes
     ;;
   upgrade)
     [ "$#" -eq 0 ] || fail 'upgrade does not accept extra arguments.'
@@ -215,7 +215,7 @@ case "$command_name" in
     # empty, so an upgraded SubConverter keeps the previous image's /base tree
     # unless the operator removes the volume. Fail the upgrade instead of
     # leaving a running container that silently uses stale preferences.
-    if ! COMPOSE_FILE=$compose_file SUBWEB_ENV_FILE=$ENV_FILE "$SCRIPT_DIRECTORY/verify-subconverter-runtime.sh"; then
+    if ! run_operation "$SCRIPT_DIRECTORY/verify-subconverter-runtime.sh"; then
       printf '\n%s\n' \
         'SubConverter upgrade is incomplete: the running container still serves the previous image /base content.' \
         'Stop the stack, remove the stale runtime volume, then start it again:' \

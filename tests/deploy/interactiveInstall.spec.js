@@ -20,6 +20,7 @@ const makeFixture = async () => {
   await cp(new URL('scripts/subweb.sh', repositoryRoot), join(root, 'scripts/subweb.sh'));
   await cp(new URL('scripts/lib/config.sh', repositoryRoot), join(root, 'scripts/lib/config.sh'));
   await cp(new URL('scripts/lib/path-lock.sh', repositoryRoot), join(root, 'scripts/lib/path-lock.sh'));
+  await cp(new URL('scripts/lib/docker-environment.sh', repositoryRoot), join(root, 'scripts/lib/docker-environment.sh'));
   await cp(new URL('scripts/lib/release-image.sh', repositoryRoot), join(root, 'scripts/lib/release-image.sh'));
   await cp(new URL('scripts/install-wizard.sh', repositoryRoot), join(root, 'scripts/install-wizard.sh'));
   await chmod(join(root, 'scripts/subweb.sh'), 0o755);

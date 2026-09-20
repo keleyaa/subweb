@@ -23,6 +23,10 @@ const makeFixture = async ({ volumeDigest }) => {
   await writeFile(join(root, '.env'), 'SHORT_LINKS_ENABLED=true\n', { mode: 0o600 });
   await writeFile(join(root, 'scripts/subweb.sh'), await readFile(new URL('scripts/subweb.sh', repositoryRoot), 'utf8'));
   await writeFile(join(root, 'scripts/lib/path-lock.sh'), await readFile(new URL('scripts/lib/path-lock.sh', repositoryRoot), 'utf8'));
+  await writeFile(
+    join(root, 'scripts/lib/docker-environment.sh'),
+    await readFile(new URL('scripts/lib/docker-environment.sh', repositoryRoot), 'utf8'),
+  );
   await chmod(join(root, 'scripts/subweb.sh'), 0o755);
   await writeFile(
     join(root, 'scripts/verify-subconverter-runtime.sh'),
@@ -37,8 +41,11 @@ const makeFixture = async ({ volumeDigest }) => {
   await writeFile(join(bin, 'docker'), `#!/bin/sh
 set -eu
 printf '%s\\n' "$*" >> "$DOCKER_CONFIG/docker.log"
-if [ "$1" = compose ] && [ "$2" = version ]; then exit 0; fi
-if [ "$1" = run ]; then
+  if [ "$1" = compose ] && [ "$2" = version ]; then exit 0; fi
+  if [ "$1" = compose ]; then
+    [ -z "\${COMPOSE_PROJECT_NAME-}" ] && [ -z "\${APP_DOMAIN-}" ] && [ -z "\${API_URL-}" ] || exit 65
+  fi
+  if [ "$1" = run ]; then
   printf '%s\\n' '${imageTemplateDigest}'
   exit 0
 fi
@@ -54,9 +61,9 @@ fi
 case "$compose_file:$*" in
   'compose.yaml:pull gateway subconverter myurls redis') exit 0 ;;
   'compose.yaml:up -d --no-build --pull never --remove-orphans --wait') exit 0 ;;
-  'common:config --format json') printf '{"services":{"subconverter":{"image":"${image}"}}}\\n' ;;
-  'common:ps -q subconverter') printf 'container-id\\n' ;;
-  'common:exec -T subconverter sh -eu -c'*) printf '%s\\n' '${volumeDigest}' ;;
+  'common:config --format json') [ "\${COMPOSE_FILE-}" = compose.yaml ] && printf '{"services":{"subconverter":{"image":"${image}"}}}\\n' ;;
+  'common:ps -q subconverter') [ "\${COMPOSE_FILE-}" = compose.yaml ] && printf 'container-id\\n' ;;
+  'common:exec -T subconverter sh -eu -c'*) [ "\${COMPOSE_FILE-}" = compose.yaml ] && printf '%s\\n' '${volumeDigest}' ;;
   *) exit 64 ;;
 esac
 `);
@@ -64,12 +71,13 @@ esac
   return root;
 };
 
-const runUpgrade = (root) => {
+const runUpgrade = (root, environment = {}) => {
   const env = {
     ...process.env,
     PATH: `${join(root, 'bin')}:${process.env.PATH}`,
     DOCKER_LOG: join(root, 'docker.log'),
     DOCKER_CONFIG: root,
+    ...environment,
   };
   delete env.SUBWEB_IMAGE;
   return spawnSync('sh', [join(root, 'scripts/subweb.sh'), 'upgrade'], { cwd: root, encoding: 'utf8', env });
@@ -92,6 +100,18 @@ describe('SubConverter upgrade runtime volume gate', () => {
     expect(log).toContain('compose --env-file <private-snapshot> config --format json\n');
     expect(log).toContain('compose --env-file <private-snapshot> ps -q subconverter\n');
     expect(log).toContain('compose --env-file <private-snapshot> exec -T subconverter sh -eu -c');
+  }, 30_000);
+
+  it('runs the runtime verifier inside the selected, sanitized Compose environment', async () => {
+    const root = await makeFixture({ volumeDigest: imageTemplateDigest });
+
+    const result = runUpgrade(root, {
+      COMPOSE_PROJECT_NAME: 'attacker-project',
+      APP_DOMAIN: 'attacker.example',
+      API_URL: 'https://attacker.example/sub',
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
   });
 
   it('fails the upgrade with remediation when the volume keeps the previous image content', async () => {

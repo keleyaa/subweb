@@ -9,11 +9,12 @@ describe('SubConverter runtime drift detection', () => {
     const script = await readFile(rootFile('scripts/verify-subconverter-runtime.sh'), 'utf8');
 
     // 通过一次性容器读取镜像自带文件，避免运行卷遮蔽镜像内容。
-    expect(script).toContain('docker run --rm --entrypoint sh "$image"');
+    expect(script).toContain('run_docker_environment docker run --rm --entrypoint sh "$image"');
     expect(script).toContain('/base/pref.example.toml');
     // 运行卷内容从运行容器读取，不直接操作宿主机卷路径。
-    expect(script).toContain('docker compose --env-file "$SUBWEB_ENV_FILE" "$@"');
+    expect(script).toContain('run_docker_environment docker compose --env-file "$SUBWEB_ENV_FILE" "$@"');
     expect(script).toContain('compose exec -T subconverter');
+    expect(script).toContain('lib/docker-environment.sh');
     expect(script).toContain('sha256sum');
     // 不一致时给出可执行的修复指引而非仅报错。
     expect(script).toContain('subconverter-runtime volume');

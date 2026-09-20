@@ -1,7 +1,8 @@
 #!/bin/sh
 
-operations_script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
-operations_project_root=$(CDPATH= cd -- "$operations_script_directory/../.." && pwd -P)
+operations_script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+operations_project_root=$(CDPATH='' cd -- "$operations_script_directory/../.." && pwd -P)
+. "$operations_project_root/scripts/lib/docker-environment.sh"
 
 operations_fail() {
   printf 'Redis operation error: %s\n' "$1" >&2
@@ -14,9 +15,9 @@ require_docker() {
 
 compose() {
   if [ -n "${SUBWEB_ENV_FILE:-}" ]; then
-    docker compose --env-file "$SUBWEB_ENV_FILE" "$@"
+    run_docker_environment docker compose --env-file "$SUBWEB_ENV_FILE" "$@"
   else
-    docker compose "$@"
+    run_docker_environment docker compose "$@"
   fi
 }
 

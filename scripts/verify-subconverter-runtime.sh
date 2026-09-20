@@ -14,14 +14,17 @@ fail() {
   exit 1
 }
 
+script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+. "$script_directory/lib/docker-environment.sh"
+
 command -v docker >/dev/null 2>&1 || fail 'Docker is not available in PATH.'
-docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
+run_docker_environment docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
 
 compose() {
   if [ -n "${SUBWEB_ENV_FILE:-}" ]; then
-    docker compose --env-file "$SUBWEB_ENV_FILE" "$@"
+    run_docker_environment docker compose --env-file "$SUBWEB_ENV_FILE" "$@"
   else
-    docker compose "$@"
+    run_docker_environment docker compose "$@"
   fi
 }
 
@@ -37,15 +40,17 @@ process.stdin.on("end", () => {
 });
 ') || fail 'unable to resolve the subconverter image from the compose configuration.'
 
-subconverter_id=$(compose ps -q subconverter 2>/dev/null) \
+compose ps -q subconverter >/dev/null 2>&1 \
   || fail 'subconverter service is not running.'
 
 # 镜像自带文件：起一个无卷挂载的一次性容器读取，避免运行卷遮蔽镜像内容。
-image_file_digest=$(docker run --rm --entrypoint sh "$image" -c \
+# shellcheck disable=SC2016 # The command is interpreted inside the container.
+image_file_digest=$(run_docker_environment docker run --rm --entrypoint sh "$image" -c \
   'sha256sum /base/pref.example.toml 2>/dev/null | awk "{ print \$1 }"') \
   || fail 'unable to read pref.example.toml from the resolved image.'
 [ -n "$image_file_digest" ] || fail 'image does not contain /base/pref.example.toml.'
 
+# shellcheck disable=SC2016 # The command is interpreted inside the container.
 runtime_file_digest=$(compose exec -T subconverter sh -eu -c \
   'sha256sum /base/pref.example.toml | awk "{ print \$1 }"') \
   || fail 'unable to read pref.example.toml from the running container.'
