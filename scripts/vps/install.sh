@@ -25,6 +25,25 @@ case "$SOURCE_DIRECTORY" in /*) ;; *) fail 'SUBWEB_SOURCE must be an absolute pa
 if find "$SOURCE_DIRECTORY" -type l -print -quit | grep -q .; then
   fail 'release tree must not contain symbolic links.'
 fi
+
+release_tree_has_unsafe_modes() {
+  release_tree=$1
+  release_tree_entry=$(find "$release_tree" \
+    \( -type f -o -type d \) \
+    \( -perm -020 -o -perm -002 \) -print -quit) || return 2
+  [ -n "$release_tree_entry" ]
+}
+
+if release_tree_has_unsafe_modes "$SOURCE_DIRECTORY"; then
+  fail 'release tree must not contain group- or other-writable entries.'
+else
+  release_tree_mode_status=$?
+  case "$release_tree_mode_status" in
+    1) ;;
+    *) fail 'unable to validate release tree modes.' ;;
+  esac
+fi
+
 [ -f "$SOURCE_DIRECTORY/compose.yaml" ] || fail 'SUBWEB_SOURCE does not look like a Subweb release.'
 for state_directory in .runtime .local; do
   [ ! -e "$SOURCE_DIRECTORY/$state_directory" ] && [ ! -L "$SOURCE_DIRECTORY/$state_directory" ] \
@@ -198,12 +217,20 @@ if find "$TARGET_DIRECTORY" -type l -print -quit | grep -q .; then
 fi
 [ -f "$TARGET_DIRECTORY/.env" ] && [ ! -L "$TARGET_DIRECTORY/.env" ] \
   || fail 'installed .env must be a regular file and not a symlink.'
-find "$TARGET_DIRECTORY" \
-  \( -path "$TARGET_DIRECTORY/.runtime" -o -path "$TARGET_DIRECTORY/.local" -o -path "$TARGET_DIRECTORY/.env" \) -prune -o \
-  -exec chown root:subweb {} +
-chown subweb:subweb "$TARGET_DIRECTORY/.env"
-chmod 0600 "$TARGET_DIRECTORY/.env"
-find "$TARGET_DIRECTORY/scripts" -type f -name '*.sh' -exec chmod 0750 {} +
+normalize_installed_release_tree() {
+  installed_tree=$1
+  find "$installed_tree" \
+    \( -path "$installed_tree/.runtime" -o -path "$installed_tree/.local" -o -path "$installed_tree/.env" \) -prune -o \
+    -type d -exec chown root:subweb {} + -exec chmod 0750 {} + || return 1
+  find "$installed_tree" \
+    \( -path "$installed_tree/.runtime" -o -path "$installed_tree/.local" -o -path "$installed_tree/.env" \) -prune -o \
+    -type f -exec chown root:subweb {} + -exec chmod 0640 {} + || return 1
+  chown subweb:subweb "$installed_tree/.env" || return 1
+  chmod 0600 "$installed_tree/.env" || return 1
+  find "$installed_tree/scripts" -type f -name '*.sh' -exec chmod 0750 {} + || return 1
+}
+normalize_installed_release_tree "$TARGET_DIRECTORY" \
+  || fail 'unable to secure the installed release tree.'
 
 reconcile_install_host_assets || fail 'unable to install selected release host assets.'
 systemctl daemon-reload || fail 'unable to reload systemd after installing host assets.'

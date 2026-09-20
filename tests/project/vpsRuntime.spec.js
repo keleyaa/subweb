@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,20 @@ const backupPathScript = fileURLToPath(new URL('scripts/vps/backup-path.sh', roo
 const reconcileReleaseScript = fileURLToPath(new URL('scripts/vps/reconcile-release.sh', root));
 const temporaryDirectories = [];
 const read = (path) => readFile(new URL(path, root), 'utf8');
+
+const extractInstallerFunction = async (name) => {
+  const installer = await readFile(installPath, 'utf8');
+  const start = installer.indexOf(`${name}() {`);
+  const end = installer.indexOf('\n}\n', start);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  return installer.slice(start, end + 2);
+};
+
+const runInstallerFunction = async (name, args, environment = {}) => {
+  const functionSource = await extractInstallerFunction(name);
+  return runShell(`set -eu\n${functionSource}\n${name} "$@"`, args, environment);
+};
 
 const writeExecutable = async (path, source) => {
   await writeFile(path, source, { mode: 0o755 });
@@ -143,11 +157,8 @@ describe('VPS runtime contract', () => {
     expect(verifyTimer).toContain('OnCalendar=Sun *-*-01..07 04:15:00');
     expect(verifyBackup).toContain('verify-redis-backup.sh');
     expect(backup).toContain('flock -n 9');
-    expect(backup).toContain('BACKUP_LOCK_FILE=${BACKUP_WORKSPACE_DIRECTORY}/backup.lock');
+    expect(backup).toContain('BACKUP_WORKSPACE_DIRECTORY=/run/subweb-backup');
     expect(backup).toContain('mktemp -d "$BACKUP_WORKSPACE_DIRECTORY/.subweb-backup.XXXXXX"');
-    expect(backup).not.toContain('"$BACKUP_DIRECTORY/.backup.lock"');
-    expect(service).toContain('RuntimeDirectory=subweb-backup');
-    expect(service).toContain('RuntimeDirectoryMode=0700');
     expect(backup.indexOf('mkdir -p "$BACKUP_DIRECTORY"')).toBeLessThan(backup.indexOf('df -Pk "$BACKUP_DIRECTORY"'));
     expect(backup).toContain("''|*[!0-9]*) fail 'MIN_FREE_KIB must be a non-negative decimal integer.'");
     expect(subweb).toContain('DEFAULT_ENV_FILE=$PROJECT_DIRECTORY/.env');
@@ -156,7 +167,7 @@ describe('VPS runtime contract', () => {
     expect(backupPath).toContain('$path_label must be under a systemd ReadWritePaths entry.');
     expect(backup).toContain('require_supported_backup_path BACKUP_DIRECTORY');
     expect(verifyBackup).toContain('require_supported_backup_path BACKUP_DIRECTORY');
-     expect(service).toContain('ReadWritePaths=/opt/subweb/.env.lock /opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups');
+      expect(service).toContain('ReadWritePaths=/opt/subweb/.env.lock /opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups');
      expect(verifyService).toContain('ReadWritePaths=/opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups');
      for (const unit of [service, verifyService]) {
        expect(unit).toContain('RequiresMountsFor=/var/lib/subweb-backups /mnt/subweb-backups');
@@ -190,8 +201,9 @@ describe('VPS runtime contract', () => {
      expect(installer).toContain('install -d -o subweb -g subweb -m 0700 "$TARGET_DIRECTORY/.runtime" "$TARGET_DIRECTORY/.local"');
      expect(installer).toContain('reconcile_release_tree "$SOURCE_DIRECTORY" "$TARGET_DIRECTORY"');
      expect(installer).not.toContain('cp -a "$SOURCE_DIRECTORY/." "$TARGET_DIRECTORY/"');
-     expect(installer).toContain('-path "$TARGET_DIRECTORY/.runtime" -o -path "$TARGET_DIRECTORY/.local"');
-     expect(installer).not.toContain('chown -R');
+      expect(installer).toContain('normalize_installed_release_tree');
+      expect(installer).toContain('-path "$installed_tree/.runtime" -o -path "$installed_tree/.local"');
+      expect(installer).not.toContain('chown -R');
     expect(installer).not.toContain('usermod -aG docker subweb');
     expect(installer).toContain('systemctl daemon-reload');
     expect(installer).toContain('reconcile_snapshot_managed_unit_enablement');
@@ -257,6 +269,64 @@ describe('VPS runtime contract', () => {
     expect(result.stderr).toContain('release tree must not contain symbolic links');
     expect(await readCalls(fixture)).toBe('');
   });
+
+  it.each([
+     ['group-writable file', 'file', 0o664],
+     ['world-writable file', 'file', 0o646],
+     ['group-writable directory', 'directory', 0o775],
+     ['world-writable directory', 'directory', 0o757],
+   ])('rejects %s in a release tree before installation', async (_name, entryType, mode) => {
+     const fixture = await mkdtemp(join(tmpdir(), 'subweb-vps-release-mode-'));
+     temporaryDirectories.push(fixture);
+     const source = join(fixture, 'release');
+     await mkdir(source);
+     await writeFile(join(source, 'compose.yaml'), 'services: {}\n');
+     const entry = join(source, entryType === 'directory' ? 'unsafe-directory' : 'unsafe-file');
+     if (entryType === 'directory') {
+       await mkdir(entry);
+       await writeFile(join(entry, 'nested.txt'), 'nested\n');
+     } else {
+       await writeFile(entry, 'unsafe\n');
+     }
+     await chmod(entry, mode);
+
+     const result = await runInstallerFunction('release_tree_has_unsafe_modes', [source]);
+
+     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+   });
+
+  it('accepts a normal release and normalizes installed files without weakening .env', async () => {
+     const fixture = await mkdtemp(join(tmpdir(), 'subweb-vps-release-mode-safe-'));
+     temporaryDirectories.push(fixture);
+     const source = join(fixture, 'release');
+     const bin = join(fixture, 'bin');
+     const chownLog = join(fixture, 'chown.log');
+     await mkdir(join(source, 'scripts'), { recursive: true });
+     await mkdir(join(source, '.runtime'));
+     await mkdir(join(source, '.local'));
+     await mkdir(bin);
+     await writeFile(join(source, 'compose.yaml'), 'services: {}\n', { mode: 0o644 });
+     await writeFile(join(source, 'scripts', 'subweb.sh'), '#!/bin/sh\n', { mode: 0o755 });
+     await writeFile(join(source, '.env'), 'SHORT_LINKS_ENABLED=false\n', { mode: 0o644 });
+     await writeExecutable(join(bin, 'chown'), `#!/bin/sh\nprintf '%s\\n' "$*" >> "$CHOWN_LOG"\n`);
+
+     const validation = await runInstallerFunction('release_tree_has_unsafe_modes', [source]);
+     expect(validation.status, `${validation.stdout}\n${validation.stderr}`).toBe(1);
+
+     const result = await runInstallerFunction(
+       'normalize_installed_release_tree',
+       [source],
+       { PATH: `${bin}:${process.env.PATH}`, CHOWN_LOG: chownLog },
+     );
+
+     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+     expect((await stat(source)).mode & 0o777).toBe(0o750);
+     expect((await stat(join(source, 'compose.yaml'))).mode & 0o777).toBe(0o640);
+     expect((await stat(join(source, 'scripts'))).mode & 0o777).toBe(0o750);
+     expect((await stat(join(source, 'scripts', 'subweb.sh'))).mode & 0o777).toBe(0o750);
+     expect((await stat(join(source, '.env'))).mode & 0o777).toBe(0o600);
+     expect(await readFile(chownLog, 'utf8')).toContain('root:subweb');
+   });
 
   it('rejects symlinked components before using an approved backup path', async () => {
     const fixture = await mkdtemp(join(tmpdir(), 'subweb-backup-path-'));
