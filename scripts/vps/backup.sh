@@ -23,6 +23,14 @@ backup_expected_mount_identity=
 
 validate_backup_destination() {
   require_supported_backup_path BACKUP_DIRECTORY "$BACKUP_DIRECTORY"
+  if [ -n "${backup_directory_handle:-}" ]; then
+    backup_handle_identity=$(backup_file_identity "$backup_directory_handle") \
+      || fail 'unable to inspect BACKUP_DIRECTORY handle; refusing backup.'
+    backup_path_identity=$(backup_file_identity "$BACKUP_DIRECTORY") \
+      || fail 'unable to inspect BACKUP_DIRECTORY; refusing backup.'
+    [ "$backup_handle_identity" = "$backup_path_identity" ] \
+      || fail 'BACKUP_DIRECTORY identity changed; refusing backup.'
+  fi
   if [ -z "$BACKUP_REMOTE_MOUNT" ]; then
     return 0
   fi
@@ -64,6 +72,16 @@ esac
 
 mkdir -p "$BACKUP_DIRECTORY"
 validate_backup_destination
+backup_hold_directory "$BACKUP_DIRECTORY" \
+  || fail 'unable to hold BACKUP_DIRECTORY open; refusing backup.'
+backup_directory_handle=$(backup_directory_handle_path) \
+  || fail 'unable to resolve BACKUP_DIRECTORY handle; refusing backup.'
+backup_directory_handle_identity=$(backup_file_identity "$backup_directory_handle") \
+  || fail 'unable to inspect BACKUP_DIRECTORY handle; refusing backup.'
+backup_directory_path_identity=$(backup_file_identity "$BACKUP_DIRECTORY") \
+  || fail 'unable to inspect BACKUP_DIRECTORY; refusing backup.'
+[ "$backup_directory_handle_identity" = "$backup_directory_path_identity" ] \
+  || fail 'BACKUP_DIRECTORY changed while opening its handle; refusing backup.'
 chmod 0700 "$BACKUP_DIRECTORY"
 command -v flock >/dev/null 2>&1 || fail 'flock is required to serialize backups.'
 validate_backup_destination
@@ -118,8 +136,19 @@ fi
 validate_backup_destination
 mv "$final_temporary" "$final_file"
 
-sha256sum "$final_file" >"$checksum_temporary" 2>/dev/null \
-  || shasum -a 256 "$final_file" >"$checksum_temporary"
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum "$final_file" >"$checksum_temporary" \
+    || fail 'unable to calculate backup checksum.'
+elif command -v shasum >/dev/null 2>&1; then
+  shasum -a 256 "$final_file" >"$checksum_temporary" \
+    || fail 'unable to calculate backup checksum.'
+else
+  fail 'sha256sum or shasum is required to calculate backup checksum.'
+fi
+checksum_value=$(awk 'NR == 1 { print $1 }' "$checksum_temporary")
+printf '%s\n' "$checksum_value" | LC_ALL=C grep -Eq '^[0-9a-fA-F]{64}$' \
+  || fail 'backup checksum tool returned an invalid SHA-256 digest.'
+printf '%s  %s\n' "$checksum_value" "$final_file" >"$checksum_temporary"
 validate_backup_destination
 mv "$checksum_temporary" "$checksum_file"
 validate_backup_destination

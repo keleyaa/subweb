@@ -83,6 +83,34 @@ backup_hold_mount() {
   exec 8<"$backup_mount_path" || return 1
 }
 
+backup_hold_directory() {
+  backup_directory_path=$(backup_path_without_trailing_slashes "$1") || return 1
+  [ -d "$backup_directory_path" ] || return 1
+  exec 7<"$backup_directory_path" || return 1
+}
+
+backup_directory_handle_path() {
+  if [ -d /proc/self/fd/7 ]; then
+    printf '%s\n' /proc/self/fd/7
+  else
+    printf '%s\n' /dev/fd/7
+  fi
+}
+
+backup_file_identity() {
+  if backup_identity=$(stat -Lc '%d:%i' "$1" 2>/dev/null); then
+    case "$backup_identity" in
+      *[!0-9:]*|*::*|:*) return 1 ;;
+    esac
+  else
+    backup_identity=$(stat -Lf '%i' "$1") || return 1
+    case "$backup_identity" in
+      *[!0-9]*|'') return 1 ;;
+    esac
+  fi
+  printf '%s\n' "$backup_identity"
+}
+
 backup_path_is_within() {
   backup_parent_path=$(backup_path_without_trailing_slashes "$1") || return 1
   backup_child_path=$(backup_path_without_trailing_slashes "$2") || return 1

@@ -95,7 +95,7 @@ for (const name of readdirSync(directory)) {
 `);
   await writeExecutable(join(fixture, 'flock'), '#!/bin/sh\nexit 0\n');
   await writeExecutable(join(fixture, 'sha256sum'), `#!/bin/sh
-printf 'digest  %s\\n' "$1"
+  printf '%064d  %s\\n' 0 "$1"
 `);
   await writeExecutable(join(fixture, 'sort'), `#!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
@@ -457,7 +457,7 @@ describe('VPS backup checksum verification', () => {
     });
 
     expect(result.status, result.stderr).not.toBe(0);
-    expect(result.stderr, result.stderr).toContain('exactly one record for the selected backup');
+    expect(result.stderr, result.stderr).toContain('sidecar must identify the selected backup');
     await expect(readFile(fixture.verifiedMarker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
