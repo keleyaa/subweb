@@ -19,6 +19,7 @@ const makeFixture = async (shortLinksEnabled) => {
   await writeFile(join(root, '.env'), `SHORT_LINKS_ENABLED=${shortLinksEnabled}\n`, { mode: 0o600 });
   await writeFile(join(root, 'scripts/subweb.sh'), await readFile(new URL('scripts/subweb.sh', repositoryRoot), 'utf8'));
   await writeFile(join(root, 'scripts/lib/path-lock.sh'), await readFile(new URL('scripts/lib/path-lock.sh', repositoryRoot), 'utf8'));
+  await writeFile(join(root, 'scripts/lib/docker-environment.sh'), await readFile(new URL('scripts/lib/docker-environment.sh', repositoryRoot), 'utf8'));
   await chmod(join(root, 'scripts/subweb.sh'), 0o755);
   await writeFile(join(root, 'scripts/validate-compose.sh'), '#!/bin/sh\nprintf "validate\\n" >> "$DOCKER_LOG"\n');
   await chmod(join(root, 'scripts/validate-compose.sh'), 0o755);
@@ -162,7 +163,7 @@ describe('feature-flag deployment entrypoint', () => {
     await mkdir(join(root, 'scripts', 'operations'));
     await writeFile(
       join(root, 'scripts', 'operations', 'restore-redis.sh'),
-      '#!/bin/sh\nprintf "compose=%s args=%s\\n" "$COMPOSE_FILE" "$*" >> "$RESTORE_LOG"\n',
+      '#!/bin/sh\nprintf "compose=%s args=%s\\n" "$COMPOSE_FILE" "$*" >> "$DOCKER_CONFIG/restore.log"\n',
     );
     await chmod(join(root, 'scripts', 'operations', 'restore-redis.sh'), 0o755);
 
@@ -179,7 +180,6 @@ describe('feature-flag deployment entrypoint', () => {
           PATH: `${join(root, 'bin')}:${process.env.PATH}`,
           DOCKER_LOG: join(root, 'docker.log'),
           DOCKER_CONFIG: root,
-          RESTORE_LOG: join(root, 'restore.log'),
         },
       },
     );

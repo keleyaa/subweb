@@ -275,12 +275,13 @@ describe('release evidence and command gate', () => {
     expect(workflow).toContain('run: npm run verify:ci');
     expect(workflow).toContain('outputs:\n      source_sha: ${{ steps.source.outputs.source_sha }}');
     expect(workflow).toContain('EXPECTED_SOURCE_SHA: ${{ needs.quality.outputs.source_sha }}');
-    expect(workflow).toContain('Release tag resolved to a different commit than quality verification');
+    expect(workflow).toContain('Release tag does not match the quality-verified commit');
     expect(workflow).toContain('source_sha=$(git rev-parse HEAD)');
      expect(workflow).toContain('timeout-minutes: 60');
      expect(workflow).toContain('timeout-minutes: 45');
-     expect(workflow).toContain('[[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$ ]]');
-     expect(workflow).toContain('[[ "$version" =~ ^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$ ]]');
+    expect(workflow).toContain("semver_pattern='^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$'");
+    expect(workflow).toContain('[ "${#VERSION}" -le 128 ]');
+    expect(workflow).toContain('[ "${#version}" -le 128 ]');
     expect(workflow).not.toContain('npm pkg get version');
     expect(workflow).toContain('[[ "$source_sha" == "$EXPECTED_SOURCE_SHA" ]]');
     expect(workflow.indexOf('[[ "$source_sha" == "$EXPECTED_SOURCE_SHA" ]]')).toBeLessThan(workflow.indexOf('name: Set up QEMU'));
@@ -368,7 +369,7 @@ describe('release evidence and command gate', () => {
     expect(source).toContain('dockerhub_reference');
     expect(source).toContain('ghcr_reference');
     expect(source).toContain('node scripts/runtime-image-contract.mjs env >> "$GITHUB_ENV"');
-    expect(source).toContain('runtime_images_json=$(node scripts/runtime-image-contract.mjs rollback)');
+    expect(source).toContain('scripts/runtime-image-contract.mjs rollback');
     expect(source).toContain('--argjson runtime_images "$runtime_images_json"');
     expect(source).toContain('runtime_images: $runtime_images');
      expect(source).toContain('(keys | sort) == ["myurls", "redis", "subconverter"]');
