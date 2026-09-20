@@ -19,9 +19,10 @@ const normalizeComposeSnapshot = (log) => log.replace(
 const makeFixture = async ({ volumeDigest }) => {
   const root = await mkdtemp(join(tmpdir(), 'subweb-subconverter-upgrade-'));
   temporaryDirectories.push(root);
-  await mkdir(join(root, 'scripts'), { recursive: true });
+  await mkdir(join(root, 'scripts/lib'), { recursive: true });
   await writeFile(join(root, '.env'), 'SHORT_LINKS_ENABLED=true\n', { mode: 0o600 });
   await writeFile(join(root, 'scripts/subweb.sh'), await readFile(new URL('scripts/subweb.sh', repositoryRoot), 'utf8'));
+  await writeFile(join(root, 'scripts/lib/path-lock.sh'), await readFile(new URL('scripts/lib/path-lock.sh', repositoryRoot), 'utf8'));
   await chmod(join(root, 'scripts/subweb.sh'), 0o755);
   await writeFile(
     join(root, 'scripts/verify-subconverter-runtime.sh'),
@@ -35,7 +36,7 @@ const makeFixture = async ({ volumeDigest }) => {
   await mkdir(bin);
   await writeFile(join(bin, 'docker'), `#!/bin/sh
 set -eu
-printf '%s\\n' "$*" >> "$DOCKER_LOG"
+printf '%s\\n' "$*" >> "$DOCKER_CONFIG/docker.log"
 if [ "$1" = compose ] && [ "$2" = version ]; then exit 0; fi
 if [ "$1" = run ]; then
   printf '%s\\n' '${imageTemplateDigest}'
@@ -68,6 +69,7 @@ const runUpgrade = (root) => {
     ...process.env,
     PATH: `${join(root, 'bin')}:${process.env.PATH}`,
     DOCKER_LOG: join(root, 'docker.log'),
+    DOCKER_CONFIG: root,
   };
   delete env.SUBWEB_IMAGE;
   return spawnSync('sh', [join(root, 'scripts/subweb.sh'), 'upgrade'], { cwd: root, encoding: 'utf8', env });

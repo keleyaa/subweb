@@ -15,9 +15,10 @@ const normalizeComposeSnapshot = (log) => log.replace(
 const makeFixture = async (shortLinksEnabled) => {
   const root = await mkdtemp(join(tmpdir(), 'subweb-feature-deploy-'));
   temporaryDirectories.push(root);
-  await mkdir(join(root, 'scripts'), { recursive: true });
+  await mkdir(join(root, 'scripts/lib'), { recursive: true });
   await writeFile(join(root, '.env'), `SHORT_LINKS_ENABLED=${shortLinksEnabled}\n`, { mode: 0o600 });
   await writeFile(join(root, 'scripts/subweb.sh'), await readFile(new URL('scripts/subweb.sh', repositoryRoot), 'utf8'));
+  await writeFile(join(root, 'scripts/lib/path-lock.sh'), await readFile(new URL('scripts/lib/path-lock.sh', repositoryRoot), 'utf8'));
   await chmod(join(root, 'scripts/subweb.sh'), 0o755);
   await writeFile(join(root, 'scripts/validate-compose.sh'), '#!/bin/sh\nprintf "validate\\n" >> "$DOCKER_LOG"\n');
   await chmod(join(root, 'scripts/validate-compose.sh'), 0o755);
@@ -25,7 +26,7 @@ const makeFixture = async (shortLinksEnabled) => {
   await mkdir(docker);
   await writeFile(join(docker, 'docker'), `#!/bin/sh
 set -eu
-printf '%s\\n' "$*" >> "$DOCKER_LOG"
+printf '%s\\n' "$*" >> "$DOCKER_CONFIG/docker.log"
 if [ "$1" = compose ] && [ "$2" = version ]; then exit 0; fi
 [ "$1" = compose ] || exit 64
 shift
@@ -53,6 +54,7 @@ const runCLI = (root, args, environment = {}) => {
     ...process.env,
     PATH: `${join(root, 'bin')}:${process.env.PATH}`,
     DOCKER_LOG: join(root, 'docker.log'),
+    DOCKER_CONFIG: root,
     ...environment,
   };
   if (!Object.hasOwn(environment, 'SUBWEB_IMAGE')) delete env.SUBWEB_IMAGE;
@@ -128,7 +130,7 @@ describe('feature-flag deployment entrypoint', () => {
     const result = runCLI(root, ['up'], { SUBWEB_IMAGE: '' });
     expect(result.status, result.stderr).toBe(0);
     expect(normalizeComposeSnapshot(await readFile(join(root, 'docker.log'), 'utf8'))).toContain(
-      'compose --env-file <private-snapshot> -f compose.disabled-short-links.yaml up -d --build --pull missing --remove-orphans --wait\n',
+      'compose --env-file <private-snapshot> -f compose.disabled-short-links.yaml up -d --no-build --pull never --remove-orphans --wait\n',
     );
   });
 
@@ -176,6 +178,7 @@ describe('feature-flag deployment entrypoint', () => {
           ...process.env,
           PATH: `${join(root, 'bin')}:${process.env.PATH}`,
           DOCKER_LOG: join(root, 'docker.log'),
+          DOCKER_CONFIG: root,
           RESTORE_LOG: join(root, 'restore.log'),
         },
       },

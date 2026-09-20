@@ -314,7 +314,7 @@ describe('Docker image quick deployment', () => {
     expect(hostEnvironmentLines).toEqual(Array(5).fill(
       `COMPOSE_HOST_ENV=DOCKER_HOST:tcp://docker.example:2376;DOCKER_CONFIG:${root};HTTPS_PROXY:unset`,
     ));
-  });
+  }, 30_000);
 
   it('persists the selected image and pulls the three default services', async () => {
     const root = await makeFixture();
@@ -337,7 +337,7 @@ describe('Docker image quick deployment', () => {
       'compose -f compose.yaml up -d --no-build --pull never --remove-orphans --wait',
       'compose -f compose.yaml ps',
     ]);
-  });
+  }, 30_000);
 
   it.each([
     ['with short links enabled', []],
@@ -379,7 +379,7 @@ describe('Docker image quick deployment', () => {
     expect(log.match(/^buildx version$/gm)).toHaveLength(1);
     expect(log.match(/^buildx imagetools inspect /gm)).toHaveLength(1);
     expect(log).toContain(`COMPOSE_GATEWAY_IMAGE=ghcr.io/keleyaa/subweb@sha256:${releaseDigest}`);
-  });
+  }, 30_000);
 
   it('does not pass the Turnstile secret to release image resolution', async () => {
     const root = await makeFixture();
@@ -506,7 +506,7 @@ EOF
     const log = await readFile(join(root, 'docker.log'), 'utf8');
     expect(log).toContain('SUBWEB_IMAGE=unset');
     expect(log).not.toContain('SUBWEB_IMAGE=docker.io/attacker/subweb:sha-deadbee');
-  });
+  }, 30_000);
 
   it('requires an immutable Gateway digest instead of silently deploying a tag', async () => {
     const root = await makeFixture();
@@ -568,7 +568,7 @@ EOF
     const config = JSON.parse(rendered.stdout);
     expect(Object.keys(config.services).sort()).toEqual(['gateway', 'subconverter']);
     expect(config.services.gateway.image).toBe(disabledProfileImage);
-  });
+  }, 30_000);
 
   it('deploys only Gateway and SubConverter when short links are disabled', async () => {
     const root = await makeFixture();

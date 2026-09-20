@@ -43,6 +43,7 @@ const secureService = (service) => ({
 const renderedProfile = (profile) => {
   const images = resolveRuntimeImages(lock);
   const gateway = secureService({
+    user: '65532:65532',
     build: { dockerfile: 'Dockerfile' },
     image: generatedEnvironment.SUBWEB_IMAGE,
     ports: [{ host_ip: '127.0.0.1', published: 18080, target: 8080 }],
@@ -65,6 +66,7 @@ const renderedProfile = (profile) => {
     ? {
       gateway,
       myurls: secureService({
+        user: '10001:10001',
         image: images.MYURLS_IMAGE,
         networks: { 'myurls-data': {}, 'myurls-edge': {} },
         environment: {
@@ -79,10 +81,13 @@ const renderedProfile = (profile) => {
         },
       }),
       redis: secureService({
+        user: '999:999',
         image: images.REDIS_IMAGE,
         networks: { 'myurls-data': {}, 'redis-policy': {} },
       }),
       subconverter: secureService({
+        user: '0:0',
+        cap_add: ['CHOWN', 'SETGID', 'SETUID'],
         image: images.SUBCONVERTER_IMAGE,
         networks: { 'subconverter-egress': {} },
         environment: { HTTPS_PROXY: 'http://gateway:25502' },
@@ -92,6 +97,8 @@ const renderedProfile = (profile) => {
     : {
       gateway,
       subconverter: secureService({
+        user: '0:0',
+        cap_add: ['CHOWN', 'SETGID', 'SETUID'],
         image: images.SUBCONVERTER_IMAGE,
         networks: { 'subconverter-egress': {} },
         environment: { HTTPS_PROXY: 'http://gateway:25502' },

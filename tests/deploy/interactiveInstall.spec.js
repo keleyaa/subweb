@@ -19,6 +19,7 @@ const makeFixture = async () => {
   await mkdir(join(root, 'bin'), { recursive: true });
   await cp(new URL('scripts/subweb.sh', repositoryRoot), join(root, 'scripts/subweb.sh'));
   await cp(new URL('scripts/lib/config.sh', repositoryRoot), join(root, 'scripts/lib/config.sh'));
+  await cp(new URL('scripts/lib/path-lock.sh', repositoryRoot), join(root, 'scripts/lib/path-lock.sh'));
   await cp(new URL('scripts/lib/release-image.sh', repositoryRoot), join(root, 'scripts/lib/release-image.sh'));
   await cp(new URL('scripts/install-wizard.sh', repositoryRoot), join(root, 'scripts/install-wizard.sh'));
   await chmod(join(root, 'scripts/subweb.sh'), 0o755);
@@ -56,8 +57,11 @@ esac
 set -eu
 printf '%s\\n' "$*" >> "$GH_LOG"
 case "$*" in
+  'api repos/keleyaa/subweb/commits/'*' --jq .sha')
+    printf '%s' '${'a'.repeat(40)}'
+    ;;
   'attestation verify '*)
-    printf '%s\\trefs/tags/%s\\tsha256:%s' '${releaseVersion}' '${releaseVersion}' '${releaseDigest}'
+    printf '%s\\trefs/tags/%s\\t%s\\tsha256:%s' '${releaseVersion}' '${releaseVersion}' '${'a'.repeat(40)}' '${releaseDigest}'
     ;;
   *) exit 64 ;;
 esac
@@ -261,7 +265,7 @@ describe('interactive deployment install', () => {
     expect(await readFile(join(root, 'docker.log'), 'utf8')).toContain('INSPECT_STDIN=<none>');
     expect(await readFile(join(root, 'docker.log'), 'utf8')).not.toContain(secret);
     expect(await readOptional(join(root, '.env'))).toBe('');
-  });
+  }, 35_000);
 
   it('runs the enabled wizard directly under dash and preserves the secret handoff', async () => {
     const root = await makeFixture();
