@@ -16,6 +16,8 @@ describe('integrated stack privacy sentinel', () => {
     expect(source).toContain('umask 077');
     expect(source).toContain('REDISCLI_AUTH');
     expect(source).toContain('subconverter_runs_as_101');
+    expect(source).toContain('run_docker_environment docker compose --env-file "$env_file"');
+    expect(source).not.toContain('COMPOSE_ENV_FILES');
     expect(source).not.toMatch(/printf[^\n]*"\$(?:sentinel_value|secret_value|password|ip_hash_secret)"/i);
     expect(source).not.toMatch(/set\s+-x/);
   });

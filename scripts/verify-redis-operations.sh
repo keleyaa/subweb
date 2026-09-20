@@ -9,8 +9,9 @@ for command in docker curl node openssl; do
   }
 done
 
-script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
-project_root=$(CDPATH= cd -- "$script_directory/.." && pwd -P)
+script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+project_root=$(CDPATH='' cd -- "$script_directory/.." && pwd -P)
+. "$project_root/scripts/lib/docker-environment.sh"
 
 # This verifier owns every variable in its temporary Compose environment.
 unset \
@@ -51,9 +52,12 @@ NODE
   exit 1
 }
 
+compose() {
+  run_docker_environment docker compose --env-file "$env_file" "$@"
+}
+
 cleanup() {
-  COMPOSE_FILE=$compose_files COMPOSE_ENV_FILES=$env_file COMPOSE_PROJECT_NAME=$project_name \
-    docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+  compose down --volumes --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$temporary_directory"
 }
 trap cleanup EXIT HUP INT TERM
@@ -80,12 +84,12 @@ trap cleanup EXIT HUP INT TERM
 chmod 0600 "$env_file"
 
 export COMPOSE_FILE=$compose_files
-export COMPOSE_ENV_FILES=$env_file
+export SUBWEB_ENV_FILE=$env_file
 export COMPOSE_PROJECT_NAME=$project_name
 export SUBWEB_OPERATIONS_RUNTIME_DIR=$temporary_directory/rollback
 
 cd "$project_root"
-docker compose up -d --build --wait >/dev/null
+compose up -d --build --wait >/dev/null
 
 gateway_ready() {
   curl --noproxy '*' --fail --silent --show-error \
@@ -100,38 +104,38 @@ short_resolves() {
 }
 
 subconverter_runs_as_101() {
-  docker compose exec -T subconverter sh -eu -c \
+  compose exec -T subconverter sh -eu -c \
     'awk '\''$1 == "Uid:" && $2 == 101 { uid = 1 } $1 == "CapEff:" && $2 == "0000000000000000" { caps = 1 } END { exit uid && caps ? 0 : 1 }'\'' /proc/1/status'
 }
 
 wait_for_stack() {
-  docker compose up -d --wait >/dev/null
+  compose up -d --wait >/dev/null
   gateway_ready
   short_resolves
   subconverter_runs_as_101
 }
 
-docker compose exec -T redis sh -eu -c \
+compose exec -T redis sh -eu -c \
   'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning SET "myurl:link:$1" "$2" EX 7200 >/dev/null' \
   sh "$short_key" "$short_url"
 short_resolves
 "$script_directory/operations/backup-redis.sh" --output "$backup_file" >/dev/null
 "$script_directory/operations/verify-redis-backup.sh" --backup "$backup_file" >/dev/null
 
-docker compose stop gateway myurls >/dev/null
-docker compose exec -T redis sh -eu -c \
+compose stop gateway myurls >/dev/null
+compose exec -T redis sh -eu -c \
   'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning FLUSHDB >/dev/null'
 "$script_directory/operations/restore-redis.sh" --backup "$backup_file" --confirm-stop-writes >/dev/null
 short_resolves
 
-docker compose restart redis >/dev/null
+compose restart redis >/dev/null
 wait_for_stack
 
-docker compose restart gateway >/dev/null
+compose restart gateway >/dev/null
 wait_for_stack
 
-docker compose restart subconverter >/dev/null
+compose restart subconverter >/dev/null
 wait_for_stack
-docker compose ps --services --filter status=running | grep -qx subconverter
+compose ps --services --filter status=running | grep -qx subconverter
 
 printf '%s\n' 'Unified Redis backup, restore, and service recovery verification passed.'
