@@ -39,6 +39,42 @@ resolve_release_image() (
 
   release_reference="ghcr.io/keleyaa/subweb:$release_version"
   sentinel=$(printf '\037')
+  source_capture=$(
+    if gh api "repos/keleyaa/subweb/commits/$release_version" --jq '.sha'; then
+      source_status=0
+    else
+      source_status=$?
+    fi
+    printf '%s%s' "$sentinel" "$source_status"
+  )
+  source_status=${source_capture##*"$sentinel"}
+  source_sha=${source_capture%"$sentinel$source_status"}
+
+  case "$source_status" in
+    0) ;;
+    *)
+      printf 'Unable to resolve authoritative source commit for: %s\n' "$release_version" >&2
+      return 1
+      ;;
+  esac
+
+  newline='
+'
+  case "$source_sha" in
+    *"$newline") source_sha=${source_sha%"$newline"} ;;
+  esac
+  case "$source_sha" in
+    ''|*"$newline"|*[!0-9a-f]*)
+      printf 'Unable to resolve authoritative source commit for: %s\n' "$release_version" >&2
+      return 1
+      ;;
+  esac
+  [ "${#source_sha}" -eq 40 ] || {
+    printf 'Unable to resolve authoritative source commit for: %s\n' "$release_version" >&2
+    return 1
+  }
+
+  sentinel=$(printf '\037')
   manifest_capture=$(
     if docker buildx imagetools inspect "$release_reference" --format '{{.Manifest.Digest}}'; then
       inspect_status=0
@@ -84,7 +120,7 @@ resolve_release_image() (
       --signer-workflow keleyaa/subweb/.github/workflows/docker-build-release.yml \
       --predicate-type "$release_predicate_type" \
       --format json \
-      --jq '.[] | .verificationResult.statement.predicate | [.releaseTag, .releaseRef, .imageDigest] | @tsv'; then
+       --jq '.[] | .verificationResult.statement.predicate | [.releaseTag, .releaseRef, .sourceSha, .imageDigest] | @tsv'; then
       attestation_status=0
     else
       attestation_status=$?
@@ -115,7 +151,7 @@ resolve_release_image() (
   esac
 
   tab=$(printf '\t')
-  expected_attestation_predicate="$release_version${tab}refs/tags/$release_version${tab}$manifest_digest"
+   expected_attestation_predicate="$release_version${tab}refs/tags/$release_version${tab}$source_sha${tab}$manifest_digest"
   remaining_predicates=$attestation_predicate
   matching_predicate_found=0
   while [ -n "$remaining_predicates" ]; do
@@ -146,20 +182,35 @@ resolve_release_image() (
         return 1
         ;;
     esac
-    release_ref=${remaining_fields%%"$tab"*}
-    image_digest=${remaining_fields#*"$tab"}
-    if [ -z "$release_tag" ] || [ -z "$release_ref" ] || [ -z "$image_digest" ]; then
+     release_ref=${remaining_fields%%"$tab"*}
+     remaining_fields=${remaining_fields#*"$tab"}
+     case "$remaining_fields" in
+       *"$tab"*) ;;
+       *)
+         printf 'Signed release provenance does not match the requested release: %s\n' "$release_version" >&2
+         return 1
+         ;;
+     esac
+     attested_source_sha=${remaining_fields%%"$tab"*}
+     image_digest=${remaining_fields#*"$tab"}
+     if [ -z "$release_tag" ] || [ -z "$release_ref" ] || [ -z "$attested_source_sha" ] || [ -z "$image_digest" ]; then
       printf 'Signed release provenance does not match the requested release: %s\n' "$release_version" >&2
       return 1
     fi
-    case "$image_digest" in
-      *"$tab"*)
-        printf 'Signed release provenance does not match the requested release: %s\n' "$release_version" >&2
-        return 1
-        ;;
-    esac
+     case "$attested_source_sha" in
+       *"$tab"*)
+         printf 'Signed release provenance does not match the requested release: %s\n' "$release_version" >&2
+         return 1
+         ;;
+     esac
+     case "$image_digest" in
+       *"$tab"*)
+         printf 'Signed release provenance does not match the requested release: %s\n' "$release_version" >&2
+         return 1
+         ;;
+     esac
 
-    if [ "$attestation_predicate" = "$expected_attestation_predicate" ]; then
+     if [ "$attestation_predicate" = "$expected_attestation_predicate" ]; then
       matching_predicate_found=1
     fi
   done

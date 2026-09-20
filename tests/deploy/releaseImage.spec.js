@@ -10,6 +10,8 @@ const temporaryDirectories = [];
 const validVersion = 'v1.2.3';
 const validDigest = 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const otherDigest = 'sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
+const validSourceSha = '0123456789abcdef0123456789abcdef01234567';
+const otherSourceSha = 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba98';
 const releasePredicateType = 'https://keleyaa.dev/subweb/release/v1';
 const expectedReference = `ghcr.io/keleyaa/subweb:${validVersion}`;
 const expectedImmutableReference = `ghcr.io/keleyaa/subweb@${validDigest}`;
@@ -17,8 +19,9 @@ const expectedImmutableReference = `ghcr.io/keleyaa/subweb@${validDigest}`;
 const makeAttestationOutput = ({
   version = validVersion,
   ref = `refs/tags/${version}`,
+  sourceSha = validSourceSha,
   digest = validDigest,
-} = {}) => [version, ref, digest].join('\t');
+} = {}) => [version, ref, sourceSha, digest].join('\t');
 
 const makeFixture = async () => {
   const root = await mkdtemp(join(tmpdir(), 'subweb-release-image-'));
@@ -50,8 +53,12 @@ const makeFixture = async () => {
     'set -eu',
     'printf \'%s\\n\' "$*" >> "$GH_LOG"',
     'case "$*" in',
-    "  'attestation verify '*)",
-    '    [ "${ATTESTATION_STATUS:-0}" -eq 0 ] || exit "$ATTESTATION_STATUS"',
+     "  *'commits/'*'--jq .sha'*)",
+     '    [ "${SOURCE_STATUS:-0}" -eq 0 ] || exit "$SOURCE_STATUS"',
+     '    printf \'%s\\n\' "${SOURCE_SHA:-0123456789abcdef0123456789abcdef01234567}"',
+     '    ;;',
+     "  'attestation verify '*)",
+     '    [ "${ATTESTATION_STATUS:-0}" -eq 0 ] || exit "$ATTESTATION_STATUS"',
     '    printf \'%s\' "${ATTESTATION_OUTPUT-}"',
     '    ;;',
     '  *) exit 64 ;;',
@@ -84,10 +91,11 @@ const runResolver = (root, version, environment = {}) => {
       ...process.env,
       PATH: `${join(root, 'bin')}:${process.env.PATH}`,
       DOCKER_LOG: join(root, 'docker.log'),
-      GH_LOG: join(root, 'gh.log'),
-      INSPECT_DIGEST: validDigest,
-      ATTESTATION_OUTPUT: makeAttestationOutput(),
-      ...environment,
+       GH_LOG: join(root, 'gh.log'),
+       INSPECT_DIGEST: validDigest,
+       SOURCE_SHA: validSourceSha,
+       ATTESTATION_OUTPUT: makeAttestationOutput(),
+       ...environment,
     },
   });
 };
@@ -129,8 +137,8 @@ describe('release image resolver', () => {
 
     const result = runResolver(root, validVersion, { INSPECT_DIGEST: validDigest });
 
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toBe(`ghcr.io/keleyaa/subweb@${validDigest}\n`);
+     expect(result.status, result.stderr).toBe(0);
+     expect(result.stdout).toBe(`ghcr.io/keleyaa/subweb@${validDigest}\n`);
     expect(await readDockerLog(root)).toBe([
       'buildx version',
       `buildx imagetools inspect ${expectedReference} --format {{.Manifest.Digest}}`,
@@ -150,6 +158,19 @@ describe('release image resolver', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('Unable to verify release provenance');
+    expect(result.stdout).toBe('');
+    await expectNoDeploymentCommands(root);
+  });
+
+  it('rejects an attestation whose source commit differs from the authoritative tag', async () => {
+    const root = await makeFixture();
+
+    const result = runResolver(root, validVersion, {
+      ATTESTATION_OUTPUT: makeAttestationOutput({ sourceSha: otherSourceSha }),
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('does not match the requested release');
     expect(result.stdout).toBe('');
     await expectNoDeploymentCommands(root);
   });
@@ -189,8 +210,8 @@ describe('release image resolver', () => {
   it.each([
     'not-tsv',
     `${makeAttestationOutput()}\textra-field`,
-    `${validVersion}\t\t${validDigest}`,
-    `${makeAttestationOutput()}\nnot-tsv`,
+     `${validVersion}\t\t${validSourceSha}\t${validDigest}`,
+     `${makeAttestationOutput()}\nnot-tsv`,
     `${makeAttestationOutput()}\n\n`,
   ])('rejects malformed attestation TSV output', async (attestationOutput) => {
     const root = await makeFixture();
@@ -334,8 +355,11 @@ describe('release image resolver', () => {
       env: {
         ...process.env,
         PATH: `${join(root, 'bin')}:${process.env.PATH}`,
-        DOCKER_LOG: join(root, 'docker.log'),
-        INSPECT_STATUS: '42',
+         DOCKER_LOG: join(root, 'docker.log'),
+         GH_LOG: join(root, 'gh.log'),
+         SOURCE_SHA: validSourceSha,
+         ATTESTATION_OUTPUT: makeAttestationOutput(),
+         INSPECT_STATUS: '42',
       },
     });
 
