@@ -16,6 +16,7 @@ fail() {
 # shellcheck source=backup-path.sh
 . "$SCRIPT_DIRECTORY/backup-path.sh"
 
+BACKUP_DIRECTORY=$(backup_normalize_path "$BACKUP_DIRECTORY")
 backup_expected_mount_identity=
 verification_directory=
 verified_backup=
@@ -104,7 +105,7 @@ backup=$(backup_canonical_child_path "$BACKUP_DIRECTORY" "$backup") \
 checksum_sidecar=$backup.sha256
 [ -f "$checksum_sidecar" ] && [ ! -L "$checksum_sidecar" ] \
   || fail 'backup checksum sidecar must be a regular, non-symlink file.'
-checksum_sidecar=$(backup_canonical_child_path "$BACKUP_DIRECTORY" "$checksum_sidecar") \
+checksum_sidecar=$(backup_canonical_child_path "$BACKUP_DIRECTORY" "$BACKUP_DIRECTORY/${backup##*/}.sha256") \
   || fail 'backup checksum sidecar must resolve inside BACKUP_DIRECTORY without symlink components.'
 
 verification_directory=$(mktemp -d /tmp/subweb-backup-verify.XXXXXX) \
@@ -123,8 +124,12 @@ checksum_record=$(sed -n '1p' "$checksum_snapshot") \
   || fail 'unable to read backup checksum sidecar.'
 [ "$(wc -l <"$checksum_snapshot")" -eq 1 ] \
   || fail 'backup checksum sidecar must contain exactly one record for the selected backup.'
-expected_checksum=$(printf '%s' "$checksum_record" | cut -c 1-64)
-expected_path=$(printf '%s' "$checksum_record" | cut -c 67-)
+expected_checksum=${checksum_record%% *}
+expected_path=${checksum_record#"$expected_checksum"}
+expected_path=${expected_path# }
+expected_path=${expected_path# }
+expected_path=$(backup_canonical_child_path "$BACKUP_DIRECTORY" "$expected_path") \
+  || fail 'backup checksum sidecar must identify the selected backup.'
 [ "$expected_path" = "$backup" ] \
   || fail 'backup checksum sidecar must identify the selected backup.'
 printf '%s\n' "$expected_checksum" | LC_ALL=C grep -Eq '^[0-9a-fA-F]{64}$' \

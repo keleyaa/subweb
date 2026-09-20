@@ -11,10 +11,12 @@ User=root
 Group=root
 WorkingDirectory=/opt/subweb
 EnvironmentFile=-/etc/subweb/backup.env
-ExecCondition=/bin/sh -eu -c '. /opt/subweb/scripts/vps/backup-path.sh; mount=${BACKUP_REMOTE_MOUNT:-}; [ -z "$mount" ] || { backup_path_is_supported "$mount" && command -v findmnt >/dev/null 2>&1 && backup_mount_is_distinct "$mount"; }'
+ExecCondition=/bin/sh -eu -c '. /opt/subweb/scripts/vps/backup-path.sh; mount=${BACKUP_REMOTE_MOUNT:-}; [ -z "$mount" ] || { backup_path_is_supported "$mount" && command -v findmnt >/dev/null 2>&1 && backup_mount_is_distinct "$mount" && { backup_mount_is_supported_remote "$mount" || [ -n "${AGE_RECIPIENT:-}" ]; }; }'
 ExecStart=/opt/subweb/scripts/vps/backup.sh
+RuntimeDirectory=subweb-backup
+RuntimeDirectoryMode=0700
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups
+ReadWritePaths=/opt/subweb/.env.lock /opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups

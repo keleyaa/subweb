@@ -10,6 +10,8 @@ BACKUP_RETENTION=${BACKUP_RETENTION:-14}
 AGE_RECIPIENT=${AGE_RECIPIENT:-}
 MIN_FREE_KIB=${MIN_FREE_KIB:-10485760}
 ENV_FILE=${SUBWEB_ENV_FILE:-$PROJECT_ROOT/.env}
+BACKUP_WORKSPACE_DIRECTORY=/run/subweb-backup
+BACKUP_LOCK_FILE=${BACKUP_WORKSPACE_DIRECTORY}/backup.lock
 
 fail() {
   printf 'VPS backup failed: %s\n' "$1" >&2
@@ -19,7 +21,38 @@ fail() {
 # shellcheck source=backup-path.sh
 . "$SCRIPT_DIRECTORY/backup-path.sh"
 
+BACKUP_DIRECTORY=$(backup_normalize_path "$BACKUP_DIRECTORY")
 backup_expected_mount_identity=
+backup_remote_storage_validated=0
+
+require_backup_workspace() {
+  [ -d "$BACKUP_WORKSPACE_DIRECTORY" ] && [ ! -L "$BACKUP_WORKSPACE_DIRECTORY" ] \
+    || fail 'root-only backup runtime workspace is unavailable.'
+  if [ -e "$BACKUP_LOCK_FILE" ] || [ -L "$BACKUP_LOCK_FILE" ]; then
+    [ -f "$BACKUP_LOCK_FILE" ] && [ ! -L "$BACKUP_LOCK_FILE" ] \
+      || fail 'backup runtime lock must be a regular, non-symlink file.'
+  fi
+}
+
+publish_completed_file() {
+  source_file=$1
+  destination_file=$2
+
+  [ -f "$source_file" ] && [ ! -L "$source_file" ] \
+    || fail 'completed backup artifact must be a regular, non-symlink file.'
+  if [ -e "$destination_file" ] || [ -L "$destination_file" ]; then
+    fail 'refusing to overwrite existing backup artifact.'
+  fi
+  backup_canonical_child_path "$BACKUP_DIRECTORY" "$destination_file" >/dev/null \
+    || fail 'backup artifact destination must resolve inside BACKUP_DIRECTORY.'
+  (
+    set -C
+    exec 3> "$destination_file" || exit 1
+    cat "$source_file" >&3
+  ) || fail 'unable to publish completed backup artifact.'
+  [ -f "$destination_file" ] && [ ! -L "$destination_file" ] \
+    || fail 'published backup artifact must be a regular, non-symlink file.'
+}
 
 validate_backup_destination() {
   require_supported_backup_path BACKUP_DIRECTORY "$BACKUP_DIRECTORY"
@@ -46,6 +79,13 @@ validate_backup_destination() {
     "$backup_observed_mount_identity") ;;
     *) fail 'BACKUP_REMOTE_MOUNT identity changed; refusing backup.' ;;
   esac
+  if backup_mount_identity_is_supported_remote "$backup_observed_mount_identity"; then
+    backup_remote_storage_validated=1
+  else
+    backup_remote_storage_validated=0
+    [ -n "$AGE_RECIPIENT" ] \
+      || fail 'BACKUP_REMOTE_MOUNT is not a supported remote source; configure AGE_RECIPIENT.'
+  fi
   backup_path_is_within "$BACKUP_REMOTE_MOUNT" "$BACKUP_DIRECTORY" \
     || fail 'BACKUP_DIRECTORY must be under BACKUP_REMOTE_MOUNT; refusing retention.'
 }
@@ -66,9 +106,10 @@ esac
 case "$MIN_FREE_KIB" in
   ''|*[!0-9]*) fail 'MIN_FREE_KIB must be a non-negative decimal integer.' ;;
 esac
-[ -n "$AGE_RECIPIENT" ] || [ -n "$BACKUP_REMOTE_MOUNT" ] \
-  || fail 'retention is refused until AGE_RECIPIENT or BACKUP_REMOTE_MOUNT is configured.'
+[ -n "$AGE_RECIPIENT" ] || [ "$backup_remote_storage_validated" -eq 1 ] \
+  || fail 'retention is refused until AGE_RECIPIENT or a validated remote mount is configured.'
 [ -f "$ENV_FILE" ] && [ ! -L "$ENV_FILE" ] || fail 'production .env must be a regular file.'
+require_backup_workspace
 
 mkdir -p "$BACKUP_DIRECTORY"
 validate_backup_destination
@@ -85,7 +126,7 @@ backup_directory_path_identity=$(backup_file_identity "$BACKUP_DIRECTORY") \
 chmod 0700 "$BACKUP_DIRECTORY"
 command -v flock >/dev/null 2>&1 || fail 'flock is required to serialize backups.'
 validate_backup_destination
-exec 9>"$BACKUP_DIRECTORY/.backup.lock" || fail 'unable to open the backup lock.'
+exec 9>> "$BACKUP_LOCK_FILE" || fail 'unable to open the backup lock.'
 flock -n 9 || fail 'another backup is already running.'
 
 command -v df >/dev/null 2>&1 || fail 'df is required.'
@@ -98,7 +139,7 @@ awk -v free_kib="$free_kib" -v min_free_kib="$MIN_FREE_KIB" \
   || fail "backup filesystem is below ${MIN_FREE_KIB} KiB."
 
 validate_backup_destination
-work_directory=$(mktemp -d "$BACKUP_DIRECTORY/.subweb-backup.XXXXXX") \
+work_directory=$(mktemp -d "$BACKUP_WORKSPACE_DIRECTORY/.subweb-backup.XXXXXX") \
   || fail 'unable to create a unique backup workspace.'
 chmod 0700 "$work_directory"
 run_id=${work_directory##*.subweb-backup.}
@@ -156,9 +197,9 @@ chmod 0600 "$checksum_temporary" \
   || fail 'unable to protect the backup checksum.'
 
 validate_backup_destination
-mv "$final_temporary" "$final_file"
+publish_completed_file "$final_temporary" "$final_file"
 validate_backup_destination
-mv "$checksum_temporary" "$checksum_file"
+publish_completed_file "$checksum_temporary" "$checksum_file"
 validate_backup_destination
 
 validate_backup_destination
@@ -194,4 +235,9 @@ else
 fi
 
 completed=1
-printf 'Encrypted/off-host Redis backup retained: %s\n' "$final_file"
+case "$backup_remote_storage_validated:$AGE_RECIPIENT" in
+  1:) storage_description='Off-host' ;;
+  1:*) storage_description='Encrypted/off-host' ;;
+  *) storage_description='Encrypted' ;;
+esac
+printf '%s Redis backup retained: %s\n' "$storage_description" "$final_file"

@@ -36,6 +36,10 @@ backup_path_without_trailing_slashes() {
   printf '%s\n' "$backup_normalized_path"
 }
 
+backup_normalize_path() {
+  backup_path_without_trailing_slashes "$1"
+}
+
 backup_path_has_navigation_component() {
   case "$1" in
     *'/../'*|*/..|*'/./'*|*/.) return 0 ;;
@@ -75,6 +79,42 @@ backup_mount_identity() {
   backup_mount_device=$(findmnt -rn --mountpoint "$backup_mount_path" -o MAJ:MIN 2>/dev/null) || return 1
   [ -n "$backup_mount_source" ] && [ -n "$backup_mount_fstype" ] && [ -n "$backup_mount_device" ] || return 1
   printf '%s|%s|%s\n' "$backup_mount_source" "$backup_mount_fstype" "$backup_mount_device"
+}
+
+backup_mount_identity_is_supported_remote() {
+  backup_remote_identity=$1
+  backup_remote_source=${backup_remote_identity%%|*}
+  backup_remote_remaining=${backup_remote_identity#*|}
+  backup_remote_fstype=${backup_remote_remaining%%|*}
+
+  [ "$backup_remote_remaining" != "$backup_remote_identity" ] || return 1
+  [ "$backup_remote_fstype" != "$backup_remote_remaining" ] || return 1
+  case "$backup_remote_fstype" in
+    nfs|nfs4|sshfs|fuse.sshfs)
+      case "$backup_remote_source" in
+        ''|/*|*'|'*) return 1 ;;
+        *:/*?*) return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    cifs|smb3)
+      case "$backup_remote_source" in
+        //?*/?*)
+          case "$backup_remote_source" in
+            *'|'*) return 1 ;;
+            *) return 0 ;;
+          esac
+          ;;
+        *) return 1 ;;
+      esac
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+backup_mount_is_supported_remote() {
+  backup_remote_identity=$(backup_mount_identity "$1") || return 1
+  backup_mount_identity_is_supported_remote "$backup_remote_identity"
 }
 
 backup_hold_mount() {

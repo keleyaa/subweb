@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,21 +47,26 @@ const makeBackupRetentionFixture = async () => {
   const backupDirectory = join(fixture, 'backups');
   const scriptsDirectory = join(fixture, 'scripts', 'vps');
   const projectRoot = join(fixture, 'project');
+  const workspaceDirectory = join(fixture, 'root-only-workspace');
+  const backupOutputLog = join(fixture, 'backup-output');
   const backupPathSource = await readFile(backupPathScript, 'utf8');
   const backupSource = await readFile(backupScript, 'utf8');
 
   temporaryDirectories.push(fixture);
   await mkdir(backupDirectory, { recursive: true });
+  await mkdir(workspaceDirectory, { recursive: true, mode: 0o700 });
+  await chmod(workspaceDirectory, 0o700);
   await mkdir(scriptsDirectory, { recursive: true });
   await mkdir(join(projectRoot, 'scripts'), { recursive: true });
   await writeExecutable(join(scriptsDirectory, 'backup-path.sh'), backupPathSource
     .replaceAll('/var/lib/subweb-backups', backupDirectory)
     .replaceAll('/mnt/subweb-backups', join(fixture, 'other-managed-root')));
-  await writeExecutable(join(scriptsDirectory, 'backup.sh'), backupSource);
+  await writeExecutable(join(scriptsDirectory, 'backup.sh'), backupSource
+    .replaceAll('/run/subweb-backup', workspaceDirectory));
   await writeExecutable(join(projectRoot, 'scripts', 'subweb.sh'), `#!/bin/sh
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --output) printf 'backup' >"$2"; exit 0 ;;
+    --output) printf '%s' "$2" > '${backupOutputLog}'; printf 'backup' >"$2"; exit 0 ;;
   esac
   shift
 done
@@ -143,7 +148,14 @@ for (const path of paths) {
 }
 `);
 
-  return { backupDirectory, fixture, projectRoot, script: join(scriptsDirectory, 'backup.sh') };
+  return {
+    backupDirectory,
+    backupOutputLog,
+    fixture,
+    projectRoot,
+    script: join(scriptsDirectory, 'backup.sh'),
+    workspaceDirectory,
+  };
 };
 
 const makeBackupVerificationFixture = async (sidecarContents) => {
@@ -228,15 +240,40 @@ describe('VPS backup mount safety', () => {
     expect(result.status).not.toBe(0);
   });
 
+  it.each([
+    { name: 'NFSv4 export', source: 'backup.example:/subweb', type: 'nfs4', supported: true },
+    { name: 'SMB share', source: '//backup.example/subweb', type: 'cifs', supported: true },
+    { name: 'SSHFS mount', source: 'backup@backup.example:/srv/subweb', type: 'fuse.sshfs', supported: true },
+    { name: 'local block device', source: '/dev/vdb1', type: 'ext4', supported: false },
+    { name: 'malformed NFS source', source: '/srv/subweb', type: 'nfs4', supported: false },
+  ])('recognizes only explicit remote storage sources for $name', async ({ source, type, supported }) => {
+    const fixture = await makeFindmntFixture();
+    const mountPath = join(fixture, 'remote');
+    await mkdir(mountPath);
+
+    const result = runShell(
+      'set -eu; . "$1"; backup_mount_is_supported_remote "$2"',
+      [backupPathScript, mountPath],
+      {
+        PATH: `${fixture}:${process.env.PATH}`,
+        BACKUP_MOUNT_DEVICE: '0:42',
+        BACKUP_MOUNT_FSTYPE: type,
+        BACKUP_MOUNT_SOURCE: source,
+      },
+    );
+
+    expect(result.status === 0, `${result.stdout}\n${result.stderr}`).toBe(supported);
+  });
+
   it('revalidates the destination identity after mkdir before lock, workspace, and output operations', async () => {
     const backup = await readFile(backupScript, 'utf8');
     const revalidate = 'validate_backup_destination';
     const mkdir = backup.indexOf('mkdir -p "$BACKUP_DIRECTORY"');
     const firstRevalidation = backup.indexOf(revalidate, mkdir);
-    const lock = backup.indexOf('exec 9>"$BACKUP_DIRECTORY/.backup.lock"');
-    const workspace = backup.indexOf('mktemp -d "$BACKUP_DIRECTORY/.subweb-backup.XXXXXX"');
-    const finalOutput = backup.indexOf('mv "$final_temporary" "$final_file"');
-    const checksumOutput = backup.indexOf('mv "$checksum_temporary" "$checksum_file"');
+    const lock = backup.indexOf('exec 9>> "$BACKUP_LOCK_FILE"');
+    const workspace = backup.indexOf('mktemp -d "$BACKUP_WORKSPACE_DIRECTORY/.subweb-backup.XXXXXX"');
+    const finalOutput = backup.indexOf('publish_completed_file "$final_temporary" "$final_file"');
+    const checksumOutput = backup.indexOf('publish_completed_file "$checksum_temporary" "$checksum_file"');
 
     expect(mkdir).toBeGreaterThanOrEqual(0);
     expect(firstRevalidation).toBeGreaterThan(mkdir);
@@ -245,6 +282,7 @@ describe('VPS backup mount safety', () => {
     expect(backup.lastIndexOf(revalidate, finalOutput)).toBeGreaterThan(workspace);
     expect(backup.lastIndexOf(revalidate, checksumOutput)).toBeGreaterThan(finalOutput);
     expect(backup).toContain('backup_expected_mount_identity');
+    expect(backup).toContain('BACKUP_DIRECTORY=$(backup_normalize_path "$BACKUP_DIRECTORY")');
   });
 
   it('publishes already-protected artifacts and revalidates remote mounts during retention deletion', async () => {
@@ -256,7 +294,10 @@ describe('VPS backup mount safety', () => {
     expect(backup).not.toContain('sha256sum "$final_file"');
     expect(backup).not.toContain('chmod 0600 "$final_file" "$checksum_file"');
     expect(backup).toContain('BACKUP_REMOTE_MOUNT changed before retained backups could be removed.');
-    expect(backup.indexOf('mv "$final_temporary" "$final_file"')).toBeGreaterThan(
+    expect(backup).toContain('set -C');
+    expect(backup).not.toContain('mv "$final_temporary" "$final_file"');
+    expect(backup).toContain('publish_completed_file "$final_temporary" "$final_file"');
+    expect(backup.indexOf('publish_completed_file "$final_temporary" "$final_file"')).toBeGreaterThan(
       backup.indexOf('chmod 0600 "$checksum_temporary"'),
     );
   });
@@ -388,7 +429,7 @@ describe('VPS backup mount safety', () => {
 
 describe('VPS backup retention', () => {
   it('fails closed when the sort stage fails', async () => {
-    const { backupDirectory, fixture, projectRoot, script } = await makeBackupRetentionFixture();
+    const { backupDirectory, fixture, projectRoot, script, workspaceDirectory } = await makeBackupRetentionFixture();
     await writeFile(join(backupDirectory, 'subweb-redis-20250101T000000Z-ABC123.rdb'), 'retain');
     await writeFile(join(fixture, 'production.env'), '');
     await writeExecutable(join(fixture, 'sort'), '#!/bin/sh\nexit 1\n');
@@ -402,6 +443,7 @@ describe('VPS backup retention', () => {
         AGE_RECIPIENT: 'age1testrecipient',
         BACKUP_DIRECTORY: backupDirectory,
         BACKUP_REMOTE_MOUNT: '',
+        BACKUP_WORKSPACE_DIRECTORY: workspaceDirectory,
         SUBWEB_ENV_FILE: join(fixture, 'production.env'),
         SUBWEB_ROOT: projectRoot,
       },
@@ -412,7 +454,7 @@ describe('VPS backup retention', () => {
   }, 15_000);
 
   it('does not delete a forged path outside the backup directory from a newline-bearing matching filename', async () => {
-    const { backupDirectory, fixture, projectRoot, script } = await makeBackupRetentionFixture();
+    const { backupDirectory, fixture, projectRoot, script, workspaceDirectory } = await makeBackupRetentionFixture();
     const retainedBackup = join(backupDirectory, 'subweb-redis-20250101T000000Z-ABC123.rdb');
     const staleBackup = join(backupDirectory, 'subweb-redis-20240101T000000Z-DEF456.rdb');
     const forgedTarget = join(fixture, 'forged-target.rdb');
@@ -438,6 +480,7 @@ describe('VPS backup retention', () => {
         BACKUP_DIRECTORY: backupDirectory,
         BACKUP_REMOTE_MOUNT: '',
         BACKUP_RETENTION: '2',
+        BACKUP_WORKSPACE_DIRECTORY: workspaceDirectory,
         SUBWEB_ENV_FILE: join(fixture, 'production.env'),
         SUBWEB_ROOT: projectRoot,
       },
@@ -451,6 +494,104 @@ describe('VPS backup retention', () => {
   }, 15_000);
 });
 
+
+describe('VPS backup publication safety', () => {
+  const runBackup = ({ backupDirectory, fixture, projectRoot, script, workspaceDirectory }, extraEnvironment = {}) =>
+    spawnSync('sh', [script], {
+      cwd: fixture,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${fixture}:${process.env.PATH}`,
+        AGE_RECIPIENT: 'age1testrecipient',
+        BACKUP_DIRECTORY: backupDirectory,
+        BACKUP_REMOTE_MOUNT: '',
+        BACKUP_WORKSPACE_DIRECTORY: workspaceDirectory,
+        SUBWEB_ENV_FILE: join(fixture, 'production.env'),
+        SUBWEB_ROOT: projectRoot,
+        ...extraEnvironment,
+      },
+    });
+
+  it('keeps a subweb-writable legacy lock symlink untouched and stages outside the backup directory', async () => {
+    const backup = await makeBackupRetentionFixture();
+    const outsideLockTarget = join(backup.fixture, 'outside-lock-target');
+    await writeFile(join(backup.fixture, 'production.env'), '');
+    await writeFile(outsideLockTarget, 'must remain');
+    await symlink(outsideLockTarget, join(backup.backupDirectory, '.backup.lock'));
+
+    const result = runBackup(backup);
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    await expect(readFile(outsideLockTarget, 'utf8')).resolves.toBe('must remain');
+    await expect(readFile(backup.backupOutputLog, 'utf8')).resolves.toMatch(
+      new RegExp(`^${backup.workspaceDirectory.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/\\.subweb-backup\\.`),
+    );
+  }, 15_000);
+
+  it('refuses to publish over a preexisting output symlink without touching its target', async () => {
+    const backup = await makeBackupRetentionFixture();
+    const runIdentifier = 'controlled';
+    const timestamp = '20260101T000000Z';
+    const outputName = `subweb-redis-${timestamp}-${runIdentifier}.rdb.age`;
+    const outsideTarget = join(backup.fixture, 'outside-target');
+    await writeFile(join(backup.fixture, 'production.env'), '');
+    await writeFile(outsideTarget, 'must remain');
+    await symlink(outsideTarget, join(backup.backupDirectory, outputName));
+    await writeExecutable(join(backup.fixture, 'date'), `#!/bin/sh\nprintf '%s\\n' '${timestamp}'\n`);
+    await writeExecutable(join(backup.fixture, 'mktemp'), `#!/bin/sh
+if [ "$1" = '-d' ]; then
+  directory="$BACKUP_WORKSPACE_DIRECTORY/.subweb-backup.${runIdentifier}"
+  mkdir "$directory" || exit 1
+  printf '%s\\n' "$directory"
+  exit 0
+fi
+exec /usr/bin/mktemp "$@"
+`);
+
+    const result = runBackup(backup);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('refusing to overwrite existing backup artifact');
+    await expect(readFile(outsideTarget, 'utf8')).resolves.toBe('must remain');
+  }, 15_000);
+
+  it('normalizes a trailing backup-directory slash so the produced sidecar verifies', async () => {
+    const backup = await makeBackupRetentionFixture();
+    const verifySource = await readFile(verifyBackupScript, 'utf8');
+    const identityFile = join(backup.fixture, 'age-identity');
+    const verifiedMarker = join(backup.fixture, 'verified');
+    await writeFile(join(backup.fixture, 'production.env'), '');
+    await writeFile(identityFile, 'AGE-SECRET-KEY-1TEST', { mode: 0o600 });
+    await mkdir(join(backup.projectRoot, 'scripts', 'operations'), { recursive: true });
+    await writeExecutable(join(backup.fixture, 'scripts', 'vps', 'verify-backup.sh'), verifySource);
+    await writeExecutable(join(backup.projectRoot, 'scripts', 'operations', 'verify-redis-backup.sh'),
+      `#!/bin/sh\nprintf '%s' "$2" > '${verifiedMarker}'\n`);
+
+    const backupResult = runBackup(backup, { BACKUP_DIRECTORY: `${backup.backupDirectory}/` });
+    expect(backupResult.status, `${backupResult.stdout}\n${backupResult.stderr}`).toBe(0);
+    const [backupName] = (await readdir(backup.backupDirectory)).filter((name) => name.endsWith('.rdb.age'));
+    const backupFile = join(backup.backupDirectory, backupName);
+    const sidecar = await readFile(`${backupFile}.sha256`, 'utf8');
+
+    expect(sidecar).toBe(`${'0'.repeat(64)}  ${backupFile}\n`);
+
+    const verifyResult = spawnSync('sh', [join(backup.fixture, 'scripts', 'vps', 'verify-backup.sh'), backupFile], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        AGE_IDENTITY_FILE: identityFile,
+        BACKUP_DIRECTORY: `${backup.backupDirectory}/`,
+        BACKUP_REMOTE_MOUNT: '',
+        PATH: `${backup.fixture}:${process.env.PATH}`,
+        SUBWEB_ROOT: backup.projectRoot,
+      },
+    });
+
+    expect(verifyResult.status, `${verifyResult.stdout}\n${verifyResult.stderr}`).toBe(0);
+    await expect(readFile(verifiedMarker, 'utf8')).resolves.toBeTruthy();
+  }, 15_000);
+});
 
 describe('VPS backup checksum verification', () => {
   const zeroDigest = '0'.repeat(64);

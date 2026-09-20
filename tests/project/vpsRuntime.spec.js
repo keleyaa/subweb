@@ -143,7 +143,11 @@ describe('VPS runtime contract', () => {
     expect(verifyTimer).toContain('OnCalendar=Sun *-*-01..07 04:15:00');
     expect(verifyBackup).toContain('verify-redis-backup.sh');
     expect(backup).toContain('flock -n 9');
-    expect(backup).toContain('mktemp -d "$BACKUP_DIRECTORY/.subweb-backup.XXXXXX"');
+    expect(backup).toContain('BACKUP_LOCK_FILE=${BACKUP_WORKSPACE_DIRECTORY}/backup.lock');
+    expect(backup).toContain('mktemp -d "$BACKUP_WORKSPACE_DIRECTORY/.subweb-backup.XXXXXX"');
+    expect(backup).not.toContain('"$BACKUP_DIRECTORY/.backup.lock"');
+    expect(service).toContain('RuntimeDirectory=subweb-backup');
+    expect(service).toContain('RuntimeDirectoryMode=0700');
     expect(backup.indexOf('mkdir -p "$BACKUP_DIRECTORY"')).toBeLessThan(backup.indexOf('df -Pk "$BACKUP_DIRECTORY"'));
     expect(backup).toContain("''|*[!0-9]*) fail 'MIN_FREE_KIB must be a non-negative decimal integer.'");
     expect(subweb).toContain('DEFAULT_ENV_FILE=$PROJECT_DIRECTORY/.env');
@@ -152,7 +156,7 @@ describe('VPS runtime contract', () => {
     expect(backupPath).toContain('$path_label must be under a systemd ReadWritePaths entry.');
     expect(backup).toContain('require_supported_backup_path BACKUP_DIRECTORY');
     expect(verifyBackup).toContain('require_supported_backup_path BACKUP_DIRECTORY');
-     expect(service).toContain('ReadWritePaths=/opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups');
+     expect(service).toContain('ReadWritePaths=/opt/subweb/.env.lock /opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups');
      expect(verifyService).toContain('ReadWritePaths=/opt/subweb/.runtime /var/lib/subweb-backups /mnt/subweb-backups');
      for (const unit of [service, verifyService]) {
        expect(unit).toContain('RequiresMountsFor=/var/lib/subweb-backups /mnt/subweb-backups');
