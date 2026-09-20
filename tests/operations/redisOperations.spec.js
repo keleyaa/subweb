@@ -60,9 +60,10 @@ describe('Redis operations safety contracts', () => {
     expect(verifier).not.toContain('migrate-myurls-v1.sh');
     expect(verifier).toContain('compose.yaml:$project_root/compose.test.yaml');
     expect(verifier).toContain('REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning FLUSHDB');
-    expect(verifier).toContain('docker compose restart redis');
-    expect(verifier).toContain('docker compose restart gateway');
-    expect(verifier).toContain('docker compose restart subconverter');
+    expect(verifier).toContain('run_docker_environment docker compose --env-file "$env_file"');
+    expect(verifier).toContain('compose restart redis');
+    expect(verifier).toContain('compose restart gateway');
+    expect(verifier).toContain('compose restart subconverter');
     expect(verifier).not.toContain('-a "$REDIS_PASSWORD"');
     expect(restore).toContain('--confirm-stop-writes');
     expect(restore).toContain('Pre-restore backup retained');

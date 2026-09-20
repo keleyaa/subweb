@@ -11,13 +11,14 @@ describe('unified stack recovery contract', () => {
     expect(verifier).toContain('compose.yaml:$project_root/compose.test.yaml');
     expect(verifier).not.toContain('compose.hardened.yaml');
     expect(verifier).not.toContain('migrate-myurls-v1.sh');
-    expect(verifier).toContain('docker compose up -d --build --wait');
+    expect(verifier).toContain('run_docker_environment docker compose --env-file "$env_file"');
+    expect(verifier).toContain('compose up -d --build --wait');
     expect(verifier).toContain('myurl:link:$1');
     expect(verifier).toContain('backup-redis.sh');
     expect(verifier).toContain('restore-redis.sh');
-    expect(verifier).toContain('docker compose restart redis');
-    expect(verifier).toContain('docker compose restart gateway');
-    expect(verifier).toContain('docker compose restart subconverter');
+    expect(verifier).toContain('compose restart redis');
+    expect(verifier).toContain('compose restart gateway');
+    expect(verifier).toContain('compose restart subconverter');
     expect(verifier).toContain('subconverter_runs_as_101');
     expect(verifier).toContain('/proc/1/status');
     expect(verifier).toContain('CapEff:');
