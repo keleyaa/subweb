@@ -279,6 +279,7 @@ describe('release image resolver', () => {
     'v01.2.3',
     'v1.02.3',
     'v1.2.03',
+    `v${'1'.repeat(126)}.2.3`,
     'latest',
   ])('rejects invalid version %s before invoking Docker', async (version) => {
     const root = await makeFixture();

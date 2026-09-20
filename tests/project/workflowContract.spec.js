@@ -45,6 +45,23 @@ describe('GitHub Actions workflow contract', () => {
     }
   });
 
+  it('bounds release-tag inputs in both workflow release steps', async () => {
+    const workflow = await readWorkflow('docker-build-release.yml');
+
+    for (const [stepName, versionVariable] of [
+      ['Checkout requested release tag', 'VERSION'],
+      ['Set release tags', 'version'],
+    ]) {
+      const start = workflow.indexOf(`- name: ${stepName}`);
+      const next = workflow.indexOf('\n      - name:', start + 1);
+      const step = workflow.slice(start, next === -1 ? undefined : next);
+
+      expect(start).toBeGreaterThan(-1);
+      expect(step).toContain(`[ "\${#${versionVariable}}" -le 128 ]`);
+      expect(step).toContain('semver_pattern=');
+    }
+  });
+
   it('provides a deterministic local workflow verifier', async () => {
     const verifier = await readFile(new URL('../../scripts/verify-workflows.sh', import.meta.url), 'utf8');
 

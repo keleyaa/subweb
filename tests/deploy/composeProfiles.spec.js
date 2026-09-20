@@ -231,13 +231,15 @@ describe('unified Compose validation', () => {
     expect(await readFile(capturePath, 'utf8')).toContain('DOCKER_HOST=tcp://selected-env:2376\n');
   });
 
-  it('derives locked runtime images over stale existing environment values without changing .env', async () => {
+  it.each([
+    'REDIS_IMAGE=redis:latest',
+    ' export SUBCONVERTER_IMAGE=registry.example/subconverter:latest',
+    'MYURLS_IMAGE = registry.example/myurls:latest',
+  ])('rejects a selected environment that assigns a managed runtime image: %s', async (assignment) => {
     const fixture = await createFixture(validCompose);
     const originalEnvironment = await readFile(fixture.envPath, 'utf8');
-    const staleImageEnvironment = `${originalEnvironment}REDIS_IMAGE=redis:latest\nSUBCONVERTER_IMAGE=registry.example/subconverter:latest\nMYURLS_IMAGE=registry.example/myurls:latest\n`;
-    const capturePath = join(fixture.directory, 'validation.env');
-    await writeFile(fixture.envPath, staleImageEnvironment);
-    await writeFile(join(fixture.directory, 'capture-validation-env'), '1\n');
+    const sourceEnvironment = `${originalEnvironment}${assignment}\n`;
+    await writeFile(fixture.envPath, sourceEnvironment);
 
     const result = spawnSync('sh', [validatorPath], {
       cwd: fixture.directory,
@@ -250,13 +252,9 @@ describe('unified Compose validation', () => {
       },
     });
 
-    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
-    expect(await readFile(fixture.envPath, 'utf8')).toBe(staleImageEnvironment);
-    const validationEnvironment = await readFile(capturePath, 'utf8');
-    expect(validationEnvironment).toContain(`REDIS_IMAGE=${validCompose.services.redis.image}\n`);
-    expect(validationEnvironment).toContain(`SUBCONVERTER_IMAGE=${validCompose.services.subconverter.image}\n`);
-    expect(validationEnvironment).toContain(`MYURLS_IMAGE=${validCompose.services.myurls.image}\n`);
-    expect(validationEnvironment).not.toContain('attacker-');
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Compose environment must not define managed runtime image variables.');
+    expect(await readFile(fixture.envPath, 'utf8')).toBe(sourceEnvironment);
   });
 
   it('rejects a four-service topology whose rendered Gateway disables short links', async () => {

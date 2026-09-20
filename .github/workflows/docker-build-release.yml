@@ -1,6 +1,7 @@
+---
 name: docker build release
 
-on:
+'on':
   push:
     tags:
       - 'v*.*.*'
@@ -40,7 +41,12 @@ jobs:
           VERSION: ${{ inputs.version || github.ref_name }}
         shell: bash
         run: |
-          [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
+          semver_pattern='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          [ "${#VERSION}" -le 128 ] || {
+            echo 'version must be at most 128 characters' >&2
+            exit 1
+          }
+          [[ "$VERSION" =~ $semver_pattern ]] || {
             echo 'version must match vX.Y.Z' >&2
             exit 1
           }
@@ -56,7 +62,7 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 24
-          cache: npm
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -125,7 +131,8 @@ jobs:
 
       # Scan each image the compose stack actually pulls so a vulnerable
       # upstream release fails the gate instead of reaching production silently.
-      # Kept as three steps because trivy rejects comma-separated image-ref lists.
+      # Kept as three steps because Trivy rejects comma-separated
+      # image-reference lists.
       - name: Scan external runtime images (Redis)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
@@ -170,7 +177,8 @@ jobs:
     needs: quality
     timeout-minutes: 45
     # Publishing only happens for semantic-version tag pushes or an explicit
-    # manual run; ordinary branch pushes and pull requests do not trigger this workflow.
+    # manual run; ordinary branch pushes and pull requests do not trigger
+    # this workflow.
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
@@ -192,7 +200,12 @@ jobs:
         shell: bash
         run: |
           version="$VERSION"
-          [[ "$version" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
+          semver_pattern='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          [ "${#version}" -le 128 ] || {
+            echo 'version must be at most 128 characters' >&2
+            exit 1
+          }
+          [[ "$version" =~ $semver_pattern ]] || {
             echo 'version must match vX.Y.Z' >&2
             exit 1
           }
@@ -204,7 +217,8 @@ jobs:
           git checkout --detach FETCH_HEAD
           source_sha=$(git rev-parse HEAD)
           [[ "$source_sha" == "$EXPECTED_SOURCE_SHA" ]] || {
-            echo "Release tag resolved to a different commit than quality verification" >&2
+            printf '%s\n' \
+              'Release tag does not match the quality-verified commit' >&2
             exit 1
           }
           echo "version=${version}" >> "$GITHUB_OUTPUT"
@@ -214,6 +228,7 @@ jobs:
         uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
 
       - name: Set up Docker Buildx
+        # yamllint disable-line rule:line-length
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
 
       - name: Login to Docker Hub
@@ -241,11 +256,12 @@ jobs:
           sbom: true
           tags: ghcr.io/${{ env.GHCR_IMAGE }}:${{ steps.tag.outputs.version }}
 
-      # The exact multi-platform artifact is scanned before it is promoted to release tags.
+      # Scan the exact multi-platform artifact before promotion to release tags.
       - name: Scan release candidate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           version: "v0.74.0"
+          # yamllint disable-line rule:line-length
           image-ref: ghcr.io/${{ env.GHCR_IMAGE }}@${{ steps.image.outputs.digest }}
           format: table
           exit-code: "1"
@@ -298,7 +314,9 @@ jobs:
         run: |
           version_ids=$(gh api --paginate \
             "/user/packages/container/${GHCR_PACKAGE}/versions?per_page=100" \
-            --jq '.[] | select(.metadata.container.tags[]? == env.RELEASE_TAG) | .id')
+            --jq '
+              .[] | select(.metadata.container.tags[]? == env.RELEASE_TAG) | .id
+            ')
           while IFS= read -r version_id; do
             [ -n "$version_id" ] || continue
             gh api --method DELETE \
@@ -324,7 +342,8 @@ jobs:
             "ghcr.io/${GHCR_IMAGE}:latest" \
             "ghcr.io/${GHCR_IMAGE}:${RELEASE_TAG}"
           do
-            published_digest="$(docker buildx imagetools inspect "$reference" --format '{{.Manifest.Digest}}')"
+            published_digest="$(docker buildx imagetools inspect "$reference" \
+              --format '{{.Manifest.Digest}}')"
             [[ "$published_digest" == "$IMAGE_DIGEST" ]] || {
               echo "Published digest mismatch for ${reference}" >&2
               exit 1
@@ -343,16 +362,19 @@ jobs:
             echo "Docker image digest is missing or malformed" >&2
             exit 1
           }
-          runtime_images_json=$(node scripts/runtime-image-contract.mjs rollback)
+          runtime_images_json=$(node \
+            scripts/runtime-image-contract.mjs rollback)
           manifest_path="$RUNNER_TEMP/rollback-manifest.json"
+          dockerhub_reference="docker.io/${DOCKERHUB_IMAGE}"'@'"${IMAGE_DIGEST}"
+          ghcr_reference="ghcr.io/${GHCR_IMAGE}"'@'"${IMAGE_DIGEST}"
           jq -n \
             --arg source_sha "$SOURCE_SHA" \
             --arg run_id "$GITHUB_RUN_ID" \
             --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
             --arg release_tag "$RELEASE_TAG" \
             --arg image_digest "$IMAGE_DIGEST" \
-            --arg dockerhub_reference "docker.io/${DOCKERHUB_IMAGE}@${IMAGE_DIGEST}" \
-            --arg ghcr_reference "ghcr.io/${GHCR_IMAGE}@${IMAGE_DIGEST}" \
+            --arg dockerhub_reference "$dockerhub_reference" \
+            --arg ghcr_reference "$ghcr_reference" \
             --argjson runtime_images "$runtime_images_json" \
             --arg build_time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '{
@@ -381,7 +403,8 @@ jobs:
            jq -e '
              .release_identity.source_sha and
              .release_identity.source_digest and
-             .release_identity.rollback_target.registry_references.docker_hub and
+              (.release_identity.rollback_target.registry_references |
+                .docker_hub) and
              .release_identity.rollback_target.registry_references.ghcr and
              (.release_identity.runtime_images |
                (keys | sort) == ["myurls", "redis", "subconverter"] and
@@ -394,7 +417,9 @@ jobs:
                  (.platforms |
                    has("linux/amd64") and
                    has("linux/arm64") and
-                   all(.[]; (type == "string" and test("^sha256:[0-9a-f]{64}$"))))
+                   all(.[]; (
+                    type == "string" and test("^sha256:[0-9a-f]{64}$")
+                  )))
                ))
              )
            ' "$manifest_path" >/dev/null
@@ -402,8 +427,8 @@ jobs:
           echo "digest_suffix=${IMAGE_DIGEST#sha256:}" >> "$GITHUB_OUTPUT"
           {
             echo "### Container release"
-            echo "- Docker Hub: \`docker.io/${DOCKERHUB_IMAGE}@${IMAGE_DIGEST}\`"
-            echo "- GHCR: \`ghcr.io/${GHCR_IMAGE}@${IMAGE_DIGEST}\`"
+            echo "- Docker Hub: \`${dockerhub_reference}\`"
+            echo "- GHCR: \`${ghcr_reference}\`"
             echo "- source: \`${SOURCE_SHA}\`"
             echo "- tag: \`${RELEASE_TAG}\`"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -411,12 +436,14 @@ jobs:
       - name: Upload rollback manifest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
+          # yamllint disable-line rule:line-length
           name: rollback-manifest-${{ github.run_id }}-${{ steps.rollback.outputs.digest_suffix }}
           path: ${{ steps.rollback.outputs.manifest_path }}
           if-no-files-found: error
           retention-days: 90
 
       - name: Sync README to Docker Hub
+        # yamllint disable-line rule:line-length
         uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa
         with:
           username: ${{ secrets.DOCKER_USERNAME }}

@@ -139,16 +139,29 @@ newline='
 case "$image" in
   *"$newline"*) fail '--image must use an immutable sha256 digest.' ;;
 esac
-printf '%s\n' "$image" | LC_ALL=C grep -Eq '^[^[:space:]@/:]+(:[0-9]+)?(/[^[:space:]@/:]+)+(:[^[:space:]@/:]+)?@sha256:[0-9a-f]{64}$' \
+repository=${image%@sha256:*}
+digest=${image#*@sha256:}
+[ "$repository" != "$image" ] && [ -n "$repository" ] \
+  || fail '--image must use an immutable sha256 digest.'
+printf '%s\n' "$digest" | LC_ALL=C grep -Eq '^[0-9a-f]{64}$' \
   || fail '--image must use an immutable sha256 digest.'
 
-registry=${image%%/*}
+case "$repository" in
+  \[*\]:*/*)
+    printf '%s\n' "$repository" | LC_ALL=C grep -Eq '^\[[0-9A-Fa-f:.]+\]:[0-9]+/[a-z0-9]+([._-][a-z0-9]+)*(\/([a-z0-9]+([._-][a-z0-9]+)*))*$' \
+      || fail '--image must use an immutable sha256 digest.'
+    registry=${repository%%/*}
+    ;;
+  *)
+    printf '%s\n' "$repository" | LC_ALL=C grep -Eq '^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)*$' \
+      || fail '--image must use an immutable sha256 digest.'
+    case "$repository" in */*) registry=${repository%%/*} ;; *) registry= ;; esac
+    ;;
+esac
+
 case "$registry" in
   *:*)
     registry_port=${registry##*:}
-    case "$registry_port" in
-      ''|*[!0-9]*) fail '--image must use an immutable sha256 digest.' ;;
-    esac
     [ "$registry_port" -ge 1 ] 2>/dev/null && [ "$registry_port" -le 65535 ] 2>/dev/null \
       || fail '--image must use an immutable sha256 digest.'
     ;;

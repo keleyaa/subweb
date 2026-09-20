@@ -21,7 +21,7 @@ const runConfigure = (cwd, args, input = 'test-secret-key\n', environment = {}) 
     cwd,
     encoding: 'utf8',
     input,
-    env: { ...process.env, ...environment },
+    env: { ...process.env, SUBWEB_VERSION_LOCK_HELD: '1', ...environment },
   },
 );
 const baseArgs = [

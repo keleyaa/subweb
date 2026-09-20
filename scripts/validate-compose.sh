@@ -36,16 +36,11 @@ if [ "${SUBWEB_ENV_FILE+x}" = x ]; then
       source_env_file=$source_directory/$(basename -- "$source_env_file")
       ;;
   esac
-  [ -f "$source_env_file" ] && [ ! -L "$source_env_file" ] \
-    || fail 'SUBWEB_ENV_FILE must be a regular, non-symlink file.'
 elif [ -e .env ]; then
-  [ -f .env ] && [ ! -L .env ] || fail '.env must be a regular, non-symlink file.'
   source_env_file=.env
 fi
 
 version_lock_file=${VERSION_LOCK_FILE:-$script_directory/../deploy/versions.lock.json}
-[ -f "$version_lock_file" ] && [ ! -L "$version_lock_file" ] \
-  || fail "version lock file must be a regular, non-symlink file: $version_lock_file"
 if [ "${SUBWEB_ENV_LOCK_HELD:-0}" != 1 ] && [ -n "$source_env_file" ]; then
   acquire_path_lock "$source_env_file" || fail 'could not lock the Compose environment.'
   validation_env_lock_directory=$PATH_LOCK_DIRECTORY
@@ -55,13 +50,39 @@ if [ "${SUBWEB_VERSION_LOCK_HELD:-0}" != 1 ]; then
   validation_version_lock_directory=$PATH_LOCK_DIRECTORY
 fi
 
+[ -f "$version_lock_file" ] && [ ! -L "$version_lock_file" ] \
+  || fail "version lock file must be a regular, non-symlink file: $version_lock_file"
+if [ -n "$source_env_file" ]; then
+  [ -f "$source_env_file" ] && [ ! -L "$source_env_file" ] \
+    || fail 'SUBWEB_ENV_FILE must be a regular, non-symlink file.'
+fi
+
+validation_file_identity() {
+  if validation_identity=$(stat -Lc '%d:%i' "$1" 2>/dev/null); then
+    case "$validation_identity" in *[!0-9:]*|*::*|:*) return 1 ;; esac
+  else
+    validation_identity=$(stat -Lf '%i' "$1") || return 1
+    case "$validation_identity" in *[!0-9]*|'') return 1 ;; esac
+  fi
+  printf '%s\n' "$validation_identity"
+}
+
+version_lock_identity=$(validation_file_identity "$version_lock_file") \
+  || fail 'could not identify deploy/versions.lock.json.'
+exec 8< "$version_lock_file" || fail 'could not open deploy/versions.lock.json.'
+[ "$(validation_file_identity /dev/fd/8)" = "$version_lock_identity" ] \
+  || fail 'deploy/versions.lock.json changed before it could be opened.'
+
 validation_version_lock_snapshot=$(mktemp "${TMPDIR:-/tmp}/subweb-version-lock.XXXXXX") \
   || fail 'could not create a version lock snapshot.'
 chmod 600 "$validation_version_lock_snapshot" \
   || fail 'could not protect the version lock snapshot.'
-cat "$version_lock_file" > "$validation_version_lock_snapshot" \
+cat <&8 > "$validation_version_lock_snapshot" \
   || fail 'could not snapshot deploy/versions.lock.json.'
 cmp -s "$validation_version_lock_snapshot" "$version_lock_file" \
+  || fail 'deploy/versions.lock.json changed while it was being snapshotted.'
+exec 8<&-
+[ "$(validation_file_identity "$version_lock_file")" = "$version_lock_identity" ] \
   || fail 'deploy/versions.lock.json changed while it was being snapshotted.'
 version_lock_file=$validation_version_lock_snapshot
 
@@ -70,12 +91,18 @@ if [ -n "$source_env_file" ]; then
     || fail 'could not create a Compose environment snapshot.'
   chmod 600 "$validation_source_env_file" \
     || fail 'could not protect the Compose environment snapshot.'
+  source_env_identity=$(validation_file_identity "$source_env_file") \
+    || fail 'could not identify the Compose environment.'
   exec 9< "$source_env_file" || fail 'could not open the Compose environment.'
+  [ "$(validation_file_identity /dev/fd/9)" = "$source_env_identity" ] \
+    || fail 'Compose environment changed before it could be opened.'
   cat <&9 > "$validation_source_env_file" \
     || fail 'could not snapshot the Compose environment.'
   cmp -s "$validation_source_env_file" "$source_env_file" \
     || fail 'Compose environment changed while it was being snapshotted.'
   exec 9<&-
+  [ "$(validation_file_identity "$source_env_file")" = "$source_env_identity" ] \
+    || fail 'Compose environment changed while it was being snapshotted.'
   source_env_file=$validation_source_env_file
 fi
 
@@ -95,17 +122,41 @@ if [ -z "$compose_file" ]; then
     esac
   fi
 fi
+runtime_image_env=$(node "$script_directory/runtime-image-contract.mjs" env --lock "$version_lock_file") \
+  || fail "could not derive external runtime images from $version_lock_file"
+for name in REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE; do
+  printf '%s\n' "$runtime_image_env" | grep -q "^$name=" \
+    || fail 'runtime image contract is incomplete.'
+done
+
 validation_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-compose-validation.XXXXXX") \
   || fail 'could not create a Compose validation environment.'
 chmod 600 "$validation_env_file" || fail 'could not protect a Compose validation environment.'
 
 if [ -n "$source_env_file" ]; then
-  sed \
-    -e '/^REDIS_IMAGE=/d' \
-    -e '/^SUBCONVERTER_IMAGE=/d' \
-    -e '/^MYURLS_IMAGE=/d' \
-    "$source_env_file" > "$validation_env_file" \
-    || fail 'could not prepare a Compose validation environment.'
+  redis_image=$(printf '%s\n' "$runtime_image_env" | sed -n 's/^REDIS_IMAGE=//p')
+  subconverter_image=$(printf '%s\n' "$runtime_image_env" | sed -n 's/^SUBCONVERTER_IMAGE=//p')
+  myurls_image=$(printf '%s\n' "$runtime_image_env" | sed -n 's/^MYURLS_IMAGE=//p')
+  awk \
+    -v "redis_image=$redis_image" \
+    -v "subconverter_image=$subconverter_image" \
+    -v "myurls_image=$myurls_image" '
+      BEGIN {
+        expected["REDIS_IMAGE"] = "REDIS_IMAGE=" redis_image
+        expected["SUBCONVERTER_IMAGE"] = "SUBCONVERTER_IMAGE=" subconverter_image
+        expected["MYURLS_IMAGE"] = "MYURLS_IMAGE=" myurls_image
+      }
+      /^[[:space:]]*(export[[:space:]]+)?(REDIS_IMAGE|SUBCONVERTER_IMAGE|MYURLS_IMAGE)[[:space:]]*=/ {
+        name = $0
+        sub(/^[[:space:]]*(export[[:space:]]+)?/, "", name)
+        sub(/[[:space:]]*=.*/, "", name)
+        gsub(/[[:space:]]/, "", name)
+        if ($0 != expected[name] || ++seen[name] > 1) exit 1
+        next
+      }
+      { print }
+    ' "$source_env_file" > "$validation_env_file" \
+    || fail 'Compose environment must not define managed runtime image variables.'
 else
   validation_ip_hash_secret=$(printf '%064d' 0)
   {
@@ -123,12 +174,6 @@ else
   } > "$validation_env_file"
 fi
 
-runtime_image_env=$(node "$script_directory/runtime-image-contract.mjs" env --lock "$version_lock_file") \
-  || fail "could not derive external runtime images from $version_lock_file"
-for name in REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE; do
-  printf '%s\n' "$runtime_image_env" | grep -q "^$name=" \
-    || fail 'runtime image contract is incomplete.'
-done
 printf '%s\n' "$runtime_image_env" >> "$validation_env_file" \
   || fail 'could not write locked runtime images to Compose validation environment.'
 
@@ -167,11 +212,9 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
   const enabled = shortLinksEnabled === "true";
   const gatewayImage = services.gateway?.image;
   const immutableGatewayImage = (image) =>
-    image === "subweb:local" ||
-    /:sha-[0-9a-f]{7,64}$/u.test(String(image)) ||
-    /@sha256:[0-9a-f]{64}$/u.test(String(image));
+    image === "subweb:local" || /@sha256:[0-9a-f]{64}$/u.test(String(image));
   if (!immutableGatewayImage(gatewayImage)) {
-    console.error("Compose validation error: gateway must use subweb:local or an immutable sha-* / sha256 image.");
+    console.error("Compose validation error: gateway must use subweb:local or an immutable sha256 image.");
     process.exitCode = 1;
   }
   const expected = enabled

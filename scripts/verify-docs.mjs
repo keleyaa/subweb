@@ -110,7 +110,7 @@ export function verifyDocs({ root }) {
   ];
   for (const [relativeFile, expectedText] of requiredContracts) {
     const absoluteFile = path.join(root, relativeFile);
-    if (fs.existsSync(absoluteFile) && !fs.readFileSync(absoluteFile, 'utf8').includes(expectedText)) {
+    if (!fs.existsSync(absoluteFile) || !fs.readFileSync(absoluteFile, 'utf8').includes(expectedText)) {
       errors.push(`missing current deployment contract: ${relativeFile}`);
     }
   }

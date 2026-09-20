@@ -11,6 +11,7 @@ validate_release_version() (
     *"$newline"*) return 1 ;;
   esac
 
+  [ "${#release_version}" -le 128 ] || return 1
   printf '%s\n' "$release_version" | LC_ALL=C grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 )
 

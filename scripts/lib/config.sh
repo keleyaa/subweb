@@ -9,19 +9,15 @@ validate_domain() {
     *[!A-Za-z0-9.-]* | .* | *. | *..*) return 1 ;;
   esac
 
-  old_ifs=$IFS
-  IFS=.
-  set -- $domain
-  IFS=$old_ifs
-  [ "$#" -ge 2 ] || return 1
-
-  for label do
-    [ -n "$label" ] || return 1
-    [ "${#label}" -le 63 ] || return 1
-    case "$label" in
-      -* | *-) return 1 ;;
-    esac
-  done
+  printf '%s\n' "$domain" | LC_ALL=C awk -F. '
+    NF < 2 { exit 1 }
+    {
+      for (field_index = 1; field_index <= NF; field_index += 1) {
+        if (length($field_index) == 0 || length($field_index) > 63) exit 1
+        if ($field_index ~ /^-/ || $field_index ~ /-$/) exit 1
+      }
+    }
+  '
 }
 
 validate_distinct_domains() (
@@ -43,21 +39,16 @@ validate_distinct_domains() (
 validate_ipv4() {
   address=${1-}
 
-  printf '%s\n' "$address" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || return 1
-  old_ifs=$IFS
-  IFS=.
-  set -- $address
-  IFS=$old_ifs
-  [ "$#" -eq 4 ] || return 1
-
-  for octet do
-    case "$octet" in
-      0) ;;
-      0*) return 1 ;;
-    esac
-    [ -n "$octet" ] && [ "$octet" -ge 0 ] 2>/dev/null && [ "$octet" -le 255 ] \
-      || return 1
-  done
+  printf '%s\n' "$address" | LC_ALL=C awk -F. '
+    NF != 4 { exit 1 }
+    {
+      for (field_index = 1; field_index <= NF; field_index += 1) {
+        if ($field_index !~ /^[0-9]+$/) exit 1
+        if ($field_index != "0" && $field_index ~ /^0/) exit 1
+        if ($field_index + 0 > 255) exit 1
+      }
+    }
+  '
 }
 
 validate_ipv4_cidr() {
@@ -91,17 +82,31 @@ validate_container_image() {
   [ -n "$image" ] || return 1
   [ "${#image}" -le 512 ] || return 1
   case "$image" in
-    *[!A-Za-z0-9._/@:+-]* | -* | */ | *:) return 1 ;;
+    *[!A-Za-z0-9._/@:+\[\]-]* | -* | */ | *:) return 1 ;;
   esac
-  # digest references take precedence: the bare tag branch below would
-  # otherwise swallow repo/image@sha256:... without validating the digest.
+  # Digest references take precedence over tags and must not carry a tag.
   case "$image" in
-    */*@sha256:*)
-      digest=${image##*@sha256:}
-      case "$digest" in
-        ''|*[!0-9a-f]*) return 1 ;;
+    *@sha256:*)
+      repository=${image%@sha256:*}
+      digest=${image#*@sha256:}
+      [ "$repository" != "$image" ] && [ -n "$repository" ] || return 1
+      printf '%s\n' "$digest" | LC_ALL=C grep -Eq '^[0-9a-f]{64}$' || return 1
+      case "$repository" in
+        \[*\]:[0-9]*/*)
+          printf '%s\n' "$repository" | LC_ALL=C grep -Eq '^\[[0-9A-Fa-f:.]+\]:[0-9]+/[a-z0-9]+([._-][a-z0-9]+)*(\/[a-z0-9]+([._-][a-z0-9]+)*)*$' || return 1
+          registry=${repository%%/*}
+          registry_port=${registry##*:}
+          ;;
+        *)
+          printf '%s\n' "$repository" | LC_ALL=C grep -Eq '^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)*$' || return 1
+          case "$repository" in */*) registry=${repository%%/*} ;; *) registry= ;; esac
+          case "$registry" in *:*) registry_port=${registry##*:} ;; *) registry_port= ;; esac
+          ;;
       esac
-      [ "${#digest}" -eq 64 ] || return 1
+      if [ -n "$registry_port" ]; then
+        printf '%s\n' "$registry_port" | LC_ALL=C grep -Eq '^[0-9]{1,5}$' || return 1
+        [ "$registry_port" -ge 1 ] 2>/dev/null && [ "$registry_port" -le 65535 ] 2>/dev/null || return 1
+      fi
       ;;
     */*:*)
       tag=${image##*:}

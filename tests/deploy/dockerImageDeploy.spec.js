@@ -343,7 +343,7 @@ describe('Docker image quick deployment', () => {
     ['with short links enabled', []],
     ['with short links disabled', ['--disable-short-links']],
   ])('renders each direct digest %s without release resolution', async (_profile, profileArgs) => {
-    const directImages = [dockerHubImage, ghcrImage, registryPortImage, taggedDigestImage];
+    const directImages = [dockerHubImage, ghcrImage, registryPortImage];
 
     for (const image of directImages) {
       const root = await makeFixture();
@@ -530,7 +530,18 @@ EOF
     expect(invalidProxyLog).toBe('compose version\n');
   });
 
+  it('accepts an immutable single-component repository digest', async () => {
+    const root = await makeFixture();
+    const image = `subweb@sha256:${releaseDigest}`;
+
+    const result = runDeploy(root, ['--image', image]);
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(await readFile(join(root, '.env'), 'utf8')).toContain(`SUBWEB_IMAGE=${image}\n`);
+  });
+
   it.each([
+    ['tagged digest', taggedDigestImage],
     ['sha tag', 'docker.io/keleyaa/subweb:sha-2bf1a9f'],
     ['latest tag', 'docker.io/keleyaa/subweb:latest'],
     ['malformed registry port', `registry.example:not-a-port/repository@sha256:${releaseDigest}`],
