@@ -50,7 +50,7 @@ const lock = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
 const image = lock.services?.redis?.image;
 if (!image?.reference || !/^sha256:[0-9a-f]{64}$/.test(image.digest ?? "")) process.exit(1);
 process.stdout.write(`${image.reference}@${image.digest}`);
-' "$operations_project_root/deploy/versions.lock.json" || operations_fail 'Redis image lock is invalid.'
+  ' "${VERSION_LOCK_FILE:-$operations_project_root/deploy/versions.lock.json}" || operations_fail 'Redis image lock is invalid.'
 }
 
 sha256_file() {

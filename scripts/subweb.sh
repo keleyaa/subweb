@@ -9,12 +9,18 @@ ENV_FILE=${SUBWEB_ENV_FILE:-$DEFAULT_ENV_FILE}
 . "$SCRIPT_DIRECTORY/lib/docker-environment.sh"
 
 SUBWEB_ENV_LOCK_DIRECTORY=
+SUBWEB_ENV_LOCK_TOKEN=
+SUBWEB_VERSION_LOCK_DIRECTORY=
+SUBWEB_VERSION_LOCK_TOKEN=
 validated_env_file=
+upgrade_env_file=
 cleanup_complete=0
 cleanup() {
   [ "$cleanup_complete" -eq 0 ] || return 0
   cleanup_complete=1
   [ -z "$validated_env_file" ] || rm -f "$validated_env_file"
+  [ -z "$upgrade_env_file" ] || rm -f "$upgrade_env_file"
+  release_path_lock "$SUBWEB_VERSION_LOCK_DIRECTORY" || true
   release_path_lock "$SUBWEB_ENV_LOCK_DIRECTORY" || true
 }
 trap cleanup 0
@@ -34,6 +40,10 @@ case "$ENV_FILE" in
     ;;
 esac
 export SUBWEB_ENV_FILE="$ENV_FILE"
+SUBWEB_ENV_LOCK_TARGET=$ENV_FILE
+export SUBWEB_ENV_LOCK_TARGET
+# Compose project selection is owned by each controlled verifier, never by the caller.
+unset COMPOSE_PROJECT_NAME
 read_env_value() {
   key=$1
   [ -f "$ENV_FILE" ] || return 1
@@ -87,6 +97,7 @@ require_production_env() {
 
 acquire_path_lock "$ENV_FILE" || fail 'could not lock the production environment.'
 SUBWEB_ENV_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
+SUBWEB_ENV_LOCK_TOKEN=$PATH_LOCK_TOKEN
 require_production_env
 
 validated_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-env.XXXXXX") \
@@ -145,12 +156,26 @@ run_operation() (
   run_docker_environment "$@"
 )
 
+validate_compose() (
+  SUBWEB_ENV_LOCK_HELD=1
+  SUBWEB_ENV_LOCK_DIRECTORY=$SUBWEB_ENV_LOCK_DIRECTORY
+  SUBWEB_ENV_LOCK_TOKEN=$SUBWEB_ENV_LOCK_TOKEN
+  SUBWEB_ENV_FILE=$ENV_FILE
+  SHORT_LINKS_ENABLED=$short_links_enabled
+  COMPOSE_VALIDATION_FILE=$compose_file
+  export SUBWEB_ENV_LOCK_HELD SUBWEB_ENV_LOCK_DIRECTORY SUBWEB_ENV_LOCK_TOKEN
+  export SUBWEB_ENV_FILE SHORT_LINKS_ENABLED COMPOSE_VALIDATION_FILE
+  if [ -n "$SUBWEB_VERSION_LOCK_DIRECTORY" ]; then
+    SUBWEB_VERSION_LOCK_HELD=1
+    export SUBWEB_VERSION_LOCK_HELD SUBWEB_VERSION_LOCK_DIRECTORY SUBWEB_VERSION_LOCK_TOKEN
+  fi
+  "$SCRIPT_DIRECTORY/validate-compose.sh"
+)
+
 case "$command_name" in
   up)
     [ "$#" -eq 0 ] || fail 'up does not accept extra arguments.'
-    SUBWEB_ENV_LOCK_HELD=1 \
-      SUBWEB_ENV_FILE=$ENV_FILE SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
-      "$SCRIPT_DIRECTORY/validate-compose.sh"
+    validate_compose
     if gateway_image=$(read_env_value SUBWEB_IMAGE); then
       :
     else
@@ -177,9 +202,7 @@ case "$command_name" in
     ;;
   verify)
     [ "$#" -eq 0 ] || fail 'verify does not accept extra arguments.'
-    SUBWEB_ENV_LOCK_HELD=1 \
-      SUBWEB_ENV_FILE=$ENV_FILE SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
-      "$SCRIPT_DIRECTORY/validate-compose.sh"
+    validate_compose
     compose ps
     ;;
   backup)
@@ -200,11 +223,29 @@ case "$command_name" in
     run_operation "$SCRIPT_DIRECTORY/operations/restore-redis.sh" --backup "$2" --confirm-stop-writes
     ;;
   upgrade)
-    [ "$#" -eq 0 ] || fail 'upgrade does not accept extra arguments.'
-    unset SUBWEB_IMAGE MYURLS_IMAGE REDIS_IMAGE SUBCONVERTER_IMAGE
-    SUBWEB_ENV_LOCK_HELD=1 \
-      SUBWEB_ENV_FILE=$ENV_FILE SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
-      "$SCRIPT_DIRECTORY/validate-compose.sh"
+     [ "$#" -eq 0 ] || fail 'upgrade does not accept extra arguments.'
+      version_lock_file=${VERSION_LOCK_FILE:-$PROJECT_DIRECTORY/deploy/versions.lock.json}
+      acquire_path_lock "$version_lock_file" \
+        || fail 'could not lock deploy/versions.lock.json for upgrade.'
+     SUBWEB_VERSION_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
+     SUBWEB_VERSION_LOCK_TOKEN=$PATH_LOCK_TOKEN
+     upgrade_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-upgrade-env.XXXXXX") \
+       || fail 'unable to create an upgrade environment snapshot.'
+     chmod 0600 "$upgrade_env_file" \
+       || fail 'unable to protect the upgrade environment snapshot.'
+     runtime_image_env=$(node "$SCRIPT_DIRECTORY/runtime-image-contract.mjs" env \
+        --lock "$version_lock_file") \
+       || fail 'unable to derive locked runtime images for upgrade.'
+     awk '
+       /^[[:space:]]*(export[[:space:]]+)?(REDIS_IMAGE|SUBCONVERTER_IMAGE|MYURLS_IMAGE)[[:space:]]*=/ { next }
+       { print }
+     ' "$ENV_FILE" > "$upgrade_env_file" \
+       || fail 'unable to prepare the upgrade environment snapshot.'
+     printf '%s\\n' "$runtime_image_env" >> "$upgrade_env_file" \
+       || fail 'unable to write locked runtime images to the upgrade environment.'
+     ENV_FILE=$upgrade_env_file
+     export SUBWEB_ENV_FILE="$ENV_FILE"
+      validate_compose
     if [ "$short_links_enabled" = true ]; then
       compose pull gateway subconverter myurls redis
     else

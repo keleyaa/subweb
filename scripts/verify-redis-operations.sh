@@ -24,6 +24,7 @@ unset \
 
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/subweb-unified-operations.XXXXXX")
 project_name=subweb-unified-operations-$(openssl rand -hex 6)
+export SUBWEB_LOCAL_PROJECT_NAME=$project_name
 compose_files=$project_root/compose.yaml:$project_root/compose.test.yaml
 env_file=$temporary_directory/stack.env
 backup_file=$temporary_directory/short-links.rdb
@@ -32,13 +33,14 @@ short_url=https://example.com/unified-recovery
 host_port=$(node -e 'const n=require("node:net");const s=n.createServer();s.listen(0,"127.0.0.1",()=>{process.stdout.write(String(s.address().port));s.close()})')
 password=$(openssl rand -hex 32)
 ip_hash_secret=$(openssl rand -hex 32)
-test_network_subnet=$("$script_directory/select-test-network.sh")
+test_network_subnet=$(SUBWEB_LOCAL_PROJECT_NAME="$project_name" \
+  "$script_directory/local/select-test-network.sh")
 test_network_prefix=${test_network_subnet%.*}
 test_gateway_ip=$test_network_prefix.2
 test_myurls_ip=$test_network_prefix.3
 
 node "$project_root/scripts/verify-version-locks.mjs" >/dev/null
-myurls_image=$(node - "$project_root/deploy/versions.lock.json" <<'NODE'
+myurls_image=$(node - "${VERSION_LOCK_FILE:-$project_root/deploy/versions.lock.json}" <<'NODE'
 const fs = require('node:fs');
 const lock = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 for (const service of ['myurls', 'redis', 'subconverter']) {

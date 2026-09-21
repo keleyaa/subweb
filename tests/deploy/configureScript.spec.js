@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { copyFileSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,16 +15,20 @@ const makeDirectory = async () => {
   temporaryDirectories.push(directory);
   return directory;
 };
-const runConfigure = (cwd, args, input = 'test-secret-key\n', environment = {}) => spawnSync(
-  'sh',
-  [configurePath, ...args],
-  {
-    cwd,
-    encoding: 'utf8',
-    input,
-    env: { ...process.env, SUBWEB_VERSION_LOCK_HELD: '1', ...environment },
-  },
-);
+const runConfigure = (cwd, args, input = 'test-secret-key\n', environment = {}) => {
+  const versionLockPath = join(cwd, 'versions.lock.json');
+  copyFileSync(new URL('../../deploy/versions.lock.json', import.meta.url), versionLockPath);
+  return spawnSync(
+    'sh',
+    [configurePath, ...args],
+    {
+      cwd,
+      encoding: 'utf8',
+      input,
+      env: { ...process.env, VERSION_LOCK_FILE: versionLockPath, ...environment },
+    },
+  );
+};
 const baseArgs = [
   '--app-domain', 'example.com', '--api-domain', 'api.example.com', '--short-domain', 'short.example.com',
   '--turnstile-site-key', 'test-site-key', '--turnstile-secret-key-stdin',
@@ -104,6 +109,35 @@ exit 23
     expect(result.stderr).not.toContain('Turnstile secret key must be provided on stdin.');
     expect(await readFile(nodeLog, 'utf8')).toBe('--version\n');
     await expect(readFile(join(cwd, '.env'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readdir(cwd)).not.toContain('.env.lock');
+    expect(await readdir(cwd)).not.toContain('versions.lock.json.lock');
+  });
+
+  it('rejects malformed lock handoffs without releasing either parent lock', async () => {
+    const cwd = await makeDirectory();
+    const environmentLockDirectory = join(cwd, '.env.lock');
+    const versionLockDirectory = join(cwd, 'versions.lock.json.lock');
+    const environmentLockToken = `${environmentLockDirectory}/parent`;
+    const versionLockToken = `${versionLockDirectory}/parent`;
+    const environmentOwner = `${process.pid}|${environmentLockToken}\n`;
+    const versionOwner = `${process.pid}|${versionLockToken}\n`;
+    await mkdir(environmentLockDirectory);
+    await mkdir(versionLockDirectory);
+    await writeFile(join(environmentLockDirectory, 'owner'), environmentOwner);
+    await writeFile(join(versionLockDirectory, 'owner'), versionOwner);
+
+    const result = runConfigure(cwd, baseArgs, 'test-secret-key\n', {
+      SUBWEB_ENV_LOCK_HELD: '1',
+      SUBWEB_ENV_LOCK_DIRECTORY: environmentLockDirectory,
+      SUBWEB_ENV_LOCK_TOKEN: environmentLockToken,
+      SUBWEB_VERSION_LOCK_HELD: '1',
+      SUBWEB_VERSION_LOCK_DIRECTORY: versionLockDirectory,
+      SUBWEB_VERSION_LOCK_TOKEN: `${versionLockToken}-invalid`,
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(await readFile(join(environmentLockDirectory, 'owner'), 'utf8')).toBe(environmentOwner);
+    expect(await readFile(join(versionLockDirectory, 'owner'), 'utf8')).toBe(versionOwner);
   });
 
   it('allows short links to be disabled without short-link domains or secrets', async () => {
@@ -121,6 +155,8 @@ exit 23
     for (const omitted of ['SHORT_DOMAIN', 'TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET_KEY', 'IP_HASH_SECRET', 'REDIS_PASSWORD']) {
       expect(env[omitted]).toBeUndefined();
     }
+    expect(await readdir(cwd)).not.toContain('.env.lock');
+    expect(await readdir(cwd)).not.toContain('versions.lock.json.lock');
   });
 
   it.each([

@@ -304,26 +304,8 @@ jobs:
           create-storage-record: false
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Remove failed release candidate package version
-        if: failure()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GHCR_PACKAGE: subweb
-          RELEASE_TAG: ${{ steps.tag.outputs.version }}
-        shell: bash
-        run: |
-          version_ids=$(gh api --paginate \
-            "/user/packages/container/${GHCR_PACKAGE}/versions?per_page=100" \
-            --jq '
-              .[] | select(.metadata.container.tags[]? == env.RELEASE_TAG) | .id
-            ')
-          while IFS= read -r version_id; do
-            [ -n "$version_id" ] || continue
-            gh api --method DELETE \
-              "/user/packages/container/${GHCR_PACKAGE}/versions/${version_id}"
-          done <<< "$version_ids"
-
       - name: Promote verified candidate
+        id: promote
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
           RELEASE_TAG: ${{ steps.tag.outputs.version }}
@@ -349,6 +331,25 @@ jobs:
               exit 1
             }
           done
+
+      - name: Remove failed release candidate package version
+        if: ${{ failure() && steps.promote.outcome != 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_PACKAGE: subweb
+          RELEASE_TAG: ${{ steps.tag.outputs.version }}
+        shell: bash
+        run: |
+          version_ids=$(gh api --paginate \
+            "/user/packages/container/${GHCR_PACKAGE}/versions?per_page=100" \
+            --jq '
+              .[] | select(.metadata.container.tags[]? == env.RELEASE_TAG) | .id
+            ')
+          while IFS= read -r version_id; do
+            [ -n "$version_id" ] || continue
+            gh api --method DELETE \
+              "/user/packages/container/${GHCR_PACKAGE}/versions/${version_id}"
+          done <<< "$version_ids"
 
       - name: Create rollback manifest
         id: rollback

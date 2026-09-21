@@ -150,6 +150,22 @@ describe('integrated service artifact locks', () => {
     expect(lock.services.subconverter.source.repository).toBe(
       'Aethersailor/SubConverter-Extended',
     );
+    expect(lock.services.subconverter.image.reference).toBe(
+      'ghcr.io/aethersailor/subconverter-extended:v1.9.4',
+    );
+  });
+
+  it('rejects a foreign or tag-mismatched SubConverter artifact', () => {
+    const candidate = structuredClone(lock);
+    candidate.services.subconverter.source.repository = 'untrusted/SubConverter';
+    candidate.services.subconverter.image.reference =
+      'ghcr.io/untrusted/subconverter:v9.9.9';
+
+    expect(validateVersionLocks(candidate)).toEqual(expect.arrayContaining([
+      'services.subconverter.source.repository must equal Aethersailor/SubConverter-Extended',
+      'services.subconverter.image.reference must use ghcr.io/aethersailor/subconverter-extended',
+      'services.subconverter.image.reference tag must match source.tag',
+    ]));
   });
 
   it('pins the Go gateway builder and runtime image inputs used by Dockerfile', () => {

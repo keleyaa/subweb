@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -40,6 +40,8 @@ esac
   const jsonPath = join(directory, 'compose.json');
   await writeFile(jsonPath, JSON.stringify(composeJson));
   const envPath = join(directory, '.env');
+  const versionLockPath = join(directory, 'versions.lock.json');
+  await writeFile(versionLockPath, await readFile(new URL('../../deploy/versions.lock.json', import.meta.url)));
   await writeFile(envPath, [
     'APP_DOMAIN=app.validation.test', 'API_DOMAIN=api.validation.test',
     'SHORT_DOMAIN=short.validation.test', 'API_URL=https://api.validation.test',
@@ -55,9 +57,11 @@ esac
       DOCKER_CALL_LOG: join(directory, 'docker-calls.log'),
       COMPOSE_JSON_FIXTURE: jsonPath,
       COMPOSE_VALIDATION_FILE: 'compose.yaml',
+      VERSION_LOCK_FILE: versionLockPath,
       SHORT_LINKS_ENABLED: shortLinksEnabled,
     },
     envPath,
+    versionLockPath,
   };
 };
 
@@ -132,11 +136,14 @@ describe('unified Compose validation', () => {
     ['TURNSTILE_MODE', 'test'],
     ['TURNSTILE_SECRET_KEY', ''],
     ['NODE_ENV', 'development'],
-  ])('rejects invalid single-instance MyUrls %s', async (name, value) => {
+  ])('rejects invalid single-instance MyUrls %s and releases direct locks', async (name, value) => {
     const candidate = structuredClone(validCompose);
     candidate.services.myurls.environment[name] = value;
-    const { result } = await validateFixture(candidate);
+    const { fixture, result } = await validateFixture(candidate);
+
     expect(result.status).not.toBe(0);
+    expect(await readdir(fixture.directory)).not.toContain('.env.lock');
+    expect(await readdir(fixture.directory)).not.toContain('versions.lock.json.lock');
   });
 
   it('rejects a Gateway pointed outside the sole MyUrls service', async () => {
@@ -149,6 +156,46 @@ describe('unified Compose validation', () => {
   it('validates the four-container production topology', async () => {
     const { result } = await validateFixture(validCompose);
     expect(result.status).toBe(0);
+  });
+
+  it('releases locally acquired environment and version locks after direct validation', async () => {
+    const { fixture, result } = await validateFixture(validCompose);
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(await readdir(fixture.directory)).not.toContain('.env.lock');
+    expect(await readdir(fixture.directory)).not.toContain('versions.lock.json.lock');
+  });
+
+  it('rejects malformed lock handoffs without releasing either parent lock', async () => {
+    const fixture = await createFixture(validCompose);
+    const environmentLockDirectory = `${fixture.envPath}.lock`;
+    const versionLockDirectory = `${fixture.versionLockPath}.lock`;
+    const environmentLockToken = `${environmentLockDirectory}/parent`;
+    const versionLockToken = `${versionLockDirectory}/parent`;
+    const environmentOwner = `${process.pid}|${environmentLockToken}\n`;
+    const versionOwner = `${process.pid}|${versionLockToken}\n`;
+    await (await import('node:fs/promises')).mkdir(environmentLockDirectory);
+    await (await import('node:fs/promises')).mkdir(versionLockDirectory);
+    await writeFile(join(environmentLockDirectory, 'owner'), environmentOwner);
+    await writeFile(join(versionLockDirectory, 'owner'), versionOwner);
+
+    const result = spawnSync('sh', [validatorPath], {
+      cwd: fixture.directory,
+      encoding: 'utf8',
+      env: {
+        ...fixture.env,
+        SUBWEB_ENV_LOCK_HELD: '1',
+        SUBWEB_ENV_LOCK_DIRECTORY: environmentLockDirectory,
+        SUBWEB_ENV_LOCK_TOKEN: environmentLockToken,
+        SUBWEB_VERSION_LOCK_HELD: '1',
+        SUBWEB_VERSION_LOCK_DIRECTORY: versionLockDirectory,
+        SUBWEB_VERSION_LOCK_TOKEN: `${versionLockToken}-invalid`,
+      },
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(await readFile(join(environmentLockDirectory, 'owner'), 'utf8')).toBe(environmentOwner);
+    expect(await readFile(join(versionLockDirectory, 'owner'), 'utf8')).toBe(versionOwner);
   });
 
   it('validates the two-service short-links-disabled topology', async () => {

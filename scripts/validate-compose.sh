@@ -13,13 +13,19 @@ validation_env_file=
 validation_source_env_file=
 validation_version_lock_snapshot=
 validation_env_lock_directory=
+validation_env_lock_owned=0
 validation_version_lock_directory=
+validation_version_lock_owned=0
 cleanup() {
   [ -z "$validation_env_file" ] || rm -f "$validation_env_file"
   [ -z "$validation_source_env_file" ] || rm -f "$validation_source_env_file"
   [ -z "$validation_version_lock_snapshot" ] || rm -f "$validation_version_lock_snapshot"
-  release_path_lock "$validation_version_lock_directory" || true
-  release_path_lock "$validation_env_lock_directory" || true
+  if [ "$validation_version_lock_owned" -eq 1 ]; then
+    release_path_lock "$validation_version_lock_directory" || true
+  fi
+  if [ "$validation_env_lock_owned" -eq 1 ]; then
+    release_path_lock "$validation_env_lock_directory" || true
+  fi
 }
 trap cleanup 0
 trap 'cleanup; exit 1' HUP INT TERM
@@ -37,17 +43,30 @@ if [ "${SUBWEB_ENV_FILE+x}" = x ]; then
       ;;
   esac
 elif [ -e .env ]; then
-  source_env_file=.env
+  source_env_file=$(pwd -P)/.env
 fi
 
 version_lock_file=${VERSION_LOCK_FILE:-$script_directory/../deploy/versions.lock.json}
 if [ "${SUBWEB_ENV_LOCK_HELD:-0}" != 1 ] && [ -n "$source_env_file" ]; then
   acquire_path_lock "$source_env_file" || fail 'could not lock the Compose environment.'
   validation_env_lock_directory=$PATH_LOCK_DIRECTORY
+  validation_env_lock_owned=1
+elif [ -n "$source_env_file" ]; then
+  validation_env_lock_target=${SUBWEB_ENV_LOCK_TARGET:-$source_env_file}
+  [ "${SUBWEB_ENV_LOCK_DIRECTORY:-}" = "$validation_env_lock_target.lock" ] \
+    || fail 'invalid Compose environment lock handoff.'
+  validate_path_lock_handoff "$SUBWEB_ENV_LOCK_DIRECTORY" "${SUBWEB_ENV_LOCK_TOKEN:-}" \
+    || fail 'invalid Compose environment lock handoff.'
 fi
 if [ "${SUBWEB_VERSION_LOCK_HELD:-0}" != 1 ]; then
   acquire_path_lock "$version_lock_file" || fail 'could not lock deploy/versions.lock.json.'
   validation_version_lock_directory=$PATH_LOCK_DIRECTORY
+  validation_version_lock_owned=1
+else
+  [ "${SUBWEB_VERSION_LOCK_DIRECTORY:-}" = "$version_lock_file.lock" ] \
+    || fail 'invalid version lock handoff.'
+  validate_path_lock_handoff "$SUBWEB_VERSION_LOCK_DIRECTORY" "${SUBWEB_VERSION_LOCK_TOKEN:-}" \
+    || fail 'invalid version lock handoff.'
 fi
 
 [ -f "$version_lock_file" ] && [ ! -L "$version_lock_file" ] \
@@ -317,7 +336,7 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
       process.exitCode = 1;
     }
   }
-  if (enabled && services.gateway?.environment?.EGRESS_LISTEN_ADDR !== "0.0.0.0:25502") {
+  if (services.gateway?.environment?.EGRESS_LISTEN_ADDR !== "0.0.0.0:25502") {
     console.error("Compose validation error: gateway egress listener contract is missing.");
     process.exitCode = 1;
   }

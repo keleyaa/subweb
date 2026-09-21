@@ -17,6 +17,7 @@ run_docker_environment() (
     DOCKER_TLS_VERIFY="${DOCKER_TLS_VERIFY-}" \
     SSH_AUTH_SOCK="${SSH_AUTH_SOCK-}" \
     COMPOSE_FILE="${COMPOSE_FILE-}" \
+    COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME-}" \
     SUBWEB_ENV_FILE="${SUBWEB_ENV_FILE-}" \
     "$@"
 )

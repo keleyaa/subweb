@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { resolveRuntimeImages } from './runtime-image-contract.mjs';
 import { validateVersionLocks } from './verify-version-locks.mjs';
 
-const defaultLockPath = fileURLToPath(
+const defaultLockPath = process.env.VERSION_LOCK_FILE || fileURLToPath(
   new URL('../deploy/versions.lock.json', import.meta.url),
 );
 const fullProfile = {
@@ -185,6 +185,60 @@ const environmentValue = (service, name) =>
 const serviceNetworks = (service) =>
   isRecord(service?.networks) ? Object.keys(service.networks).sort() : [];
 
+const allowedServiceFields = {
+  gateway: new Set([
+    'build', 'cap_drop', 'command', 'depends_on', 'entrypoint', 'environment',
+    'healthcheck', 'image', 'logging', 'networks', 'ports', 'read_only',
+    'restart', 'security_opt', 'stop_grace_period', 'user',
+  ]),
+  myurls: new Set([
+    'cap_drop', 'command', 'depends_on', 'entrypoint', 'environment',
+    'healthcheck', 'image', 'logging', 'networks', 'read_only', 'restart',
+    'security_opt', 'stop_grace_period', 'tmpfs', 'user',
+  ]),
+  redis: new Set([
+    'cap_drop', 'command', 'entrypoint', 'environment', 'healthcheck', 'image',
+    'logging', 'networks', 'read_only', 'restart', 'security_opt',
+    'stop_grace_period', 'tmpfs', 'user', 'volumes',
+  ]),
+  subconverter: new Set([
+    'cap_add', 'cap_drop', 'command', 'depends_on', 'entrypoint', 'environment',
+    'healthcheck', 'image', 'logging', 'networks', 'read_only', 'restart',
+    'security_opt', 'stop_grace_period', 'tmpfs', 'user', 'volumes',
+  ]),
+};
+
+const allowedEnvironmentNames = {
+  gateway: new Set([
+    'API_DOMAIN', 'API_URL', 'APP_DOMAIN', 'CONVERSION_DNS_TIMEOUT_MS',
+    'CONVERSION_EGRESS_CONNECT_TIMEOUT_MS', 'CONVERSION_MAX_CONCURRENCY',
+    'CONVERSION_MAX_CONCURRENCY_PER_IP', 'CONVERSION_MAX_REQUEST_BYTES',
+    'CONVERSION_MAX_RESPONSE_BYTES', 'CONVERSION_RATE_LIMIT',
+    'CONVERSION_RATE_WINDOW_SECONDS', 'CONVERSION_REQUEST_TIMEOUT_MS',
+    'CUSTOM_BACKEND_ENABLED', 'EGRESS_ALLOWED_HOSTS', 'EGRESS_LISTEN_ADDR',
+    'EGRESS_RESTRICTED_LISTEN_ADDR', 'IP_HASH_SECRET', 'LISTEN_ADDR',
+    'LOG_LEVEL', 'MYURLS_UPSTREAM', 'REDIS_PASSWORD', 'REDIS_URL',
+    'SHORT_DOMAIN', 'SHORT_LINKS_ENABLED', 'SUBCONVERTER_UPSTREAM',
+    'TRUSTED_PROXY_CIDR', 'TURNSTILE_SITE_KEY', 'TZ',
+  ]),
+  myurls: new Set([
+    'APP_PORT', 'CREATE_DIRECT_LIMIT_10M', 'CREATE_HARD_LIMIT_10M',
+    'CREATE_HARD_LIMIT_1D', 'HTTPS_PROXY', 'IP_HASH_SECRET', 'LOG_LEVEL',
+    'NODE_ENV', 'NO_PROXY', 'PUBLIC_BASE_URL', 'REDIS_PASSWORD', 'REDIS_URL',
+    'REDIS_TIMEOUT_MS', 'REQUEST_TIMEOUT_MS', 'RESOLVE_LIMIT_10S', 'RISK_BLOCK_SCORE',
+    'RISK_CHALLENGE_SCORE', 'SHUTDOWN_TIMEOUT_MS', 'TURNSTILE_ENABLED',
+    'TURNSTILE_HOSTNAME', 'TURNSTILE_MODE', 'TURNSTILE_SECRET_KEY',
+    'TURNSTILE_TIMEOUT_MS',
+    'TURNSTILE_SITE_KEY', 'TRUST_PROXY_CIDRS', 'TZ', 'https_proxy', 'no_proxy',
+  ]),
+  redis: new Set(['REDIS_PASSWORD', 'TZ']),
+  subconverter: new Set([
+    'HTTPS_PROXY', 'MANAGED_CONFIG_PREFIX', 'NO_PROXY',
+    'SUBCONVERTER_ALLOW_PUBLIC_UPLOAD', 'SUBCONVERTER_SECURITY_PROFILE', 'TZ',
+    'https_proxy', 'no_proxy',
+  ]),
+};
+
 const dependsOn = (service, dependency) => {
   const dependencies = service?.depends_on;
   if (Array.isArray(dependencies)) return dependencies.includes(dependency) ? {} : undefined;
@@ -257,6 +311,23 @@ export const verifyRenderedCompose = (rendered, profile, lock, errors, environme
   const authorizedSubconverterCapabilities = ['CHOWN', 'SETGID', 'SETUID'];
   for (const [serviceName, networks] of Object.entries(expectedNetworks(profile))) {
     const service = services[serviceName];
+    const unexpectedFields = Object.keys(service ?? {}).filter(
+      (field) => !allowedServiceFields[serviceName]?.has(field),
+    );
+    check(
+      unexpectedFields.length === 0,
+      `${serviceName} has unsupported service fields: ${unexpectedFields.join(', ')}`,
+      errors,
+    );
+    const environment = isRecord(service?.environment) ? service.environment : {};
+    const unexpectedEnvironmentNames = Object.keys(environment).filter(
+      (name) => !allowedEnvironmentNames[serviceName]?.has(name),
+    );
+    check(
+      unexpectedEnvironmentNames.length === 0,
+      `${serviceName} has unsupported environment entries: ${unexpectedEnvironmentNames.join(', ')}`,
+      errors,
+    );
     const capabilities = Array.isArray(service?.cap_add) ? [...service.cap_add].sort() : [];
     const isAuthorizedSubconverterBootstrap = serviceName === 'subconverter'
       && service?.user === '0:0'

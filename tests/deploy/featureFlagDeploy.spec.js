@@ -16,10 +16,14 @@ const makeFixture = async (shortLinksEnabled) => {
   const root = await mkdtemp(join(tmpdir(), 'subweb-feature-deploy-'));
   temporaryDirectories.push(root);
   await mkdir(join(root, 'scripts/lib'), { recursive: true });
+  await mkdir(join(root, 'deploy'), { recursive: true });
   await writeFile(join(root, '.env'), `SHORT_LINKS_ENABLED=${shortLinksEnabled}\n`, { mode: 0o600 });
   await writeFile(join(root, 'scripts/subweb.sh'), await readFile(new URL('scripts/subweb.sh', repositoryRoot), 'utf8'));
   await writeFile(join(root, 'scripts/lib/path-lock.sh'), await readFile(new URL('scripts/lib/path-lock.sh', repositoryRoot), 'utf8'));
   await writeFile(join(root, 'scripts/lib/docker-environment.sh'), await readFile(new URL('scripts/lib/docker-environment.sh', repositoryRoot), 'utf8'));
+  await writeFile(join(root, 'scripts/runtime-image-contract.mjs'), await readFile(new URL('scripts/runtime-image-contract.mjs', repositoryRoot), 'utf8'));
+  await writeFile(join(root, 'scripts/verify-version-locks.mjs'), await readFile(new URL('scripts/verify-version-locks.mjs', repositoryRoot), 'utf8'));
+  await writeFile(join(root, 'deploy/versions.lock.json'), await readFile(new URL('deploy/versions.lock.json', repositoryRoot), 'utf8'));
   await chmod(join(root, 'scripts/subweb.sh'), 0o755);
   await writeFile(join(root, 'scripts/validate-compose.sh'), '#!/bin/sh\nprintf "validate\\n" >> "$DOCKER_LOG"\n');
   await chmod(join(root, 'scripts/validate-compose.sh'), 0o755);

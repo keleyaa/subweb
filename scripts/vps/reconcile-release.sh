@@ -42,15 +42,43 @@ reconcile_mountinfo_stream() {
   cat /proc/self/mountinfo
 }
 
+reconcile_decode_mountpoint() {
+  reconcile_encoded=$1
+  reconcile_decoded=''
+  reconcile_backslash=$(printf '\\')
+  reconcile_newline='
+'
+  reconcile_tab=$(printf '\tX')
+  reconcile_tab=${reconcile_tab%X}
+
+  while [ -n "$reconcile_encoded" ]; do
+    reconcile_character=${reconcile_encoded%"${reconcile_encoded#?}"}
+    reconcile_encoded=${reconcile_encoded#?}
+    if [ "$reconcile_character" = "$reconcile_backslash" ]; then
+      case "$reconcile_encoded" in
+        040*) reconcile_decoded="${reconcile_decoded} "; reconcile_encoded=${reconcile_encoded#040} ;;
+        011*) reconcile_decoded="${reconcile_decoded}${reconcile_tab}"; reconcile_encoded=${reconcile_encoded#011} ;;
+        012*) reconcile_decoded="${reconcile_decoded}${reconcile_newline}"; reconcile_encoded=${reconcile_encoded#012} ;;
+        \\*) reconcile_decoded="${reconcile_decoded}${reconcile_backslash}"; reconcile_encoded=${reconcile_encoded#\\} ;;
+        *) reconcile_decoded="${reconcile_decoded}${reconcile_backslash}" ;;
+      esac
+    else
+      reconcile_decoded="${reconcile_decoded}${reconcile_character}"
+    fi
+  done
+  printf '%s\n' "$reconcile_decoded"
+}
+
 reconcile_target_has_nested_mount() {
   reconcile_target=$1
   if command -v findmnt >/dev/null 2>&1; then
     reconcile_mounts=$(findmnt -rn -o TARGET 2>/dev/null) || return 0
     while IFS= read -r reconcile_mount; do
       [ -n "$reconcile_mount" ] || continue
-      case "$reconcile_mount" in
-        "$reconcile_target"/*) return 0 ;;
-      esac
+       reconcile_mount=$(reconcile_decode_mountpoint "$reconcile_mount") || return 0
+       case "$reconcile_mount" in
+         "$reconcile_target"/*) return 0 ;;
+       esac
     done <<EOF
 $reconcile_mounts
 EOF
@@ -60,9 +88,11 @@ EOF
   reconcile_mounts=$(reconcile_mountinfo_stream 2>/dev/null) || return 0
   [ -n "$reconcile_mounts" ] || return 0
   while IFS= read -r reconcile_mountinfo; do
+    # mountinfo escapes whitespace, so its unquoted fields remain atomic here.
+    # shellcheck disable=SC2086
     set -- $reconcile_mountinfo
     [ "$#" -ge 5 ] || return 0
-    reconcile_mount=$(printf '%b\n' "$5") || return 0
+    reconcile_mount=$(reconcile_decode_mountpoint "$5") || return 0
     case "$reconcile_mount" in
       "$reconcile_target"/*) return 0 ;;
     esac
@@ -270,6 +300,14 @@ reconcile_restore_old_tree() {
   RECONCILE_RELEASE_CUTOVER_PENDING=0
 }
 
+reconcile_stop_active_service() {
+  if systemctl is-active --quiet subweb.service; then
+    systemctl stop subweb.service
+  else
+    return 0
+  fi
+}
+
 reconcile_restore_prior_service() {
   [ "$RECONCILE_RELEASE_SERVICE_WAS_ACTIVE" -eq 1 ] || return 0
   systemctl start subweb.service
@@ -293,7 +331,10 @@ reconcile_release_commit() {
 reconcile_release_abort() {
   reconcile_abort_status=0
   if [ "$RECONCILE_RELEASE_CUTOVER_PENDING" -eq 1 ]; then
-    reconcile_restore_old_tree || reconcile_abort_status=1
+    reconcile_stop_active_service || reconcile_abort_status=1
+    if [ "$reconcile_abort_status" -eq 0 ]; then
+      reconcile_restore_old_tree || reconcile_abort_status=1
+    fi
     if [ "$reconcile_abort_status" -eq 0 ]; then
       reconcile_restore_prior_service || reconcile_abort_status=1
     fi
@@ -343,13 +384,13 @@ reconcile_release_tree() {
   RECONCILE_RELEASE_TARGET=$reconcile_target
   RECONCILE_RELEASE_STAGE=$(mktemp -d "$reconcile_target_parent/.${reconcile_target_name}.stage.XXXXXX") || return 1
 
-  reconcile_copy_selected_release "$reconcile_source" "$RECONCILE_RELEASE_STAGE" \
-    && reconcile_copy_runtime_state "$reconcile_source" "$reconcile_target" "$RECONCILE_RELEASE_STAGE" \
-    && reconcile_tree_is_safe "$RECONCILE_RELEASE_STAGE" \
-    && reconcile_validate_runtime_state "$RECONCILE_RELEASE_STAGE" || {
-reconcile_release_abort_with_report || true
-       return 1
-     }
+  if ! reconcile_copy_selected_release "$reconcile_source" "$RECONCILE_RELEASE_STAGE" \
+    || ! reconcile_copy_runtime_state "$reconcile_source" "$reconcile_target" "$RECONCILE_RELEASE_STAGE" \
+    || ! reconcile_tree_is_safe "$RECONCILE_RELEASE_STAGE" \
+    || ! reconcile_validate_runtime_state "$RECONCILE_RELEASE_STAGE"; then
+    reconcile_release_abort_with_report || true
+    return 1
+  fi
 
   reconcile_source_fingerprint=$(reconcile_release_tree_fingerprint "$reconcile_source") || {
     reconcile_release_abort_with_report || true

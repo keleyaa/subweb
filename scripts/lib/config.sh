@@ -98,7 +98,7 @@ validate_container_image() {
           registry_port=${registry##*:}
           ;;
         *)
-          printf '%s\n' "$repository" | LC_ALL=C grep -Eq '^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)*$' || return 1
+          printf '%s\n' "$repository" | LC_ALL=C grep -Eq '^[a-z0-9][a-z0-9.-]*(:[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)*$' || return 1
           case "$repository" in */*) registry=${repository%%/*} ;; *) registry= ;; esac
           case "$registry" in *:*) registry_port=${registry##*:} ;; *) registry_port= ;; esac
           ;;

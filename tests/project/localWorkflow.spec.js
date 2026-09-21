@@ -34,12 +34,12 @@ describe('Compose-first local workflow contract', () => {
   APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN SUBWEB_PORT \\
   REDIS_PASSWORD IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY \\
   REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE \\
-  MYURLS_NETWORK_SUBNET MYURLS_GATEWAY_IP MYURLS_IP MYURLS_TRUST_PROXY_CIDR \\
-  SUBWEB_LOCAL_PROJECT_NAME`;
+  MYURLS_NETWORK_SUBNET MYURLS_GATEWAY_IP MYURLS_IP MYURLS_TRUST_PROXY_CIDR`;
 
     expect(verifier).toContain(isolationBlock);
     expect(verifier).toContain('export SUBWEB_LOCAL_PROJECT_NAME="subweb-local-verify-$(openssl rand -hex 6)"');
-    expect(verifier).toContain('test_network_subnet=$("$script_directory/select-test-network.sh")');
+    expect(verifier).toContain('test_network_subnet=$(SUBWEB_LOCAL_PROJECT_NAME="$SUBWEB_LOCAL_PROJECT_NAME"');
+    expect(verifier).toContain('"$script_directory/local/select-test-network.sh")');
     expect(verifier).toContain('export LOCAL_MYURLS_NETWORK_SUBNET="$test_network_subnet"');
     expect(verifier).toContain('export LOCAL_MYURLS_GATEWAY_IP="$test_network_prefix.2"');
     expect(verifier).toContain('export LOCAL_MYURLS_IP="$test_network_prefix.3"');

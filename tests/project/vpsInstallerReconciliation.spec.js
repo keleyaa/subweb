@@ -69,23 +69,27 @@ printf '%s\\n' "$*" >> "$CALL_LOG"
 case "$1 $2" in
   'is-active --quiet')
     [ "$3" = subweb.service ] || exit 64
-    [ "${'${SUBWEB_SERVICE_ACTIVE:-0}'}" = 1 ] && exit 0
+    [ "${'${SUBWEB_SERVICE_ACTIVE:-0}'}" = 1 ] \
+      && [ ! -e "$SERVICE_STOPPED_FILE" ] \
+      && exit 0
     exit 3
-    ;;
+  ;;
   'stop subweb.service')
     if [ "${'${SUBWEB_SERVICE_STOP_FAIL_ONCE:-0}'}" = 1 ] && [ ! -e "$SERVICE_STATE_FILE" ]; then
       : > "$SERVICE_STATE_FILE"
       exit 1
     fi
+    : > "$SERVICE_STOPPED_FILE"
     exit 0
-    ;;
+  ;;
   'start subweb.service')
     if [ "${'${SUBWEB_SERVICE_START_FAIL_ONCE:-0}'}" = 1 ] && [ ! -e "$SERVICE_STATE_FILE" ]; then
       : > "$SERVICE_STATE_FILE"
       exit 1
     fi
+    rm -f "$SERVICE_STOPPED_FILE"
     exit 0
-    ;;
+  ;;
 esac
 exit 64
 `);
@@ -339,6 +343,7 @@ exec /bin/cp "$@"
     const bin = join(fixture, 'bin');
     const calls = join(fixture, 'calls');
     const serviceState = join(fixture, 'service-state');
+    const serviceStopped = join(fixture, 'service-stopped');
     await mkdir(source);
     await mkdir(target);
     await mkdir(bin);
@@ -354,6 +359,7 @@ exec /bin/cp "$@"
         PATH: `${bin}:${process.env.PATH}`,
         CALL_LOG: calls,
         SERVICE_STATE_FILE: serviceState,
+        SERVICE_STOPPED_FILE: serviceStopped,
         SUBWEB_SERVICE_ACTIVE: '1',
         SUBWEB_SERVICE_STOP_FAIL_ONCE: '1',
       },
@@ -362,6 +368,8 @@ exec /bin/cp "$@"
     expect(result.status).not.toBe(0);
     expect(await readFile(join(target, 'compose.yaml'), 'utf8')).toBe('old release\n');
     expect((await readFile(calls, 'utf8')).trim().split('\n')).toEqual([
+      'is-active --quiet subweb.service',
+      'stop subweb.service',
       'is-active --quiet subweb.service',
       'stop subweb.service',
       'start subweb.service',
@@ -419,6 +427,7 @@ exec /bin/cp "$@"
     const bin = join(fixture, 'bin');
     const calls = join(fixture, 'calls');
     const serviceState = join(fixture, 'service-state');
+    const serviceStopped = join(fixture, 'service-stopped');
     await mkdir(source);
     await mkdir(target);
     await mkdir(bin);
@@ -434,6 +443,7 @@ exec /bin/cp "$@"
         PATH: `${bin}:${process.env.PATH}`,
         CALL_LOG: calls,
         SERVICE_STATE_FILE: serviceState,
+        SERVICE_STOPPED_FILE: serviceStopped,
         SUBWEB_SERVICE_ACTIVE: '1',
         SUBWEB_SERVICE_START_FAIL_ONCE: '1',
       },
@@ -445,6 +455,7 @@ exec /bin/cp "$@"
       'is-active --quiet subweb.service',
       'stop subweb.service',
       'start subweb.service',
+      'is-active --quiet subweb.service',
       'start subweb.service',
     ]);
     expect(await workTrees(fixture, 'target')).toEqual([]);

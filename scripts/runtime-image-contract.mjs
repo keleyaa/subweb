@@ -1,4 +1,5 @@
 import { readFile, realpath } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { validateVersionLocks } from './verify-version-locks.mjs';
@@ -16,7 +17,7 @@ const containsControlCharacter = (value) =>
     return codePoint < 0x20 || codePoint === 0x7f;
   });
 
-const defaultLockPath = fileURLToPath(
+const defaultLockPath = process.env.VERSION_LOCK_FILE || fileURLToPath(
   new URL('../deploy/versions.lock.json', import.meta.url),
 );
 const isRecord = (value) =>
@@ -70,6 +71,28 @@ export function renderRuntimeImageEnv(images) {
     .join('\n')}\n`;
 }
 
+export function verifyRuntimeImageManifests(lock, dockerCommand = 'docker') {
+  const images = resolveRuntimeImages(lock);
+  for (const [variable, reference] of Object.entries(images)) {
+    const expectedDigest = reference.slice(reference.lastIndexOf('@') + 1);
+    let output;
+    try {
+      output = execFileSync(
+        dockerCommand,
+        ['buildx', 'imagetools', 'inspect', reference, '--format', '{{.Manifest.Digest}}'],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+    } catch (error) {
+      const stderr = String(error.stderr ?? '').trim();
+      const detail = stderr || error.message;
+      throw new Error(`${variable} manifest verification failed: ${detail}`, { cause: error });
+    }
+    if (output.trim() !== expectedDigest) {
+      throw new Error(`${variable} manifest digest does not match the version lock`);
+    }
+  }
+}
+
 export function runtimeImagesForRollback(lock) {
   const services = validatedLock(lock).services;
 
@@ -89,12 +112,12 @@ export function runtimeImagesForRollback(lock) {
 }
 
 const usage = () => {
-  console.error('Usage: node scripts/runtime-image-contract.mjs <env|rollback> [--lock path]');
+  console.error('Usage: node scripts/runtime-image-contract.mjs <env|rollback|verify> [--lock path]');
 };
 
 const parseArguments = (argumentsList) => {
   const [command, ...options] = argumentsList;
-  if (command !== 'env' && command !== 'rollback') return null;
+  if (command !== 'env' && command !== 'rollback' && command !== 'verify') return null;
 
   let lockPath = defaultLockPath;
   for (let index = 0; index < options.length; index += 1) {
@@ -126,8 +149,10 @@ const runCli = async () => {
   try {
     if (argumentsResult.command === 'env') {
       process.stdout.write(renderRuntimeImageEnv(resolveRuntimeImages(lock)));
-    } else {
+    } else if (argumentsResult.command === 'rollback') {
       process.stdout.write(`${JSON.stringify(runtimeImagesForRollback(lock))}\n`);
+    } else {
+      verifyRuntimeImageManifests(lock);
     }
   } catch (error) {
     console.error(error.message);

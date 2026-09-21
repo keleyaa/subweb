@@ -1,6 +1,45 @@
 #!/bin/sh
 set -eu
 
+SCRIPT_DIRECTORY=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+PROJECT_DIRECTORY=$(CDPATH='' cd -- "$SCRIPT_DIRECTORY/.." && pwd -P)
+cd "$PROJECT_DIRECTORY"
+# shellcheck source=lib/path-lock.sh
+. "$SCRIPT_DIRECTORY/lib/path-lock.sh"
+
+VERSION_LOCK_SOURCE=$PROJECT_DIRECTORY/deploy/versions.lock.json
+VERSION_LOCK_SNAPSHOT=''
+VERSION_LOCK_DIRECTORY=''
+
+cleanup_release_verification() {
+  cleanup_status=$?
+  trap - 0 HUP INT TERM
+  if [ -n "$VERSION_LOCK_SNAPSHOT" ] && [ -f "$VERSION_LOCK_SNAPSHOT" ]; then
+    if ! cmp -s "$VERSION_LOCK_SOURCE" "$VERSION_LOCK_SNAPSHOT"; then
+      printf '%s\n' 'release verification failed: version lock changed during verification.' >&2
+      cleanup_status=1
+    fi
+    rm -f -- "$VERSION_LOCK_SNAPSHOT" || cleanup_status=1
+  fi
+  release_path_lock "$VERSION_LOCK_DIRECTORY" || cleanup_status=1
+  exit "$cleanup_status"
+}
+trap cleanup_release_verification 0 HUP INT TERM
+
+acquire_path_lock "$VERSION_LOCK_SOURCE" \
+  || { printf '%s\n' 'release verification failed: unable to lock version locks.' >&2; exit 1; }
+VERSION_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
+VERSION_LOCK_SNAPSHOT=$(mktemp "${TMPDIR:-/tmp}/subweb-versions.lock.XXXXXX") \
+  || { printf '%s\n' 'release verification failed: unable to create version-lock snapshot.' >&2; exit 1; }
+chmod 0600 "$VERSION_LOCK_SNAPSHOT"
+cp "$VERSION_LOCK_SOURCE" "$VERSION_LOCK_SNAPSHOT"
+if ! cmp -s "$VERSION_LOCK_SOURCE" "$VERSION_LOCK_SNAPSHOT"; then
+  printf '%s\n' 'release verification failed: version lock changed while being snapshotted.' >&2
+  exit 1
+fi
+VERSION_LOCK_FILE=$VERSION_LOCK_SNAPSHOT
+export VERSION_LOCK_FILE
+
 if [ ! -f .env ]; then
   APP_DOMAIN=app.release-validation.test
   API_DOMAIN=api.release-validation.test
@@ -48,6 +87,7 @@ stage integration npm run verify:integration
 stage local npm run verify:local
 stage browser npm run test:e2e
 stage locks npm run verify:locks
+stage runtime-image-provenance node scripts/runtime-image-contract.mjs verify --lock "$VERSION_LOCK_FILE"
 stage production-readiness node scripts/verify-production-readiness.mjs
 stage compose npm run verify:compose
 stage documentation npm run verify:docs

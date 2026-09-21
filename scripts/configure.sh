@@ -9,7 +9,9 @@ SCRIPT_DIRECTORY=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 . "$SCRIPT_DIRECTORY/lib/path-lock.sh"
 
 CONFIG_ENV_LOCK_DIRECTORY=
+CONFIG_ENV_LOCK_OWNED=0
 CONFIG_VERSION_LOCK_DIRECTORY=
+CONFIG_VERSION_LOCK_OWNED=0
 CONFIG_VERSION_LOCK_SNAPSHOT=
 CONFIG_TEMP_FILE=
 CONFIG_MOVED_FILE=
@@ -23,8 +25,12 @@ cleanup() {
   if [ -n "$CONFIG_MOVED_FILE" ]; then
     rm -f "$CONFIG_MOVED_FILE"
   fi
-  release_path_lock "$CONFIG_VERSION_LOCK_DIRECTORY" || true
-  release_path_lock "$CONFIG_ENV_LOCK_DIRECTORY" || true
+  if [ "$CONFIG_VERSION_LOCK_OWNED" -eq 1 ]; then
+    release_path_lock "$CONFIG_VERSION_LOCK_DIRECTORY" || true
+  fi
+  if [ "$CONFIG_ENV_LOCK_OWNED" -eq 1 ]; then
+    release_path_lock "$CONFIG_ENV_LOCK_DIRECTORY" || true
+  fi
 }
 trap cleanup 0
 trap 'cleanup; exit 1' HUP INT TERM
@@ -303,14 +309,26 @@ done
 if [ "${SUBWEB_ENV_LOCK_HELD:-0}" != 1 ]; then
   acquire_path_lock "$env_file" || fail 'could not lock the deployment environment.'
   CONFIG_ENV_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
+  CONFIG_ENV_LOCK_OWNED=1
+else
+  [ "${SUBWEB_ENV_LOCK_DIRECTORY:-}" = "$env_file.lock" ] \
+    || fail 'invalid deployment environment lock handoff.'
+  validate_path_lock_handoff "$SUBWEB_ENV_LOCK_DIRECTORY" "${SUBWEB_ENV_LOCK_TOKEN:-}" \
+    || fail 'invalid deployment environment lock handoff.'
 fi
-version_lock_file=$SCRIPT_DIRECTORY/../deploy/versions.lock.json
+version_lock_file=${VERSION_LOCK_FILE:-$SCRIPT_DIRECTORY/../deploy/versions.lock.json}
 [ -f "$version_lock_file" ] && [ ! -L "$version_lock_file" ] \
   || fail 'deploy/versions.lock.json must be a regular, non-symlink file.'
 if [ "${SUBWEB_VERSION_LOCK_HELD:-0}" != 1 ]; then
   acquire_path_lock "$version_lock_file" \
     || fail 'could not lock deploy/versions.lock.json.'
   CONFIG_VERSION_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
+  CONFIG_VERSION_LOCK_OWNED=1
+else
+  [ "${SUBWEB_VERSION_LOCK_DIRECTORY:-}" = "$version_lock_file.lock" ] \
+    || fail 'invalid version lock handoff.'
+  validate_path_lock_handoff "$SUBWEB_VERSION_LOCK_DIRECTORY" "${SUBWEB_VERSION_LOCK_TOKEN:-}" \
+    || fail 'invalid version lock handoff.'
 fi
 CONFIG_VERSION_LOCK_SNAPSHOT=$(mktemp "${TMPDIR:-/tmp}/subweb-version-lock.XXXXXX") \
   || fail 'could not create a version lock snapshot.'

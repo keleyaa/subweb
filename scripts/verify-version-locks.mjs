@@ -23,6 +23,8 @@ const myurlsImageRepository = 'ghcr.io/keleyaa/myurls';
 const redisSourceRepository = 'redis/redis';
 const redisSourceTag = '7.4.11';
 const redisImageReference = 'docker.io/library/redis:7.4.11-alpine';
+const subconverterSourceRepository = 'Aethersailor/SubConverter-Extended';
+const subconverterImageRepository = 'ghcr.io/aethersailor/subconverter-extended';
 const myurlsReleaseTagPattern = /^v2\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u;
 const gatewayBaseSourceRepository = 'docker-library/golang';
 const gatewayBaseImageReference = 'docker.io/library/golang:1.27-alpine';
@@ -230,6 +232,11 @@ export function validateVersionLocks(lock) {
           errors.push(`${prefix}.source.tag must be a published Rust v2 release tag`);
         }
       }
+      if (name === 'subconverter' && source.repository !== subconverterSourceRepository) {
+        errors.push(
+          `${prefix}.source.repository must equal ${subconverterSourceRepository}`,
+        );
+      }
     }
 
     const parsedReference = validateImageDescriptor(`${prefix}.image`, service.image, errors);
@@ -240,6 +247,15 @@ export function validateVersionLocks(lock) {
       const imageRepository = `${parsedReference.registry}/${parsedReference.repository}`;
       if (imageRepository !== myurlsImageRepository) {
         errors.push(`${prefix}.image.reference must use ${myurlsImageRepository}`);
+      }
+      if (parsedReference.tag !== service.source?.tag) {
+        errors.push(`${prefix}.image.reference tag must match source.tag`);
+      }
+    }
+    if (name === 'subconverter' && parsedReference) {
+      const imageRepository = `${parsedReference.registry}/${parsedReference.repository}`;
+      if (imageRepository !== subconverterImageRepository) {
+        errors.push(`${prefix}.image.reference must use ${subconverterImageRepository}`);
       }
       if (parsedReference.tag !== service.source?.tag) {
         errors.push(`${prefix}.image.reference tag must match source.tag`);
@@ -294,6 +310,7 @@ export function validateVersionLocks(lock) {
 async function runCli() {
   const lockPath =
     process.argv[2] ??
+    process.env.VERSION_LOCK_FILE ??
     fileURLToPath(new URL('../deploy/versions.lock.json', import.meta.url));
   let lock;
 

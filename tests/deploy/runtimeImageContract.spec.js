@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,7 @@ import {
   renderRuntimeImageEnv,
   resolveRuntimeImages,
   runtimeImagesForRollback,
+  verifyRuntimeImageManifests,
 } from '../../scripts/runtime-image-contract.mjs';
 
 const lockPath = fileURLToPath(
@@ -135,6 +136,28 @@ describe('runtime image contract', () => {
     expect(result.status).not.toBe(0);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain('services.redis.image.digest must be a sha256 digest');
+  });
+
+  it('verifies locked runtime image manifests against registry digests', async () => {
+    const dockerPath = join(temporaryDirectory, 'docker');
+    await writeFile(dockerPath, `#!/usr/bin/env node
+const reference = process.argv[5];
+process.stdout.write(reference.slice(reference.lastIndexOf('@') + 1));
+`);
+    await chmod(dockerPath, 0o755);
+
+    expect(() => verifyRuntimeImageManifests(lock, dockerPath)).not.toThrow();
+
+    await writeFile(dockerPath, '#!/usr/bin/env node\nprocess.stdout.write("sha256:bad");\n');
+    expect(() => verifyRuntimeImageManifests(lock, dockerPath)).toThrow(
+      'manifest digest does not match the version lock',
+    );
+
+    await writeFile(dockerPath, '#!/usr/bin/env node\nconsole.error("registry unavailable");\nprocess.exit(1);\n');
+    await chmod(dockerPath, 0o755);
+    expect(() => verifyRuntimeImageManifests(lock, dockerPath)).toThrow(
+      'manifest verification failed: registry unavailable',
+    );
   });
 
   it('renders a complete rollback payload with immutable image references', () => {

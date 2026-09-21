@@ -2,7 +2,7 @@
 set -eu
 
 # shellcheck source=lib.sh
-. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)/lib.sh"
+. "$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)/lib.sh"
 
 backup=
 while [ "$#" -gt 0 ]; do
@@ -28,6 +28,13 @@ report_rdb_format_error() {
   operations_fail 'Redis RDB format is incompatible with the locked Redis image; use a compatible backup or perform an explicit reset.'
 }
 
+startup_error_file=
+cleanup() {
+  [ -z "$startup_error_file" ] || rm -f -- "$startup_error_file"
+}
+trap cleanup 0
+trap 'cleanup; exit 1' HUP INT TERM
+
 if check_output=$(docker run --rm --read-only --network none \
   --mount "type=bind,src=$backup,dst=/backup.rdb,readonly" \
   --entrypoint redis-check-rdb "$image" /backup.rdb 2>&1); then
@@ -37,6 +44,7 @@ else
   operations_fail 'Redis backup validation failed.'
 fi
 
+startup_error_file=$(mktemp "${TMPDIR:-/tmp}/subweb-redis-startup.XXXXXX")
 if key_count=$(docker run --rm --read-only --network none \
   --tmpfs /data:uid=999,gid=1000,mode=0700 \
   --tmpfs /tmp:uid=999,gid=1000,mode=0700 \
@@ -52,12 +60,17 @@ if key_count=$(docker run --rm --read-only --network none \
       [ "$attempts" -lt 50 ] || exit 1
     done
     redis-cli -s /tmp/redis.sock --raw DBSIZE
-  ' 2>&1); then
+  ' 2>"$startup_error_file"); then
   :
 else
-  rdb_format_error "$key_count" && report_rdb_format_error
+  startup_error=$(cat "$startup_error_file")
+  rm -f -- "$startup_error_file"
+  startup_error_file=
+  rdb_format_error "$key_count $startup_error" && report_rdb_format_error
   operations_fail 'Redis backup could not be loaded in an isolated process.'
 fi
+rm -f -- "$startup_error_file"
+startup_error_file=
 case "$key_count" in ''|*[!0-9]*) operations_fail 'Redis backup returned an invalid key count.' ;; esac
 
 printf 'Redis backup verified: %s keys=%s sha256=%s\n' "$backup" "$key_count" "$(sha256_file "$backup")"

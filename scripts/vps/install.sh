@@ -10,6 +10,7 @@ fail() {
 
 [ "$(id -u)" -eq 0 ] || fail 'run as root.'
 command -v install >/dev/null 2>&1 || fail 'install is required.'
+command -v readlink >/dev/null 2>&1 || fail 'readlink is required.'
 command -v systemctl >/dev/null 2>&1 || fail 'systemd is required.'
 command -v docker >/dev/null 2>&1 || fail 'Docker Engine is required.'
 docker compose version >/dev/null 2>&1 || fail 'Docker Compose v2 is required.'
@@ -73,6 +74,7 @@ id subweb >/dev/null 2>&1 || useradd --system --gid subweb --home-dir "$TARGET_D
 HOST_ASSET_BACKUP=''
 HOST_ASSET_MANIFEST=''
 UNIT_ENABLEMENT_SNAPSHOT=''
+NGINX_SITE_LINK_CREATED=0
 INSTALLATION_COMMITTED=0
 
 reconcile_host_assets() {
@@ -86,12 +88,21 @@ reconcile_host_assets() {
   printf '%s|%s\n' "$SOURCE_DIRECTORY/deploy/nginx/subweb.conf" /etc/nginx/sites-available/subweb
 }
 
+reconcile_preflight_nginx_site_link() {
+  nginx_site_link=/etc/nginx/sites-enabled/subweb
+  if [ -e "$nginx_site_link" ] || [ -L "$nginx_site_link" ]; then
+    [ -L "$nginx_site_link" ] || return 1
+    [ "$(readlink "$nginx_site_link")" = /etc/nginx/sites-available/subweb ] || return 1
+  fi
+}
+
 reconcile_preflight_host_assets() {
   reconcile_host_assets | while IFS='|' read -r host_asset_source host_asset_target; do
     [ -f "$host_asset_source" ] && [ ! -L "$host_asset_source" ] || return 1
     [ ! -e "$host_asset_target" ] && [ ! -L "$host_asset_target" ] && continue
     [ -f "$host_asset_target" ] && [ ! -L "$host_asset_target" ] || return 1
   done
+  reconcile_preflight_nginx_site_link
 }
 
 reconcile_managed_units() {
@@ -121,7 +132,9 @@ reconcile_restore_managed_unit_enablement() {
 }
 
 reconcile_snapshot_host_assets() {
-  install -d -o root -g root -m 0755 /etc/subweb /etc/nginx/sites-available /etc/nginx/snippets || return 1
+  install -d -o root -g root -m 0755 \
+    /etc/subweb /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/snippets \
+    || return 1
   HOST_ASSET_BACKUP=$(mktemp -d /etc/subweb/.install-assets.XXXXXX) || return 1
   HOST_ASSET_MANIFEST="$HOST_ASSET_BACKUP/manifest"
   reconcile_host_assets | while IFS='|' read -r host_asset_source host_asset_target; do
@@ -163,6 +176,11 @@ reconcile_install_host_assets() {
   reconcile_host_assets | while IFS='|' read -r host_asset_source host_asset_target; do
     install -m 0644 "$host_asset_source" "$host_asset_target" || return 1
   done
+  nginx_site_link=/etc/nginx/sites-enabled/subweb
+  if [ ! -e "$nginx_site_link" ] && [ ! -L "$nginx_site_link" ]; then
+    ln -s /etc/nginx/sites-available/subweb "$nginx_site_link" || return 1
+    NGINX_SITE_LINK_CREATED=1
+  fi
 }
 
 cleanup_installation() {
@@ -171,6 +189,11 @@ cleanup_installation() {
   if [ "$INSTALLATION_COMMITTED" -eq 0 ]; then
     if ! reconcile_restore_host_assets >/dev/null 2>&1; then
       printf 'VPS install rollback failed: unable to restore host assets.\n' >&2
+      cleanup_status=1
+    fi
+    if [ "$NGINX_SITE_LINK_CREATED" -eq 1 ] \
+      && ! rm -f -- /etc/nginx/sites-enabled/subweb >/dev/null 2>&1; then
+      printf 'VPS install rollback failed: unable to remove the Nginx site link.\n' >&2
       cleanup_status=1
     fi
     if ! systemctl daemon-reload >/dev/null 2>&1; then
@@ -243,6 +266,7 @@ resume_paused_release_timers \
   || fail 'unable to resume active backup or verification timers.'
 reconcile_release_commit || fail 'unable to commit the selected release.'
 INSTALLATION_COMMITTED=1
+NGINX_SITE_LINK_CREATED=0
 trap - 0 HUP INT TERM
 reconcile_discard_host_asset_snapshot || fail 'unable to discard host asset snapshot.'
 printf 'VPS installation prepared at %s. Run scripts/vps/check-host.sh, then systemctl start subweb.service.\n' "$TARGET_DIRECTORY"

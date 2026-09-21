@@ -48,7 +48,7 @@ fail() {
 }
 
 node "$project_root/scripts/verify-version-locks.mjs" >/dev/null
-locked_images=$(node - "$project_root/deploy/versions.lock.json" <<'NODE'
+locked_images=$(node - "${VERSION_LOCK_FILE:-$project_root/deploy/versions.lock.json}" <<'NODE'
 const fs = require('node:fs');
 const lock = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 for (const service of ['myurls', 'redis', 'subconverter']) {

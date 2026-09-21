@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -337,6 +337,41 @@ describe('Docker image quick deployment', () => {
       'compose -f compose.yaml up -d --no-build --pull never --remove-orphans --wait',
       'compose -f compose.yaml ps',
     ]);
+  }, 30_000);
+
+  it('retains deployment-owned locks across configure and Compose validation handoffs', async () => {
+    const root = await makeFixture();
+    const validationPath = join(root, 'scripts/validate-compose.sh');
+    const retainedValidationPath = join(root, 'scripts/validate-compose-real.sh');
+    const handoffMarkerPath = join(root, 'configure-handoff-observed');
+    await cp(validationPath, retainedValidationPath);
+    await writeFile(validationPath, `#!/bin/sh
+set -eu
+[ -d "$SUBWEB_ENV_LOCK_DIRECTORY" ] || exit 71
+[ -f "$SUBWEB_ENV_LOCK_DIRECTORY/owner" ] || exit 72
+[ -d "$SUBWEB_VERSION_LOCK_DIRECTORY" ] || exit 73
+[ -f "$SUBWEB_VERSION_LOCK_DIRECTORY/owner" ] || exit 74
+printf '%s\\n' configure-handoff > "$SUBWEB_LOCK_HANDOFF_MARKER"
+script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+"$script_directory/validate-compose-real.sh" "$@"
+[ -d "$SUBWEB_ENV_LOCK_DIRECTORY" ] || exit 75
+[ -f "$SUBWEB_ENV_LOCK_DIRECTORY/owner" ] || exit 76
+[ -d "$SUBWEB_VERSION_LOCK_DIRECTORY" ] || exit 77
+[ -f "$SUBWEB_VERSION_LOCK_DIRECTORY/owner" ] || exit 78
+printf '%s\\n' validate-compose-handoff >> "$SUBWEB_LOCK_HANDOFF_MARKER"
+`);
+    await chmod(validationPath, 0o755);
+
+    const result = runDeploy(root, ['--image', dockerHubImage], {
+      SUBWEB_LOCK_HANDOFF_MARKER: handoffMarkerPath,
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(await readFile(handoffMarkerPath, 'utf8')).toBe(
+      'configure-handoff\nvalidate-compose-handoff\n',
+    );
+    expect(await readdir(root)).not.toContain('.env.lock');
+    expect(await readdir(join(root, 'deploy'))).not.toContain('versions.lock.json.lock');
   }, 30_000);
 
   it.each([

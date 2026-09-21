@@ -7,7 +7,10 @@ PROJECT_DIRECTORY=$(CDPATH='' cd -- "$SCRIPT_DIRECTORY/.." && pwd)
 . "$SCRIPT_DIRECTORY/lib/path-lock.sh"
 
 DEPLOY_ENV_LOCK_DIRECTORY=
+DEPLOY_ENV_LOCK_TOKEN=
 DEPLOY_VERSION_LOCK_DIRECTORY=
+DEPLOY_VERSION_LOCK_TOKEN=
+DEPLOY_VERSION_LOCK_FILE=${VERSION_LOCK_FILE:-}
 cleanup() {
   release_path_lock "$DEPLOY_VERSION_LOCK_DIRECTORY" || true
   release_path_lock "$DEPLOY_ENV_LOCK_DIRECTORY" || true
@@ -153,7 +156,7 @@ case "$repository" in
     registry=${repository%%/*}
     ;;
   *)
-    printf '%s\n' "$repository" | LC_ALL=C grep -Eq '^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)*$' \
+    printf '%s\n' "$repository" | LC_ALL=C grep -Eq '^[a-z0-9][a-z0-9.-]*(:[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)*$' \
       || fail '--image must use an immutable sha256 digest.'
     case "$repository" in */*) registry=${repository%%/*} ;; *) registry= ;; esac
     ;;
@@ -196,9 +199,13 @@ cd "$PROJECT_DIRECTORY"
 acquire_path_lock "$PROJECT_DIRECTORY/.env" \
   || fail 'could not lock the deployment environment.'
 DEPLOY_ENV_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
-acquire_path_lock "$PROJECT_DIRECTORY/deploy/versions.lock.json" \
+DEPLOY_ENV_LOCK_TOKEN=$PATH_LOCK_TOKEN
+DEPLOY_VERSION_LOCK_FILE=${VERSION_LOCK_FILE:-$PROJECT_DIRECTORY/deploy/versions.lock.json}
+export VERSION_LOCK_FILE="$DEPLOY_VERSION_LOCK_FILE"
+acquire_path_lock "$DEPLOY_VERSION_LOCK_FILE" \
   || fail 'could not lock deploy/versions.lock.json.'
 DEPLOY_VERSION_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
+DEPLOY_VERSION_LOCK_TOKEN=$PATH_LOCK_TOKEN
 
 run_configure() {
   set -- "$SCRIPT_DIRECTORY/configure.sh" \
@@ -213,7 +220,13 @@ run_configure() {
   [ -n "$trusted_proxy_cidr" ] && set -- "$@" --trusted-proxy-cidr "$trusted_proxy_cidr"
   [ -n "$turnstile_site_key" ] && set -- "$@" --turnstile-site-key "$turnstile_site_key"
   [ "$turnstile_secret_key_stdin" -eq 0 ] || set -- "$@" --turnstile-secret-key-stdin
-  SUBWEB_ENV_LOCK_HELD=1 SUBWEB_VERSION_LOCK_HELD=1 "$@"
+  SUBWEB_ENV_LOCK_HELD=1 \
+    SUBWEB_VERSION_LOCK_HELD=1 \
+    SUBWEB_ENV_LOCK_DIRECTORY=$DEPLOY_ENV_LOCK_DIRECTORY \
+    SUBWEB_ENV_LOCK_TOKEN=$DEPLOY_ENV_LOCK_TOKEN \
+    SUBWEB_VERSION_LOCK_DIRECTORY=$DEPLOY_VERSION_LOCK_DIRECTORY \
+    SUBWEB_VERSION_LOCK_TOKEN=$DEPLOY_VERSION_LOCK_TOKEN \
+    "$@"
 }
 run_configure
 
@@ -234,7 +247,13 @@ compose() {
   compose_docker -f "$compose_file" "$@"
 }
 
-SUBWEB_ENV_LOCK_HELD=1 SUBWEB_VERSION_LOCK_HELD=1 \
+SUBWEB_ENV_LOCK_HELD=1 \
+  SUBWEB_VERSION_LOCK_HELD=1 \
+  SUBWEB_ENV_LOCK_TARGET=$PROJECT_DIRECTORY/.env \
+  SUBWEB_ENV_LOCK_DIRECTORY=$DEPLOY_ENV_LOCK_DIRECTORY \
+  SUBWEB_ENV_LOCK_TOKEN=$DEPLOY_ENV_LOCK_TOKEN \
+  SUBWEB_VERSION_LOCK_DIRECTORY=$DEPLOY_VERSION_LOCK_DIRECTORY \
+  SUBWEB_VERSION_LOCK_TOKEN=$DEPLOY_VERSION_LOCK_TOKEN \
   SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
   "$SCRIPT_DIRECTORY/validate-compose.sh"
 if [ "$short_links_enabled" = true ]; then

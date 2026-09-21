@@ -12,7 +12,7 @@ const imageTemplateDigest = 'a'.repeat(64);
 const driftingVolumeDigest = 'c'.repeat(64);
 
 const normalizeComposeSnapshot = (log) => log.replace(
-  /--env-file \S*subweb-env\.[^ ]+/gu,
+  /--env-file \S*subweb-(?:env|upgrade-env)\.[^ ]+/gu,
   '--env-file <private-snapshot>',
 );
 
@@ -20,7 +20,12 @@ const makeFixture = async ({ volumeDigest }) => {
   const root = await mkdtemp(join(tmpdir(), 'subweb-subconverter-upgrade-'));
   temporaryDirectories.push(root);
   await mkdir(join(root, 'scripts/lib'), { recursive: true });
+  await mkdir(join(root, 'deploy'), { recursive: true });
   await writeFile(join(root, '.env'), 'SHORT_LINKS_ENABLED=true\n', { mode: 0o600 });
+  await writeFile(
+    join(root, 'deploy/versions.lock.json'),
+    await readFile(new URL('deploy/versions.lock.json', repositoryRoot), 'utf8'),
+  );
   await writeFile(join(root, 'scripts/subweb.sh'), await readFile(new URL('scripts/subweb.sh', repositoryRoot), 'utf8'));
   await writeFile(join(root, 'scripts/lib/path-lock.sh'), await readFile(new URL('scripts/lib/path-lock.sh', repositoryRoot), 'utf8'));
   await writeFile(
@@ -28,6 +33,14 @@ const makeFixture = async ({ volumeDigest }) => {
     await readFile(new URL('scripts/lib/docker-environment.sh', repositoryRoot), 'utf8'),
   );
   await chmod(join(root, 'scripts/subweb.sh'), 0o755);
+  await writeFile(
+    join(root, 'scripts/runtime-image-contract.mjs'),
+    await readFile(new URL('scripts/runtime-image-contract.mjs', repositoryRoot), 'utf8'),
+  );
+  await writeFile(
+    join(root, 'scripts/verify-version-locks.mjs'),
+    await readFile(new URL('scripts/verify-version-locks.mjs', repositoryRoot), 'utf8'),
+  );
   await writeFile(
     join(root, 'scripts/verify-subconverter-runtime.sh'),
     await readFile(new URL('scripts/verify-subconverter-runtime.sh', repositoryRoot), 'utf8'),
