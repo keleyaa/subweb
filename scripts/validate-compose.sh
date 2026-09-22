@@ -53,7 +53,9 @@ if [ "${SUBWEB_ENV_LOCK_HELD:-0}" != 1 ] && [ -n "$source_env_file" ]; then
   validation_env_lock_owned=1
 elif [ -n "$source_env_file" ]; then
   validation_env_lock_target=${SUBWEB_ENV_LOCK_TARGET:-$source_env_file}
-  [ "${SUBWEB_ENV_LOCK_DIRECTORY:-}" = "$validation_env_lock_target.lock" ] \
+  expected_env_lock_directory=$(path_lock_directory_for_target "$validation_env_lock_target") \
+    || fail 'invalid Compose environment lock handoff.'
+  [ "${SUBWEB_ENV_LOCK_DIRECTORY:-}" = "$expected_env_lock_directory" ] \
     || fail 'invalid Compose environment lock handoff.'
   validate_path_lock_handoff "$SUBWEB_ENV_LOCK_DIRECTORY" "${SUBWEB_ENV_LOCK_TOKEN:-}" \
     || fail 'invalid Compose environment lock handoff.'
@@ -63,7 +65,9 @@ if [ "${SUBWEB_VERSION_LOCK_HELD:-0}" != 1 ]; then
   validation_version_lock_directory=$PATH_LOCK_DIRECTORY
   validation_version_lock_owned=1
 else
-  [ "${SUBWEB_VERSION_LOCK_DIRECTORY:-}" = "$version_lock_file.lock" ] \
+  expected_version_lock_directory=$(path_lock_directory_for_target "$version_lock_file") \
+    || fail 'invalid version lock handoff.'
+  [ "${SUBWEB_VERSION_LOCK_DIRECTORY:-}" = "$expected_version_lock_directory" ] \
     || fail 'invalid version lock handoff.'
   validate_path_lock_handoff "$SUBWEB_VERSION_LOCK_DIRECTORY" "${SUBWEB_VERSION_LOCK_TOKEN:-}" \
     || fail 'invalid version lock handoff.'

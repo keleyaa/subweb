@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmod, cp, lstat, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -159,10 +159,11 @@ describe('production command configuration contract', () => {
   it('does not release a lock reacquired after signal cleanup', async () => {
     const root = await makeFixture();
     const envFile = join(root, '.env');
-    const lockPath = `${envFile}.lock`;
+    const physicalRoot = await realpath(root);
+    const lockPath = `${join(physicalRoot, '.env')}.lock`;
     await writeFile(envFile, 'SHORT_LINKS_ENABLED=false\n', { mode: 0o600 });
     await writeFile(join(root, 'signal'), '1\n');
-    const reacquiredCandidate = join(root, 'reacquired.lock-candidate');
+    const reacquiredCandidate = join(physicalRoot, 'reacquired.lock-candidate');
     await writeFile(join(root, 'bin/rm'), `#!/bin/sh
 if [ "$1" = -f ] && [ "$2" = "$RACE_LOCK" ] && [ ! -e "$RACE_OWNER" ]; then
   /bin/rm "$@"
@@ -179,11 +180,11 @@ exec /bin/rm "$@"
     const result = run(root, 'status', {
       RACE_LOCK: lockPath,
       RACE_CANDIDATE: reacquiredCandidate,
-      RACE_OWNER: join(root, 'reacquired'),
+      RACE_OWNER: join(physicalRoot, 'reacquired'),
     });
 
     expect(result.status).not.toBe(0);
-    await expect(stat(join(root, 'reacquired'))).resolves.toBeDefined();
+    await expect(stat(join(physicalRoot, 'reacquired'))).resolves.toBeDefined();
     expect((await lstat(lockPath)).isSymbolicLink()).toBe(true);
     expect((await stat(lockPath)).isDirectory()).toBe(true);
   });

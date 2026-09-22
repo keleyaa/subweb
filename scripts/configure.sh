@@ -311,7 +311,9 @@ if [ "${SUBWEB_ENV_LOCK_HELD:-0}" != 1 ]; then
   CONFIG_ENV_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
   CONFIG_ENV_LOCK_OWNED=1
 else
-  [ "${SUBWEB_ENV_LOCK_DIRECTORY:-}" = "$env_file.lock" ] \
+  expected_env_lock_directory=$(path_lock_directory_for_target "$env_file") \
+    || fail 'invalid deployment environment lock handoff.'
+  [ "${SUBWEB_ENV_LOCK_DIRECTORY:-}" = "$expected_env_lock_directory" ] \
     || fail 'invalid deployment environment lock handoff.'
   validate_path_lock_handoff "$SUBWEB_ENV_LOCK_DIRECTORY" "${SUBWEB_ENV_LOCK_TOKEN:-}" \
     || fail 'invalid deployment environment lock handoff.'
@@ -325,7 +327,9 @@ if [ "${SUBWEB_VERSION_LOCK_HELD:-0}" != 1 ]; then
   CONFIG_VERSION_LOCK_DIRECTORY=$PATH_LOCK_DIRECTORY
   CONFIG_VERSION_LOCK_OWNED=1
 else
-  [ "${SUBWEB_VERSION_LOCK_DIRECTORY:-}" = "$version_lock_file.lock" ] \
+  expected_version_lock_directory=$(path_lock_directory_for_target "$version_lock_file") \
+    || fail 'invalid version lock handoff.'
+  [ "${SUBWEB_VERSION_LOCK_DIRECTORY:-}" = "$expected_version_lock_directory" ] \
     || fail 'invalid version lock handoff.'
   validate_path_lock_handoff "$SUBWEB_VERSION_LOCK_DIRECTORY" "${SUBWEB_VERSION_LOCK_TOKEN:-}" \
     || fail 'invalid version lock handoff.'
