@@ -11,6 +11,7 @@ const runtimeImageServices = [
 ];
 const runtimeImageVariableNames = runtimeImageServices.map(([variable]) => variable);
 const immutableImageReferencePattern = /^[^@\s]+@sha256:[0-9a-f]{64}$/u;
+const manifestInspectionTimeoutMs = 30_000;
 const containsControlCharacter = (value) =>
   [...value].some((character) => {
     const codePoint = character.codePointAt(0);
@@ -71,7 +72,11 @@ export function renderRuntimeImageEnv(images) {
     .join('\n')}\n`;
 }
 
-export function verifyRuntimeImageManifests(lock, dockerCommand = 'docker') {
+export function verifyRuntimeImageManifests(
+  lock,
+  dockerCommand = 'docker',
+  timeoutMs = manifestInspectionTimeoutMs,
+) {
   const images = resolveRuntimeImages(lock);
   for (const [variable, reference] of Object.entries(images)) {
     const expectedDigest = reference.slice(reference.lastIndexOf('@') + 1);
@@ -80,11 +85,18 @@ export function verifyRuntimeImageManifests(lock, dockerCommand = 'docker') {
       output = execFileSync(
         dockerCommand,
         ['buildx', 'imagetools', 'inspect', reference, '--format', '{{.Manifest.Digest}}'],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+        {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+          timeout: timeoutMs,
+          killSignal: 'SIGKILL',
+        },
       );
     } catch (error) {
       const stderr = String(error.stderr ?? '').trim();
-      const detail = stderr || error.message;
+      const detail = error.code === 'ETIMEDOUT'
+        ? `timed out after ${timeoutMs}ms`
+        : stderr || error.message;
       throw new Error(`${variable} manifest verification failed: ${detail}`, { cause: error });
     }
     if (output.trim() !== expectedDigest) {

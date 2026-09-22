@@ -144,6 +144,39 @@ printf '%s\\n' "$NESTED_MOUNT"
     expect(await readFile(join(source, 'compose.yaml'), 'utf8')).toBe('new release\n');
   });
 
+  it('decodes mountinfo backslash escapes before comparing mount paths', () => {
+    const result = runShell(
+      'set -eu; . "$1"; reconcile_decode_mountpoint "$2"',
+      [reconcilerPath, '/srv/subweb\\134state'],
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('/srv/subweb\\state\n');
+  });
+
+  it('preserves literal backslashes reported by findmnt', async () => {
+    const fixture = await createTemporaryDirectory('subweb-vps-findmnt-backslash-');
+    const bin = join(fixture, 'bin');
+    const target = join(fixture, 'target\\134state');
+    await mkdir(bin);
+    await mkdir(target);
+    await writeExecutable(join(bin, 'findmnt'), `#!/bin/sh
+[ "$*" = '-rn -o TARGET' ] || exit 64
+printf '%s\\n' "$NESTED_MOUNT"
+`);
+
+    const result = runShell(
+      'set -eu; . "$1"; reconcile_target_has_nested_mount "$2"',
+      [reconcilerPath, target],
+      {
+        PATH: `${bin}:${process.env.PATH}`,
+        NESTED_MOUNT: `${target}/mounted-state`,
+      },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+  });
+
   it('uses mountinfo to allow a safe target when findmnt is unavailable', async () => {
     const fixture = await createTemporaryDirectory('subweb-vps-mountinfo-safe-');
     const bin = join(fixture, 'bin');

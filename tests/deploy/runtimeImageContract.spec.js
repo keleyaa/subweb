@@ -160,6 +160,21 @@ process.stdout.write(reference.slice(reference.lastIndexOf('@') + 1));
     );
   });
 
+  it('forcefully terminates a manifest command that ignores SIGTERM', async () => {
+    const dockerPath = join(temporaryDirectory, 'slow-docker');
+    await writeFile(dockerPath, `#!/usr/bin/env node
+process.on('SIGTERM', () => {});
+setTimeout(() => {}, 2_000);
+`);
+    await chmod(dockerPath, 0o755);
+
+    const startedAt = Date.now();
+    expect(() => verifyRuntimeImageManifests(lock, dockerPath, 1_000)).toThrow(
+      'REDIS_IMAGE manifest verification failed: timed out after 1000ms',
+    );
+    expect(Date.now() - startedAt).toBeLessThan(1_300);
+  });
+
   it('renders a complete rollback payload with immutable image references', () => {
     const rollback = runtimeImagesForRollback(lock);
 

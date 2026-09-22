@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmod, cp, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, lstat, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -162,24 +162,29 @@ describe('production command configuration contract', () => {
     const lockPath = `${envFile}.lock`;
     await writeFile(envFile, 'SHORT_LINKS_ENABLED=false\n', { mode: 0o600 });
     await writeFile(join(root, 'signal'), '1\n');
-    await writeFile(join(root, 'bin/rmdir'), `#!/bin/sh
-if [ "$1" = "$RACE_LOCK" ] && [ ! -e "$RACE_OWNER" ]; then
-  /bin/rmdir "$1"
-  mkdir "$1"
+    const reacquiredCandidate = join(root, 'reacquired.lock-candidate');
+    await writeFile(join(root, 'bin/rm'), `#!/bin/sh
+if [ "$1" = -f ] && [ "$2" = "$RACE_LOCK" ] && [ ! -e "$RACE_OWNER" ]; then
+  /bin/rm "$@"
+  mkdir "$RACE_CANDIDATE"
+  printf '%s|%s\\n' 1 "$RACE_CANDIDATE" > "$RACE_CANDIDATE/owner"
+  ln -s "$RACE_CANDIDATE" "$RACE_LOCK"
   : > "$RACE_OWNER"
   exit 0
 fi
-exec /bin/rmdir "$@"
+exec /bin/rm "$@"
 `);
-    await chmod(join(root, 'bin/rmdir'), 0o755);
+    await chmod(join(root, 'bin/rm'), 0o755);
 
     const result = run(root, 'status', {
       RACE_LOCK: lockPath,
+      RACE_CANDIDATE: reacquiredCandidate,
       RACE_OWNER: join(root, 'reacquired'),
     });
 
     expect(result.status).not.toBe(0);
     await expect(stat(join(root, 'reacquired'))).resolves.toBeDefined();
+    expect((await lstat(lockPath)).isSymbolicLink()).toBe(true);
     expect((await stat(lockPath)).isDirectory()).toBe(true);
   });
 

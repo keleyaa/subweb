@@ -241,7 +241,7 @@ case "$command_name" in
        { print }
      ' "$ENV_FILE" > "$upgrade_env_file" \
        || fail 'unable to prepare the upgrade environment snapshot.'
-     printf '%s\\n' "$runtime_image_env" >> "$upgrade_env_file" \
+      printf '%s\n' "$runtime_image_env" >> "$upgrade_env_file" \
        || fail 'unable to write locked runtime images to the upgrade environment.'
      ENV_FILE=$upgrade_env_file
      export SUBWEB_ENV_FILE="$ENV_FILE"

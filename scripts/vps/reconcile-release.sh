@@ -59,7 +59,7 @@ reconcile_decode_mountpoint() {
         040*) reconcile_decoded="${reconcile_decoded} "; reconcile_encoded=${reconcile_encoded#040} ;;
         011*) reconcile_decoded="${reconcile_decoded}${reconcile_tab}"; reconcile_encoded=${reconcile_encoded#011} ;;
         012*) reconcile_decoded="${reconcile_decoded}${reconcile_newline}"; reconcile_encoded=${reconcile_encoded#012} ;;
-        \\*) reconcile_decoded="${reconcile_decoded}${reconcile_backslash}"; reconcile_encoded=${reconcile_encoded#\\} ;;
+        134*) reconcile_decoded="${reconcile_decoded}${reconcile_backslash}"; reconcile_encoded=${reconcile_encoded#134} ;;
         *) reconcile_decoded="${reconcile_decoded}${reconcile_backslash}" ;;
       esac
     else
@@ -75,8 +75,8 @@ reconcile_target_has_nested_mount() {
     reconcile_mounts=$(findmnt -rn -o TARGET 2>/dev/null) || return 0
     while IFS= read -r reconcile_mount; do
       [ -n "$reconcile_mount" ] || continue
-       reconcile_mount=$(reconcile_decode_mountpoint "$reconcile_mount") || return 0
-       case "$reconcile_mount" in
+      # findmnt -r emits raw paths; only mountinfo requires escape decoding.
+      case "$reconcile_mount" in
          "$reconcile_target"/*) return 0 ;;
        esac
     done <<EOF

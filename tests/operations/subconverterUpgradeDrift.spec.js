@@ -46,7 +46,10 @@ const makeFixture = async ({ volumeDigest }) => {
     await readFile(new URL('scripts/verify-subconverter-runtime.sh', repositoryRoot), 'utf8'),
   );
   await chmod(join(root, 'scripts/verify-subconverter-runtime.sh'), 0o755);
-  await writeFile(join(root, 'scripts/validate-compose.sh'), '#!/bin/sh\nprintf "validate\\n" >> "$DOCKER_LOG"\n');
+  await writeFile(
+    join(root, 'scripts/validate-compose.sh'),
+    '#!/bin/sh\nset -eu\nprintf "validate\\n" >> "$DOCKER_LOG"\ncp "$SUBWEB_ENV_FILE" "$DOCKER_CONFIG/upgrade.env"\n',
+  );
   await chmod(join(root, 'scripts/validate-compose.sh'), 0o755);
 
   const bin = join(root, 'bin');
@@ -125,6 +128,17 @@ describe('SubConverter upgrade runtime volume gate', () => {
     });
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+  });
+
+  it('writes newline-terminated locked runtime image assignments to the upgrade environment', async () => {
+    const root = await makeFixture({ volumeDigest: imageTemplateDigest });
+
+    const result = runUpgrade(root);
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    const upgradeEnvironment = await readFile(join(root, 'upgrade.env'), 'utf8');
+    expect(upgradeEnvironment).toMatch(/MYURLS_IMAGE=[^\n]+\n$/u);
+    expect(upgradeEnvironment).not.toContain('\\n');
   });
 
   it('fails the upgrade with remediation when the volume keeps the previous image content', async () => {
