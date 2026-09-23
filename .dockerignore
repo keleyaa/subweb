@@ -1,7 +1,12 @@
 .git
 .github
 .claude
+.pi
+.runtime
+.superpowers
+.vitest
 .worktrees
+deploy/versions.lock.json.lock*
 
 node_modules
 /dist

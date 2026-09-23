@@ -26,6 +26,13 @@ command -v trivy >/dev/null 2>&1 || {
   exit 2
 }
 
+required_trivy_version=0.74.0
+installed_trivy_version=$(trivy --version | awk '$1 == "Version:" { print $2; exit }')
+[ "$installed_trivy_version" = "$required_trivy_version" ] || {
+  printf 'Trivy %s is required; found %s\n' "$required_trivy_version" "${installed_trivy_version:-unknown}" >&2
+  exit 2
+}
+
 for image in "$@"; do
   printf 'image security scan=%s\n' "$image"
   trivy image \

@@ -9,8 +9,9 @@ for command in docker curl node openssl grep; do
   }
 done
 
-script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
-project_root=$(CDPATH= cd -- "$script_directory/.." && pwd -P)
+script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+project_root=$(CDPATH='' cd -- "$script_directory/.." && pwd -P)
+version_lock_file=$project_root/deploy/versions.lock.json
 
 # This verifier owns every variable in its temporary Compose environment.
 unset \
@@ -47,17 +48,8 @@ fail() {
   exit 1
 }
 
-node "$project_root/scripts/verify-version-locks.mjs" >/dev/null
-locked_images=$(node - "${VERSION_LOCK_FILE:-$project_root/deploy/versions.lock.json}" <<'NODE'
-const fs = require('node:fs');
-const lock = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-for (const service of ['myurls', 'redis', 'subconverter']) {
-  const image = lock.services[service]?.image;
-  if (!image?.reference || !/^sha256:[0-9a-f]{64}$/u.test(image.digest ?? '')) process.exit(1);
-  process.stdout.write(`${service.toUpperCase()}_IMAGE=${image.reference}@${image.digest}\n`);
-}
-NODE
-) || fail 'unable to read locked production images.'
+node "$project_root/scripts/verify-version-locks.mjs" "$version_lock_file" >/dev/null
+locked_images=$(node "$project_root/scripts/runtime-image-contract.mjs" env --lock "$version_lock_file") || fail 'unable to read locked production images.'
 
 {
   printf '%s\n' \
@@ -342,7 +334,7 @@ restricted_probe=$(docker compose exec -T myurls curl -sS --max-time 15 \
 printf '%s' "$restricted_probe" | grep -q '403' \
   || fail 'restricted egress accepted a host outside EGRESS_ALLOWED_HOSTS.'
 
-for attempt in 2 3 4 5; do
+for _attempt in 2 3 4 5; do
   status=$(request app.test POST /short-api/links '{"url":"https://example.com/challenge-probe"}')
   assert_status "$status" 201 'creation below challenge threshold'
 done

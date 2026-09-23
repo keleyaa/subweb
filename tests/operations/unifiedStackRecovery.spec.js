@@ -28,6 +28,14 @@ describe('unified stack recovery contract', () => {
     expect(verifier).not.toContain('printf \'%s\\n\' "$password"');
   });
 
+  it('initializes request output paths outside the command-substitution subshell', async () => {
+    const verifier = await readFile(rootFile('scripts/verify-unified-stack.sh'), 'utf8');
+    const initialization = 'request_headers=$temporary_directory/headers\nrequest_body=$temporary_directory/body';
+
+    expect(verifier).toContain(initialization);
+    expect(verifier.indexOf(initialization)).toBeLessThan(verifier.indexOf('\nrequest() {'));
+  });
+
   it('documents backup and restore through the feature-aware CLI', async () => {
     const documentation = await readFile(rootFile('docs/operations.md'), 'utf8');
 

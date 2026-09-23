@@ -11,6 +11,7 @@ done
 
 script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 project_root=$(CDPATH='' cd -- "$script_directory/.." && pwd -P)
+version_lock_file=$project_root/deploy/versions.lock.json
 . "$project_root/scripts/lib/docker-environment.sh"
 
 # This verifier owns every variable in its temporary Compose environment.
@@ -39,17 +40,8 @@ test_network_prefix=${test_network_subnet%.*}
 test_gateway_ip=$test_network_prefix.2
 test_myurls_ip=$test_network_prefix.3
 
-node "$project_root/scripts/verify-version-locks.mjs" >/dev/null
-myurls_image=$(node - "${VERSION_LOCK_FILE:-$project_root/deploy/versions.lock.json}" <<'NODE'
-const fs = require('node:fs');
-const lock = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-for (const service of ['myurls', 'redis', 'subconverter']) {
-  const image = lock.services[service]?.image;
-  if (!image?.reference || !/^sha256:[0-9a-f]{64}$/u.test(image.digest ?? '')) process.exit(1);
-  process.stdout.write(`${service.toUpperCase()}_IMAGE=${image.reference}@${image.digest}\n`);
-}
-NODE
-) || {
+node "$project_root/scripts/verify-version-locks.mjs" "$version_lock_file" >/dev/null
+myurls_image=$(node "$project_root/scripts/runtime-image-contract.mjs" env --lock "$version_lock_file") || {
   printf '%s\n' 'Unable to read locked operation images.' >&2
   exit 1
 }
@@ -89,6 +81,7 @@ export COMPOSE_FILE=$compose_files
 export SUBWEB_ENV_FILE=$env_file
 export COMPOSE_PROJECT_NAME=$project_name
 export SUBWEB_OPERATIONS_RUNTIME_DIR=$temporary_directory/rollback
+export VERSION_LOCK_FILE="$version_lock_file"
 
 cd "$project_root"
 compose up -d --build --wait >/dev/null

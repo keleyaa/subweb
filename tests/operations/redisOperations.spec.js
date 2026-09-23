@@ -122,10 +122,13 @@ exit 1
   it('pins the MyUrls, Redis, and SubConverter images from the version lock for the temporary operations stack', () => {
     const verifier = fs.readFileSync(operationsVerifier, 'utf8');
 
-    expect(verifier).toContain('scripts/verify-version-locks.mjs');
-    expect(verifier).toContain('deploy/versions.lock.json');
-    expect(verifier).toContain("['myurls', 'redis', 'subconverter']");
-    expect(verifier).toContain('image.reference}@${image.digest}');
+    expect(verifier).toContain('scripts/verify-version-locks.mjs" "$version_lock_file"');
+    expect(verifier).toContain('version_lock_file=$project_root/deploy/versions.lock.json');
+    const lockExport = 'export VERSION_LOCK_FILE="$version_lock_file"';
+
+    expect(verifier).toContain('scripts/runtime-image-contract.mjs" env --lock "$version_lock_file"');
+    expect(verifier).toContain(lockExport);
+    expect(verifier.indexOf(lockExport)).toBeLessThan(verifier.indexOf('backup-redis.sh'));
     expect(verifier).toContain('printf \'%s\\n\' "$myurls_image"');
   });
 

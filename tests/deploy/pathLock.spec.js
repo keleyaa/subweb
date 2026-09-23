@@ -9,6 +9,7 @@ const pathLockPath = fileURLToPath(
   new URL('../../scripts/lib/path-lock.sh', import.meta.url),
 );
 const temporaryDirectories = [];
+const boundedRetryTimeout = 10_000;
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) =>
@@ -68,7 +69,7 @@ exec /bin/rm "$@"
       ['-c', 'set -eu; . "$1"; acquire_path_lock "$2"; release_path_lock "$PATH_LOCK_DIRECTORY"', 'sh', pathLockPath, target],
       {
         encoding: 'utf8',
-        timeout: 5_000,
+        timeout: boundedRetryTimeout,
         env: {
           ...process.env,
           LOCK_MARKER: marker,
@@ -134,7 +135,7 @@ exec /bin/rm "$@"
       ['-c', 'set -eu; . "$1"; acquire_path_lock "$2"', 'sh', pathLockPath, target],
       {
         encoding: 'utf8',
-        timeout: 3_000,
+        timeout: boundedRetryTimeout,
         env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
       },
     );
@@ -207,7 +208,7 @@ exec /bin/rm "$@"
     const result = spawnSync(
       'sh',
       ['-c', 'set -eu; . "$1"; acquire_path_lock "$2"; release_path_lock "$PATH_LOCK_DIRECTORY"', 'sh', pathLockPath, target],
-      { encoding: 'utf8', timeout: 3_000 },
+      { encoding: 'utf8', timeout: boundedRetryTimeout },
     );
 
     expect(result.status, result.stderr).toBe(0);
@@ -355,7 +356,8 @@ exec /bin/rm "$@"
       { cwd: directory, encoding: 'utf8', timeout: 3_000, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } },
     );
 
-    expect(result.status).not.toBe(0);
+    expect(result.signal, result.stderr).toBeNull();
+    expect(result.status, result.stderr).toBe(1);
     expect((await lstat(`${target}.lock`)).isSymbolicLink()).toBe(true);
   });
 
@@ -377,8 +379,7 @@ exec /bin/rm "$@"
     const result = spawnSync(
       'sh',
       ['-c', 'set -eu; . "$1"; acquire_path_lock "$2"', 'sh', pathLockPath, target],
-      { encoding: 'utf8', timeout: 5_000, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } },
-    );
+      { encoding: 'utf8', timeout: boundedRetryTimeout, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } },    );
 
     expect(result.signal, result.stderr).toBeNull();
     expect(result.status, result.stderr).toBe(1);
@@ -403,8 +404,7 @@ exec /bin/rm "$@"
     const result = spawnSync(
       'sh',
       ['-c', 'set -eu; . "$1"; acquire_path_lock "$2"', 'sh', pathLockPath, target],
-      { encoding: 'utf8', timeout: 3_000, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } },
-    );
+      { encoding: 'utf8', timeout: boundedRetryTimeout, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } },    );
 
     expect(result.signal, result.stderr).toBeNull();
     expect(result.status, result.stderr).toBe(1);
@@ -451,7 +451,8 @@ exec /bin/rm "$@"
       { encoding: 'utf8', timeout: 3_000, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } },
     );
 
-    expect(result.status).not.toBe(0);
+    expect(result.signal, result.stderr).toBeNull();
+    expect(result.status, result.stderr).toBe(1);
     expect((await lstat(`${target}.lock`)).isSymbolicLink()).toBe(true);
   });
 
@@ -482,12 +483,13 @@ exec /bin/cat "$@"
       ['-c', 'set -eu; . "$1"; acquire_path_lock "$2"', 'sh', pathLockPath, target],
       {
         encoding: 'utf8',
-        timeout: 3_000,
+        timeout: boundedRetryTimeout,
         env: { ...process.env, LOCK_TARGET: canonicalTarget, PATH: `${bin}:${process.env.PATH}` },
       },
     );
 
-    expect(result.status).not.toBe(0);
+    expect(result.signal, result.stderr).toBeNull();
+    expect(result.status, result.stderr).toBe(1);
     expect((await lstat(`${target}.lock`)).isSymbolicLink()).toBe(true);
   });
 

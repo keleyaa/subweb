@@ -330,6 +330,65 @@ describe('release evidence and command gate', () => {
     expect(source).not.toContain('request-policy');
   });
 
+  it('derives every unified verifier image from the repository version lock', () => {
+    const verifiers = [
+      'scripts/verify-unified-stack.sh',
+      'scripts/verify-redis-operations.sh',
+    ].map((file) => fs.readFileSync(path.join(root, file), 'utf8'));
+
+    const lockExport = 'export VERSION_LOCK_FILE="$version_lock_file"';
+
+    for (const verifier of verifiers) {
+      expect(verifier).toContain('version_lock_file=$project_root/deploy/versions.lock.json');
+      expect(verifier).toContain('verify-version-locks.mjs" "$version_lock_file"');
+      expect(verifier).toContain('runtime-image-contract.mjs" env --lock "$version_lock_file"');
+      if (verifier.includes('backup-redis.sh')) {
+        expect(verifier).toContain(lockExport);
+        expect(verifier.indexOf(lockExport)).toBeLessThan(verifier.indexOf('backup-redis.sh'));
+      } else {
+        expect(verifier).not.toContain('VERSION_LOCK_FILE');
+      }
+    }
+  });
+
+  it('requires the documented Trivy release before scanning images', () => {
+    const directory = fs.mkdtempSync(path.join(tmpdir(), 'subweb-trivy-version-'));
+    const trivy = path.join(directory, 'trivy');
+    const ignoreFile = path.join(directory, 'ignore');
+    const verifier = path.join(root, 'scripts/verify-image-security.sh');
+
+    try {
+      fs.writeFileSync(ignoreFile, '');
+      fs.writeFileSync(trivy, `#!/bin/sh
+if [ "$1" = '--version' ]; then
+  printf 'Version: %s\\n' "$TRIVY_VERSION"
+  exit 0
+fi
+exit 0
+`);
+      fs.chmodSync(trivy, 0o755);
+
+      const environment = {
+        ...process.env,
+        PATH: `${directory}:${process.env.PATH}`,
+      };
+      const mismatched = spawnSync(verifier, ['--ignorefile', ignoreFile, 'subweb:test'], {
+        encoding: 'utf8',
+        env: { ...environment, TRIVY_VERSION: '0.73.0' },
+      });
+      const expected = spawnSync(verifier, ['--ignorefile', ignoreFile, 'subweb:test'], {
+        encoding: 'utf8',
+        env: { ...environment, TRIVY_VERSION: '0.74.0' },
+      });
+
+      expect(mismatched.status).not.toBe(0);
+      expect(`${mismatched.stdout}${mismatched.stderr}`).toContain('Trivy 0.74.0 is required');
+      expect(expected.status, expected.stderr).toBe(0);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('publishes one multi-platform release to Docker Hub and GHCR', () => {
     const source = fs.readFileSync(path.join(root, '.github/workflows/docker-build-release.yml'), 'utf8');
 

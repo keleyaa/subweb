@@ -32,6 +32,12 @@ const removedArtifacts = [
   'docs/three-domain-documentation-guide.md',
   'docs/prd-three-domain-separation.md',
   'docs/implementation-status-three-domain.md',
+  'docs/deployment-integration-prd.md',
+  'docs/superpowers/plans/2026-09-14-repository-formalization.md',
+  'docs/superpowers/plans/2026-09-17-interactive-deployment-wizard.md',
+  'docs/superpowers/specs/2026-09-14-repository-formalization-design.md',
+  'docs/superpowers/specs/2026-09-15-vps-runtime-design.md',
+  'docs/superpowers/specs/2026-09-17-interactive-deployment-wizard-design.md',
   'deploy/subconverter/config/README.md',
 ].map(rootFile);
 
@@ -41,13 +47,14 @@ describe('project cleanup and independent-maintenance boundary', () => {
   });
 
   it('keeps metadata, docs, and build context free of upstream operational defaults', async () => {
-    const [readme, publicConfig, runtimeConfig, dockerfile, workflow, dockerignore] = await Promise.all([
+    const [readme, publicConfig, runtimeConfig, dockerfile, workflow, dockerignore, gitignore] = await Promise.all([
       readFile(rootFile('README.md'), 'utf8'),
       readFile(rootFile('public/conf/config.js'), 'utf8'),
       readFile(rootFile('src/runtime/config.js'), 'utf8'),
       readFile(rootFile('Dockerfile'), 'utf8'),
       readFile(rootFile('.github/workflows/docker-build-release.yml'), 'utf8'),
       readFile(rootFile('.dockerignore'), 'utf8'),
+      readFile(rootFile('.gitignore'), 'utf8'),
     ]);
 
     for (const source of [publicConfig, runtimeConfig, dockerfile]) {
@@ -67,8 +74,11 @@ describe('project cleanup and independent-maintenance boundary', () => {
     expect(dockerfile).not.toContain('LABEL maintainer');
     expect(dockerfile).not.toContain('ENV VERSION');
     expect(workflow).not.toContain('paths-ignore:');
-    for (const ignoredPath of ['docs', 'tests', 'output', 'prototypes', '.worktrees']) {
+    for (const ignoredPath of ['docs', 'tests', 'output', 'prototypes', '.worktrees', '.pi', '.runtime', '.superpowers', '.vitest', 'deploy/versions.lock.json.lock*']) {
       expect(dockerignore.split('\n')).toContain(ignoredPath);
+    }
+    for (const ignoredPath of ['/.superpowers/', '/.vitest/', '/deploy/versions.lock.json.lock*']) {
+      expect(gitignore.split('\n')).toContain(ignoredPath);
     }
   });
 

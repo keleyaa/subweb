@@ -168,7 +168,19 @@ describe('integrated service artifact locks', () => {
     ]));
   });
 
-  it('pins the Go gateway builder and runtime image inputs used by Dockerfile', () => {
+  it('pins the Go gateway builder and runtime image inputs used by Dockerfile', async () => {
+    const fixtureDockerfile = await readFile(
+      new URL('../fixtures/conversion-upstream/Dockerfile', import.meta.url),
+      'utf8',
+    );
+    const fixtureBuilderReference = lock.services.gatewayBase.image.reference.replace(
+      'docker.io/library/',
+      '',
+    );
+
+    expect(fixtureDockerfile).toContain(
+      `FROM ${fixtureBuilderReference}@${lock.services.gatewayBase.image.digest} AS build`,
+    );
     expect(lock.services.gatewayBase.source).toMatchObject({
       repository: 'docker-library/golang', tag: '1.27/alpine3.24',
     });
