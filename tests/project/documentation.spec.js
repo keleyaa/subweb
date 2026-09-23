@@ -478,14 +478,14 @@ describe("documentation contract", () => {
     }
   });
 
-  it("keeps the current product story and local visual proof explicit", () => {
+  it("keeps the product-first story and local interface proof explicit", () => {
     const readme = read("README.md");
 
     for (const text of [
-      "面向自托管维护者的在线订阅转换与短链服务",
+      "自托管订阅转换与可选短链发行服务",
+      "唯一公网边界",
       "固定黑色命令界面",
       "assets/readme/command-interface.png",
-      "assets/readme/security-architecture.svg",
       "ghcr.io/keleyaa/subweb",
       "npm run verify:ci",
       "`--image` 不接收 `latest` 或发布版本 tag",
@@ -495,6 +495,7 @@ describe("documentation contract", () => {
     ]) {
       expect(readme).toContain(text);
     }
+    expect(readme).not.toContain("assets/readme/security-architecture.svg");
   });
 
   it("requires local visual proof to be rendered HTML images with descriptive alt text", () => {
@@ -585,15 +586,11 @@ describe("documentation contract", () => {
     ).toBe(true);
   });
 
-  it("embeds the current interface and security architecture as descriptive local HTML images", () => {
+  it("embeds the current interface as a descriptive local HTML image", () => {
     const readme = read("README.md");
 
-    for (const asset of [
-      "command-interface.png",
-      "security-architecture.svg",
-    ]) {
-      expect(hasEmbeddedReadmeImage(readme, asset)).toBe(true);
-    }
+    expect(hasEmbeddedReadmeImage(readme, "command-interface.png")).toBe(true);
+    expect(hasEmbeddedReadmeImage(readme, "security-architecture.svg")).toBe(false);
   });
 
   it("documents the Rust MyUrls release and safe rollback boundary", () => {

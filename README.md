@@ -1,35 +1,30 @@
 # Subconverter Web
 
-> 面向自托管维护者的在线订阅转换与短链服务。统一 Go Gateway、受控 HTTPS CONNECT egress，以及可审计的四服务 Docker 部署。
-
-[![Docker build and release](https://github.com/keleyaa/subweb/actions/workflows/docker-build-release.yml/badge.svg?branch=main)](https://github.com/keleyaa/subweb/actions/workflows/docker-build-release.yml) [![Local development contract](https://github.com/keleyaa/subweb/actions/workflows/local-dev.yml/badge.svg?branch=main)](https://github.com/keleyaa/subweb/actions/workflows/local-dev.yml)
+> 自托管订阅转换与可选短链发行服务。统一 Go Gateway 是唯一公网边界；其余服务保持私有，并由 Compose 合同与锁定的运行时镜像约束。
 
 <p align="center">
   <img src="./assets/readme/command-interface.png" alt="Subconverter Web 固定黑色命令界面：订阅输入、客户端选择、订阅后端、高级参数与转换并复制操作" width="100%">
 </p>
 
-## 能力
+## 核心能力
 
-- **订阅转换：** 输入订阅链接或节点，选择客户端与远程配置后生成可复制的转换地址。
-- **统一 Gateway：** Go 1.27 单二进制负责 APP、API、SHORT Host 路由、静态资源、请求策略、限流、MyUrls 适配，以及订阅 egress（`:25502`）与 hostname 白名单受限 egress（`:25503`）两个内部 CONNECT 监听。
-- **短链：** 通过 APP 同源 `/short-api/links` 创建短链；一个 MyUrls Rust v2.0.8 进程为 APP 与 SHORT 的 `/code` 解析提供上游支持，SHORT 不可创建或管理短链，MyUrls 没有直连公网能力。
-- **可控功能开关：** `SHORT_LINKS_ENABLED` 控制是否部署 MyUrls/Redis，`CUSTOM_BACKEND_ENABLED` 控制前端自定义后端；安全策略不可关闭。
-- **PWA 图标：** 提供 favicon、Apple Touch Icon、`192 px` / `512 px` 图标与 manifest。
+### 转换订阅
+
+粘贴订阅链接或节点，选择客户端与远程配置，生成可复制的转换地址。订阅后端和高级参数按需展开，不会同时挤占工作区。
+
+### 发行可选短链
+
+APP 同源 `/short-api/links` 用于创建短链；启用后，一个 MyUrls Rust v2.0.8 上游同时支持 APP 管理与 SHORT 域名的短码解析。关闭短链时，MyUrls 与 Redis 不会部署。
+
+### 保持网络边界可见
+
+Gateway 是唯一发布到宿主机 loopback 的服务，负责 Host 路由、请求策略、限流和受控 CONNECT egress。SubConverter、MyUrls 与 Redis 保持在内部网络中；生产入口的 TLS、80/443 端口和 DNS 由部署者管理。
 
 ## 快速开始
 
-### 环境要求
-
-本机源码开发使用 Docker Compose 与 Vite；生产部署使用 Docker Compose，不需要在容器中运行 Node.js。
-
-- Docker Engine 与 Docker Compose v2
-- OpenSSL、curl
-- Node.js 24 与 npm 11（源码开发、验证和发布门禁）
-- 启用短链时使用 3 个不同域名：APP、API、SHORT；关闭短链时不需要 SHORT 域名
-
 ### 生产 Docker 部署
 
-首次由人部署时，在交互式终端运行：
+首次生产部署在交互式终端运行：
 
 ```sh
 git clone https://github.com/keleyaa/subweb.git
@@ -37,13 +32,24 @@ cd subweb
 ./scripts/subweb.sh install
 ```
 
-向导依次询问 APP、API 域名和是否启用短链；启用时才询问 SHORT 域名与 Turnstile Site Key；随后可选填 `TRUSTED_PROXY_CIDR`，并要求明确输入 Gateway 发布版本 `vX.Y.Z`。它会将该版本解析为不可变 GHCR manifest digest，显示不含密钥的确认摘要，并且只接受 `yes` 才会继续；之后 Turnstile Secret Key 仍通过既有隐藏输入流程处理。不会选择 `latest`，也不会隐式选择版本。
+向导询问 APP、API 域名和是否启用短链；仅在启用时询问 SHORT 域名与 Turnstile Site Key。随后可选填 `TRUSTED_PROXY_CIDR`，并要求明确输入 Gateway 发布版本 `vX.Y.Z`。它将版本解析为不可变 GHCR manifest digest，显示不含密钥的确认摘要，并且只接受 `yes` 才会继续；Turnstile Secret Key 仍通过既有隐藏输入流程处理。不会选择 `latest`，也不会隐式选择版本。
 
-默认启用短链时会运行 `gateway`、`subconverter`、`myurls` 和 `redis` 四个服务；`myurls` 是唯一的 MyUrls Rust v2.0.8 进程。所有 APP、API、SHORT 域名由外层 TLS 反向代理转发到 `127.0.0.1:<SUBWEB_PORT>`，并保留原始 Host。项目自身不管理 HTTPS 证书、80/443 端口或公网 DNS。
+默认短链 profile 启动 `gateway`、`subconverter`、`myurls` 和 `redis` 四个服务。所有 APP、API、SHORT 域名由外层 TLS 反向代理转发到 `127.0.0.1:<SUBWEB_PORT>`，并保留原始 Host。完整步骤见 [Docker 部署](docs/deployment-docker.md)；部署入口、代理和域名约束见 [部署总览](docs/deployment.md)。
 
-在向导中关闭短链时，不会询问 SHORT 域名、Turnstile Site Key 或 Secret Key，也不会部署 Redis 或 MyUrls；仅启动 Gateway 与 SubConverter。完整步骤见 [部署索引](docs/deployment.md) 和 [Docker 部署](docs/deployment-docker.md)。
+`SHORT_LINKS_ENABLED=true` 选择默认短链 profile；`SHORT_LINKS_ENABLED=false` 选择关闭短链 profile。
 
-### 自动化与预构建镜像
+| 运行模式 | 服务 | 域名要求 |
+| --- | --- | --- |
+| 默认短链 profile | Gateway、SubConverter、MyUrls、Redis | APP、API、SHORT 三个不同域名 |
+| 关闭短链 profile | Gateway、SubConverter | APP、API 两个不同域名；不设置 SHORT 域名 |
+
+### 本机源码与 VPS
+
+本机源码开发使用 Docker Compose 与 Vite；生产部署使用 Docker Compose，不需要在容器中运行 Node.js。开发、验证和发布门禁要求 Node.js 24、npm 11、Docker Engine、Docker Compose v2、OpenSSL 与 curl。参见 [本地开发](docs/deployment-local.md)。
+
+单台服务器部署、外部 TLS 代理和恢复操作分别见 [Linux VPS 部署](docs/deployment-vps.md)、[Nginx 代理示例](docs/deployment-nginx.md) 和 [运维](docs/operations.md)。
+
+### 自动化安装与不可变镜像
 
 CI 或其他非交互环境显式提供安装参数。启用短链时，Turnstile Secret Key 必须通过 `--turnstile-secret-key-stdin` 管道传入：
 
@@ -60,39 +66,14 @@ printf '%s\n' "$TURNSTILE_SECRET_KEY" | ./scripts/subweb.sh install \
 
 `--version vX.Y.Z` 仅通过 GHCR 在配置和部署前解析为不可变 manifest digest，不会将版本 tag 直接写入运行时配置。`--image` 是直接传入的、与 registry 无关的不可变 digest 镜像输入；Docker Hub 与 GHCR 的 release digest 是等价的直接来源，例如 `--image ghcr.io/keleyaa/subweb@sha256:<digest>`。`--version` 与 `--image` 互斥，`--image` 不接收 `latest` 或发布版本 tag。SubConverter、MyUrls Rust 和 Redis 的镜像只从 [版本锁](deploy/versions.lock.json) 的 runtime-image contract 派生，不能手工覆盖。推送 `vX.Y.Z` 格式的 Git tag 会自动触发 Docker release workflow，也可以手动输入已有 tag 补跑。产品发布版本只由 Git tag 决定，`package.json` 仅是 Node 工具链元数据。
 
-## 架构
-
-<p align="center">
-  <img src="./assets/readme/security-architecture.svg" alt="统一 Go Gateway 的 Subweb 服务架构：Gateway 路由 APP、API、SHORT，连接 SubConverter、一个 MyUrls 实例与 Redis，并通过已验证 IP 的 HTTPS CONNECT egress 访问订阅" width="100%">
-</p>
-
-生产短链 profile 的四个服务和网络边界见 [架构](docs/architecture.md)。短链关闭时使用显式两服务 profile。外部 TLS 入口属于部署者，不是 Compose 服务。
-
-| 服务           | 职责                                                                                    |
-| -------------- | --------------------------------------------------------------------------------------- |
-| `gateway`      | 唯一公开 loopback 端口；统一 Host 路由、静态资源、策略、限流、短链适配和 CONNECT egress |
-| `subconverter` | 订阅转换执行器，只能通过内部 egress 网络访问                                            |
-| `myurls`       | 一个 MyUrls Rust v2.0.8 进程；APP 创建/管理，APP 与 SHORT 短码解析由 Gateway 分流        |
-| `redis`        | DB `0` 保存短链，DB `1` 保存 Gateway HMAC IP 限流状态                                   |
-
-## 界面操作
-
-1. 粘贴订阅链接或节点。
-2. 选择客户端与远程配置。
-3. 按需展开「订阅后端」或「高级参数」；两项不会同时占用页面空间。
-4. 点击「转换并复制」。成功后显示转换结果和短链操作。
-
-页面固定使用黑色命令主题，不提供明暗主题切换。交互目标、键盘焦点、减少动效与增强对比度均有独立验证。
-
-## 安全与隐私
+## 安全与数据边界
 
 - Gateway 只发布 loopback 端口；MyUrls、Redis 和 SubConverter 不发布宿主机端口。
-- `/sub` 强制执行 DNS、SSRF、响应大小、超时、并发（全局 `4`、单客户端 `2`）、限流和 `:443` CONNECT 策略；SubConverter 不能绕过 Gateway 直接访问公网，MyUrls 的 Turnstile siteverify 只能通过 hostname 白名单受限 egress 访问 `challenges.cloudflare.com`。
+- `/sub` 强制执行 DNS、SSRF、响应大小、超时、并发、限流和 `:443` CONNECT 策略；SubConverter 不能绕过 Gateway 直接访问公网。
 - Gateway 清理凭据、Cookie、Origin 和伪造的转发头，验证 Host 并重建客户端身份；日志不记录原始 IP、订阅 URL、Query、Token、Redis 密码或完整短码。
-- 转换 URL 与结果不写入 Redis；用户主动创建的短链按 TTL 保存，短链属于持有即可访问的数据。
-- `proxy-providers` URL 由最终客户端直接拉取，不经过本服务 egress；这是客户端侧边界。
+- 转换 URL 与结果不写入 Redis；用户主动创建的短链按 TTL 保存，短链属于持有即可访问的数据。Redis DB `0` 保存短链，DB `1` 保存 Gateway HMAC IP 限流状态。
 
-详细边界见 [安全](docs/security.md) 与 [配置](docs/configuration.md)。
+完整服务拓扑与网络隔离见 [架构](docs/architecture.md)，受控 egress、隐私与凭据边界见 [安全](docs/security.md) 和 [配置](docs/configuration.md)。
 
 ## 验证与维护
 
