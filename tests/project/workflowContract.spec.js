@@ -1,10 +1,55 @@
-import { readFile } from 'node:fs/promises';
-import { describe, expect, it } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 
+const temporaryDirectories = [];
+const verifierPath = new URL('../../scripts/verify-workflows.sh', import.meta.url).pathname;
 const readWorkflow = (name) => readFile(new URL(`../../.github/workflows/${name}`, import.meta.url), 'utf8');
 
 const pinnedActions = (workflow) =>
   [...workflow.matchAll(/^\s+uses:\s+([^\s]+)@([^\s]+)$/gmu)].map(([, action, ref]) => ({ action, ref }));
+
+const makeLocalActionlintFixture = async (version, { dockerInfoFails = false } = {}) => {
+  const root = await mkdtemp(join(tmpdir(), 'subweb-actionlint-'));
+  const bin = join(root, 'bin');
+  temporaryDirectories.push(root);
+  await mkdir(bin);
+
+  const commands = new Map([
+    ['dirname', '#!/bin/sh\nexec /usr/bin/dirname "$@"\n'],
+    ['awk', '#!/bin/sh\nexec /usr/bin/awk "$@"\n'],
+    ['actionlint', [
+      '#!/bin/sh',
+      'if [ "${1-}" = -version ]; then',
+      `  printf '%s\\n' '${version}'`,
+      '  exit 0',
+      'fi',
+      'exit 0',
+      '',
+    ].join('\n')],
+    ...(dockerInfoFails ? [['docker', '#!/bin/sh\nexit 1\n']] : []),
+  ]);
+  await Promise.all([...commands].map(async ([name, contents]) => {
+    const path = join(bin, name);
+    await writeFile(path, contents);
+    await chmod(path, 0o755);
+  }));
+
+  return root;
+};
+
+const runVerifierWithoutDocker = (root) => spawnSync('/bin/sh', [verifierPath], {
+  cwd: root,
+  encoding: 'utf8',
+  env: { PATH: join(root, 'bin') },
+});
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((root) =>
+    rm(root, { recursive: true, force: true })));
+});
 
 describe('GitHub Actions workflow contract', () => {
   it('runs repository quality checks for pull requests and main', async () => {
@@ -62,12 +107,55 @@ describe('GitHub Actions workflow contract', () => {
     }
   });
 
+  it('rejects a local actionlint version that differs from the pinned verifier', async () => {
+    const root = await makeLocalActionlintFixture('1.7.12');
+
+    const result = runVerifierWithoutDocker(root);
+
+    expect(result.status, result.stderr).toBe(2);
+    expect(result.stderr).toContain('actionlint 1.7.7');
+    expect(result.stdout).toBe('');
+  });
+
+  it('accepts the pinned local actionlint fallback when Docker is unavailable', async () => {
+    const root = await makeLocalActionlintFixture('1.7.7');
+
+    const result = runVerifierWithoutDocker(root);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('workflow contracts=passed\n');
+  });
+
+  it('falls back to pinned local actionlint when the Docker daemon is unavailable', async () => {
+    const root = await makeLocalActionlintFixture('1.7.7', { dockerInfoFails: true });
+
+    const result = runVerifierWithoutDocker(root);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('workflow contracts=passed\n');
+  });
+
+  it('declares the release version for pinned actionlint shell analysis', async () => {
+    const workflow = await readWorkflow('docker-build-release.yml');
+    const start = workflow.indexOf('- name: Set release tags');
+    const next = workflow.indexOf('\n      - name:', start + 1);
+    const step = workflow.slice(start, next === -1 ? undefined : next);
+
+    expect(start).toBeGreaterThan(-1);
+    expect(step).toContain('readonly VERSION');
+  });
+
   it('provides a deterministic local workflow verifier', async () => {
     const verifier = await readFile(new URL('../../scripts/verify-workflows.sh', import.meta.url), 'utf8');
+    const dockerCheck = verifier.indexOf('if command -v docker');
+    const actionlintCheck = verifier.indexOf('elif command -v actionlint');
 
-     expect(verifier).toContain('actionlint');
-     expect(verifier).toMatch(/rhysd\/actionlint:1\.7\.7@sha256:[0-9a-f]{64}/u);
-     expect(verifier).toContain('workflow contracts=passed');
+    expect(verifier).toContain('actionlint');
+    expect(verifier).toMatch(/rhysd\/actionlint:1\.7\.7@sha256:[0-9a-f]{64}/u);
+    expect(dockerCheck).toBeGreaterThan(-1);
+    expect(actionlintCheck).toBeGreaterThan(-1);
+    expect(dockerCheck).toBeLessThan(actionlintCheck);
+    expect(verifier).toContain('workflow contracts=passed');
     expect(verifier).not.toContain('latest');
   });
 });
