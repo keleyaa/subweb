@@ -136,9 +136,18 @@ const makeFixture = async () => {
 set -eu
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 printf '%s\\n' "$*" >> "$root/docker.log"
+compose_env_file=.env
+previous_argument=
+for argument in "$@"; do
+  if [ "$previous_argument" = --env-file ]; then
+    compose_env_file=$argument
+    break
+  fi
+  previous_argument=$argument
+done
 render_compose() {
   compose_json=$1
-  gateway_image=$(awk -F= '$1 == "SUBWEB_IMAGE" { print substr($0, index($0, "=") + 1); exit }' .env)
+  gateway_image=$(awk -F= '$1 == "SUBWEB_IMAGE" { print substr($0, index($0, "=") + 1); exit }' "$compose_env_file")
   if [ -f "$root/capture-gateway-image" ]; then
     printf 'COMPOSE_GATEWAY_IMAGE=%s\\n' "$gateway_image" >> "$root/docker.log"
   fi
@@ -278,6 +287,7 @@ describe('Docker image quick deployment', () => {
       'MYURLS_IMAGE', 'IP_HASH_SECRET', 'REDIS_PASSWORD', 'TURNSTILE_SITE_KEY',
       'TURNSTILE_SECRET_KEY',
     ]) delete environment[name];
+    environment.PATH = `${join(root, 'bin')}:${process.env.PATH}`;
 
     const result = spawnSync(
       'docker',
@@ -286,6 +296,9 @@ describe('Docker image quick deployment', () => {
     );
 
     expect(result.status, result.stderr).toBe(0);
+    expect(await readDockerLog(root)).toBe(
+      `compose -f compose.yaml --env-file ${envPath} config --format json\n`,
+    );
     expect(JSON.parse(result.stdout).services.subconverter.image).toBe(lockedImages.subconverter);
   });
 

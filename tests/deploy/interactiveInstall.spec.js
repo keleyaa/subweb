@@ -100,6 +100,19 @@ const runWizard = (root, input, environment = {}) => runScript(
 
 const shellQuote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
 
+const interactiveScriptArguments = (platform, interpreter, scriptPath) => {
+  const command = interpreter === 'sh'
+    ? 'IFS= read -r discarded || :; exec "$1" install'
+    : `IFS= read -r discarded || :; exec ${shellQuote(interpreter)} "$1" install`;
+  const linuxCommand = interpreter === 'sh'
+    ? `exec ${shellQuote(scriptPath)} install`
+    : `exec ${shellQuote(interpreter)} ${shellQuote(scriptPath)} install`;
+
+  return platform === 'linux'
+    ? ['-e', '-q', '-c', linuxCommand, '/dev/null']
+    : ['-q', '/dev/null', 'sh', '-c', command, 'sh', scriptPath];
+};
+
 const runInteractiveInstall = async (
   root,
   input,
@@ -111,15 +124,7 @@ const runInteractiveInstall = async (
   const inputPath = join(root, 'interactive-input');
   await writeFile(inputPath, input);
   const inputFd = openSync(inputPath, 'r');
-  const command = interpreter === 'sh'
-    ? 'IFS= read -r discarded || :; exec "$1" install'
-    : `IFS= read -r discarded || :; exec ${shellQuote(interpreter)} "$1" install`;
-  const linuxCommand = interpreter === 'sh'
-    ? `IFS= read -r discarded || :; exec ${shellQuote(scriptPath)} install`
-    : `IFS= read -r discarded || :; exec ${shellQuote(interpreter)} ${shellQuote(scriptPath)} install`;
-  const args = process.platform === 'linux'
-    ? ['-e', '-q', '-c', linuxCommand, '/dev/null']
-    : ['-q', '/dev/null', 'sh', '-c', command, 'sh', scriptPath];
+  const args = interactiveScriptArguments(process.platform, interpreter, scriptPath);
 
   try {
     return spawnSync('script', args, {
@@ -172,6 +177,12 @@ afterEach(async () => {
 });
 
 describe('interactive deployment install', () => {
+  it('preserves the first answer in the GNU script PTY wrapper', () => {
+    expect(interactiveScriptArguments('linux', 'sh', '/tmp/subweb.sh')).toEqual([
+      '-e', '-q', '-c', "exec '/tmp/subweb.sh' install", '/dev/null',
+    ]);
+  });
+
   it('rejects parameterless non-TTY dispatcher invocation without deployment', async () => {
     const root = await makeFixture();
 

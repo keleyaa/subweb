@@ -226,9 +226,16 @@ describe('release image resolver', () => {
 
   it('rejects a missing GitHub CLI before resolving the image', async () => {
     const root = await makeFixture();
+    const systemBin = join(root, 'system-bin');
+    const grep = join(root, 'bin', 'grep');
     await rm(join(root, 'bin', 'gh'));
+    await mkdir(systemBin);
+    await writeFile(join(systemBin, 'gh'), '#!/bin/sh\nexit 42\n');
+    await chmod(join(systemBin, 'gh'), 0o755);
+    await writeFile(grep, '#!/bin/sh\nexec /usr/bin/grep "$@"\n');
+    await chmod(grep, 0o755);
 
-    const result = spawnSync('sh', [
+    const result = spawnSync('/bin/sh', [
       '-c',
       '. "$1"; resolve_release_image "$2"',
       'sh',
@@ -239,7 +246,7 @@ describe('release image resolver', () => {
       encoding: 'utf8',
       env: {
         ...process.env,
-        PATH: `${join(root, 'bin')}:/usr/bin:/bin`,
+        PATH: join(root, 'bin'),
         DOCKER_LOG: join(root, 'docker.log'),
         GH_LOG: join(root, 'gh.log'),
         INSPECT_DIGEST: validDigest,
