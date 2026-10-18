@@ -5,3 +5,16 @@
 # libcrypto3/libssl3 3.5.7-r0 (fixed 3.5.8-r0) only, and the scan passes with
 # this file applied.
 CVE-2026-14456
+#
+# CVE-2026-78667 and CVE-2026-97031 are Go 1.27.1 stdlib net/http and crypto/tls
+# denial-of-service advisories; CVE-2026-78669 is the matching x/net/http2
+# advisory. They live in the upstream-built binary, not in source this repository
+# compiles.
+# Re-verified 2026-10-18 with trivy 0.76.0: upstream v1.10.1 ships the same Go
+# 1.27.1 and x/net 0.59.0 build, so no fixed release exists. The container is
+# reachable only from Gateway on the internal subconverter network, behind the
+# gateway request-size and timeout limits.
+# Recheck this file whenever the locked SubConverter image digest changes.
+CVE-2026-78667
+CVE-2026-78669
+CVE-2026-97031

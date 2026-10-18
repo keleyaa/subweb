@@ -374,15 +374,15 @@ exit 0
       };
       const mismatched = spawnSync(verifier, ['--ignorefile', ignoreFile, 'subweb:test'], {
         encoding: 'utf8',
-        env: { ...environment, TRIVY_VERSION: '0.73.0' },
+        env: { ...environment, TRIVY_VERSION: '0.75.0' },
       });
       const expected = spawnSync(verifier, ['--ignorefile', ignoreFile, 'subweb:test'], {
         encoding: 'utf8',
-        env: { ...environment, TRIVY_VERSION: '0.74.0' },
+        env: { ...environment, TRIVY_VERSION: '0.76.0' },
       });
 
       expect(mismatched.status).not.toBe(0);
-      expect(`${mismatched.stdout}${mismatched.stderr}`).toContain('Trivy 0.74.0 is required');
+      expect(`${mismatched.stdout}${mismatched.stderr}`).toContain('Trivy 0.76.0 is required');
       expect(expected.status, expected.stderr).toBe(0);
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });

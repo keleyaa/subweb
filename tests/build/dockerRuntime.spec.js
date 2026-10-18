@@ -132,7 +132,7 @@ describe('Docker runtime contract', () => {
     // move ahead of the version the repository verifies with, and an unrelated
     // scanner upgrade must not decide release scope.
     const trivySteps = workflow.split('aquasecurity/trivy-action@').length - 1;
-    const pinnedScannerVersions = workflow.split('version: "v0.74.0"').length - 1;
+    const pinnedScannerVersions = workflow.split('version: "v0.76.0"').length - 1;
     expect(pinnedScannerVersions).toBe(trivySteps);
     const finalImageScan = workflow.slice(
       workflow.indexOf('- name: Scan final image'),

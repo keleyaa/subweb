@@ -85,7 +85,7 @@ describe('unified Docker Gateway stack entrypoint', () => {
     expect(compose).toContain('CONVERSION_DNS_TIMEOUT_MS: "100"');
     expect(compose).toContain('CONVERSION_EGRESS_CONNECT_TIMEOUT_MS: "200"');
     expect(compose).toContain('CONVERSION_MAX_RESPONSE_BYTES: "1024"');
-    expect(dockerfile).toContain('golang:1.27-alpine@sha256:cf6fca6641884b8433441b2b0652976f975e1d0fdd26d177eaaf8596087f3125');
+    expect(dockerfile).toContain('golang:1.27-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d');
     expect(source).toContain('fixture://echo');
     expect(source).toContain('fixture://slow');
     expect(source).toContain('fixture://large');

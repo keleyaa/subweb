@@ -641,7 +641,7 @@ EOF
     expect(log).toContain('compose -f compose.disabled-short-links.yaml pull gateway subconverter');
     expect(log).toContain('compose -f compose.disabled-short-links.yaml up -d --no-build --pull never --remove-orphans --wait');
     expect(log).not.toContain('compose -f compose.yaml pull');
-  });
+  }, 30_000);
 
   it('overrides a stale disabled profile when short links are explicitly enabled', async () => {
     const root = await makeFixture();

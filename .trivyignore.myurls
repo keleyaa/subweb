@@ -1,9 +1,19 @@
-# No active exceptions. Re-verified 2026-09-12 with trivy 0.74.0 against
-# ghcr.io/keleyaa/myurls:v2.0.8: the image now reports no CRITICAL or HIGH
-# findings, so the previous libssh2 exceptions (CVE-2026-58050, CVE-2026-7598)
-# and the libpcre2 findings (CVE-2026-86145, CVE-2026-89161) are all resolved
-# by the upstream rebuild that installs libpcre2-8-0 10.42-1+deb12u1.
+# The previous libssh2/libpcre2 exceptions were resolved by v2.0.8. The findings
+# below are new Debian base-image advisories reported on 2026-10-18 with trivy
+# 0.76.0 against the unchanged v2.0.8 digest.
 #
-# Keep this file in place for the next exception, and re-run
-# `trivy image --ignore-unfixed --severity CRITICAL,HIGH <locked image>`
-# without it whenever the locked MyUrls image changes.
+# MyUrls is a Rust service that compose starts directly. perl-base is a Debian
+# Essential package and no perl code path is invoked by the service; libpcre2 is a
+# base-library dependency and the service does not compile attacker-controlled
+# regular expressions. v2.0.8 is still the newest upstream tag and its digest has
+# not been rebuilt, so no fixed release is available.
+#
+# Recheck this file whenever the locked MyUrls image digest changes.
+CVE-2026-103111
+CVE-2026-13221
+CVE-2026-42496
+CVE-2026-42497
+CVE-2026-48962
+CVE-2026-57432
+CVE-2026-57433
+CVE-2026-8376

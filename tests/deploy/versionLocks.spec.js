@@ -115,7 +115,7 @@ describe('integrated service artifact locks', () => {
   });
 
   it('pins the approved Redis 7.4.11 Alpine security manifest', () => {
-    expect(lock.verifiedAt).toBe('2026-09-18T18:59:27Z');
+    expect(lock.verifiedAt).toBe('2026-10-17T16:23:31Z');
     expect(lock.services.redis.source).toEqual({
       url: 'https://github.com/redis/redis',
       repository: 'redis/redis',

@@ -108,17 +108,17 @@ describe('GitHub Actions workflow contract', () => {
   });
 
   it('rejects a local actionlint version that differs from the pinned verifier', async () => {
-    const root = await makeLocalActionlintFixture('1.7.12');
+    const root = await makeLocalActionlintFixture('1.7.11');
 
     const result = runVerifierWithoutDocker(root);
 
     expect(result.status, result.stderr).toBe(2);
-    expect(result.stderr).toContain('actionlint 1.7.7');
+    expect(result.stderr).toContain('actionlint 1.7.12');
     expect(result.stdout).toBe('');
   });
 
   it('accepts the pinned local actionlint fallback when Docker is unavailable', async () => {
-    const root = await makeLocalActionlintFixture('1.7.7');
+    const root = await makeLocalActionlintFixture('1.7.12');
 
     const result = runVerifierWithoutDocker(root);
 
@@ -127,7 +127,7 @@ describe('GitHub Actions workflow contract', () => {
   });
 
   it('falls back to pinned local actionlint when the Docker daemon is unavailable', async () => {
-    const root = await makeLocalActionlintFixture('1.7.7', { dockerInfoFails: true });
+    const root = await makeLocalActionlintFixture('1.7.12', { dockerInfoFails: true });
 
     const result = runVerifierWithoutDocker(root);
 
@@ -151,7 +151,7 @@ describe('GitHub Actions workflow contract', () => {
     const actionlintCheck = verifier.indexOf('elif command -v actionlint');
 
     expect(verifier).toContain('actionlint');
-    expect(verifier).toMatch(/rhysd\/actionlint:1\.7\.7@sha256:[0-9a-f]{64}/u);
+    expect(verifier).toMatch(/rhysd\/actionlint:1\.7\.12@sha256:[0-9a-f]{64}/u);
     expect(dockerCheck).toBeGreaterThan(-1);
     expect(actionlintCheck).toBeGreaterThan(-1);
     expect(dockerCheck).toBeLessThan(actionlintCheck);
