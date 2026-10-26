@@ -27,30 +27,24 @@ const renderedProfile = (shortLinksEnabled) => {
   const gateway = secureService({
     build: { dockerfile: 'Dockerfile' },
     ports: [{ host_ip: '127.0.0.1', target: 8080, published: 8080 }],
-    networks: shortLinksEnabled
-      ? { default: {}, 'myurls-edge': {}, 'redis-policy': {}, 'subconverter-egress': {} }
-      : { default: {}, 'subconverter-egress': {} },
+    networks: { default: {}, 'subconverter-egress': {} },
+    volumes: shortLinksEnabled ? ['links-data:/data'] : undefined,
     environment: shortLinksEnabled
       ? {
         EGRESS_LISTEN_ADDR: '0.0.0.0:25502', EGRESS_RESTRICTED_LISTEN_ADDR: '0.0.0.0:25503',
         SHORT_LINKS_ENABLED: 'true', APP_DOMAIN: 'app.example.test', SHORT_DOMAIN: 'short.example.test',
-        MYURLS_UPSTREAM: 'http://myurls-edge:3000', REDIS_URL: 'redis://redis:6379/1',
+        SHORT_LINK_DB_PATH: '/data/links.db', TURNSTILE_ENABLED: 'true',
+        TURNSTILE_SITE_KEY: 'site-key', TURNSTILE_SECRET_KEY: 'secret-key',
       }
       : { EGRESS_LISTEN_ADDR: '0.0.0.0:25502', SHORT_LINKS_ENABLED: 'false' },
   });
-  const services = shortLinksEnabled
-    ? {
-      gateway,
-      myurls: secureService({ image: images.MYURLS_IMAGE, networks: { 'myurls-data': {}, 'myurls-edge': {} }, environment: { HTTPS_PROXY: 'http://gateway:25503', PUBLIC_BASE_URL: 'https://short.example.test', REDIS_URL: 'redis://redis:6379/0', TURNSTILE_HOSTNAME: 'app.example.test' } }),
-      redis: secureService({ image: images.REDIS_IMAGE, networks: { 'myurls-data': {}, 'redis-policy': {} } }),
-      subconverter: secureService({ user: '0:0', cap_add: ['CHOWN', 'SETGID', 'SETUID'], image: images.SUBCONVERTER_IMAGE, networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' } }),
-    }
-    : { gateway, subconverter: secureService({ user: '0:0', cap_add: ['CHOWN', 'SETGID', 'SETUID'], image: images.SUBCONVERTER_IMAGE, networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' } }) };
+  const subconverter = secureService({
+    user: '0:0', cap_add: ['CHOWN', 'SETGID', 'SETUID'], image: images.SUBCONVERTER_IMAGE,
+    networks: { 'subconverter-egress': {} }, environment: { HTTPS_PROXY: 'http://gateway:25502' },
+  });
   return {
-    services,
-    networks: shortLinksEnabled
-      ? { 'myurls-data': { internal: true }, 'myurls-edge': { internal: true }, 'redis-policy': { internal: true }, 'subconverter-egress': { internal: true } }
-      : { 'subconverter-egress': { internal: true } },
+    services: { gateway, subconverter },
+    networks: { 'subconverter-egress': { internal: true } },
   };
 };
 const withEnvironmentValue = (rendered, serviceName, name, value) => ({
@@ -88,8 +82,6 @@ describe('release evidence and command gate', () => {
       'stage documentation npm run verify:docs',
       'stage gateway-image docker build --file Dockerfile --tag subweb:release-check .',
       'stage image-security ./scripts/verify-image-security.sh',
-      'stage image-security-myurls ./scripts/verify-image-security.sh',
-      'stage image-security-redis ./scripts/verify-image-security.sh',
       'stage image-security-subconverter ./scripts/verify-image-security.sh',
       'stage evidence node scripts/verify-evidence.mjs',
     ];
@@ -114,7 +106,6 @@ describe('release evidence and command gate', () => {
       'TURNSTILE_SITE_KEY=release-validation-site-key',
       'TURNSTILE_SECRET_KEY=release-validation-secret-key',
       'IP_HASH_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-      'REDIS_PASSWORD=release-validation-redis-password',
     ]) {
       expect(source).toContain(assignment);
     }
@@ -183,7 +174,7 @@ describe('release evidence and command gate', () => {
 
     verifyRenderedCompose(
       { services: { gateway: { read_only: false } } },
-      { composeFile: 'compose.yaml', services: ['gateway', 'myurls', 'redis', 'subconverter'] },
+      { composeFile: 'compose.yaml', services: ['gateway', 'subconverter'] },
       lock,
       errors,
     );
@@ -192,20 +183,20 @@ describe('release evidence and command gate', () => {
   });
 
   it.each([
-    ['gateway SHORT_DOMAIN', (rendered) => withEnvironmentValue(rendered, 'gateway', 'SHORT_DOMAIN', 'wrong.example.test'), 'MyUrls public base URL must match gateway SHORT_DOMAIN'],
-    ['Gateway Redis database', (rendered) => withEnvironmentValue(rendered, 'gateway', 'REDIS_URL', 'redis://redis:6379/0'), 'gateway Redis URL must use database 1'],
-    ['MyUrls public base URL', (rendered) => withEnvironmentValue(rendered, 'myurls', 'PUBLIC_BASE_URL', 'https://wrong.example.test'), 'MyUrls public base URL must match gateway SHORT_DOMAIN'],
-    ['MyUrls Redis database', (rendered) => withEnvironmentValue(rendered, 'myurls', 'REDIS_URL', 'redis://redis:6379/1'), 'MyUrls Redis URL must use database 0'],
-    ['Turnstile hostname', (rendered) => withEnvironmentValue(rendered, 'myurls', 'TURNSTILE_HOSTNAME', 'short.example.test'), 'MyUrls Turnstile hostname must match gateway APP_DOMAIN'],
+    ['gateway SHORT_DOMAIN', (rendered) => withEnvironmentValue(rendered, 'gateway', 'SHORT_DOMAIN', 'app.example.test'), 'gateway SHORT_DOMAIN is invalid'],
+    ['short-link database path', (rendered) => withEnvironmentValue(rendered, 'gateway', 'SHORT_LINK_DB_PATH', '/tmp/links.db'), 'gateway short-link database path is invalid'],
+    ['Turnstile toggle', (rendered) => withEnvironmentValue(rendered, 'gateway', 'TURNSTILE_ENABLED', 'false'), 'gateway Turnstile must be enabled'],
+    ['MyUrls upstream', (rendered) => withEnvironmentValue(rendered, 'gateway', 'MYURLS_UPSTREAM', 'http://myurls-edge:3000'), 'the embedded profile must not configure MyUrls or Redis'],
+    ['Redis URL', (rendered) => withEnvironmentValue(rendered, 'gateway', 'REDIS_URL', 'redis://redis:6379/1'), 'the embedded profile must not configure MyUrls or Redis'],
   ])('rejects rendered %s contract drift', (_label, drift, expectedError) => {
-    const fullProfile = { composeFile: 'compose.yaml', services: ['gateway', 'myurls', 'redis', 'subconverter'], shortLinksEnabled: true };
+    const fullProfile = { composeFile: 'compose.yaml', services: ['gateway', 'subconverter'], shortLinksEnabled: true };
     expect(renderedErrors(renderedProfile(true), fullProfile)).toEqual([]);
     expect(renderedErrors(drift(renderedProfile(true)), fullProfile)).toContain(expectedError);
   });
 
   it.each([
-    'EGRESS_RESTRICTED_LISTEN_ADDR', 'IP_HASH_SECRET', 'MYURLS_UPSTREAM',
-    'REDIS_PASSWORD', 'REDIS_URL', 'SHORT_DOMAIN', 'TURNSTILE_SECRET_KEY',
+    'EGRESS_RESTRICTED_LISTEN_ADDR', 'IP_HASH_SECRET', 'SHORT_DOMAIN',
+    'SHORT_LINK_DB_PATH', 'TURNSTILE_ENABLED', 'TURNSTILE_SECRET_KEY',
     'TURNSTILE_SITE_KEY',
   ])('rejects %s in the disabled rendered profile', (name) => {
     const profile = { composeFile: 'compose.disabled-short-links.yaml', services: ['gateway', 'subconverter'], shortLinksEnabled: false };
@@ -270,7 +261,7 @@ describe('release evidence and command gate', () => {
     const releaseVerifier = fs.readFileSync(path.join(root, 'scripts/verify-release.sh'), 'utf8');
 
     expect(packageJson.scripts['verify:ci']).toBe(
-      'RUN_DOCKER_INTEGRATION=1 RUN_REDIS_INTEGRATION=1 npm run verify',
+      'RUN_DOCKER_INTEGRATION=1 npm run verify',
     );
     expect(workflow).toContain('run: npm run verify:ci');
     expect(workflow).toContain('outputs:\n      source_sha: ${{ steps.source.outputs.source_sha }}');
@@ -304,9 +295,9 @@ describe('release evidence and command gate', () => {
     const environmentTemplate = fs.readFileSync(path.join(root, '.env.example'), 'utf8');
 
     expect(environmentTemplate).toContain(
-      'configure.sh generates REDIS_IMAGE, SUBCONVERTER_IMAGE, and MYURLS_IMAGE',
+      'configure.sh generates SUBCONVERTER_IMAGE from deploy/versions.lock.json',
     );
-    for (const variable of ['REDIS_IMAGE', 'SUBCONVERTER_IMAGE', 'MYURLS_IMAGE']) {
+    for (const variable of ['SUBCONVERTER_IMAGE']) {
       expect(environmentTemplate).not.toMatch(new RegExp(`^#?\\s*${variable}=`, 'mu'));
     }
     expect(environmentTemplate).not.toContain('myurls:v1.13.0');
@@ -322,33 +313,22 @@ describe('release evidence and command gate', () => {
 
   it('keeps an integration entrypoint that delegates to unified stack verification', () => {
     const source = fs.readFileSync(path.join(root, 'scripts/verify-integrated-stack.sh'), 'utf8');
-    const operations = fs.readFileSync(path.join(root, 'scripts/verify-redis-operations.sh'), 'utf8');
 
     expect(source).toContain('exec "$script_directory/verify-unified-stack.sh"');
-    expect(operations).toContain('Unified Redis backup, restore, and service recovery verification passed.');
     expect(source).not.toContain('compose.hardened.yaml');
     expect(source).not.toContain('request-policy');
   });
 
   it('derives every unified verifier image from the repository version lock', () => {
-    const verifiers = [
-      'scripts/verify-unified-stack.sh',
-      'scripts/verify-redis-operations.sh',
-    ].map((file) => fs.readFileSync(path.join(root, file), 'utf8'));
+    const verifier = fs.readFileSync(
+      path.join(root, 'scripts/verify-unified-stack.sh'),
+      'utf8',
+    );
 
-    const lockExport = 'export VERSION_LOCK_FILE="$version_lock_file"';
-
-    for (const verifier of verifiers) {
-      expect(verifier).toContain('version_lock_file=$project_root/deploy/versions.lock.json');
-      expect(verifier).toContain('verify-version-locks.mjs" "$version_lock_file"');
-      expect(verifier).toContain('runtime-image-contract.mjs" env --lock "$version_lock_file"');
-      if (verifier.includes('backup-redis.sh')) {
-        expect(verifier).toContain(lockExport);
-        expect(verifier.indexOf(lockExport)).toBeLessThan(verifier.indexOf('backup-redis.sh'));
-      } else {
-        expect(verifier).not.toContain('VERSION_LOCK_FILE');
-      }
-    }
+    expect(verifier).toContain('version_lock_file=$project_root/deploy/versions.lock.json');
+    expect(verifier).toContain('verify-version-locks.mjs" "$version_lock_file"');
+    expect(verifier).toContain('runtime-image-contract.mjs" env --lock "$version_lock_file"');
+    expect(verifier).not.toContain('VERSION_LOCK_FILE');
   });
 
   it('requires the documented Trivy release before scanning images', () => {
@@ -431,7 +411,7 @@ exit 0
     expect(source).toContain('scripts/runtime-image-contract.mjs rollback');
     expect(source).toContain('--argjson runtime_images "$runtime_images_json"');
     expect(source).toContain('runtime_images: $runtime_images');
-     expect(source).toContain('(keys | sort) == ["myurls", "redis", "subconverter"]');
+     expect(source).toContain('(keys | sort) == ["subconverter"]');
      expect(source).toContain('test("@sha256:[0-9a-f]{64}$")');
      expect(source).toContain('has("linux/amd64")');
   });

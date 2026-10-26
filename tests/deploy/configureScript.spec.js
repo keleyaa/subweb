@@ -48,8 +48,7 @@ describe('single HTTP deployment configuration', () => {
     const gitignore = await readFile(gitignorePath, 'utf8');
     expect(envExample).toContain('IP_HASH_SECRET=REPLACE_WITH_64_CHARACTER_HEX');
     expect(envExample).toContain('TURNSTILE_SITE_KEY=REPLACE_WITH_TURNSTILE_SITE_KEY');
-    expect(envExample).toContain('REDIS_PASSWORD=REPLACE_WITH_64_CHARACTER_HEX');
-    for (const ignoredPath of ['.runtime/', 'runtime-config/', '*.pem', '*.key', 'redis-data/']) expect(gitignore.split('\n')).toContain(ignoredPath);
+    for (const ignoredPath of ['.runtime/', 'runtime-config/', '*.pem', '*.key']) expect(gitignore.split('\n')).toContain(ignoredPath);
   });
 
   it('prints its supported options without writing an environment file', async () => {
@@ -152,7 +151,7 @@ exit 23
       APP_DOMAIN: 'example.com', API_DOMAIN: 'api.example.com', API_URL: 'https://api.example.com',
       SHORT_LINKS_ENABLED: 'false', CUSTOM_BACKEND_ENABLED: 'false',
     });
-    for (const omitted of ['SHORT_DOMAIN', 'TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET_KEY', 'IP_HASH_SECRET', 'REDIS_PASSWORD']) {
+    for (const omitted of ['SHORT_DOMAIN', 'TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET_KEY', 'IP_HASH_SECRET']) {
       expect(env[omitted]).toBeUndefined();
     }
     expect(await readdir(cwd)).not.toContain('.env.lock');
@@ -179,15 +178,12 @@ exit 23
       APP_DOMAIN: 'example.com', API_DOMAIN: 'api.example.com', SHORT_DOMAIN: 'short.example.com',
       API_URL: 'https://api.example.com',
       TURNSTILE_SITE_KEY: 'test-site-key', TURNSTILE_SECRET_KEY: 'test-secret-key',
-      REDIS_IMAGE: 'docker.io/library/redis:7.4.11-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7',
-      MYURLS_IMAGE: 'ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36',
       SUBCONVERTER_IMAGE: 'ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423',
     });
     expect(env.TURNSTILE_HOSTNAME).toBeUndefined();
     for (const removed of ['COMPOSE_PROFILES', 'DOMAIN_MODE', 'PUBLIC_SCHEME', 'GATEWAY_MODE', 'TLS_CERT_PATH', 'TLS_KEY_PATH']) expect(env[removed]).toBeUndefined();
     expect(env.TRUSTED_PROXY_CIDR).toBeUndefined();
     expect(env.IP_HASH_SECRET).toMatch(/^[0-9a-f]{64}$/);
-    expect(env.REDIS_PASSWORD).toMatch(/^[0-9a-f]{64}$/);
     expect((await stat(envPath)).mode & 0o777).toBe(0o600);
     expect(`${result.stdout}${result.stderr}`).not.toContain(env.IP_HASH_SECRET);
     expect(`${result.stdout}${result.stderr}`).not.toContain(env.TURNSTILE_SECRET_KEY);
@@ -211,7 +207,6 @@ exit 23
     const preserved = parseEnv(await readFile(join(cwd, '.env'), 'utf8'));
     expect(preserved.SUBWEB_IMAGE).toBe(image);
     expect(preserved.IP_HASH_SECRET).toBe(original.IP_HASH_SECRET);
-    expect(preserved.REDIS_PASSWORD).toBe(original.REDIS_PASSWORD);
     expect(preserved.TRUSTED_PROXY_CIDR).toBe('172.18.0.1/32');
   });
 
@@ -222,7 +217,7 @@ exit 23
       'LOG_LEVEL=warn',
       'CONVERSION_MAX_CONCURRENCY_PER_IP=3',
       'EGRESS_ALLOWED_HOSTS=challenges.cloudflare.com,cdn.example.com',
-      'MYURLS_LOG_LEVEL=info',
+      'SHORT_LINK_TTL_SECONDS=3600',
       'LOG_LEVEL=warn',
       '',
     ].join('\n'), { mode: 0o600 });
@@ -235,7 +230,7 @@ exit 23
     expect(environment.LOG_LEVEL).toBe('warn');
     expect(environment.CONVERSION_MAX_CONCURRENCY_PER_IP).toBe('3');
     expect(environment.EGRESS_ALLOWED_HOSTS).toBe('challenges.cloudflare.com,cdn.example.com');
-    expect(environment.MYURLS_LOG_LEVEL).toBe('info');
+    expect(environment.SHORT_LINK_TTL_SECONDS).toBe('3600');
     expect(contents.match(/^LOG_LEVEL=/gmu)).toHaveLength(1);
     // Managed keys stay authoritative: the validated inputs replace the old ones.
     expect(environment.APP_DOMAIN).toBe('example.com');
@@ -245,20 +240,16 @@ exit 23
   it('replaces external runtime image overrides with the version-lock contract', async () => {
     const cwd = await makeDirectory();
     await writeFile(join(cwd, '.env'), [
-      'MYURLS_IMAGE=ghcr.io/keleyaa/myurls@sha256:' + 'a'.repeat(64),
-      'REDIS_IMAGE=docker.io/library/redis:7.4.11-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf',
       'SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4',
       'SUBWEB_IMAGE=docker.io/keleyaa/subweb:sha-2bf1a9f',
-      `IP_HASH_SECRET=${'a'.repeat(64)}`, `REDIS_PASSWORD=${'b'.repeat(64)}`,
+      `IP_HASH_SECRET=${'a'.repeat(64)}`,
       'TURNSTILE_SITE_KEY=test-site-key', 'TURNSTILE_SECRET_KEY=test-secret-key', '',
     ].join('\n'), { mode: 0o600 });
     expect(runConfigure(cwd, baseArgs).status).toBe(0);
     const contents = await readFile(join(cwd, '.env'), 'utf8');
-    expect(contents).toContain('MYURLS_IMAGE=ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36');
-    expect(contents).toContain('REDIS_IMAGE=docker.io/library/redis:7.4.11-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7');
     expect(contents).toContain('SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423');
-    expect(contents.match(/^MYURLS_IMAGE=/gmu)).toHaveLength(1);
-    expect(contents.match(/^REDIS_IMAGE=/gmu)).toHaveLength(1);
+    expect(contents).not.toContain('MYURLS_IMAGE=');
+    expect(contents).not.toContain('REDIS_IMAGE=');
     expect(contents.match(/^SUBCONVERTER_IMAGE=/gmu)).toHaveLength(1);
     expect(contents).toContain('SUBWEB_IMAGE=docker.io/keleyaa/subweb:sha-2bf1a9f');
   });
@@ -266,7 +257,7 @@ exit 23
   it('does not source an existing environment file or accept malformed secrets', async () => {
     const cwd = await makeDirectory();
     const marker = join(cwd, 'sourced-marker');
-    const original = `IP_HASH_SECRET=$(touch ${marker})\nREDIS_PASSWORD=${'a'.repeat(64)}\n`;
+    const original = `IP_HASH_SECRET=$(touch ${marker})\nTURNSTILE_SECRET_KEY=${'a'.repeat(64)}\n`;
     await writeFile(join(cwd, '.env'), original, { mode: 0o600 });
     expect(runConfigure(cwd, baseArgs).status).not.toBe(0);
     await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' });
@@ -280,6 +271,5 @@ exit 23
     expect(runConfigure(cwd, [...baseArgs, '--rotate-secrets']).status).toBe(0);
     const rotated = parseEnv(await readFile(join(cwd, '.env'), 'utf8'));
     expect(rotated.IP_HASH_SECRET).not.toBe(original.IP_HASH_SECRET);
-    expect(rotated.REDIS_PASSWORD).not.toBe(original.REDIS_PASSWORD);
   });
 });

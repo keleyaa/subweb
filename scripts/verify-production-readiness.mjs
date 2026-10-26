@@ -12,7 +12,7 @@ const defaultLockPath = process.env.VERSION_LOCK_FILE || fileURLToPath(
 );
 const fullProfile = {
   composeFile: 'compose.yaml',
-  services: ['gateway', 'myurls', 'redis', 'subconverter'],
+  services: ['gateway', 'subconverter'],
   shortLinksEnabled: true,
 };
 const disabledProfile = {
@@ -53,7 +53,6 @@ const readinessEnvironment = (profile, lock) => ({
   API_URL: 'https://api.readiness.test',
   CUSTOM_BACKEND_ENABLED: 'true',
   IP_HASH_SECRET: 'readiness-hash-placeholder',
-  REDIS_PASSWORD: 'readiness-redis-password',
   SHORT_DOMAIN: 'short.readiness.test',
   SHORT_LINKS_ENABLED: String(profile.shortLinksEnabled),
   SUBWEB_IMAGE: readinessGatewayImage,
@@ -189,17 +188,7 @@ const allowedServiceFields = {
   gateway: new Set([
     'build', 'cap_drop', 'command', 'depends_on', 'entrypoint', 'environment',
     'healthcheck', 'image', 'logging', 'networks', 'ports', 'read_only',
-    'restart', 'security_opt', 'stop_grace_period', 'user',
-  ]),
-  myurls: new Set([
-    'cap_drop', 'command', 'depends_on', 'entrypoint', 'environment',
-    'healthcheck', 'image', 'logging', 'networks', 'read_only', 'restart',
-    'security_opt', 'stop_grace_period', 'tmpfs', 'user',
-  ]),
-  redis: new Set([
-    'cap_drop', 'command', 'entrypoint', 'environment', 'healthcheck', 'image',
-    'logging', 'networks', 'read_only', 'restart', 'security_opt',
-    'stop_grace_period', 'tmpfs', 'user', 'volumes',
+    'restart', 'security_opt', 'stop_grace_period', 'user', 'volumes',
   ]),
   subconverter: new Set([
     'cap_add', 'cap_drop', 'command', 'depends_on', 'entrypoint', 'environment',
@@ -217,21 +206,12 @@ const allowedEnvironmentNames = {
     'CONVERSION_RATE_WINDOW_SECONDS', 'CONVERSION_REQUEST_TIMEOUT_MS',
     'CUSTOM_BACKEND_ENABLED', 'EGRESS_ALLOWED_HOSTS', 'EGRESS_LISTEN_ADDR',
     'EGRESS_RESTRICTED_LISTEN_ADDR', 'IP_HASH_SECRET', 'LISTEN_ADDR',
-    'LOG_LEVEL', 'MYURLS_UPSTREAM', 'REDIS_PASSWORD', 'REDIS_URL',
-    'SHORT_DOMAIN', 'SHORT_LINKS_ENABLED', 'SUBCONVERTER_UPSTREAM',
-    'TRUSTED_PROXY_CIDR', 'TURNSTILE_SITE_KEY', 'TZ',
+    'LOG_LEVEL', 'SHORT_DOMAIN', 'SHORT_LINKS_ENABLED', 'SHORT_LINK_DB_PATH',
+    'SHORT_LINK_TTL_SECONDS', 'SHORT_LINK_CREATE_LIMIT_10M',
+    'SHORT_LINK_DAILY_LIMIT', 'SHORT_LINK_RESOLVE_LIMIT_10S',
+    'SUBCONVERTER_UPSTREAM', 'TRUSTED_PROXY_CIDR', 'TURNSTILE_ENABLED',
+    'TURNSTILE_SECRET_KEY', 'TURNSTILE_SITE_KEY', 'TURNSTILE_TIMEOUT_MS', 'TZ',
   ]),
-  myurls: new Set([
-    'APP_PORT', 'CREATE_DIRECT_LIMIT_10M', 'CREATE_HARD_LIMIT_10M',
-    'CREATE_HARD_LIMIT_1D', 'HTTPS_PROXY', 'IP_HASH_SECRET', 'LOG_LEVEL',
-    'NODE_ENV', 'NO_PROXY', 'PUBLIC_BASE_URL', 'REDIS_PASSWORD', 'REDIS_URL',
-    'REDIS_TIMEOUT_MS', 'REQUEST_TIMEOUT_MS', 'RESOLVE_LIMIT_10S', 'RISK_BLOCK_SCORE',
-    'RISK_CHALLENGE_SCORE', 'SHUTDOWN_TIMEOUT_MS', 'TURNSTILE_ENABLED',
-    'TURNSTILE_HOSTNAME', 'TURNSTILE_MODE', 'TURNSTILE_SECRET_KEY',
-    'TURNSTILE_TIMEOUT_MS',
-    'TURNSTILE_SITE_KEY', 'TRUST_PROXY_CIDRS', 'TZ', 'https_proxy', 'no_proxy',
-  ]),
-  redis: new Set(['REDIS_PASSWORD', 'TZ']),
   subconverter: new Set([
     'HTTPS_PROXY', 'MANAGED_CONFIG_PREFIX', 'NO_PROXY',
     'SUBCONVERTER_ALLOW_PUBLIC_UPLOAD', 'SUBCONVERTER_SECURITY_PROFILE', 'TZ',
@@ -245,17 +225,10 @@ const dependsOn = (service, dependency) => {
   return isRecord(dependencies) ? dependencies[dependency] : undefined;
 };
 
-const expectedNetworks = (profile) => (profile.shortLinksEnabled
-  ? {
-    gateway: ['default', 'myurls-edge', 'redis-policy', 'subconverter-egress'],
-    myurls: ['myurls-data', 'myurls-edge'],
-    redis: ['myurls-data', 'redis-policy'],
-    subconverter: ['subconverter-egress'],
-  }
-  : {
-    gateway: ['default', 'subconverter-egress'],
-    subconverter: ['subconverter-egress'],
-  });
+const expectedNetworks = () => ({
+  gateway: ['default', 'subconverter-egress'],
+  subconverter: ['subconverter-egress'],
+});
 
 export const verifyRenderedCompose = (rendered, profile, lock, errors, environment) => {
   const services = isRecord(rendered?.services) ? rendered.services : {};
@@ -309,7 +282,7 @@ export const verifyRenderedCompose = (rendered, profile, lock, errors, environme
   }
 
   const authorizedSubconverterCapabilities = ['CHOWN', 'SETGID', 'SETUID'];
-  for (const [serviceName, networks] of Object.entries(expectedNetworks(profile))) {
+  for (const [serviceName, networks] of Object.entries(expectedNetworks())) {
     const service = services[serviceName];
     const unexpectedFields = Object.keys(service ?? {}).filter(
       (field) => !allowedServiceFields[serviceName]?.has(field),
@@ -365,9 +338,7 @@ export const verifyRenderedCompose = (rendered, profile, lock, errors, environme
 
   const images = resolveRuntimeImages(lock);
   const expectedImages = { subconverter: images.SUBCONVERTER_IMAGE };
-  const internalNetworks = profile.shortLinksEnabled
-    ? ['myurls-data', 'myurls-edge', 'redis-policy', 'subconverter-egress']
-    : ['subconverter-egress'];
+  const internalNetworks = ['subconverter-egress'];
   for (const network of internalNetworks) {
     check(rendered?.networks?.[network]?.internal === true, `${network} must be an internal network`, errors);
   }
@@ -381,68 +352,50 @@ export const verifyRenderedCompose = (rendered, profile, lock, errors, environme
       errors,
     );
     check(
-      environmentValue(gateway, 'REDIS_URL') === 'redis://redis:6379/1',
-      'gateway Redis URL must use database 1',
+      environmentValue(gateway, 'SHORT_LINK_DB_PATH') === '/data/links.db',
+      'gateway short-link database path is invalid',
       errors,
     );
     check(
-      environmentValue(services.myurls, 'PUBLIC_BASE_URL') === `https://${shortDomain}`,
-      'MyUrls public base URL must match gateway SHORT_DOMAIN',
-      errors,
-    );
-    check(
-      environmentValue(services.myurls, 'REDIS_URL') === 'redis://redis:6379/0',
-      'MyUrls Redis URL must use database 0',
-      errors,
-    );
-    check(
-      environmentValue(services.myurls, 'TURNSTILE_HOSTNAME') === appDomain,
-      'MyUrls Turnstile hostname must match gateway APP_DOMAIN',
+      environmentValue(gateway, 'TURNSTILE_ENABLED') === 'true',
+      'gateway Turnstile must be enabled',
       errors,
     );
     if (isRecord(environment)) {
       check(
-        environmentValue(services.myurls, 'TURNSTILE_ENABLED') === 'true',
-        'MyUrls Turnstile must be enabled',
+        environmentValue(gateway, 'TURNSTILE_SITE_KEY') === environment.TURNSTILE_SITE_KEY,
+        'gateway Turnstile site key must match the generated environment',
         errors,
       );
       check(
-        environmentValue(services.myurls, 'TURNSTILE_MODE') === 'cloudflare',
-        'MyUrls Turnstile mode must be cloudflare',
-        errors,
-      );
-      check(
-        environmentValue(services.myurls, 'TURNSTILE_SITE_KEY') === environment.TURNSTILE_SITE_KEY,
-        'MyUrls Turnstile site key must match the generated environment',
-        errors,
-      );
-      check(
-        environmentValue(services.myurls, 'TURNSTILE_SECRET_KEY') === environment.TURNSTILE_SECRET_KEY,
-        'MyUrls Turnstile secret key must match the generated environment',
+        environmentValue(gateway, 'TURNSTILE_SECRET_KEY') === environment.TURNSTILE_SECRET_KEY,
+        'gateway Turnstile secret key must match the generated environment',
         errors,
       );
     }
-    expectedImages.myurls = images.MYURLS_IMAGE;
-    expectedImages.redis = images.REDIS_IMAGE;
     check(
       environmentValue(gateway, 'EGRESS_RESTRICTED_LISTEN_ADDR') === '0.0.0.0:25503',
       'gateway restricted egress listener is invalid',
       errors,
     );
     check(
-      environmentValue(gateway, 'MYURLS_UPSTREAM') === 'http://myurls-edge:3000',
-      'gateway MyUrls upstream is invalid',
+      environmentValue(gateway, 'MYURLS_UPSTREAM') === undefined
+        && environmentValue(gateway, 'REDIS_URL') === undefined,
+      'the embedded profile must not configure MyUrls or Redis',
       errors,
     );
+    const gatewayVolumes = Array.isArray(gateway?.volumes) ? gateway.volumes : [];
     check(
-      environmentValue(services.myurls, 'HTTPS_PROXY') === 'http://gateway:25503',
-      'MyUrls egress proxy is invalid',
+      gatewayVolumes.some((volume) => (isRecord(volume)
+        ? volume.source === 'links-data'
+        : String(volume).startsWith('links-data:'))),
+      'gateway must mount the links-data volume',
       errors,
     );
   } else {
     for (const name of [
-      'EGRESS_RESTRICTED_LISTEN_ADDR', 'IP_HASH_SECRET', 'MYURLS_UPSTREAM',
-      'REDIS_PASSWORD', 'REDIS_URL', 'SHORT_DOMAIN', 'TURNSTILE_SECRET_KEY',
+      'EGRESS_RESTRICTED_LISTEN_ADDR', 'IP_HASH_SECRET', 'SHORT_DOMAIN',
+      'SHORT_LINK_DB_PATH', 'TURNSTILE_ENABLED', 'TURNSTILE_SECRET_KEY',
       'TURNSTILE_SITE_KEY',
     ]) {
       check(

@@ -10,6 +10,8 @@ const runGoMyURLsTests = () => new Promise((resolve, reject) => {
     'test',
     '-race',
     './internal/myurls',
+    './internal/linkstore',
+    './internal/turnstile',
     '-count=1',
   ], {
     cwd: gatewayRoot,
@@ -44,8 +46,8 @@ const runGoMyURLsTests = () => new Promise((resolve, reject) => {
   });
 });
 
-describe('Go Gateway MyUrls adapter integration', () => {
-  it('runs the Rust v2 adapter contract with the race detector', async () => {
+describe('Go Gateway short-link integration', () => {
+  it('runs the embedded short-link contract with the race detector', async () => {
     const result = await runGoMyURLsTests();
     expect(result.timedOut, result.stderr).toBe(false);
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);

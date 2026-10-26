@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 const testIPHashSecret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -103,7 +104,6 @@ func TestLoadRequiresShortLinkSecretsWhenEnabled(t *testing.T) {
 		"Redis password":     "REDIS_PASSWORD",
 		"IP hash secret":     "IP_HASH_SECRET",
 		"Turnstile site key": "TURNSTILE_SITE_KEY",
-		"MyUrls upstream":    "MYURLS_UPSTREAM",
 	} {
 		t.Run(name, func(t *testing.T) {
 			env := validEnvironment()
@@ -114,6 +114,55 @@ func TestLoadRequiresShortLinkSecretsWhenEnabled(t *testing.T) {
 				t.Fatalf("Load() error = %v, want %s validation error", err, unset)
 			}
 		})
+	}
+}
+
+func TestLoadSelectsEmbeddedShortLinksWhenUpstreamIsAbsent(t *testing.T) {
+	env := validEnvironment()
+	delete(env, "MYURLS_UPSTREAM")
+	delete(env, "REDIS_URL")
+	delete(env, "REDIS_PASSWORD")
+	env["TURNSTILE_SECRET_KEY"] = "turnstile-secret"
+
+	cfg, err := Load(getenv(env))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.EmbeddedShortLinks {
+		t.Fatal("EmbeddedShortLinks = false, want true")
+	}
+	if cfg.MyURLsUpstream != nil {
+		t.Fatalf("MyURLsUpstream = %v, want nil", cfg.MyURLsUpstream)
+	}
+	if cfg.ShortLinkDBPath != "/data/links.db" {
+		t.Fatalf("ShortLinkDBPath = %q", cfg.ShortLinkDBPath)
+	}
+	if cfg.ShortLinkTTL != 90*24*time.Hour {
+		t.Fatalf("ShortLinkTTL = %v, want 90 days", cfg.ShortLinkTTL)
+	}
+	if cfg.ShortLinkCreateLimit != 20 || cfg.ShortLinkDailyLimit != 100 || cfg.ShortLinkResolveLimit != 600 {
+		t.Fatalf("limit defaults = %d/%d/%d", cfg.ShortLinkCreateLimit, cfg.ShortLinkDailyLimit, cfg.ShortLinkResolveLimit)
+	}
+}
+
+func TestLoadRequiresTurnstileSecretForEmbeddedShortLinks(t *testing.T) {
+	env := validEnvironment()
+	delete(env, "MYURLS_UPSTREAM")
+	delete(env, "TURNSTILE_SECRET_KEY")
+
+	_, err := Load(getenv(env))
+	if err == nil || !strings.Contains(err.Error(), "TURNSTILE_SECRET_KEY") {
+		t.Fatalf("Load() error = %v, want TURNSTILE_SECRET_KEY validation error", err)
+	}
+}
+
+func TestLoadRejectsMalformedUpstreamWhenPresent(t *testing.T) {
+	env := validEnvironment()
+	env["MYURLS_UPSTREAM"] = "not-a-url"
+
+	_, err := Load(getenv(env))
+	if err == nil || !strings.Contains(err.Error(), "MYURLS_UPSTREAM") {
+		t.Fatalf("Load() error = %v, want MYURLS_UPSTREAM validation error", err)
 	}
 }
 

@@ -14,11 +14,10 @@ const composeVariableNames = [
   'CONVERSION_EGRESS_CONNECT_TIMEOUT_MS', 'CONVERSION_MAX_CONCURRENCY', 'CONVERSION_MAX_CONCURRENCY_PER_IP',
   'CONVERSION_MAX_REQUEST_BYTES', 'EGRESS_ALLOWED_HOSTS',
   'CONVERSION_MAX_RESPONSE_BYTES', 'CONVERSION_RATE_LIMIT', 'CONVERSION_RATE_WINDOW_SECONDS',
-  'CONVERSION_REQUEST_TIMEOUT_MS', 'CUSTOM_BACKEND_ENABLED', 'IP_HASH_SECRET', 'LOG_LEVEL', 'MYURLS_IP',
-  'MYURLS_GATEWAY_IP', 'MYURLS_IMAGE', 'MYURLS_LOG_LEVEL', 'MYURLS_NETWORK_SUBNET',
-  'MYURLS_TRUST_PROXY_CIDR', 'REDIS_IMAGE', 'REDIS_PASSWORD', 'SHORT_DOMAIN',
-  'SHORT_LINKS_ENABLED', 'SUBCONVERTER_IMAGE', 'SUBWEB_IMAGE', 'SUBWEB_PORT', 'TRUSTED_PROXY_CIDR',
-  'TURNSTILE_SECRET_KEY', 'TURNSTILE_SITE_KEY',
+  'CONVERSION_REQUEST_TIMEOUT_MS', 'CUSTOM_BACKEND_ENABLED', 'IP_HASH_SECRET', 'LOG_LEVEL', 'SHORT_DOMAIN',
+  'SHORT_LINKS_ENABLED', 'SHORT_LINK_DB_PATH', 'SHORT_LINK_TTL_SECONDS',
+  'SUBCONVERTER_IMAGE', 'SUBWEB_IMAGE', 'SUBWEB_PORT', 'TRUSTED_PROXY_CIDR',
+  'TURNSTILE_ENABLED', 'TURNSTILE_SECRET_KEY', 'TURNSTILE_SITE_KEY',
 ];
 let fixtureDirectory;
 
@@ -33,10 +32,8 @@ const renderCompose = async (extra = []) => {
     'APP_DOMAIN=app.example.com', 'API_DOMAIN=api.example.com', 'API_URL=https://api.example.com',
     'SHORT_DOMAIN=short.example.com', 'SHORT_LINKS_ENABLED=true', 'CUSTOM_BACKEND_ENABLED=true',
     'SUBWEB_IMAGE=subweb:ci', 'SUBWEB_PORT=19080',
-    'REDIS_IMAGE=docker.io/library/redis:7.4.11-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7',
     'SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423',
-    'MYURLS_IMAGE=ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36',
-    `IP_HASH_SECRET=${testSecret}`, `REDIS_PASSWORD=${testSecret}`,
+    `IP_HASH_SECRET=${testSecret}`,
     'TURNSTILE_SITE_KEY=test-site-key', 'TURNSTILE_SECRET_KEY=test-secret-key', ...extra, '',
   ].join('\n'));
   const environment = { ...process.env };
@@ -75,27 +72,22 @@ describe('integrated Compose stack', () => {
     }
   });
 
-  it('renders the sole four-container production topology', async () => {
+  it('renders the two-service production topology', async () => {
     const config = await renderCompose();
-    expect(Object.keys(config.services).sort()).toEqual(['gateway', 'myurls', 'redis', 'subconverter'].sort());
-    for (const name of ['redis', 'myurls', 'subconverter']) {
-      expect(config.services[name].ports).toBeUndefined();
-      expect(config.services[name].expose).toBeUndefined();
-      expectHealthBounds(config.services[name]);
-    }
-    for (const name of ['myurls']) {
-      expect(config.services[name].healthcheck.test).toEqual([
-        'CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:3000/health/live',
-      ]);
-    }
+    expect(Object.keys(config.services).sort()).toEqual(['gateway', 'subconverter']);
+    expect(config.services.subconverter.ports).toBeUndefined();
+    expect(config.services.subconverter.expose).toBeUndefined();
+    expectHealthBounds(config.services.subconverter);
     expectHealthBounds(config.services.gateway);
     expect(config.services.gateway.ports).toEqual([expect.objectContaining({ host_ip: '127.0.0.1', published: '19080', target: 8080 })]);
     expect(config.services.gateway.environment).toMatchObject({
       SHORT_LINKS_ENABLED: 'true', CUSTOM_BACKEND_ENABLED: 'true',
-      MYURLS_UPSTREAM: 'http://myurls-edge:3000',
+      SHORT_LINK_DB_PATH: '/data/links.db',
       SUBCONVERTER_UPSTREAM: 'http://subconverter:25500',
       EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
     });
+    expect(config.services.gateway.environment.MYURLS_UPSTREAM).toBeUndefined();
+    expect(config.services.gateway.environment.REDIS_URL).toBeUndefined();
     expect(config.services.subconverter.environment).toMatchObject({
       MANAGED_CONFIG_PREFIX: 'https://api.example.com', SUBCONVERTER_SECURITY_PROFILE: 'public',
       SUBCONVERTER_ALLOW_PUBLIC_UPLOAD: 'false',
@@ -113,27 +105,21 @@ describe('integrated Compose stack', () => {
 
   it('isolates service networks and does not publish the internal egress listener', async () => {
     const config = await renderCompose();
-    expect(Object.keys(config.services.gateway.networks).sort()).toEqual(['default', 'myurls-edge', 'redis-policy', 'subconverter-egress']);
+    expect(Object.keys(config.services.gateway.networks).sort()).toEqual(['default', 'subconverter-egress']);
     expect(Object.keys(config.services.subconverter.networks)).toEqual(['subconverter-egress']);
-    expect(Object.keys(config.services.redis.networks).sort()).toEqual(['myurls-data', 'redis-policy']);
-    for (const service of ['myurls']) {
-      expect(Object.keys(config.services[service].networks).sort()).toEqual(['myurls-data', 'myurls-edge']);
-    }
-    expect(config.networks['myurls-data'].internal).toBe(true);
-    expect(config.networks['myurls-edge'].internal).toBe(true);
-    expect(config.networks['redis-policy'].internal).toBe(true);
     expect(config.networks['subconverter-egress'].internal).toBe(true);
+    for (const name of ['myurls-data', 'myurls-edge', 'redis-policy']) {
+      expect(config.networks[name]).toBeUndefined();
+    }
     expect(config.services.gateway.ports).toHaveLength(1);
     expect(config.services.gateway.ports[0].target).toBe(8080);
   });
 
-  it('uses the locked external images, durable Redis, and non-root security defaults', async () => {
+  it('uses the locked external image, durable links volume, and non-root security defaults', async () => {
     const config = await renderCompose();
-    expect(config.services.redis.image).toContain('@sha256:');
-    expect(config.services['myurls'].image).toContain('@sha256:');
     expect(config.services.subconverter.image).toContain('@sha256:');
-    expect(config.volumes['redis-data']).toBeTruthy();
-    expect(config.services.redis.volumes).toContainEqual(expect.objectContaining({ source: 'redis-data', target: '/data', type: 'volume' }));
+    expect(config.volumes['links-data']).toBeTruthy();
+    expect(config.services.gateway.volumes).toContainEqual(expect.objectContaining({ source: 'links-data', target: '/data', type: 'volume' }));
     for (const [name, service] of Object.entries(config.services)) {
       expect(service.environment.TZ).toBe('Asia/Shanghai');
       expect(service.cap_drop).toContain('ALL');
@@ -149,29 +135,12 @@ describe('integrated Compose stack', () => {
     expect(entrypoint).toContain('chown 101:101 "$base_path"');
     expect(entrypoint).toContain('exec su -s /bin/sh -c');
     expect(entrypoint).toContain('subweb');
-    expect(config.services['myurls'].environment).toMatchObject({
-      REDIS_URL: 'redis://redis:6379/0', TURNSTILE_HOSTNAME: 'app.example.com',
-      TURNSTILE_SECRET_KEY: 'test-secret-key',
-      LOG_LEVEL: 'warn',
-    });
-    expect(config.services.myurls.environment).toMatchObject({
-      PUBLIC_BASE_URL: 'https://short.example.com',
-      TURNSTILE_HOSTNAME: 'app.example.com',
+    expect(config.services.gateway.environment).toMatchObject({
       TURNSTILE_ENABLED: 'true',
+      TURNSTILE_SITE_KEY: 'test-site-key',
+      TURNSTILE_SECRET_KEY: 'test-secret-key',
     });
-    expect(JSON.stringify(config.services.redis.command)).not.toContain(testSecret);
-  });
-
-  it('uses a quiet Redis log level while retaining warnings and errors', async () => {
-    const config = await renderCompose();
-    const redisTemplate = await readFile(new URL('../../deploy/redis/redis.conf.template', import.meta.url), 'utf8');
-    expect(redisTemplate).toContain('loglevel warning');
-    expect(config.services['myurls'].environment.LOG_LEVEL).toBe('warn');
-  });
-
-  it('allows temporarily raising MyUrls verbosity through the environment', async () => {
-    const config = await renderCompose(['MYURLS_LOG_LEVEL=info']);
-    expect(config.services['myurls'].environment.LOG_LEVEL).toBe('info');
+    expect(config.services.gateway.environment.TURNSTILE_SECRET_KEY).toBe('test-secret-key');
   });
 
   it('has no legacy hardened file, profiles, TLS mounts, or Nginx runtime entrypoint', async () => {

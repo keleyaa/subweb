@@ -16,7 +16,7 @@ const script = path.join(root, 'scripts/verify-production-readiness.mjs');
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'deploy/versions.lock.json'), 'utf8'));
 const fullProfile = {
   composeFile: 'compose.yaml',
-  services: ['gateway', 'myurls', 'redis', 'subconverter'],
+  services: ['gateway', 'subconverter'],
   shortLinksEnabled: true,
 };
 const disabledProfile = {
@@ -26,8 +26,6 @@ const disabledProfile = {
 };
 const generatedEnvironment = {
   SUBWEB_IMAGE: 'subweb:readiness@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-  MYURLS_IMAGE: resolveRuntimeImages(lock).MYURLS_IMAGE,
-  REDIS_IMAGE: resolveRuntimeImages(lock).REDIS_IMAGE,
   SUBCONVERTER_IMAGE: resolveRuntimeImages(lock).SUBCONVERTER_IMAGE,
   TURNSTILE_SECRET_KEY: 'testing-only-placeholder',
   TURNSTILE_SITE_KEY: 'readiness-turnstile-site-key',
@@ -47,9 +45,8 @@ const renderedProfile = (profile) => {
     build: { dockerfile: 'Dockerfile' },
     image: generatedEnvironment.SUBWEB_IMAGE,
     ports: [{ host_ip: '127.0.0.1', published: 18080, target: 8080 }],
-    networks: profile.shortLinksEnabled
-      ? { default: {}, 'myurls-edge': {}, 'redis-policy': {}, 'subconverter-egress': {} }
-      : { default: {}, 'subconverter-egress': {} },
+    networks: { default: {}, 'subconverter-egress': {} },
+    volumes: profile.shortLinksEnabled ? ['links-data:/data'] : undefined,
     environment: profile.shortLinksEnabled
       ? {
         EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
@@ -57,65 +54,25 @@ const renderedProfile = (profile) => {
         SHORT_LINKS_ENABLED: 'true',
         APP_DOMAIN: 'app.example.test',
         SHORT_DOMAIN: 'short.example.test',
-        MYURLS_UPSTREAM: 'http://myurls-edge:3000',
-        REDIS_URL: 'redis://redis:6379/1',
+        SHORT_LINK_DB_PATH: '/data/links.db',
+        TURNSTILE_ENABLED: 'true',
+        TURNSTILE_SITE_KEY: generatedEnvironment.TURNSTILE_SITE_KEY,
+        TURNSTILE_SECRET_KEY: generatedEnvironment.TURNSTILE_SECRET_KEY,
       }
       : { EGRESS_LISTEN_ADDR: '0.0.0.0:25502', SHORT_LINKS_ENABLED: 'false' },
   });
-  const services = profile.shortLinksEnabled
-    ? {
-      gateway,
-      myurls: secureService({
-        user: '10001:10001',
-        image: images.MYURLS_IMAGE,
-        networks: { 'myurls-data': {}, 'myurls-edge': {} },
-        environment: {
-          HTTPS_PROXY: 'http://gateway:25503',
-          PUBLIC_BASE_URL: 'https://short.example.test',
-          REDIS_URL: 'redis://redis:6379/0',
-          TURNSTILE_ENABLED: 'true',
-          TURNSTILE_MODE: 'cloudflare',
-          TURNSTILE_SITE_KEY: generatedEnvironment.TURNSTILE_SITE_KEY,
-          TURNSTILE_SECRET_KEY: generatedEnvironment.TURNSTILE_SECRET_KEY,
-          TURNSTILE_HOSTNAME: 'app.example.test',
-        },
-      }),
-      redis: secureService({
-        user: '999:999',
-        image: images.REDIS_IMAGE,
-        networks: { 'myurls-data': {}, 'redis-policy': {} },
-      }),
-      subconverter: secureService({
-        user: '0:0',
-        cap_add: ['CHOWN', 'SETGID', 'SETUID'],
-        image: images.SUBCONVERTER_IMAGE,
-        networks: { 'subconverter-egress': {} },
-        environment: { HTTPS_PROXY: 'http://gateway:25502' },
-        depends_on: { gateway: { condition: 'service_healthy', restart: true } },
-      }),
-    }
-    : {
-      gateway,
-      subconverter: secureService({
-        user: '0:0',
-        cap_add: ['CHOWN', 'SETGID', 'SETUID'],
-        image: images.SUBCONVERTER_IMAGE,
-        networks: { 'subconverter-egress': {} },
-        environment: { HTTPS_PROXY: 'http://gateway:25502' },
-        depends_on: { gateway: { condition: 'service_healthy', restart: true } },
-      }),
-    };
+  const subconverter = secureService({
+    user: '0:0',
+    cap_add: ['CHOWN', 'SETGID', 'SETUID'],
+    image: images.SUBCONVERTER_IMAGE,
+    networks: { 'subconverter-egress': {} },
+    environment: { HTTPS_PROXY: 'http://gateway:25502' },
+    depends_on: { gateway: { condition: 'service_healthy', restart: true } },
+  });
 
   return {
-    services,
-    networks: profile.shortLinksEnabled
-      ? {
-        'myurls-data': { internal: true },
-        'myurls-edge': { internal: true },
-        'redis-policy': { internal: true },
-        'subconverter-egress': { internal: true },
-      }
-      : { 'subconverter-egress': { internal: true } },
+    services: { gateway, subconverter },
+    networks: { 'subconverter-egress': { internal: true } },
   };
 };
 
@@ -195,24 +152,29 @@ const runVerifier = (args, environment) => spawnSync(process.execPath, [script, 
 describe('production readiness verifier', () => {
   it.each([
     [
-      'MyUrls Turnstile enabled flag',
-      (rendered) => withEnvironmentValue(rendered, 'myurls', 'TURNSTILE_ENABLED', 'false'),
-      'MyUrls Turnstile must be enabled',
+      'Gateway Turnstile enabled flag',
+      (rendered) => withEnvironmentValue(rendered, 'gateway', 'TURNSTILE_ENABLED', 'false'),
+      'gateway Turnstile must be enabled',
     ],
     [
-      'MyUrls Turnstile mode',
-      (rendered) => withEnvironmentValue(rendered, 'myurls', 'TURNSTILE_MODE', 'managed'),
-      'MyUrls Turnstile mode must be cloudflare',
+      'Gateway Turnstile site key',
+      (rendered) => withEnvironmentValue(rendered, 'gateway', 'TURNSTILE_SITE_KEY', 'wrong-site-key'),
+      'gateway Turnstile site key must match the generated environment',
     ],
     [
-      'MyUrls Turnstile site key',
-      (rendered) => withEnvironmentValue(rendered, 'myurls', 'TURNSTILE_SITE_KEY', 'wrong-site-key'),
-      'MyUrls Turnstile site key must match the generated environment',
+      'Gateway Turnstile secret key',
+      (rendered) => withEnvironmentValue(rendered, 'gateway', 'TURNSTILE_SECRET_KEY', 'wrong-secret-key'),
+      'gateway Turnstile secret key must match the generated environment',
     ],
     [
-      'MyUrls Turnstile secret key',
-      (rendered) => withEnvironmentValue(rendered, 'myurls', 'TURNSTILE_SECRET_KEY', 'wrong-secret-key'),
-      'MyUrls Turnstile secret key must match the generated environment',
+      'Gateway short-link database',
+      (rendered) => withEnvironmentValue(rendered, 'gateway', 'SHORT_LINK_DB_PATH', '/tmp/links.db'),
+      'gateway short-link database path is invalid',
+    ],
+    [
+      'Gateway legacy MyUrls upstream',
+      (rendered) => withEnvironmentValue(rendered, 'gateway', 'MYURLS_UPSTREAM', 'http://myurls-edge:3000'),
+      'the embedded profile must not configure MyUrls or Redis',
     ],
     [
       'SubConverter Gateway health dependency',

@@ -22,13 +22,6 @@ describe('SubConverter runtime drift detection', () => {
     expect(script).not.toContain('docker compose down');
   });
 
-  it('is exercised by the integrated stack verifier on a fresh stack', async () => {
-    const verifier = await readFile(rootFile('scripts/verify-redis-operations.sh'), 'utf8');
-
-    expect(verifier).toContain('subconverter_runs_as_101');
-    expect(verifier).toContain('Unified Redis backup, restore, and service recovery verification passed.');
-  });
-
   it('runs after an upgrade and fails the upgrade with remediation steps', async () => {
     const entrypoint = await readFile(rootFile('scripts/subweb.sh'), 'utf8');
     const manifest = JSON.parse(await readFile(rootFile('package.json'), 'utf8'));

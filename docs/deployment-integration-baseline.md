@@ -4,26 +4,24 @@
 
 ## 运行时合同快照
 
-### 四服务短链启用合同
+### 两服务短链启用合同
 
-`compose.yaml` 是短链启用的生产入口，准确包含以下四个服务：
+`compose.yaml` 是短链启用的生产入口，准确包含以下两个服务：
 
-- `gateway`：唯一发布到 `127.0.0.1:${SUBWEB_PORT}:8080` 的服务；负责 APP/API/SHORT Host 路由、转换策略、限流、MyUrls 适配与内部 CONNECT egress。
+- `gateway`：唯一发布到 `127.0.0.1:${SUBWEB_PORT}:8080` 的服务；负责 APP/API/SHORT Host 路由、转换策略、限流、内嵌短链存储与内部 CONNECT egress。
 - `subconverter`：只连接 `subconverter-egress`，通过 Gateway 的内部 egress 获取外部订阅。
-- `myurls`：只连接 `myurls-edge` 与 `myurls-data`，处理 APP 创建和 APP/SHORT 短码解析的唯一上游。
-- `redis`：只连接 `myurls-data` 与 `redis-policy`；MyUrls 使用 DB `0`，Gateway 限流使用 DB `1`。
 
-启用合同要求 APP、API、SHORT 三个不同域名和短链所需的 Redis、IP HMAC、Turnstile 配置。Gateway 必须连接 `redis-policy`，但不得加入 `myurls-data`；SubConverter 不得加入 MyUrls 或 Redis 网络。四个服务、Gateway loopback 发布端口、各内部网络和容器权限均由 `scripts/validate-compose.sh` 与 production-readiness 验证。
+启用合同要求 APP、API、SHORT 三个不同域名和短链所需的 IP HMAC、Turnstile 配置与 `links-data` 卷。Gateway 连接默认网络与内部 `subconverter-egress`；SubConverter 不得加入默认网络。两个服务、Gateway loopback 发布端口、内部网络和容器权限均由 `scripts/validate-compose.sh` 与 production-readiness 验证。
 
 ### 两服务短链关闭合同
 
-`compose.disabled-short-links.yaml` 是短链关闭的独立生产入口，准确包含 `gateway` 与 `subconverter` 两个服务。Gateway 的 `SHORT_LINKS_ENABLED=false`，不配置 MyUrls 上游或 Redis 限流 URL，并使用进程内限流；SubConverter 仍只通过内部 egress 访问外部订阅。
+`compose.disabled-short-links.yaml` 是短链关闭的独立生产入口，准确包含 `gateway` 与 `subconverter` 两个服务。Gateway 的 `SHORT_LINKS_ENABLED=false`，不配置短链数据库、上游或 Turnstile 私钥，并使用进程内限流；SubConverter 仍只通过内部 egress 访问外部订阅。
 
-该合同不要求 `SHORT_DOMAIN`、Redis、MyUrls、Turnstile 或相关秘密，且不声明多 Gateway 实例的共享限流。它不是从启用合同删除服务后可随意得到的 profile：变量插值发生在 Compose profile 选择之前，因此 Compose profile 不能作为隐藏必填变量的条件机制。
+该合同不要求 `SHORT_DOMAIN`、短链数据库、Turnstile 或相关秘密，且不声明多 Gateway 实例的共享限流。它不是从启用合同删除服务后可随意得到的 profile：变量插值发生在 Compose profile 选择之前，因此 Compose profile 不能作为隐藏必填变量的条件机制。
 
 ## 版本与部署入口快照
 
-`deploy/versions.lock.json` 是 Redis、SubConverter 和 MyUrls 的可追溯来源，记录每个外部运行时的 registry repository、source repository/commit、tag、manifest digest、平台 digest 与必要端口。Gateway 镜像是单独的 release 输入，不属于该外部运行时集合。
+`deploy/versions.lock.json` 是 SubConverter 与 Go 构建基础镜像的可追溯来源，记录每个外部运行时的 registry repository、source repository/commit、tag、manifest digest、平台 digest 与必要端口。Gateway 镜像是单独的 release 输入，不属于该外部运行时集合。
 
 当前基线中，`compose.yaml` 和 `compose.disabled-short-links.yaml` 仍各自内嵌外部镜像的锁定默认值；`scripts/configure.sh` 提供同名 `*_IMAGE` 覆盖输入；`scripts/verify-version-locks.mjs`、`scripts/validate-compose.sh`、`scripts/docker-deploy.sh` 和 release workflow 分别读取版本锁。验证器已经拒绝和锁不一致的覆盖，因此这些重复读取和回填路径是后续可以收敛的管理面，不是可变部署选择。
 
@@ -40,11 +38,11 @@
 
 以下不在本次整合范围：
 
-- 将 MyUrls 或 SubConverter 编译或运行在 Gateway 内。
-- 拆分 Redis，或合并 MyUrls 的 DB `0` 与 Gateway 限流 DB `1`。
+- 将 SubConverter 编译或运行在 Gateway 内。
+- 为短链重新引入外部 Redis 或 MyUrls 进程。
 - 合并两个内部 CONNECT listener。
 - 以 Compose profile 代替显式的短链开启/关闭 Compose 合同。
-- 用只替换 MyUrls 镜像的方式执行跨 HTTP 合同回滚。
+- 用只替换短链存储的方式执行跨 schema 回滚。
 
 ## 比较与验证
 

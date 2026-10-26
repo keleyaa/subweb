@@ -66,7 +66,6 @@ describe('project cleanup and independent-maintenance boundary', () => {
     expect(readme).toContain('独立维护');
     expect(readme).toContain('Fork 与来源说明');
     expect(readme).toContain('https://github.com/stilleshan/subweb');
-    expect(readme).toContain('keleyaa/MyUrls');
     expect(readme).toContain('Aethersailor/SubConverter-Extended');
     expect(readme).toContain('固定黑色命令界面');
     expect(readme).toContain('受控请求策略');

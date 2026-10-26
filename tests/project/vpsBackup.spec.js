@@ -93,7 +93,7 @@ const directory = process.argv[2];
 const format = process.argv.at(-1);
 const separator = format.endsWith('\\\\0') ? String.fromCharCode(0) : String.fromCharCode(10);
 for (const name of readdirSync(directory)) {
-  if (!/^subweb-redis-.*\\.rdb(?:\\.age)?$/s.test(name)) continue;
+  if (!/^subweb-links-.*\\.db(?:\\.age)?$/s.test(name)) continue;
   const path = directory + '/' + name;
   process.stdout.write(String(statSync(path).mtimeMs) + ' ' + path + separator);
 }
@@ -164,7 +164,7 @@ const makeBackupVerificationFixture = async (sidecarContents) => {
   const backupDirectory = join(fixture, 'backups');
   const scriptsDirectory = join(fixture, 'scripts', 'vps');
   const projectRoot = join(fixture, 'project');
-  const backupFile = join(backupDirectory, 'subweb-redis.rdb');
+  const backupFile = join(backupDirectory, 'subweb-links.db');
   const verifiedMarker = join(fixture, 'verified');
   const hashInput = join(fixture, 'hash-input');
   const backupPathSource = await readFile(backupPathScript, 'utf8');
@@ -180,7 +180,7 @@ const makeBackupVerificationFixture = async (sidecarContents) => {
     .replaceAll('/var/lib/subweb-backups', backupDirectory)
     .replaceAll('/mnt/subweb-backups', join(fixture, 'other-managed-root')));
   await writeExecutable(join(scriptsDirectory, 'verify-backup.sh'), verifyBackupSource);
-  await writeExecutable(join(projectRoot, 'scripts', 'operations', 'verify-redis-backup.sh'),
+  await writeExecutable(join(projectRoot, 'scripts', 'operations', 'verify-links-backup.sh'),
     `#!/bin/sh\nprintf '%s' "$2" > '${verifiedMarker}'\n`);
   await writeExecutable(join(fixture, 'sha256sum'), `#!/bin/sh
 printf '%s' "$1" > '${hashInput}'
@@ -324,7 +324,7 @@ describe('VPS backup mount safety', () => {
     const backupDirectoryPath = join(fixture, backupDirectory);
     const remoteMountPath = join(fixture, remoteMount);
     const otherManagedRoot = remoteMountPath;
-    const backupFile = join(backupDirectoryPath, 'subweb-redis.rdb');
+    const backupFile = join(backupDirectoryPath, 'subweb-links.db');
     const backupPathSource = await readFile(backupPathScript, 'utf8');
     const verifyBackupSource = await readFile(verifyBackupScript, 'utf8');
 
@@ -338,7 +338,7 @@ describe('VPS backup mount safety', () => {
       .replaceAll('/var/lib/subweb-backups', backupDirectoryPath)
       .replaceAll('/mnt/subweb-backups', otherManagedRoot));
     await writeExecutable(join(scriptsDirectory, 'verify-backup.sh'), verifyBackupSource);
-    await writeExecutable(join(projectRoot, 'scripts', 'operations', 'verify-redis-backup.sh'), '#!/bin/sh\nexit 0\n');
+    await writeExecutable(join(projectRoot, 'scripts', 'operations', 'verify-links-backup.sh'), '#!/bin/sh\nexit 0\n');
     await writeExecutable(join(fixture, 'sha256sum'), '#!/bin/sh\nexit 0\n');
 
     const result = spawnSync('sh', [join(scriptsDirectory, 'verify-backup.sh'), backupFile], {
@@ -360,14 +360,14 @@ describe('VPS backup mount safety', () => {
   it.each([
     {
       name: 'lexical traversal outside BACKUP_DIRECTORY',
-      backupPath: (backupDirectory) => `${backupDirectory}/../outside/subweb-redis.rdb`,
+      backupPath: (backupDirectory) => `${backupDirectory}/../outside/subweb-links.db`,
       prepare: async (_backupDirectory, outside) => {
         await mkdir(outside, { recursive: true });
       },
     },
     {
       name: 'a symlinked directory component',
-      backupPath: (backupDirectory) => join(backupDirectory, 'linked', 'subweb-redis.rdb'),
+      backupPath: (backupDirectory) => join(backupDirectory, 'linked', 'subweb-links.db'),
       prepare: async (backupDirectory, outside) => {
         await mkdir(outside, { recursive: true });
         await symlink(outside, join(backupDirectory, 'linked'));
@@ -375,10 +375,10 @@ describe('VPS backup mount safety', () => {
     },
     {
       name: 'a symlinked final backup file',
-      backupPath: (backupDirectory) => join(backupDirectory, 'linked.rdb'),
+      backupPath: (backupDirectory) => join(backupDirectory, 'linked.db'),
       prepare: async (backupDirectory, outside) => {
         await mkdir(outside, { recursive: true });
-        await symlink(join(outside, 'subweb-redis.rdb'), join(backupDirectory, 'linked.rdb'));
+        await symlink(join(outside, 'subweb-links.db'), join(backupDirectory, 'linked.db'));
       },
     },
   ])('rejects $name before binding the backup into Docker', async ({ backupPath, prepare }) => {
@@ -403,7 +403,7 @@ describe('VPS backup mount safety', () => {
       .replaceAll('/var/lib/subweb-backups', backupDirectory)
       .replaceAll('/mnt/subweb-backups', join(fixture, 'other-managed-root')));
     await writeExecutable(join(scriptsDirectory, 'verify-backup.sh'), verifyBackupSource);
-    await writeExecutable(join(projectRoot, 'scripts', 'operations', 'verify-redis-backup.sh'),
+    await writeExecutable(join(projectRoot, 'scripts', 'operations', 'verify-links-backup.sh'),
       `#!/bin/sh\nprintf '%s' "$2" > '${marker}'\nexit 0\n`);
     await writeExecutable(join(fixture, 'sha256sum'), '#!/bin/sh\nexit 0\n');
 
@@ -430,7 +430,7 @@ describe('VPS backup mount safety', () => {
 describe('VPS backup retention', () => {
   it('fails closed when the sort stage fails', async () => {
     const { backupDirectory, fixture, projectRoot, script, workspaceDirectory } = await makeBackupRetentionFixture();
-    await writeFile(join(backupDirectory, 'subweb-redis-20250101T000000Z-ABC123.rdb'), 'retain');
+    await writeFile(join(backupDirectory, 'subweb-links-20250101T000000Z-ABC123.db'), 'retain');
     await writeFile(join(fixture, 'production.env'), '');
     await writeExecutable(join(fixture, 'sort'), '#!/bin/sh\nexit 1\n');
 
@@ -455,10 +455,10 @@ describe('VPS backup retention', () => {
 
   it('does not delete a forged path outside the backup directory from a newline-bearing matching filename', async () => {
     const { backupDirectory, fixture, projectRoot, script, workspaceDirectory } = await makeBackupRetentionFixture();
-    const retainedBackup = join(backupDirectory, 'subweb-redis-20250101T000000Z-ABC123.rdb');
-    const staleBackup = join(backupDirectory, 'subweb-redis-20240101T000000Z-DEF456.rdb');
-    const forgedTarget = join(fixture, 'forged-target.rdb');
-    const malformedBackup = join(backupDirectory, 'subweb-redis-20230101T000000Z-GHI789\nforged-target.rdb');
+    const retainedBackup = join(backupDirectory, 'subweb-links-20250101T000000Z-ABC123.db');
+    const staleBackup = join(backupDirectory, 'subweb-links-20240101T000000Z-DEF456.db');
+    const forgedTarget = join(fixture, 'forged-target.db');
+    const malformedBackup = join(backupDirectory, 'subweb-links-20230101T000000Z-GHI789\nforged-target.db');
 
     await writeFile(retainedBackup, 'retain');
     await writeFile(staleBackup, 'prune');
@@ -533,7 +533,7 @@ describe('VPS backup publication safety', () => {
     const backup = await makeBackupRetentionFixture();
     const runIdentifier = 'controlled';
     const timestamp = '20260101T000000Z';
-    const outputName = `subweb-redis-${timestamp}-${runIdentifier}.rdb.age`;
+    const outputName = `subweb-links-${timestamp}-${runIdentifier}.db.age`;
     const outsideTarget = join(backup.fixture, 'outside-target');
     await writeFile(join(backup.fixture, 'production.env'), '');
     await writeFile(outsideTarget, 'must remain');
@@ -565,12 +565,12 @@ exec /usr/bin/mktemp "$@"
     await writeFile(identityFile, 'AGE-SECRET-KEY-1TEST', { mode: 0o600 });
     await mkdir(join(backup.projectRoot, 'scripts', 'operations'), { recursive: true });
     await writeExecutable(join(backup.fixture, 'scripts', 'vps', 'verify-backup.sh'), verifySource);
-    await writeExecutable(join(backup.projectRoot, 'scripts', 'operations', 'verify-redis-backup.sh'),
+    await writeExecutable(join(backup.projectRoot, 'scripts', 'operations', 'verify-links-backup.sh'),
       `#!/bin/sh\nprintf '%s' "$2" > '${verifiedMarker}'\n`);
 
     const backupResult = runBackup(backup, { BACKUP_DIRECTORY: `${backup.backupDirectory}/` });
     expect(backupResult.status, `${backupResult.stdout}\n${backupResult.stderr}`).toBe(0);
-    const [backupName] = (await readdir(backup.backupDirectory)).filter((name) => name.endsWith('.rdb.age'));
+    const [backupName] = (await readdir(backup.backupDirectory)).filter((name) => name.endsWith('.db.age'));
     const backupFile = join(backup.backupDirectory, backupName);
     const sidecar = await readFile(`${backupFile}.sha256`, 'utf8');
 

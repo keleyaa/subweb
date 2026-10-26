@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"mime"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -70,7 +71,7 @@ func (handler *Handler) create(writer http.ResponseWriter, request *http.Request
 		writeProblem(writer, requestID, status, "invalid_request", nil, 0)
 		return
 	}
-	response, err := handler.client.Create(request.Context(), body, upstreamHeaders(request.Header, requestID))
+	response, err := handler.client.Create(request.Context(), body, upstreamHeaders(request.Header, requestID, clientAddress(request)))
 	if err != nil {
 		writeUnavailable(writer, requestID)
 		return
@@ -89,7 +90,7 @@ func (handler *Handler) resolve(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 
-	response, err := handler.client.Resolve(request.Context(), strings.TrimPrefix(request.URL.Path, "/"), upstreamHeaders(request.Header, requestID))
+	response, err := handler.client.Resolve(request.Context(), strings.TrimPrefix(request.URL.Path, "/"), upstreamHeaders(request.Header, requestID, clientAddress(request)))
 	if err != nil {
 		writeUnavailable(writer, requestID)
 		return
@@ -97,11 +98,23 @@ func (handler *Handler) resolve(writer http.ResponseWriter, request *http.Reques
 	writeResolveResponse(writer, response, requestID, handler.maxBodyBytes)
 }
 
-func upstreamHeaders(source http.Header, requestID string) http.Header {
+func upstreamHeaders(source http.Header, requestID, clientIP string) http.Header {
 	headers := make(http.Header)
 	headers.Set("X-Request-ID", requestID)
+	if clientIP != "" {
+		headers.Set(clientIPHeader, clientIP)
+	}
 	copyForwardedHeaders(headers, source)
 	return headers
+}
+
+// clientAddress returns the Gateway-observed peer address without its port.
+func clientAddress(request *http.Request) string {
+	host, _, err := net.SplitHostPort(request.RemoteAddr)
+	if err != nil {
+		return strings.TrimSpace(request.RemoteAddr)
+	}
+	return host
 }
 
 func writeCreateResponse(writer http.ResponseWriter, response *http.Response, requestID string, maxBodyBytes int64) {

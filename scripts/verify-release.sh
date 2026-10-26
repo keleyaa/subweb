@@ -48,17 +48,16 @@ if [ ! -f .env ]; then
   TURNSTILE_SITE_KEY=release-validation-site-key
   TURNSTILE_SECRET_KEY=release-validation-secret-key
   IP_HASH_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-  REDIS_PASSWORD=release-validation-redis-password
   export APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY
-  export IP_HASH_SECRET REDIS_PASSWORD
+  export IP_HASH_SECRET
   printf '%s\n' 'release verification environment=ephemeral'
 fi
 
 runtime_image_env=$(node scripts/runtime-image-contract.mjs env)
-unset REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE
+unset SUBCONVERTER_IMAGE
 while IFS='=' read -r name value; do
   case "$name" in
-    REDIS_IMAGE|SUBCONVERTER_IMAGE|MYURLS_IMAGE)
+    SUBCONVERTER_IMAGE)
       export "$name=$value"
       ;;
     *)
@@ -69,9 +68,7 @@ while IFS='=' read -r name value; do
 done <<EOF
 $runtime_image_env
 EOF
-: "${REDIS_IMAGE:?Runtime image contract did not provide REDIS_IMAGE}"
 : "${SUBCONVERTER_IMAGE:?Runtime image contract did not provide SUBCONVERTER_IMAGE}"
-: "${MYURLS_IMAGE:?Runtime image contract did not provide MYURLS_IMAGE}"
 
 stage() {
   name=$1
@@ -95,8 +92,6 @@ stage gateway-image docker build --file Dockerfile --tag subweb:release-check .
 
 candidate_image=subweb:release-check
 stage image-security ./scripts/verify-image-security.sh "$candidate_image"
-stage image-security-myurls ./scripts/verify-image-security.sh --ignorefile .trivyignore.myurls "$MYURLS_IMAGE"
-stage image-security-redis ./scripts/verify-image-security.sh --ignorefile .trivyignore.redis "$REDIS_IMAGE"
 stage image-security-subconverter ./scripts/verify-image-security.sh --ignorefile .trivyignore.subconverter "$SUBCONVERTER_IMAGE"
 stage evidence node scripts/verify-evidence.mjs
 

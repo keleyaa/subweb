@@ -8,7 +8,7 @@
 - `/opt/subweb/.env`：普通非符号链接文件，所有者 `subweb:subweb`，权限 `0600`。
 - `/opt/subweb/.runtime`、`/opt/subweb/.local`：`subweb:subweb`、`0700`，用于验证器或本地运行时状态。
 - `/var/lib/subweb-backups`：`subweb:subweb`、`0700`；自定义 `BACKUP_DIRECTORY` 和 `BACKUP_REMOTE_MOUNT` 只能位于 `/var/lib/subweb-backups` 或 `/mnt/subweb-backups`，以符合 systemd backup unit 的 `ReadWritePaths`；若使用远端挂载，备份目录还必须位于挂载点之下。
-- `/etc/subweb/backup.env`：`root:root`、`0600`，只存备份策略和 age recipient/identity 路径，不存 Redis 密码。
+- `/etc/subweb/backup.env`：`root:root`、`0600`，只存备份策略和 age recipient/identity 路径，不存数据库密钥。
 
 主机安装只支持固定根目录 `/opt/subweb`；`SUBWEB_ROOT` 的其他值会被拒绝。安装命令不会生成 `.env`，也不会删除现有 Compose volume。首次安装前，release checkout 中必须已有普通非符号链接的 `.env`；升级可保留既有 `/opt/subweb/.env`：
 
@@ -22,7 +22,7 @@ sudo /opt/subweb/scripts/vps/check-host.sh
 
 ## systemd 生命周期
 
-`subweb.service` 是唯一的应用 owner：它作为 root-owned systemd 编排边界调用 `/opt/subweb/scripts/subweb.sh up` 和 `down`，启动失败最多按 systemd 的 `StartLimitBurst=3` 保护，不会执行 `down --volumes`。普通停止、重启和升级均保留 Redis named volume。systemd 管理命令：
+`subweb.service` 是唯一的应用 owner：它作为 root-owned systemd 编排边界调用 `/opt/subweb/scripts/subweb.sh up` 和 `down`，启动失败最多按 systemd 的 `StartLimitBurst=3` 保护，不会执行 `down --volumes`。普通停止、重启和升级均保留 `links-data` 命名卷。systemd 管理命令：
 
 ```sh
 sudo systemctl enable --now subweb.service
@@ -43,11 +43,11 @@ sudo systemctl start subweb.service
 sudo sh -c 'cd /opt/subweb && npm run verify:integration'
 ```
 
-若新版本启动失败，保留旧 checkout 和 Redis volume，停止服务并把 `/opt/subweb` 恢复到上一个已验证 release；不要删除 volume 或重写 RDB。`subweb.sh upgrade` 的失败输出必须先被记录，再按 [维护与验证](maintenance.md) 的恢复边界处理。
+若新版本启动失败，保留旧 checkout 和 `links-data` 卷，停止服务并把 `/opt/subweb` 恢复到上一个已验证 release；不要删除 volume 或覆盖数据库文件。`subweb.sh upgrade` 的失败输出必须先被记录，再按 [维护与验证](maintenance.md) 的恢复边界处理。
 
 ## 备份和恢复验证
 
-备份使用 `subweb.sh backup` 生成 RDB，然后必须满足以下至少一个条件后才允许 retention 删除旧备份：
+备份使用 `subweb.sh backup` 生成 SQLite 一致性快照，然后必须满足以下至少一个条件后才允许 retention 删除旧备份：
 
 1. 配置 `AGE_RECIPIENT`，在保留前把备份加密；或
 2. 配置已挂载的 `BACKUP_REMOTE_MOUNT`，并且 `BACKUP_DIRECTORY` 位于该挂载点下；两个路径都必须位于 systemd 允许写入的 `/var/lib/subweb-backups` 或 `/mnt/subweb-backups` 目录树内。
@@ -60,7 +60,7 @@ sudoedit /etc/subweb/backup.env
 sudo install -d -o subweb -g subweb -m 0700 /var/lib/subweb-backups
 ```
 
-`subweb-backup.timer` 每日 03:15 运行，带 15 分钟随机延迟；`subweb-backup-verify.timer` 每月第一个星期日 04:15 在隔离 Docker 容器中校验最新 RDB，若备份加密则先使用 `AGE_IDENTITY_FILE` 解密到临时文件。两者均设置 `Persistent=true`，主机离线后会在恢复时补跑。
+`subweb-backup.timer` 每日 03:15 运行，带 15 分钟随机延迟；`subweb-backup-verify.timer` 每月第一个星期日 04:15 在隔离 Docker 容器中校验最新数据库快照（`gateway --verify-links` 完整性检查），若备份加密则先使用 `AGE_IDENTITY_FILE` 解密到临时文件。两者均设置 `Persistent=true`，主机离线后会在恢复时补跑。
 
 ```sh
 sudo systemctl enable --now subweb-backup.timer subweb-backup-verify.timer
@@ -69,15 +69,15 @@ sudo systemctl start subweb-backup-verify.service
 sudo journalctl -u subweb-backup.service -u subweb-backup-verify.service --since today --no-pager
 ```
 
-恢复演练是非破坏性的 RDB 加载验证；真正恢复生产数据仍需显式停止写入并运行：
+恢复演练是非破坏性的数据库完整性验证；真正恢复生产数据仍需显式停止写入并运行：
 
 ```sh
 sudo /opt/subweb/scripts/subweb.sh restore \
-  --backup /var/lib/subweb-backups/subweb-redis-YYYYMMDDTHHMMSSZ-UNIQUE.rdb \
+  --backup /var/lib/subweb-backups/subweb-links-YYYYMMDDTHHMMSSZ-UNIQUE.db \
   --confirm-stop-writes
 ```
 
-恢复前复制当前 RDB，恢复失败时使用脚本保留的恢复前快照回滚。任何删除 volume 的操作都是独立的、人工确认的灾备动作，不属于 systemd、定时备份或升级流程。
+恢复前保留当前数据库快照，恢复失败时使用脚本保留的恢复前快照回滚。任何删除 volume 的操作都是独立的、人工确认的灾备动作，不属于 systemd、定时备份或升级流程。
 
 ## 日志、磁盘和外部 TLS
 
@@ -102,4 +102,4 @@ sudo systemctl reload nginx
 
 ## 故障与灾备证据
 
-每次首次部署、升级、回滚或灾备演练至少保留：release tag、Gateway digest、`git rev-parse HEAD`、`systemctl status`、`subweb.sh status`、备份路径及 SHA-256、验证命令输出、Nginx 配置测试结果和发生时间。不要把 `.env`、Redis 密码、Turnstile 私钥、age identity 或完整短码写入工单、日志或截图。
+每次首次部署、升级、回滚或灾备演练至少保留：release tag、Gateway digest、`git rev-parse HEAD`、`systemctl status`、`subweb.sh status`、备份路径及 SHA-256、验证命令输出、Nginx 配置测试结果和发生时间。不要把 `.env`、数据库密钥、Turnstile 私钥、age identity 或完整短码写入工单、日志或截图。

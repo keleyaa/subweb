@@ -5,9 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { validateVersionLocks } from './verify-version-locks.mjs';
 
 const runtimeImageServices = [
-  ['REDIS_IMAGE', 'redis'],
   ['SUBCONVERTER_IMAGE', 'subconverter'],
-  ['MYURLS_IMAGE', 'myurls'],
 ];
 const runtimeImageVariableNames = runtimeImageServices.map(([variable]) => variable);
 const immutableImageReferencePattern = /^[^@\s]+@sha256:[0-9a-f]{64}$/u;

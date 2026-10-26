@@ -492,13 +492,6 @@ TURNSTILE_SECRET_KEY=$turnstile_secret_key
 "
 
   if [ "$rotate_secrets" -eq 0 ] && [ -f "$env_file" ]; then
-    if redis_password=$(load_existing_secret "$env_file" REDIS_PASSWORD); then
-      :
-    else
-      redis_status=$?
-      [ "$redis_status" -eq 1 ] || fail 'Existing REDIS_PASSWORD is missing, duplicated, or invalid.'
-      redis_password=$(generate_hex_secret) || fail 'Unable to generate REDIS_PASSWORD.'
-    fi
     if ip_hash_secret=$(load_existing_secret "$env_file" IP_HASH_SECRET); then
       :
     else
@@ -507,11 +500,9 @@ TURNSTILE_SECRET_KEY=$turnstile_secret_key
       ip_hash_secret=$(generate_hex_secret) || fail 'Unable to generate IP_HASH_SECRET.'
     fi
   else
-    redis_password=$(generate_hex_secret) || fail 'Unable to generate REDIS_PASSWORD.'
     ip_hash_secret=$(generate_hex_secret) || fail 'Unable to generate IP_HASH_SECRET.'
   fi
   short_link_secrets="IP_HASH_SECRET=$ip_hash_secret
-REDIS_PASSWORD=$redis_password
 "
 fi
 
@@ -519,7 +510,7 @@ fi
 # operator keeps in .env (log levels, conversion tunables, advanced egress
 # overrides) must survive a re-run verbatim: rebuilding the file from this
 # template used to drop them silently and revert them to the Compose defaults.
-managed_env_keys='APP_DOMAIN API_DOMAIN API_URL SUBWEB_PORT SHORT_LINKS_ENABLED CUSTOM_BACKEND_ENABLED SHORT_DOMAIN TRUSTED_PROXY_CIDR MYURLS_IMAGE REDIS_IMAGE SUBCONVERTER_IMAGE SUBWEB_IMAGE TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY IP_HASH_SECRET REDIS_PASSWORD'
+managed_env_keys='APP_DOMAIN API_DOMAIN API_URL SUBWEB_PORT SHORT_LINKS_ENABLED CUSTOM_BACKEND_ENABLED SHORT_DOMAIN TRUSTED_PROXY_CIDR SUBCONVERTER_IMAGE SUBWEB_IMAGE TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY IP_HASH_SECRET'
 
 preserved_env_settings() {
   preserved_source=$1

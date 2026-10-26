@@ -14,20 +14,29 @@ import (
 )
 
 const (
-	defaultListenAddr                  = "0.0.0.0:8080"
-	defaultEgressListenAddr            = "0.0.0.0:25502"
-	defaultEgressRestrictedListenAddr  = "0.0.0.0:25503"
-	defaultEgressAllowedHosts          = "challenges.cloudflare.com"
-	defaultConversionRateLimit         = 10
-	defaultConversionRateWindowSeconds = 60
-	defaultMaxRequestBytes             = 16 * 1024
-	defaultMaxResponseBytes            = 8 * 1024 * 1024
-	defaultRequestTimeoutMilliseconds  = 10_000
-	defaultDNSTimeoutMilliseconds      = 2_000
-	defaultConnectTimeoutMilliseconds  = 5_000
-	defaultMaxConcurrency              = 4
-	defaultMaxConcurrencyPerIP         = 2
-	defaultLogLevel                    = "info"
+	defaultListenAddr                   = "0.0.0.0:8080"
+	defaultEgressListenAddr             = "0.0.0.0:25502"
+	defaultEgressRestrictedListenAddr   = "0.0.0.0:25503"
+	defaultEgressAllowedHosts           = "challenges.cloudflare.com"
+	defaultConversionRateLimit          = 10
+	defaultConversionRateWindowSeconds  = 60
+	defaultMaxRequestBytes              = 16 * 1024
+	defaultMaxResponseBytes             = 8 * 1024 * 1024
+	defaultRequestTimeoutMilliseconds   = 10_000
+	defaultDNSTimeoutMilliseconds       = 2_000
+	defaultConnectTimeoutMilliseconds   = 5_000
+	defaultMaxConcurrency               = 4
+	defaultMaxConcurrencyPerIP          = 2
+	defaultLogLevel                     = "info"
+	defaultShortLinkDBPath              = "/data/links.db"
+	defaultShortLinkTTLSeconds          = 7_776_000
+	defaultShortLinkCreateLimit         = 20
+	defaultShortLinkCreateWindow        = 600
+	defaultShortLinkDailyLimit          = 100
+	defaultShortLinkDailyWindow         = 86_400
+	defaultShortLinkResolveLimit        = 600
+	defaultShortLinkResolveWindow       = 10
+	defaultTurnstileTimeoutMilliseconds = 2_500
 
 	maxConversionRateLimit         = 10_000
 	maxConversionRateWindowSeconds = 3_600
@@ -39,6 +48,8 @@ const (
 	maxConversionConcurrency       = 100
 	maxConversionConcurrencyPerIP  = 100
 	maxEgressAllowedHosts          = 16
+	maxShortLinkLimit              = 1_000_000
+	maxShortLinkTTLSeconds         = 315_360_000
 )
 
 // Config contains the Gateway's validated runtime configuration.
@@ -70,6 +81,21 @@ type Config struct {
 	EgressConnectTimeout          time.Duration
 	ConversionMaxConcurrency      int
 	ConversionMaxConcurrencyPerIP int
+
+	// EmbeddedShortLinks is true when the Gateway serves short links from its
+	// own SQLite store instead of the external MyUrls service.
+	EmbeddedShortLinks     bool
+	ShortLinkDBPath        string
+	ShortLinkTTL           time.Duration
+	ShortLinkCreateLimit   int
+	ShortLinkCreateWindow  time.Duration
+	ShortLinkDailyLimit    int
+	ShortLinkDailyWindow   time.Duration
+	ShortLinkResolveLimit  int
+	ShortLinkResolveWindow time.Duration
+	TurnstileEnabled       bool
+	TurnstileSecretKey     string
+	TurnstileTimeout       time.Duration
 }
 
 // Load reads and validates Gateway configuration through getenv.
@@ -156,31 +182,54 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	if shortLinksEnabled {
-		redisURL, err := loadRedisURL(getenv("REDIS_URL"))
-		if err != nil {
-			return Config{}, err
-		}
 		ipHashSecret, err := loadIPHashSecret(getenv("IP_HASH_SECRET"))
 		if err != nil {
 			return Config{}, err
 		}
-		myURLsUpstream, err := loadHTTPURL("MYURLS_UPSTREAM", getenv("MYURLS_UPSTREAM"))
+		myURLsUpstream, err := loadOptionalHTTPURL("MYURLS_UPSTREAM", getenv("MYURLS_UPSTREAM"))
 		if err != nil {
 			return Config{}, err
 		}
-		redisPassword, err := required("REDIS_PASSWORD", getenv("REDIS_PASSWORD"))
+		turnstileEnabled, err := loadBoolean("TURNSTILE_ENABLED", getenv("TURNSTILE_ENABLED"), true)
 		if err != nil {
 			return Config{}, err
 		}
-		turnstileSiteKey, err := required("TURNSTILE_SITE_KEY", getenv("TURNSTILE_SITE_KEY"))
-		if err != nil {
-			return Config{}, err
+		cfg.TurnstileEnabled = turnstileEnabled
+		if turnstileEnabled {
+			turnstileSiteKey, err := required("TURNSTILE_SITE_KEY", getenv("TURNSTILE_SITE_KEY"))
+			if err != nil {
+				return Config{}, err
+			}
+			cfg.TurnstileSiteKey = turnstileSiteKey
 		}
-		cfg.RedisURL = redisURL
-		cfg.RedisPassword = redisPassword
 		cfg.IPHashSecret = ipHashSecret
-		cfg.TurnstileSiteKey = turnstileSiteKey
 		cfg.MyURLsUpstream = myURLsUpstream
+		cfg.EmbeddedShortLinks = myURLsUpstream == nil
+
+		if cfg.EmbeddedShortLinks {
+			if turnstileEnabled {
+				turnstileSecretKey, err := required("TURNSTILE_SECRET_KEY", getenv("TURNSTILE_SECRET_KEY"))
+				if err != nil {
+					return Config{}, err
+				}
+				cfg.TurnstileSecretKey = turnstileSecretKey
+			}
+		} else {
+			redisURL, err := loadRedisURL(getenv("REDIS_URL"))
+			if err != nil {
+				return Config{}, err
+			}
+			redisPassword, err := required("REDIS_PASSWORD", getenv("REDIS_PASSWORD"))
+			if err != nil {
+				return Config{}, err
+			}
+			cfg.RedisURL = redisURL
+			cfg.RedisPassword = redisPassword
+		}
+
+		if err := loadShortLinkOptions(&cfg, getenv); err != nil {
+			return Config{}, err
+		}
 	}
 
 	if cfg.ConversionRateLimit, err = loadPositiveInt(getenv, "CONVERSION_RATE_LIMIT", defaultConversionRateLimit, maxConversionRateLimit); err != nil {
@@ -330,6 +379,58 @@ func loadHTTPURL(name, value string) (*url.URL, error) {
 		return nil, fmt.Errorf("%s must be an HTTP(S) URL", name)
 	}
 	return parsed, nil
+}
+
+func loadOptionalHTTPURL(name, value string) (*url.URL, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	return loadHTTPURL(name, value)
+}
+
+func loadShortLinkOptions(cfg *Config, getenv func(string) string) error {
+	dbPath := strings.TrimSpace(getenv("SHORT_LINK_DB_PATH"))
+	if dbPath == "" {
+		dbPath = defaultShortLinkDBPath
+	}
+	if !strings.HasPrefix(dbPath, "/") {
+		return fmt.Errorf("SHORT_LINK_DB_PATH must be an absolute path")
+	}
+	cfg.ShortLinkDBPath = dbPath
+
+	ttlSeconds, err := loadPositiveInt(getenv, "SHORT_LINK_TTL_SECONDS", defaultShortLinkTTLSeconds, maxShortLinkTTLSeconds)
+	if err != nil {
+		return err
+	}
+	cfg.ShortLinkTTL = time.Duration(ttlSeconds) * time.Second
+
+	createLimit, err := loadPositiveInt(getenv, "SHORT_LINK_CREATE_LIMIT_10M", defaultShortLinkCreateLimit, maxShortLinkLimit)
+	if err != nil {
+		return err
+	}
+	cfg.ShortLinkCreateLimit = createLimit
+	cfg.ShortLinkCreateWindow = defaultShortLinkCreateWindow * time.Second
+
+	dailyLimit, err := loadPositiveInt(getenv, "SHORT_LINK_DAILY_LIMIT", defaultShortLinkDailyLimit, maxShortLinkLimit)
+	if err != nil {
+		return err
+	}
+	cfg.ShortLinkDailyLimit = dailyLimit
+	cfg.ShortLinkDailyWindow = defaultShortLinkDailyWindow * time.Second
+
+	resolveLimit, err := loadPositiveInt(getenv, "SHORT_LINK_RESOLVE_LIMIT_10S", defaultShortLinkResolveLimit, maxShortLinkLimit)
+	if err != nil {
+		return err
+	}
+	cfg.ShortLinkResolveLimit = resolveLimit
+	cfg.ShortLinkResolveWindow = defaultShortLinkResolveWindow * time.Second
+
+	timeoutMilliseconds, err := loadPositiveInt(getenv, "TURNSTILE_TIMEOUT_MS", defaultTurnstileTimeoutMilliseconds, maxRequestTimeoutMilliseconds)
+	if err != nil {
+		return err
+	}
+	cfg.TurnstileTimeout = time.Duration(timeoutMilliseconds) * time.Millisecond
+	return nil
 }
 
 func loadRedisURL(value string) (string, error) {

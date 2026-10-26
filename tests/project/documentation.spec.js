@@ -125,7 +125,7 @@ describe("documentation contract", () => {
     const baseline = read("docs/deployment-integration-baseline.md");
 
     for (const contract of [
-      "四服务短链启用合同",
+      "两服务短链启用合同",
       "两服务短链关闭合同",
       "deploy/versions.lock.json",
       "Compose profile 不能作为隐藏必填变量的条件机制",
@@ -145,7 +145,7 @@ describe("documentation contract", () => {
     }
     expect(docker).toContain("compose.common-services.yaml");
     expect(configuration).toContain("runtime-image-contract.mjs");
-    expect(configuration).toContain("不接受手工 `REDIS_IMAGE`、`SUBCONVERTER_IMAGE` 或 `MYURLS_IMAGE` 覆盖");
+    expect(configuration).toContain("不接受手工 `SUBCONVERTER_IMAGE` 覆盖");
     expect(maintenance).toContain("runtime-image-contract.mjs");
   });
 
@@ -155,10 +155,10 @@ describe("documentation contract", () => {
 
     expect(envExample).toContain("# SUBWEB_IMAGE=docker.io/keleyaa/subweb@sha256:<64-hex-digest>");
     expect(envExample).not.toMatch(/^#?\s*SUBWEB_IMAGE=.*:sha-/mu);
-    for (const variable of ["REDIS_IMAGE", "SUBCONVERTER_IMAGE", "MYURLS_IMAGE"]) {
+    for (const variable of ["SUBCONVERTER_IMAGE"]) {
       expect(envExample).not.toMatch(new RegExp(`^#?\\s*${variable}=`, "mu"));
     }
-    expect(envExample).toContain("configure.sh generates REDIS_IMAGE, SUBCONVERTER_IMAGE, and MYURLS_IMAGE");
+    expect(envExample).toContain("configure.sh generates SUBCONVERTER_IMAGE from deploy/versions.lock.json");
     expect(vps).toContain("/srv/releases/subweb-vX.Y.Z");
     expect(vps).not.toContain("/srv/releases/subweb-v1.0.4");
   });
@@ -218,8 +218,6 @@ describe("documentation contract", () => {
     for (const name of ["本机源码", "Docker"]) expect(readme).toContain(name);
     for (const source of [
       "stilleshan/subweb",
-      "keleyaa/MyUrls",
-      "CareyWang/MyUrls",
       "Aethersailor/SubConverter-Extended",
     ])
       expect(readme).toContain(source);
@@ -273,9 +271,6 @@ describe("documentation contract", () => {
       "docs/security.md",
       "docs/validation/docker-integration.md",
       "docs/validation/local-dev.md",
-      "assets/readme/security-architecture.svg",
-      "docs/assets/readme/subweb-architecture.svg",
-      "docs/assets/readme/subweb-hero.svg",
     ]
       .map(read)
       .join("\\n");
@@ -333,7 +328,7 @@ describe("documentation contract", () => {
     expect(docker).toContain("不要执行 `cat .env`");
     expect(local).toContain("http://127.0.0.1:5173/");
     expect(local).toContain("compose.dev.yaml");
-    expect(local).toContain("myurls");
+    expect(local).toContain("links-data");
     expect(local).not.toContain("合并容器");
     expect(local).not.toContain("hardened Compose 的 Request Policy");
     expect(local).toContain("不要在其他项目目录执行");
@@ -390,7 +385,7 @@ describe("documentation contract", () => {
 
     expect(docker).toContain("在首次安装向导中选择 `false` 时");
     expect(docker).toContain("不会询问 SHORT 域名、Turnstile Site Key 或 Secret Key");
-    expect(docker).toContain("不会启动 Redis 或 MyUrls");
+    expect(docker).toContain("也不会启用短链存储");
     expect(docker).toContain("只运行 `gateway` 和 `subconverter`");
     expect(docker).toContain("现有显式配置方式保留给高级或手动操作");
     expect(docker).toContain("./scripts/configure.sh");
@@ -432,7 +427,6 @@ describe("documentation contract", () => {
       "10m",
       "最多 `3` 个文件",
       "verify-unified-stack.sh",
-      "verify-redis-operations.sh",
     ]) {
       expect(operations).toContain(text);
     }
@@ -441,8 +435,8 @@ describe("documentation contract", () => {
     expect(security).toContain("持有即可访问");
     expect(security).toContain("SSRF");
     expect(security).toContain("IP_HASH_SECRET");
-    expect(security).toContain("MYURLS");
-    expect(read("docs/deployment.md")).toContain("四个服务");
+    expect(security).toContain("SQLite");
+    expect(read("docs/deployment.md")).toContain("两个服务");
     expect(read("docs/deployment.md")).toContain("SHORT_LINKS_ENABLED=false");
     expect(read("docs/architecture.md")).toContain("Go Gateway");
     expect(read("docs/architecture.md")).not.toContain("独立 Request Policy");
@@ -459,7 +453,7 @@ describe("documentation contract", () => {
     for (const contract of [
       "`.env` 是权限 `0600` 的普通文件",
       "down` 只停止服务，不使用 `--volumes`",
-      "RDB format version 15",
+      "`--backup-links` 一致性快照",
     ]) {
       expect(`${production}\n${operations}`).toContain(contract);
     }
@@ -473,9 +467,6 @@ describe("documentation contract", () => {
     ].map(read).join("\n");
 
     expect(currentDocs).not.toMatch(/(?:Redis\s*v?\s*8(?:\.\d+)?|redis\s*:\s*8|8\.10\.1|两个 MyUrls 服务|two MyUrls services|myurls-app|myurls-short|双上游 Compose)/iu);
-    for (const asset of ["docs/assets/readme/subweb-hero.svg", "docs/assets/readme/subweb-architecture.svg"]) {
-      expect(read(asset)).not.toMatch(/(?:Redis\s*v?\s*8|two MyUrls services|MyUrls APP|MyUrls SHORT|separate MyUrls)/iu);
-    }
   });
 
   it("keeps the product-first story and local interface proof explicit", () => {
@@ -593,24 +584,23 @@ describe("documentation contract", () => {
     expect(hasEmbeddedReadmeImage(readme, "security-architecture.svg")).toBe(false);
   });
 
-  it("documents the Rust MyUrls release and safe rollback boundary", () => {
+  it("documents the locked runtime image and embedded short-link rollback boundary", () => {
     const readme = read("README.md");
     const architecture = read("docs/architecture.md");
     const configuration = read("docs/configuration.md");
-    const integration = read("docs/validation/docker-integration.md");
     const maintenance = read("docs/maintenance.md");
 
     for (const document of [readme, architecture]) {
-      expect(document).toContain("MyUrls Rust");
-      expect(document).toContain("v2.0.8");
+      expect(document).toContain("deploy/versions.lock.json");
+      expect(document).toContain("SubConverter");
     }
-    expect(configuration).toContain(
-      "不得只通过 `MYURLS_IMAGE` 回退到旧 Node 镜像",
-    );
-    expect(integration).toContain("v2.0.8");
-    expect(integration).toContain("challenge_required");
-    expect(integration).toContain("不证明成功 token 的在线兑换");
+    expect(configuration).toContain("不接受手工 `SUBCONVERTER_IMAGE` 覆盖");
+    expect(configuration).toContain("links-data");
+    expect(maintenance).toContain("links-data");
     expect(maintenance).not.toContain("/Users/li/Desktop/GitHub/MyUrls");
+    for (const document of [readme, architecture, maintenance]) {
+      expect(document).not.toContain("MyUrls Rust v2.0.8 实例");
+    }
   });
 
   it("keeps generated deployment commands and lock boundaries current", () => {
@@ -666,7 +656,7 @@ describe("documentation contract", () => {
       expect(source, file).not.toMatch(/docker\s+(?:pull|run)[^\n]*:latest/iu);
     }
     expect(read("README.md")).toContain("SHORT_LINKS_ENABLED");
-    expect(read("docs/architecture.md")).toContain("四个服务");
+    expect(read("docs/architecture.md")).toContain("两个服务");
     expect(read("docs/architecture.md")).toContain("两服务");
     expect(read("docs/operations.md")).toContain("外部 TLS");
   });

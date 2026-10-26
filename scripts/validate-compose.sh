@@ -147,7 +147,7 @@ if [ -z "$compose_file" ]; then
 fi
 runtime_image_env=$(node "$script_directory/runtime-image-contract.mjs" env --lock "$version_lock_file") \
   || fail "could not derive external runtime images from $version_lock_file"
-for name in REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE; do
+for name in SUBCONVERTER_IMAGE; do
   printf '%s\n' "$runtime_image_env" | grep -q "^$name=" \
     || fail 'runtime image contract is incomplete.'
 done
@@ -157,19 +157,13 @@ validation_env_file=$(mktemp "${TMPDIR:-/tmp}/subweb-compose-validation.XXXXXX")
 chmod 600 "$validation_env_file" || fail 'could not protect a Compose validation environment.'
 
 if [ -n "$source_env_file" ]; then
-  redis_image=$(printf '%s\n' "$runtime_image_env" | sed -n 's/^REDIS_IMAGE=//p')
   subconverter_image=$(printf '%s\n' "$runtime_image_env" | sed -n 's/^SUBCONVERTER_IMAGE=//p')
-  myurls_image=$(printf '%s\n' "$runtime_image_env" | sed -n 's/^MYURLS_IMAGE=//p')
   awk \
-    -v "redis_image=$redis_image" \
-    -v "subconverter_image=$subconverter_image" \
-    -v "myurls_image=$myurls_image" '
+    -v "subconverter_image=$subconverter_image" '
       BEGIN {
-        expected["REDIS_IMAGE"] = "REDIS_IMAGE=" redis_image
         expected["SUBCONVERTER_IMAGE"] = "SUBCONVERTER_IMAGE=" subconverter_image
-        expected["MYURLS_IMAGE"] = "MYURLS_IMAGE=" myurls_image
       }
-      /^[[:space:]]*(export[[:space:]]+)?(REDIS_IMAGE|SUBCONVERTER_IMAGE|MYURLS_IMAGE)[[:space:]]*=/ {
+      /^[[:space:]]*(export[[:space:]]+)?(SUBCONVERTER_IMAGE)[[:space:]]*=/ {
         name = $0
         sub(/^[[:space:]]*(export[[:space:]]+)?/, "", name)
         sub(/[[:space:]]*=.*/, "", name)
@@ -190,7 +184,6 @@ else
       'SHORT_DOMAIN=short.validation.test' \
       'SHORT_LINKS_ENABLED=true' \
       'CUSTOM_BACKEND_ENABLED=true' \
-       'REDIS_PASSWORD=compose-validation-redis-password' \
        "IP_HASH_SECRET=$validation_ip_hash_secret" \
        'TURNSTILE_SITE_KEY=compose-validation-site-key' \
       'TURNSTILE_SECRET_KEY=compose-validation-secret-key'
@@ -240,20 +233,18 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
     console.error("Compose validation error: gateway must use subweb:local or an immutable sha256 image.");
     process.exitCode = 1;
   }
-  const expected = enabled
-    ? ["gateway", "myurls", "redis", "subconverter"]
-    : ["gateway", "subconverter"];
+  const expected = ["gateway", "subconverter"];
   if (enabled) {
     const gateway = services.gateway?.environment ?? {};
-    const myurls = services.myurls?.environment ?? {};
     if (!gateway.APP_DOMAIN || !gateway.SHORT_DOMAIN || gateway.APP_DOMAIN === gateway.SHORT_DOMAIN ||
-        gateway.MYURLS_UPSTREAM !== "http://myurls-edge:3000" ||
-        myurls.NODE_ENV !== "production" ||
-        myurls.PUBLIC_BASE_URL !== `https://${gateway.SHORT_DOMAIN}` ||
-        myurls.TURNSTILE_HOSTNAME !== gateway.APP_DOMAIN ||
-        myurls.TURNSTILE_ENABLED !== "true" || myurls.TURNSTILE_MODE !== "cloudflare" ||
-        !myurls.TURNSTILE_SITE_KEY || !myurls.TURNSTILE_SECRET_KEY) {
-      console.error("Compose validation error: single MyUrls must use the SHORT base URL and APP production Turnstile contract.");
+        gateway.SHORT_LINK_DB_PATH !== "/data/links.db" ||
+        gateway.TURNSTILE_ENABLED !== "true" ||
+        !gateway.TURNSTILE_SITE_KEY || !gateway.TURNSTILE_SECRET_KEY) {
+      console.error("Compose validation error: the embedded short-link store and Turnstile contract are incomplete.");
+      process.exitCode = 1;
+    }
+    if (gateway.MYURLS_UPSTREAM || gateway.REDIS_URL || gateway.REDIS_PASSWORD) {
+      console.error("Compose validation error: the embedded profile must not configure MyUrls or Redis.");
       process.exitCode = 1;
     }
   }
@@ -275,7 +266,7 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
     const image = lock.services?.[name]?.image;
     return image?.reference && image?.digest ? `${image.reference}@${image.digest}` : null;
   };
-  for (const name of (enabled ? ["redis", 'myurls', "subconverter"] : ["subconverter"])) {
+  for (const name of ["subconverter"]) {
     if (services[name]?.image !== expectedImage(name)) {
       console.error(`Compose validation error: service ${name} must use its locked image.`);
       process.exitCode = 1;
@@ -314,14 +305,10 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
       process.exitCode = 1;
     }
   }
-  const expectedNetworks = enabled
-    ? {
-        gateway: ["default", "myurls-edge", "redis-policy", "subconverter-egress"],
-        redis: ["myurls-data", "redis-policy"],
-        "myurls": ["myurls-data", "myurls-edge"],
-        subconverter: ["subconverter-egress"],
-      }
-    : { gateway: ["default", "subconverter-egress"], subconverter: ["subconverter-egress"] };
+  const expectedNetworks = {
+    gateway: ["default", "subconverter-egress"],
+    subconverter: ["subconverter-egress"],
+  };
   for (const [name, expectedNames] of Object.entries(expectedNetworks)) {
     const actualNames = Object.keys(services[name]?.networks ?? {}).sort();
     if (actualNames.join("\n") !== expectedNames.slice().sort().join("\n")) {
@@ -329,16 +316,15 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
       process.exitCode = 1;
     }
   }
-  for (const name of ["myurls-data", "myurls-edge", "redis-policy", "subconverter-egress"]) {
-    const shouldExist = enabled || name === "subconverter-egress";
-    if (shouldExist && config.networks?.[name]?.internal !== true) {
-      console.error(`Compose validation error: network ${name} must be internal.`);
+  for (const name of ["myurls-data", "myurls-edge", "redis-policy"]) {
+    if (Object.hasOwn(config.networks ?? {}, name)) {
+      console.error(`Compose validation error: network ${name} must be absent from the embedded profile.`);
       process.exitCode = 1;
     }
-    if (!shouldExist && Object.hasOwn(config.networks ?? {}, name)) {
-      console.error(`Compose validation error: network ${name} must be absent when short links are disabled.`);
-      process.exitCode = 1;
-    }
+  }
+  if (config.networks?.["subconverter-egress"]?.internal !== true) {
+    console.error("Compose validation error: network subconverter-egress must be internal.");
+    process.exitCode = 1;
   }
   if (services.gateway?.environment?.EGRESS_LISTEN_ADDR !== "0.0.0.0:25502") {
     console.error("Compose validation error: gateway egress listener contract is missing.");
@@ -357,11 +343,7 @@ try { lock = JSON.parse(fs.readFileSync(process.env.VERSION_LOCK_FILE, "utf8"));
     .map((host) => host.trim())
     .filter(Boolean);
   if (enabled && !restrictedHosts.includes("challenges.cloudflare.com")) {
-    console.error("Compose validation error: the restricted egress allowlist must contain challenges.cloudflare.com for MyUrls Turnstile verification.");
-    process.exitCode = 1;
-  }
-  if (enabled && services.myurls?.environment?.HTTPS_PROXY !== "http://gateway:25503") {
-    console.error("Compose validation error: MyUrls must use the host-allowlisted Gateway egress proxy.");
+    console.error("Compose validation error: the restricted egress allowlist must contain challenges.cloudflare.com for Turnstile verification.");
     process.exitCode = 1;
   }
 }

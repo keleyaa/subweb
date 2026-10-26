@@ -20,11 +20,7 @@ const runtimeContractPath = fileURLToPath(
 );
 const lock = JSON.parse(await readFile(lockPath, 'utf8'));
 const immutableImageReferencePattern = /^[^@\s]+@sha256:[0-9a-f]{64}$/u;
-const runtimeImageVariableNames = [
-  'REDIS_IMAGE',
-  'SUBCONVERTER_IMAGE',
-  'MYURLS_IMAGE',
-];
+const runtimeImageVariableNames = ['SUBCONVERTER_IMAGE'];
 
 let temporaryDirectory;
 
@@ -43,9 +39,10 @@ const runRuntimeContractCli = (argumentsList) =>
 
 const validCustomLock = () => {
   const candidate = structuredClone(lock);
-  candidate.services.myurls.source.tag = 'v2.1.0';
-  candidate.services.myurls.image.reference = 'ghcr.io/keleyaa/myurls:v2.1.0';
-  candidate.services.myurls.image.digest = `sha256:${'a'.repeat(64)}`;
+  candidate.services.subconverter.source.tag = 'v1.9.5';
+  candidate.services.subconverter.image.reference =
+    'ghcr.io/aethersailor/subconverter-extended:v1.9.5';
+  candidate.services.subconverter.image.digest = `sha256:${'a'.repeat(64)}`;
   return candidate;
 };
 
@@ -79,14 +76,15 @@ describe('runtime image contract', () => {
 
   it('requires exactly the managed runtime environment variable set', () => {
     const images = resolveRuntimeImages(lock);
-    const imagesWithoutMyUrls = Object.fromEntries(
-      Object.entries(images).filter(([name]) => name !== 'MYURLS_IMAGE'),
-    );
 
     expect(Object.keys(images)).toEqual(runtimeImageVariableNames);
-    expect(() => renderRuntimeImageEnv(imagesWithoutMyUrls)).toThrow(
+    expect(() => renderRuntimeImageEnv({})).toThrow(
       'Runtime image environment must contain exactly',
     );
+    expect(() => renderRuntimeImageEnv({
+      ...images,
+      REDIS_IMAGE: images.SUBCONVERTER_IMAGE,
+    })).toThrow('Runtime image environment must contain exactly');
   });
 
   it.each([
@@ -101,8 +99,8 @@ describe('runtime image contract', () => {
 
     expect(() => renderRuntimeImageEnv({
       ...images,
-      MYURLS_IMAGE: transform(images.MYURLS_IMAGE),
-    })).toThrow('MYURLS_IMAGE must be an immutable sha256 image reference');
+      SUBCONVERTER_IMAGE: transform(images.SUBCONVERTER_IMAGE),
+    })).toThrow('SUBCONVERTER_IMAGE must be an immutable sha256 image reference');
   });
 
   it('uses the explicit --lock file for environment and rollback output', async () => {
@@ -127,7 +125,7 @@ describe('runtime image contract', () => {
 
   it('rejects an invalid explicit --lock file before writing output', async () => {
     const invalidLock = structuredClone(lock);
-    invalidLock.services.redis.image.digest = 'sha256:bad';
+    invalidLock.services.subconverter.image.digest = 'sha256:bad';
     const invalidLockPath = join(temporaryDirectory, 'invalid.lock.json');
     await writeFile(invalidLockPath, JSON.stringify(invalidLock));
 
@@ -135,7 +133,7 @@ describe('runtime image contract', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stdout).toBe('');
-    expect(result.stderr).toContain('services.redis.image.digest must be a sha256 digest');
+    expect(result.stderr).toContain('services.subconverter.image.digest must be a sha256 digest');
   });
 
   it('verifies locked runtime image manifests against registry digests', async () => {
@@ -170,7 +168,7 @@ setTimeout(() => {}, 2_000);
 
     const startedAt = Date.now();
     expect(() => verifyRuntimeImageManifests(lock, dockerPath, 1_000)).toThrow(
-      'REDIS_IMAGE manifest verification failed: timed out after 1000ms',
+      'SUBCONVERTER_IMAGE manifest verification failed: timed out after 1000ms',
     );
     expect(Date.now() - startedAt).toBeLessThan(1_300);
   });
@@ -178,7 +176,7 @@ setTimeout(() => {}, 2_000);
   it('renders a complete rollback payload with immutable image references', () => {
     const rollback = runtimeImagesForRollback(lock);
 
-    expect(Object.keys(rollback).sort()).toEqual(['myurls', 'redis', 'subconverter']);
+    expect(Object.keys(rollback).sort()).toEqual(['subconverter']);
     for (const [serviceName, image] of Object.entries(rollback)) {
       const sourceImage = lock.services[serviceName].image;
 

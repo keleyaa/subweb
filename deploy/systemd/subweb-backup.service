@@ -1,5 +1,5 @@
 [Unit]
-Description=Subweb encrypted Redis backup
+Description=Subweb encrypted short-link database backup
 Requires=docker.service
 RequiresMountsFor=/var/lib/subweb-backups /mnt/subweb-backups
 After=docker.service remote-fs.target subweb.service

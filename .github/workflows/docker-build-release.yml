@@ -131,38 +131,12 @@ jobs:
 
       # Scan each image the compose stack actually pulls so a vulnerable
       # upstream release fails the gate instead of reaching production silently.
-      # Kept as three steps because Trivy rejects comma-separated
-      # image-reference lists.
-      - name: Scan external runtime images (Redis)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
-        with:
-          version: "v0.76.0"
-          image-ref: ${{ env.REDIS_IMAGE }}
-          trivyignores: .trivyignore.redis
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
-
       - name: Scan external runtime images (SubConverter-Extended)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           version: "v0.76.0"
           image-ref: ${{ env.SUBCONVERTER_IMAGE }}
           trivyignores: .trivyignore.subconverter
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
-
-      - name: Scan external runtime images (MyUrls)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
-        with:
-          version: "v0.76.0"
-          image-ref: ${{ env.MYURLS_IMAGE }}
-          trivyignores: .trivyignore.myurls
           format: table
           exit-code: "1"
           ignore-unfixed: true
@@ -409,7 +383,7 @@ jobs:
                 .docker_hub) and
              .release_identity.rollback_target.registry_references.ghcr and
              (.release_identity.runtime_images |
-               (keys | sort) == ["myurls", "redis", "subconverter"] and
+               (keys | sort) == ["subconverter"] and
                all(.[]; (
                  (keys | sort) == ["digest", "platforms", "reference"] and
                  ((.reference | type) == "string") and

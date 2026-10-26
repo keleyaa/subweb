@@ -75,7 +75,7 @@ if [ "$1" = -f ]; then
   shift 2
 fi
 case "$compose_file:$*" in
-  'compose.yaml:pull gateway subconverter myurls redis') exit 0 ;;
+  'compose.yaml:pull gateway subconverter') exit 0 ;;
   'compose.yaml:up -d --no-build --pull never --remove-orphans --wait') exit 0 ;;
   'common:config --format json') [ "\${COMPOSE_FILE-}" = compose.yaml ] && printf '{"services":{"subconverter":{"image":"${image}"}}}\\n' ;;
   'common:ps -q subconverter') [ "\${COMPOSE_FILE-}" = compose.yaml ] && printf 'container-id\\n' ;;
@@ -111,7 +111,7 @@ describe('SubConverter upgrade runtime volume gate', () => {
 
     expect(result.status, result.stderr).toBe(0);
     const log = normalizeComposeSnapshot(await readFile(join(root, 'docker.log'), 'utf8'));
-    expect(log).toContain('compose --env-file <private-snapshot> -f compose.yaml pull gateway subconverter myurls redis\n');
+    expect(log).toContain('compose --env-file <private-snapshot> -f compose.yaml pull gateway subconverter\n');
     expect(log).toContain('compose --env-file <private-snapshot> -f compose.yaml up -d --no-build --pull never --remove-orphans --wait\n');
     expect(log).toContain('compose --env-file <private-snapshot> config --format json\n');
     expect(log).toContain('compose --env-file <private-snapshot> ps -q subconverter\n');
@@ -137,7 +137,7 @@ describe('SubConverter upgrade runtime volume gate', () => {
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     const upgradeEnvironment = await readFile(join(root, 'upgrade.env'), 'utf8');
-    expect(upgradeEnvironment).toMatch(/MYURLS_IMAGE=[^\n]+\n$/u);
+    expect(upgradeEnvironment).toMatch(/SUBCONVERTER_IMAGE=[^\n]+\n$/u);
     expect(upgradeEnvironment).not.toContain('\\n');
   });
 

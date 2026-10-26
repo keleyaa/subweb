@@ -2,7 +2,7 @@
 
 ## 维护边界
 
-项目运行时由 Go Gateway、SubConverter、一个 MyUrls Rust v2.0.8 实例和 Redis 组成。默认生产部署使用 [`compose.yaml`](../compose.yaml) 四服务 profile；短链关闭时使用明确的 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml) 两服务 profile。外部 TLS 反向代理示例只描述项目外的入口，不属于 Compose 运行时。
+项目运行时由 Go Gateway 与 SubConverter 两个服务组成；短链存储内嵌在 Gateway 的 SQLite 数据库中。默认生产部署使用 [`compose.yaml`](../compose.yaml)，短链关闭时使用明确的 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml)；两者都是两服务 profile。外部 TLS 反向代理示例只描述项目外的入口，不属于 Compose 运行时。
 
 发布、回滚和升级必须使用 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 中记录的外部依赖源 commit、OCI tag、manifest digest 和平台 digest。`scripts/runtime-image-contract.mjs` 是锁定外部镜像值和完整 release rollback runtime image 列表的唯一生成入口，Compose、部署和 release workflow 共同调用它。Gateway 发布工作流在推送 `vX.Y.Z` Git tag 时自动触发，也支持手动输入已有 tag 补跑，并同时推送 Docker Hub 与 GHCR；`docker.io/keleyaa/subweb` 和 `ghcr.io/keleyaa/subweb` 是等价来源，生产部署使用该发布证据中的不可变多平台 manifest digest。Git tag 是产品版本的唯一来源；`package.json` 仅描述 Node 工具链，不参与决定发布版本。不要使用 `latest`、产品版本标签或其他可变 tag 作为部署依据，也不要手工拼接外部镜像 digest。
 
@@ -20,16 +20,16 @@ npm run verify:docs
 git diff --check
 ```
 
-`verify:ci` 是 CI 与本地发布共用的 Docker 门禁，启用真实 Docker integration 和 Redis integration。`verify:release` 还执行 npm audit、浏览器验证、版本锁、production-readiness、Compose、文档、Gateway 镜像安全、锁定 runtime image 安全检查和 evidence gate；Go race、Go vet、构建和 `git diff --check` 是需要另行执行或由 CI job 覆盖的独立检查，不是该脚本自身的全部步骤。只有看到 release verifier 的明确 `release verification=passed` marker 才能判定成功；截断的长日志不算通过。
+`verify:ci` 是 CI 与本地发布共用的 Docker 门禁，启用真实 Docker integration。`verify:release` 还执行 npm audit、浏览器验证、版本锁、production-readiness、Compose、文档、Gateway 镜像安全、锁定 runtime image 安全检查和 evidence gate；Go race、Go vet、构建和 `git diff --check` 是需要另行执行或由 CI job 覆盖的独立检查，不是该脚本自身的全部步骤。只有看到 release verifier 的明确 `release verification=passed` marker 才能判定成功；截断的长日志不算通过。
 
 GitHub package publish job 需要 `packages: write` 权限。发布工作流必须先通过 `npm run verify:ci`，再使用版本锁生成的镜像和 rollback manifest；不要把个人访问令牌写入工作流。
 
 ## 备份与升级顺序
 
-1. 运行 `npm run verify:operations` 完成 RDB backup/restore 和独立重启恢复演练。
+1. 运行 `npm run verify:integration` 完成两服务往返 smoke、短链持久化与过期验证。
 2. 记录 `git status --short`、当前镜像 digest 和 `./scripts/subweb.sh status`。
-3. 使用 `./scripts/subweb.sh backup --output /absolute/path/backup.rdb` 保存短链数据。
-4. 通过 `./scripts/subweb.sh upgrade` 按当前 `.env` 的 release 镜像引用拉取 Gateway，并按版本锁拉取 SubConverter、MyUrls 和 Redis 镜像，然后等待健康检查。升级入口会先校验 Compose/版本锁合同，并在启动后比对镜像自带与运行卷中的 `pref.example.toml`；Docker 只在命名卷为空时才从镜像播种 `/base`，因此 SubConverter 版本变化后必须删除 `subconverter-runtime` 卷再启动，否则容器会继续使用旧版本的偏好模板，脚本会以非零退出并打印该步骤。
+3. 使用 `./scripts/subweb.sh backup --output /absolute/path/backup.db` 保存短链数据。
+4. 通过 `./scripts/subweb.sh upgrade` 按当前 `.env` 的 release 镜像引用拉取 Gateway，并按版本锁拉取 SubConverter 镜像，然后等待健康检查。升级入口会先校验 Compose/版本锁合同，并在启动后比对镜像自带与运行卷中的 `pref.example.toml`；Docker 只在命名卷为空时才从镜像播种 `/base`，因此 SubConverter 版本变化后必须删除 `subconverter-runtime` 卷再启动，否则容器会继续使用旧版本的偏好模板，脚本会以非零退出并打印该步骤。
 
 ```sh
 docker compose -f compose.yaml down
@@ -41,7 +41,7 @@ docker volume rm subweb_subconverter-runtime
 5. 运行 `npm run verify:integration`，确认业务 smoke 和重启路径。
 6. 失败时停止继续发布，保留当前 RDB 和日志，并按版本锁生成的 rollback manifest 回滚完整 runtime image 集合。
 
-短链关闭时只升级 Gateway 与 SubConverter，不读取或创建 Redis/MyUrls 配置。不要通过只替换 `MYURLS_IMAGE` 把 Rust v2 回滚到接口不兼容的旧 Node `/api/v1/links` 合同；跨合同回滚必须同时恢复 Gateway 路由和前端行为。
+短链启用与关闭都只升级 Gateway 与 SubConverter。短链数据在 `links-data` 卷内，升级不会重建该卷；回滚 Gateway 镜像时使用兼容的数据库 schema（当前为 1），不要把数据库文件挂载给旧版本。
 
 ## 仓库卫生
 
@@ -49,7 +49,7 @@ docker volume rm subweb_subconverter-runtime
 
 ## 依赖来源
 
-第三方来源和锁定证据见 [第三方来源](third-party-sources.md)。SubConverter 的运行时权限、相对路径和本地 default config 要求见 [SubConverter 容器契约](../deploy/subconverter/README.md)。MyUrls Rust 的当前版本是 v2.0.8，升级必须同步源 commit、镜像 manifest 和 `/api/links` 兼容性验证。
+第三方来源和锁定证据见 [第三方来源](third-party-sources.md)。SubConverter 的运行时权限、相对路径和本地 default config 要求见 [SubConverter 容器契约](../deploy/subconverter/README.md)。短链实现与数据库 schema 属于 Gateway 自身，升级 Gateway 时保持 `links-data` 卷不变。
 
 ## 镜像发布
 

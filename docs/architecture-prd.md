@@ -4,7 +4,7 @@
 
 ## 1. 产品范围
 
-Subweb 是面向自托管环境的订阅转换与短链服务。项目自有 Go Gateway 统一处理公网 Host 路由、静态资源、转换策略、匿名限流、MyUrls 适配和受控 HTTPS CONNECT egress。前端是 Vue 3 + Vite 静态 SPA；SubConverter、MyUrls Rust v2 和 Redis 使用独立容器。
+Subweb 是面向自托管环境的订阅转换与短链服务。项目自有 Go Gateway 统一处理公网 Host 路由、静态资源、转换策略、匿名限流、内嵌短链存储和受控 HTTPS CONNECT egress。前端是 Vue 3 + Vite 静态 SPA；只有 SubConverter 使用独立容器，短链数据保存在 Gateway 独占的 SQLite 卷中。
 
 TLS、证书和公网 DNS 由部署者已有的外部反向代理负责。Subweb 只接收外部代理转发到 loopback 的 HTTP 流量，并根据可信代理配置重建客户端身份。
 
@@ -12,16 +12,14 @@ TLS、证书和公网 DNS 由部署者已有的外部反向代理负责。Subweb
 
 ### 2.1 短链开启
 
-`compose.yaml` 是唯一的短链开启生产 Compose 文件，准确运行四个服务：
+`compose.yaml` 是唯一的短链开启生产 Compose 文件，准确运行两个服务：
 
 | 服务 | 职责 |
 | --- | --- |
-| `gateway` | 唯一公开 loopback 端口；Host 路由、静态资源、转换策略、限流、MyUrls 适配和 egress |
+| `gateway` | 唯一公开 loopback 端口；Host 路由、静态资源、转换策略、限流、内嵌短链存储和 egress |
 | `subconverter` | 执行订阅转换；只能通过内部 CONNECT egress 访问外部订阅 |
-| `myurls` | APP 短链创建及 APP/SHORT 短码解析的唯一实例 |
-| `redis` | DB `0` 保存 MyUrls 数据，DB `1` 保存 Gateway IP 限流状态 |
 
-只有 Gateway 发布宿主机端口，而且端口必须绑定 `127.0.0.1`。MyUrls、Redis 和 SubConverter 不发布宿主机端口。
+只有 Gateway 发布宿主机端口，而且端口必须绑定 `127.0.0.1`。SubConverter 不发布宿主机端口。
 
 ### 2.2 短链关闭
 
@@ -30,18 +28,16 @@ TLS、证书和公网 DNS 由部署者已有的外部反向代理负责。Subweb
 - `gateway`
 - `subconverter`
 
-该 profile 不要求 `SHORT_DOMAIN`、Redis、MyUrls 或 Turnstile 私钥。Gateway 使用单实例内存限流；该 profile 不承诺多 Gateway 实例之间共享限流状态。
+该 profile 不要求 `SHORT_DOMAIN`、短链数据库或 Turnstile 私钥。Gateway 使用单实例内存限流；该 profile 不承诺多 Gateway 实例之间共享限流状态。
 
 ### 2.3 网络边界
 
-生产 Compose 使用以下内部网络：
+生产 Compose 使用以下网络：
 
-- `myurls-data`：Redis 与一个 MyUrls 实例之间的数据网络。
-- `myurls-edge`：Gateway 与一个 MyUrls 实例之间的 HTTP 边界。
-- `redis-policy`：Gateway 与 Redis 限流 DB 之间的边界。
+- `default`：Gateway 的 loopback 发布端口与容器入口。
 - `subconverter-egress`：Gateway egress listener 与 SubConverter 之间的受控网络，标记为 internal。
 
-Gateway 不加入 `myurls-data`；SubConverter 不加入 MyUrls 或 Redis 网络；外部订阅连接只能经 Gateway 的 CONNECT listener 建立。
+SubConverter 不加入默认网络；外部订阅连接只能经 Gateway 的 CONNECT listener 建立。短链数据不使用网络，而是 Gateway 独占的 `links-data` 命名卷。
 
 ## 3. 公网入口和路由
 
@@ -53,7 +49,7 @@ Gateway 不加入 `myurls-data`；SubConverter 不加入 MyUrls 或 Redis 网络
 | `API_DOMAIN` | `/sub` 转换接口、健康检查和 API 资源 |
 | `SHORT_DOMAIN` | 短码解析和跳转 |
 
-短链开启时，APP 创建与 APP/SHORT 解析都访问唯一的 `myurls` 上游。Gateway 不向 SHORT 域公开 APP 管理接口。
+短链开启时，APP 创建与 APP/SHORT 解析都由 Gateway 直接处理，映射写入内嵌 SQLite 数据库。Gateway 不向 SHORT 域公开 APP 管理接口。
 
 Gateway 静态资源只服务文件和明确的 PWA/crawler 路径；缺少扩展名的页面请求才允许受限 SPA fallback。目录、路径遍历、未知资源和错误 Host 不会被 fallback 掩盖。
 
@@ -69,18 +65,18 @@ Gateway 静态资源只服务文件和明确的 PWA/crawler 路径；缺少扩�
 
 Gateway 依赖响应采用完整缓冲，不支持流式传输、协议升级或 WebSocket 等可选 `ResponseWriter` 能力。
 
-## 5. MyUrls 适配
+## 5. 短链实现
 
-Go Gateway 是前端与 MyUrls 之间的唯一适配边界：
+短链由 Gateway 内嵌实现，对外合同保持与既有 `/api/links` 兼容：
 
-- APP `POST /short-api/links` 映射到 MyUrls `/api/links`。
-- APP 和 SHORT 的短码路径映射到允许的解析接口。
-- 请求只转发 Gateway 重建的 `X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host`、`X-Real-IP` 和有效 request ID。
-- 客户端 Authorization、Proxy-Authorization、Cookie、Origin 和任意未经允许的转发头不会跨越依赖边界。
-- RFC 9457 problem details 只保留白名单错误、`requestId`、`retryAfterSeconds` 和 `challenge` 元数据。
-- MyUrls 客户端禁用上游重定向，只接受 HTTP(S) 解析结果，并使用 10 秒总超时。
+- APP `POST /short-api/links` 创建短链，返回 `{ code, shortUrl, expiresAt }`。
+- APP 和 SHORT 的短码路径返回 `302` 与 `Location`；未知或过期返回 `404`。
+- 短码为 4–32 位 `[A-Za-z0-9_-]`；自定义 alias 冲突返回 `409 alias_unavailable`。
+- 短链映射与到期时间写入 `links-data` 卷中的 SQLite 数据库（`/data/links.db`，WAL 模式）。
+- 错误信封只保留白名单错误码、`requestId`、`retryAfterSeconds` 和 `challenge` 元数据。
+- 创建需要 Turnstile 校验（`TURNSTILE_ENABLED=true` 时）与每 IP 限流；解析只有限流。
 
-唯一的 MyUrls 实例使用锁定的 Rust v2.0.8 镜像，`PUBLIC_BASE_URL=https://${SHORT_DOMAIN}` 独立于 `TURNSTILE_HOSTNAME=${APP_DOMAIN}`。Gateway 仅使用 `MYURLS_UPSTREAM=http://myurls-edge:3000`。MyUrls 只连接内部网络，没有直连公网能力；Turnstile siteverify 经 Gateway 的受限 `:25503` CONNECT 监听访问 `EGRESS_ALLOWED_HOSTS`（默认 `challenges.cloudflare.com`），未列出的目标在 DNS 解析前被拒绝。创建保留风险触发的 Turnstile hostname/action 校验；解析只有限流，没有解析挑战。
+Turnstile siteverify 经 Gateway 的受限 `:25503` CONNECT 监听访问 `EGRESS_ALLOWED_HOSTS`（默认 `challenges.cloudflare.com`），未列出的目标在 DNS 解析前被拒绝。创建返回地址固定为 `https://${SHORT_DOMAIN}/<code>`，hostname 校验固定使用 `APP_DOMAIN`。
 
 ## 6. 配置和功能开关
 
@@ -96,9 +92,10 @@ Go Gateway 是前端与 MyUrls 之间的唯一适配边界：
 | `CUSTOM_BACKEND_ENABLED` | 只接受 `true` 或 `false`，默认 `true` |
 | `SUBWEB_PORT` | Gateway loopback 端口，范围 `1-65535` |
 | `TRUSTED_PROXY_CIDR` | 外部 TLS 代理的准确来源 CIDR；不可信时留空 |
-| `MYURLS_IMAGE` | 由 `deploy/versions.lock.json` 锁定的 MyUrls Rust v2 镜像 |
-| `SUBCONVERTER_IMAGE` | 由版本锁定的 SubConverter 镜像 |
-| `REDIS_IMAGE` | 由版本锁定的 Redis 镜像 |
+| `SUBCONVERTER_IMAGE` | 由 `deploy/versions.lock.json` 锁定的 SubConverter 镜像 |
+| `SHORT_LINK_DB_PATH` | Gateway 内嵌短链数据库路径，默认 `/data/links.db` |
+| `SHORT_LINK_TTL_SECONDS` | 短链有效期，默认 90 天 |
+| `TURNSTILE_ENABLED` | 是否要求 Turnstile 校验；本地开发可关闭 |
 
 `SHORT_LINKS_ENABLED` 和 `CUSTOM_BACKEND_ENABLED` 只控制业务能力。SSRF、DNS 校验、限流、超时、请求大小、网络隔离、日志脱敏和容器收紧控制没有关闭路径。
 
@@ -111,13 +108,13 @@ Go Gateway 是前端与 MyUrls 之间的唯一适配边界：
 - DNS 只解析一次，授权凭据一次性使用并短 TTL 过期。
 - 请求体上限为 `16 KiB`；上游响应超过配置上限时返回 `response_too_large`。
 - 请求总超时、DNS 超时、CONNECT 超时、并发和限流均有有限上限，并正确传播取消。
-- Gateway、MyUrls、Redis 和 SubConverter 使用只读根文件系统、最小权限和受限网络；SubConverter 只在初始化阶段使用明确的 root bootstrap，随后以非 root 用户运行并清除有效 capability。
-- 日志不记录原始订阅 URL、完整 query、Authorization、Cookie、Redis 密码或完整客户端 IP。
+- Gateway 与 SubConverter 使用只读根文件系统、最小权限和受限网络；SubConverter 只在初始化阶段使用明确的 root bootstrap，随后以非 root 用户运行并清除有效 capability。
+- 日志不记录原始订阅 URL、完整 query、Authorization、Cookie、数据库密钥或完整客户端 IP。
 - 短链是持有即可访问的数据；用户应按公开资源处理短链。
 
 ## 8. 本地开发和运维
 
-本地开发使用 `compose.yaml` 与 `compose.dev.yaml`，配置写入 `.runtime/local/compose.env`，服务名与生产保持一致。开发覆盖关闭 MyUrls Turnstile，并将 Gateway 与 SHORT 端口只绑定到 loopback。
+本地开发使用 `compose.yaml` 与 `compose.dev.yaml`，配置写入 `.runtime/local/compose.env`，服务名与生产保持一致。开发覆盖关闭 Turnstile，并且只由 Gateway 发布 loopback 端口。
 
 ```sh
 npm ci
@@ -134,13 +131,13 @@ npm run verify:local
 ./scripts/subweb.sh up
 ./scripts/subweb.sh status
 ./scripts/subweb.sh logs gateway
-./scripts/subweb.sh backup --output /absolute/path/backup.rdb
-./scripts/subweb.sh restore --backup /absolute/path/backup.rdb --confirm-stop-writes
+./scripts/subweb.sh backup --output /absolute/path/backup.db
+./scripts/subweb.sh restore --backup /absolute/path/backup.db --confirm-stop-writes
 ./scripts/subweb.sh upgrade
 ./scripts/subweb.sh down
 ```
 
-恢复只接受短链开启 profile、绝对路径普通备份文件和明确的停止写入确认。恢复流程保留现有 RDB，使用锁定镜像启动隔离栈，并验证 Redis、Gateway、SubConverter 与一个 MyUrls 实例的恢复。
+恢复只接受短链开启 profile、绝对路径普通 SQLite 备份文件和明确的停止写入确认。恢复流程通过 Gateway 的 `--restore-links` 子命令原子替换数据库并校验行数，然后重新启动并等待健康检查。
 
 ## 9. 验证和发布
 
@@ -151,7 +148,6 @@ npm run verify
 npm run verify:ci
 npm run verify:local
 npm run verify:integration
-npm run verify:operations
 npm run verify:production-readiness
 npm run verify:compose
 npm run verify:locks
@@ -160,21 +156,21 @@ npm run verify:evidence
 npm run verify:release
 ```
 
-`verify:release` 会运行浏览器、真实四服务 smoke、两服务 profile、测试 fixture、Redis backup/restore、锁定镜像扫描和 evidence 检查。Go race、Go vet、构建和 `git diff --check` 是需要另行执行或由 CI job 覆盖的独立检查；只有明确输出 `release verification=passed` 才能记录 release verifier 成功。
+`verify:release` 会运行浏览器、真实两服务 smoke、两服务 profile、短链持久化与过期、锁定镜像扫描和 evidence 检查。Go race、Go vet、构建和 `git diff --check` 是需要另行执行或由 CI job 覆盖的独立检查；只有明确输出 `release verification=passed` 才能记录 release verifier 成功。
 
 ## 10. 发布、证据和回滚
 
-`deploy/versions.lock.json` 记录外部运行时依赖的来源、版本、平台 digest 和端口。Gateway release workflow 通过手动输入已有 Git tag 从该 tag 检出源码并构建，随后以该 tag 和 digest 发布；workflow 扫描 Gateway、MyUrls、Redis 和 SubConverter，并从版本锁生成外部 runtime rollback manifest。
+`deploy/versions.lock.json` 记录外部运行时依赖的来源、版本、平台 digest 和端口。Gateway release workflow 通过手动输入已有 Git tag 从该 tag 检出源码并构建，随后以该 tag 和 digest 发布；workflow 扫描 Gateway 与 SubConverter，并从版本锁生成外部 runtime rollback manifest。
 
-回滚使用上一 release manifest 中的完整镜像集合与对应配置，不逐项猜测版本。若 MyUrls HTTP 合同发生变化，回滚必须同时恢复 Gateway 路由、前端适配和 MyUrls 镜像。Redis 数据卷在升级失败时保留，并通过恢复演练验证可用。
+回滚使用上一 release manifest 中的完整镜像集合与对应配置，不逐项猜测版本。短链数据库 schema 变化必须由 Gateway 迁移并保持向后兼容；`links-data` 卷在升级失败时保留，并通过备份/恢复演练验证可用。
 
 ## 11. 验收结果
 
 当前实现已验证以下场景：
 
-- 四服务生产 profile 的 APP/API/SHORT Host 路由、静态/PWA MIME、转换和短链创建/解析。
+- 两服务生产 profile 的 APP/API/SHORT Host 路由、静态/PWA MIME、转换和短链创建/解析。
 - 私网目标、DNS 失败、超时、响应过大、限流、并发和依赖请求头清理。
-- Gateway、SubConverter、一个 MyUrls 实例和 Redis 的独立重启恢复。
+- Gateway 重启后的短链持久化恢复。
 - 两服务短链关闭 profile 的启动、转换、功能开关和资源缺失行为。
 - 本地四依赖 Compose-first 生命周期、Vite `/short-api` 代理和 SHORT loopback `302`。
 - 锁、Compose 网络/权限、文档、证据、镜像安全和 release preflight 合同。

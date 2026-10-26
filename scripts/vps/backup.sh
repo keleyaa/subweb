@@ -144,11 +144,11 @@ work_directory=$(mktemp -d "$BACKUP_WORKSPACE_DIRECTORY/.subweb-backup.XXXXXX") 
 chmod 0700 "$work_directory"
 run_id=${work_directory##*.subweb-backup.}
 timestamp=$(date -u '+%Y%m%dT%H%M%SZ')
-raw_file="$work_directory/raw.rdb"
+raw_file="$work_directory/raw.db"
 if [ -n "$AGE_RECIPIENT" ]; then
-  final_file="$BACKUP_DIRECTORY/subweb-redis-$timestamp-$run_id.rdb.age"
+  final_file="$BACKUP_DIRECTORY/subweb-links-$timestamp-$run_id.db.age"
 else
-  final_file="$BACKUP_DIRECTORY/subweb-redis-$timestamp-$run_id.rdb"
+  final_file="$BACKUP_DIRECTORY/subweb-links-$timestamp-$run_id.db"
 fi
 checksum_file="$final_file.sha256"
 final_temporary="$work_directory/final"
@@ -165,7 +165,7 @@ trap cleanup EXIT HUP INT TERM
 
 SUBWEB_ENV_FILE="$ENV_FILE" COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-subweb} \
   "$PROJECT_ROOT/scripts/subweb.sh" backup --output "$raw_file"
-[ -s "$raw_file" ] || fail 'Redis backup is empty.'
+[ -s "$raw_file" ] || fail 'Short-link backup is empty.'
 
 if [ -n "$AGE_RECIPIENT" ]; then
   command -v age >/dev/null 2>&1 || fail 'age is required when AGE_RECIPIENT is configured.'
@@ -209,7 +209,7 @@ retention_sorted="$work_directory/retention-sorted"
 retention_stale_records="$work_directory/retention-stale-records"
 retention_stale_paths="$work_directory/retention-stale-paths"
 
-find "$BACKUP_DIRECTORY" -maxdepth 1 -type f \( -name 'subweb-redis-*.rdb' -o -name 'subweb-redis-*.rdb.age' \) -printf '%T@ %p\0' >"$retention_records" \
+find "$BACKUP_DIRECTORY" -maxdepth 1 -type f \( -name 'subweb-links-*.db' -o -name 'subweb-links-*.db.age' \) -printf '%T@ %p\0' >"$retention_records" \
   || fail 'unable to enumerate retained backups.'
 sort -znr <"$retention_records" >"$retention_sorted" \
   || fail 'unable to sort retained backups.'
@@ -240,4 +240,4 @@ case "$backup_remote_storage_validated:$AGE_RECIPIENT" in
   1:*) storage_description='Encrypted/off-host' ;;
   *) storage_description='Encrypted' ;;
 esac
-printf '%s Redis backup retained: %s\n' "$storage_description" "$final_file"
+printf '%s short-link backup retained: %s\n' "$storage_description" "$final_file"

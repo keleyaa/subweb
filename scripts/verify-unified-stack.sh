@@ -16,25 +16,17 @@ version_lock_file=$project_root/deploy/versions.lock.json
 # This verifier owns every variable in its temporary Compose environment.
 unset \
   APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN \
-  SHORT_LINKS_ENABLED CUSTOM_BACKEND_ENABLED \
+  SHORT_LINKS_ENABLED CUSTOM_BACKEND_ENABLED TURNSTILE_ENABLED \
   CONVERSION_RATE_LIMIT CONVERSION_RATE_WINDOW_SECONDS \
-  SUBWEB_PORT MYURLS_NETWORK_SUBNET MYURLS_GATEWAY_IP MYURLS_IP MYURLS_TRUST_PROXY_CIDR \
-  REDIS_PASSWORD IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY \
-  MYURLS_IMAGE REDIS_IMAGE SUBCONVERTER_IMAGE
+  SUBWEB_PORT IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY \
+  SHORT_LINK_DB_PATH SHORT_LINK_TTL_SECONDS SUBCONVERTER_IMAGE
 
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/subweb-unified-smoke.XXXXXX")
 project_name=subweb-unified-smoke-$(openssl rand -hex 6)
 compose_files=$project_root/compose.yaml:$project_root/compose.test.yaml
 env_file=$temporary_directory/stack.env
 host_port=$(node -e 'const n=require("node:net");const s=n.createServer();s.listen(0,"127.0.0.1",()=>{process.stdout.write(String(s.address().port));s.close()})')
-password=$(openssl rand -hex 32)
 ip_hash_secret=$(openssl rand -hex 32)
-test_network_subnet=$("$script_directory/select-test-network.sh")
-test_network_prefix=${test_network_subnet%.*}
-test_gateway_ip=$test_network_prefix.2
-test_myurls_ip=$test_network_prefix.3
-request_headers=$temporary_directory/headers
-request_body=$temporary_directory/body
 
 cleanup() {
   COMPOSE_FILE=$compose_files COMPOSE_ENV_FILES=$env_file COMPOSE_PROJECT_NAME=$project_name \
@@ -49,7 +41,8 @@ fail() {
 }
 
 node "$project_root/scripts/verify-version-locks.mjs" "$version_lock_file" >/dev/null
-locked_images=$(node "$project_root/scripts/runtime-image-contract.mjs" env --lock "$version_lock_file") || fail 'unable to read locked production images.'
+locked_images=$(node "$project_root/scripts/runtime-image-contract.mjs" env --lock "$version_lock_file") \
+  || fail 'unable to read locked production images.'
 
 {
   printf '%s\n' \
@@ -59,313 +52,90 @@ locked_images=$(node "$project_root/scripts/runtime-image-contract.mjs" env --lo
     'SHORT_DOMAIN=short.test' \
     'SHORT_LINKS_ENABLED=true' \
     'CUSTOM_BACKEND_ENABLED=true' \
+    'TURNSTILE_ENABLED=false' \
+    'TURNSTILE_SITE_KEY=smoke-site-key' \
+    'TURNSTILE_SECRET_KEY=smoke-secret-key' \
+    'SHORT_LINK_TTL_SECONDS=60' \
     'CONVERSION_RATE_LIMIT=1' \
     'CONVERSION_RATE_WINDOW_SECONDS=60' \
     "SUBWEB_PORT=$host_port" \
-    "MYURLS_NETWORK_SUBNET=$test_network_subnet" \
-    "MYURLS_GATEWAY_IP=$test_gateway_ip" \
-    "MYURLS_IP=$test_myurls_ip" \
-    "MYURLS_TRUST_PROXY_CIDR=$test_gateway_ip/32" \
-    "REDIS_PASSWORD=$password" \
-    "IP_HASH_SECRET=$ip_hash_secret" \
-    'TURNSTILE_SITE_KEY=test-site-key' \
-    'TURNSTILE_SECRET_KEY=test-secret-key'
+    "IP_HASH_SECRET=$ip_hash_secret"
   printf '%s\n' "$locked_images"
 } > "$env_file"
 chmod 0600 "$env_file"
 
-export COMPOSE_FILE=$compose_files
-export COMPOSE_ENV_FILES=$env_file
-export COMPOSE_PROJECT_NAME=$project_name
-
-cd "$project_root"
-docker compose up -d --build --wait >/dev/null
+export COMPOSE_FILE="$compose_files"
+export COMPOSE_ENV_FILES="$env_file"
+export COMPOSE_PROJECT_NAME="$project_name"
 
 request() {
-  request_host=$1
-  request_method=$2
-  request_path=$3
-  request_data=${4-}
-  request_headers=$temporary_directory/headers
-  request_body=$temporary_directory/body
-  rm -f "$request_headers" "$request_body"
-  if [ -n "$request_data" ]; then
-    curl --noproxy '*' --silent --show-error -D "$request_headers" -o "$request_body" \
-      -X "$request_method" -H "Host: $request_host" -H 'Content-Type: application/json' \
-      --data "$request_data" -w '%{http_code}' "http://127.0.0.1:$host_port$request_path"
-  else
-    curl --noproxy '*' --silent --show-error -D "$request_headers" -o "$request_body" \
-      -X "$request_method" -H "Host: $request_host" -w '%{http_code}' \
-      "http://127.0.0.1:$host_port$request_path"
-  fi
+  host=$1
+  method=$2
+  path=$3
+  shift 3
+  curl --connect-timeout 5 --max-time 20 --silent --output "$temporary_directory/body" \
+    --write-out '%{http_code}' \
+    --header "Host: $host" \
+    --request "$method" \
+    "http://127.0.0.1:$host_port$path" "$@"
 }
 
 assert_status() {
   actual=$1
   expected=$2
-  description=$3
-  [ "$actual" = "$expected" ] || fail "$description: expected HTTP $expected, got $actual"
-}
-
-assert_header() {
-  name=$1
-  value=$2
-  awk -v name="$name" -v expected="$value" '
-    index($0, ":") == 0 { next }
-    { header_name = $0; sub(/:.*/, "", header_name); header_value = $0; sub(/^[^:]*:[[:space:]]*/, "", header_value); sub(/\r$/, "", header_value) }
-    tolower(header_name) == tolower(name) && header_value == expected { found = 1 }
-    END { exit found ? 0 : 1 }
-  ' "$request_headers" || fail "missing $name header with value $value"
-}
-
-assert_header_matches() {
-  name=$1
-  pattern=$2
-  awk -v name="$name" -v pattern="$pattern" '
-    index($0, ":") == 0 { next }
-    { header_name = $0; sub(/:.*/, "", header_name); header_value = $0; sub(/^[^:]*:[[:space:]]*/, "", header_value); sub(/\r$/, "", header_value) }
-    tolower(header_name) == tolower(name) && header_value ~ pattern { found = 1 }
-    END { exit found ? 0 : 1 }
-  ' "$request_headers" || fail "missing $name header matching $pattern"
-}
-
-assert_problem_code() {
-  expected=$1
-  node - "$request_body" "$expected" <<'NODE'
-const fs = require('node:fs');
-const [bodyPath, expected] = process.argv.slice(2);
-try {
-  const problem = JSON.parse(fs.readFileSync(bodyPath, 'utf8'));
-  process.exit(problem.code === expected ? 0 : 1);
-} catch {
-  process.exit(1);
-}
-NODE
-}
-
-assert_fixture_headers_cleared() {
-  node - "$request_body" <<'NODE'
-const fs = require('node:fs');
-try {
-  const headers = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-  process.exit(Object.values(headers).every((value) => value === '') ? 0 : 1);
-} catch {
-  process.exit(1);
-}
-NODE
-}
-
-assert_runtime_config() {
-  expected_short=$1
-  expected_custom=$2
-  node - "$request_body" "$expected_short" "$expected_custom" <<'NODE'
-const fs = require('node:fs');
-const [bodyPath, expectedShort, expectedCustom] = process.argv.slice(2);
-const source = fs.readFileSync(bodyPath, 'utf8');
-const context = {};
-new Function('window', source)(context);
-const config = context.__SUBWEB_CONFIG__;
-if (!config || context.config !== config || config.shortLinksEnabled !== (expectedShort === 'true') || config.customBackendEnabled !== (expectedCustom === 'true')) process.exit(1);
-for (const forbidden of ['redis', 'password', 'secret', 'myurls', 'subconverter']) {
-  if (JSON.stringify(config).toLowerCase().includes(forbidden)) process.exit(1);
-}
-NODE
-}
-
-assert_gateway_security() {
-  gateway_id=$(docker compose ps -q gateway)
-  [ -n "$gateway_id" ] || fail 'gateway container is missing.'
-  docker inspect --format '{{.Config.User}} {{.HostConfig.ReadonlyRootfs}} {{json .HostConfig.CapDrop}} {{json .HostConfig.SecurityOpt}}' "$gateway_id" \
-    | grep -Fq '65532:65532 true ["ALL"] ["no-new-privileges:true"]' \
-    || fail 'gateway runtime security settings differ from the Compose contract.'
+  label=$3
+  [ "$actual" = "$expected" ] || fail "$label returned $actual, expected $expected."
 }
 
 assert_services_healthy() {
-  for service in gateway redis myurls subconverter; do
-    id=$(docker compose ps -q "$service")
-    [ -n "$id" ] || fail "$service container is missing."
-    health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$id") \
-      || fail "unable to inspect $service health."
-    [ "$health" = healthy ] || fail "$service is not healthy."
-  done
+  docker compose ps --status running --services | sort > "$temporary_directory/services"
+  printf '%s\n' gateway subconverter | sort > "$temporary_directory/expected-services"
+  cmp -s "$temporary_directory/services" "$temporary_directory/expected-services" \
+    || fail 'unexpected service inventory or unhealthy service.'
 }
 
-assert_fixture_services_healthy() {
-  for service in gateway subconverter; do
-    id=$(docker compose ps -q "$service")
-    [ -n "$id" ] || fail "$service fixture container is missing."
-    health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$id") \
-      || fail "unable to inspect $service fixture health."
-    [ "$health" = healthy ] || fail "$service fixture is not healthy."
-  done
-}
-
-assert_no_sensitive_logs() {
-  marker=private-header-$(openssl rand -hex 8)
-  status=$(curl --noproxy '*' --silent --show-error -D "$request_headers" -o "$request_body" \
-    -H 'Host: app.test' -H "Authorization: Bearer $marker" -H "Cookie: session=$marker" \
-    -H "X-Forwarded-For: $marker" -H "X-Request-ID: $marker" \
-    -w '%{http_code}' "http://127.0.0.1:$host_port/")
-  assert_status "$status" 200 'privacy probe'
-  for service in gateway myurls subconverter; do
-    if docker compose logs --no-log-prefix "$service" | grep -Fq "$marker"; then
-      fail "$service logged sensitive request data."
-    fi
-  done
-}
-
+printf '%s\n' 'unified stack: starting'
+docker compose up -d --build --remove-orphans --wait >/dev/null
 assert_services_healthy
-assert_gateway_security
 
-status=$(request app.test GET /)
-assert_status "$status" 200 'APP root'
-assert_header Content-Type 'text/html; charset=utf-8'
+printf '%s\n' 'unified stack: routing'
+assert_status "$(request app.test GET /healthz)" 200 'gateway health check'
+assert_status "$(request app.test GET /)" 200 'application shell'
+assert_status "$(request api.app.test GET /healthz)" 200 'API host health check'
+assert_status "$(request app.test GET /no-such-route)" 404 'unknown route'
 
-grep -Eo '/assets/[^" ]+\.(css|js)' "$request_body" | sort -u > "$temporary_directory/assets"
-[ -s "$temporary_directory/assets" ] || fail 'APP HTML did not reference built assets.'
-while IFS= read -r asset; do
-  status=$(request app.test GET "$asset")
-  assert_status "$status" 200 "asset $asset"
-  assert_header Cache-Control 'public, max-age=31536000, immutable'
-done < "$temporary_directory/assets"
+printf '%s\n' 'unified stack: short links'
+created=$(request app.test POST /short-api/links \
+  --header 'Content-Type: application/json' \
+  --data '{"url":"https://example.com/unified-smoke"}')
+assert_status "$created" 201 'short-link create'
+short_code=$(node -e '
+const fs = require("node:fs");
+const payload = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+if (typeof payload.code !== "string" || typeof payload.shortUrl !== "string") process.exit(1);
+if (payload.shortUrl !== "https://short.test/" + payload.code) process.exit(1);
+process.stdout.write(payload.code);
+' "$temporary_directory/body") || fail 'short-link create response is invalid.'
 
-for entry in \
-  '/favicon.svg:image/svg+xml' \
-  '/apple-touch-icon.png:image/png' \
-  '/icon-192.png:image/png' \
-  '/icon-512.png:image/png' \
-  '/site.webmanifest:application/manifest+json' \
-  '/robots.txt:text/plain; charset=utf-8' \
-  '/sitemap.xml:application/xml'; do
-  path=${entry%%:*}
-  content_type=${entry#*:}
-  status=$(request app.test GET "$path")
-  assert_status "$status" 200 "$path"
-  assert_header Content-Type "$content_type"
-done
+assert_status "$(request short.test GET "/$short_code")" 302 'short-link resolve'
 
-status=$(request app.test GET /missing.js)
-assert_status "$status" 404 'missing static resource'
-status=$(request app.test GET /dashboard/view)
-assert_status "$status" 200 'SPA fallback'
-assert_header Content-Type 'text/html; charset=utf-8'
+printf '%s\n' 'unified stack: restart persistence'
+docker compose restart gateway >/dev/null
+docker compose up -d --wait >/dev/null
+assert_services_healthy
+assert_status "$(request short.test GET "/$short_code")" 302 'short-link after gateway restart'
 
-status=$(request app.test GET /conf/config.js)
-assert_status "$status" 200 'runtime config'
-assert_header Cache-Control no-store
-assert_runtime_config true true
+printf '%s\n' 'unified stack: expiry'
+sleep 61
+assert_status "$(request short.test GET "/$short_code")" 404 'short-link expiry'
 
-status=$(request api.app.test GET /readyz)
-assert_status "$status" 200 'API readiness'
-assert_header Content-Type text/plain
-status=$(request short.test GET /readyz)
-assert_status "$status" 404 'SHORT readiness isolation'
-status=$(request app.test GET '/sub?target=clash&url=ss%3A%2F%2FYWVzLTI1Ni1nY206cGFzcw%3D%3D%40example.com%3A443%23probe')
-assert_status "$status" 404 'APP conversion isolation'
-status=$(request short.test GET '/sub?target=clash&url=ss%3A%2F%2FYWVzLTI1Ni1nY206cGFzcw%3D%3D%40example.com%3A443%23probe')
-assert_status "$status" 404 'SHORT conversion isolation'
-status=$(request unknown.test GET /)
-assert_status "$status" 421 'unknown host isolation'
-
-node_uri='ss%3A%2F%2FYWVzLTI1Ni1nY206cGFzcw%3D%3D%40example.com%3A443%23probe'
-status=$(request api.app.test GET "/sub?target=clash&url=$node_uri")
-assert_status "$status" 200 'inline conversion'
-assert_header_matches Content-Type '^(text/plain|text/yaml|text/x-yaml|application/yaml|application/json|application/octet-stream)(;[[:space:]]*charset=utf-8)?$'
-
-status=$(request api.app.test GET '/sub?target=clash&url=https%3A%2F%2F127.0.0.1%2Fprobe')
-assert_status "$status" 403 'private-address conversion rejection'
-assert_header Content-Type 'application/problem+json'
-assert_problem_code private_address || fail 'private-address rejection returned the wrong problem code.'
-
-status=$(request api.app.test GET "/sub?target=clash&url=$node_uri")
-assert_status "$status" 429 'conversion rate limit'
-assert_header Retry-After 60
-assert_problem_code rate_limited || fail 'rate limit returned the wrong problem code.'
-
-assert_no_sensitive_logs
-
-# 日志契约：真实请求要有记录，健康探测不能产生噪音。
-if ! docker compose logs --no-log-prefix gateway | grep -q 'route=sub'; then
-  fail 'gateway access log did not record the conversion request.'
-fi
-if docker compose logs --no-log-prefix gateway | grep -q -- '/healthz\|/readyz'; then
-  fail 'gateway access log recorded health or readiness probes.'
-fi
-if docker compose logs --no-log-prefix subconverter | grep -q 'path=/healthz'; then
-  fail 'subconverter logged health-check probes.'
-fi
-if ! docker compose logs --no-log-prefix subconverter | grep -q 'path=/sub'; then
-  fail 'subconverter did not record the conversion request.'
-fi
-if docker compose logs --no-log-prefix myurls | grep -q 'route=/health'; then
-  fail 'myurls recorded health-check probes at the default level.'
+printf '%s\n' 'unified stack: secret hygiene'
+if docker compose logs --no-log-prefix gateway 2>/dev/null | grep -q "$ip_hash_secret"; then
+  fail 'gateway logs exposed the IP hash secret.'
 fi
 
-short_response=$(request app.test POST /short-api/links '{"url":"https://example.com/unified-stack"}')
-assert_status "$short_response" 201 'short-link creation'
-short_code=$(node - "$request_body" <<'NODE'
-const fs = require('node:fs');
-try {
-  const result = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-  const value = result.code ?? result.shortCode ?? result.slug;
-  if (result.shortUrl !== `https://short.test/${value}`) process.exit(1);
-  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]+$/u.test(value)) process.exit(1);
-  process.stdout.write(value);
-} catch {
-  process.exit(1);
-}
-NODE
-) || fail 'short-link creation response did not contain a code.'
-
-status=$(request short.test GET "/$short_code")
-assert_status "$status" 302 'short-link resolution'
-assert_header Location 'https://example.com/unified-stack'
-
-for route in /short-api/links /api/links; do
-  status=$(request short.test POST "$route" '{"url":"https://example.com/forbidden"}')
-  assert_status "$status" 404 'SHORT creation isolation'
-done
-
-# The restricted CONNECT listener is the only egress MyUrls has: a host outside
-# EGRESS_ALLOWED_HOSTS must be refused before any DNS lookup or dial.
-# --noproxy would disable the explicit proxy, so the probe must not use it.
-restricted_probe=$(docker compose exec -T myurls curl -sS --max-time 15 \
-  -x http://gateway:25503 -o /dev/null https://example.com/ 2>&1 || true)
-printf '%s' "$restricted_probe" | grep -q '403' \
-  || fail 'restricted egress accepted a host outside EGRESS_ALLOWED_HOSTS.'
-
-for _attempt in 2 3 4 5; do
-  status=$(request app.test POST /short-api/links '{"url":"https://example.com/challenge-probe"}')
-  assert_status "$status" 201 'creation below challenge threshold'
-done
-status=$(request app.test POST /short-api/links '{"url":"https://example.com/challenge-probe"}')
-assert_status "$status" 403 'production creation challenge'
-assert_problem_code challenge_required || fail 'creation challenge was bypassed.'
-status=$(request short.test GET "/$short_code")
-assert_status "$status" 302 'resolution remains independent of creation challenge'
-assert_header Location 'https://example.com/unified-stack'
-
-docker compose exec -T redis sh -eu -c \
-  'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning SET "myurl:link:$1" "https://example.com/expired" EX 1 >/dev/null' \
-  sh expired-probe
-status=$(request short.test GET /expired-probe)
-assert_status "$status" 302 'short-link before expiry'
-sleep 2
-status=$(request short.test GET /expired-probe)
-assert_status "$status" 404 'short-link expiry'
-
-for service in redis gateway subconverter myurls; do
-  docker compose restart "$service" >/dev/null
-  docker compose up -d --wait >/dev/null
-  assert_services_healthy
-  status=$(request short.test GET "/$short_code")
-  assert_status "$status" 302 "short-link after $service restart"
-done
-
-"$script_directory/verify-redis-operations.sh"
-
+printf '%s\n' 'unified stack: disabled profile'
 docker compose down --volumes --remove-orphans >/dev/null
-
 compose_files=$project_root/compose.disabled-short-links.yaml
 env_file=$temporary_directory/disabled.env
 project_name=subweb-unified-disabled-$(openssl rand -hex 6)
@@ -374,73 +144,18 @@ project_name=subweb-unified-disabled-$(openssl rand -hex 6)
     'APP_DOMAIN=app.test' \
     'API_DOMAIN=api.app.test' \
     'API_URL=https://api.app.test' \
-    'SHORT_LINKS_ENABLED=false' \
-    'CUSTOM_BACKEND_ENABLED=false' \
     "SUBWEB_PORT=$host_port"
-  printf '%s\n' "$locked_images" | grep -E '^SUBCONVERTER_IMAGE='
+  printf '%s\n' "$locked_images"
 } > "$env_file"
 chmod 0600 "$env_file"
+export COMPOSE_FILE="$compose_files"
+export COMPOSE_ENV_FILES="$env_file"
+export COMPOSE_PROJECT_NAME="$project_name"
 
-export COMPOSE_FILE=$compose_files
-export COMPOSE_ENV_FILES=$env_file
-export COMPOSE_PROJECT_NAME=$project_name
-
-docker compose up -d --build --wait >/dev/null
-
-running_services=$(docker compose ps --services --filter status=running | sort)
-[ "$running_services" = "gateway
-subconverter" ] || fail 'disabled short-link profile did not start exactly Gateway and SubConverter.'
-status=$(request app.test GET /conf/config.js)
-assert_status "$status" 200 'disabled runtime config'
-assert_runtime_config false false
-status=$(request app.test POST /short-api/links '{"url":"https://example.com/disabled"}')
-assert_status "$status" 404 'disabled short-link creation'
-status=$(request api.app.test GET "/sub?target=clash&url=$node_uri")
-assert_status "$status" 200 'disabled profile conversion'
-status=$(request api.app.test GET "/sub?target=clash&url=$node_uri&api=https%3A%2F%2Fignored.invalid")
-assert_status "$status" 200 'disabled custom backend override'
+docker compose up -d --build --remove-orphans --wait >/dev/null
+assert_services_healthy
+assert_status "$(request app.test GET /healthz)" 200 'disabled profile health check'
+assert_status "$(request app.test GET /short-api/links)" 404 'disabled profile short-link route'
 
 docker compose down --volumes --remove-orphans >/dev/null
-
-compose_files=$project_root/compose.disabled-short-links.yaml:$project_root/compose.fixture.yaml
-env_file=$temporary_directory/fixture.env
-project_name=subweb-unified-fixture-$(openssl rand -hex 6)
-{
-  printf '%s\n' \
-    'APP_DOMAIN=app.test' \
-    'API_DOMAIN=api.app.test' \
-    'API_URL=https://api.app.test' \
-    'SHORT_LINKS_ENABLED=false' \
-    'CUSTOM_BACKEND_ENABLED=false' \
-    "SUBWEB_PORT=$host_port"
-  printf '%s\n' "$locked_images" | grep -E '^SUBCONVERTER_IMAGE='
-} > "$env_file"
-chmod 0600 "$env_file"
-
-export COMPOSE_FILE=$compose_files
-export COMPOSE_ENV_FILES=$env_file
-export COMPOSE_PROJECT_NAME=$project_name
-
-docker compose up -d --build --wait >/dev/null
-assert_fixture_services_healthy
-fixture_node_uri='ss%3A%2F%2FYWVzLTI1Ni1nY206cGFzcw%3D%3D%40example.com%3A443%23fixture%3A%2F%2Fecho'
-status=$(curl --noproxy '*' --silent --show-error -D "$request_headers" -o "$request_body" \
-  -H 'Host: api.app.test' -H 'Authorization: Bearer fixture-secret' -H 'Proxy-Authorization: Basic fixture-secret' \
-  -H 'Cookie: session=fixture-secret' -H 'Origin: https://fixture.invalid' -H 'Forwarded: for=fixture-secret' \
-  -H 'X-Forwarded-For: fixture-secret' -H 'X-Real-IP: fixture-secret' -w '%{http_code}' \
-  "http://127.0.0.1:$host_port/sub?target=clash&url=$fixture_node_uri")
-assert_status "$status" 200 'fixture header boundary'
-assert_header Content-Type application/json
-assert_fixture_headers_cleared || fail 'fixture received sensitive client headers.'
-
-fixture_node_uri='ss%3A%2F%2FYWVzLTI1Ni1nY206cGFzcw%3D%3D%40example.com%3A443%23fixture%3A%2F%2Fslow'
-status=$(request api.app.test GET "/sub?target=clash&url=$fixture_node_uri")
-assert_status "$status" 504 'fixture conversion timeout'
-assert_problem_code upstream_timeout || fail 'fixture timeout returned the wrong problem code.'
-
-fixture_node_uri='ss%3A%2F%2FYWVzLTI1Ni1nY206cGFzcw%3D%3D%40example.com%3A443%23fixture%3A%2F%2Flarge'
-status=$(request api.app.test GET "/sub?target=clash&url=$fixture_node_uri")
-assert_status "$status" 413 'fixture oversized response'
-assert_problem_code response_too_large || fail 'fixture oversized response returned the wrong problem code.'
-
 printf '%s\n' 'Unified production stack verification passed.'

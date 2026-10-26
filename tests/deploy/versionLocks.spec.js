@@ -26,24 +26,21 @@ const lock = JSON.parse(await readFile(lockPath, 'utf8'));
 const digestPattern = /^sha256:[0-9a-f]{64}$/;
 const commitPattern = /^[0-9a-f]{40}$/;
 const requiredPlatforms = ['linux/amd64', 'linux/arm64'];
-const inventoryError =
-  'services must contain exactly: gatewayBase, myurls, redis, subconverter';
+const inventoryError = 'services must contain exactly: gatewayBase, subconverter';
 const gatewayBaseSourceError =
   'services.gatewayBase.source.repository must equal docker-library/golang';
-  const gatewayBaseImageError =
-    'services.gatewayBase.image.reference must use docker.io/library/golang:1.27-alpine';
-  const redisSourceError = 'services.redis.source.tag must equal 7.4.11';
-  const redisImageError = 'services.redis.image.reference must equal docker.io/library/redis:7.4.11-alpine';
-  const runtimeImageError =
+const gatewayBaseImageError =
+  'services.gatewayBase.image.reference must use docker.io/library/golang:1.27-alpine';
+const subconverterSourceError =
+  'services.subconverter.source.repository must equal Aethersailor/SubConverter-Extended';
+const subconverterImageError =
+  'services.subconverter.image.reference must use ghcr.io/aethersailor/subconverter-extended';
+const runtimeImageError =
   'services.gatewayBase.runtimeImages must contain exactly: distroless, frontend';
-const imageReferenceError =
-  'services.myurls.image.reference must be a valid tagged OCI/Docker reference';
-const sourceTagError =
-  'services.myurls.source.tag must be a valid non-latest source tag';
-const myurlsReleaseError =
-  'services.myurls.source.tag must be a published Rust v2 release tag';
 const verifiedAtError =
   'verifiedAt must be a canonical UTC timestamp in YYYY-MM-DDTHH:mm:ssZ format';
+
+const cloneLock = () => structuredClone(lock);
 
 let temporaryDirectory;
 
@@ -56,26 +53,23 @@ afterAll(async () => {
 });
 
 const runValidatorCli = (path) =>
-  spawnSync(process.execPath, [validatorPath, path], {
+  spawnSync(process.execPath, [validatorPath, path], { encoding: 'utf8' });
+
+const runRuntimeContractCli = (command, path) =>
+  spawnSync(process.execPath, [runtimeContractPath, command, '--lock', path], {
     encoding: 'utf8',
   });
 
-const runRuntimeContractCli = (command, path) =>
-  spawnSync(
-    process.execPath,
-    [runtimeContractPath, command, '--lock', path],
-    { encoding: 'utf8' },
-  );
+const writeLock = async (name, value) => {
+  const path = join(temporaryDirectory, name);
+  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  return path;
+};
 
 describe('integrated service artifact locks', () => {
   it('uses the current schema and exact service inventory', () => {
     expect(lock.schemaVersion).toBe(1);
-    expect(Object.keys(lock.services).sort()).toEqual([
-      'gatewayBase',
-      'myurls',
-      'redis',
-      'subconverter',
-    ]);
+    expect(Object.keys(lock.services).sort()).toEqual(['gatewayBase', 'subconverter']);
   });
 
   it('pins every service to traceable non-prerelease source and image artifacts', () => {
@@ -114,481 +108,181 @@ describe('integrated service artifact locks', () => {
     }
   });
 
-  it('pins the approved Redis 7.4.11 Alpine security manifest', () => {
-    expect(lock.verifiedAt).toBe('2026-10-17T16:23:31Z');
-    expect(lock.services.redis.source).toEqual({
-      url: 'https://github.com/redis/redis',
-      repository: 'redis/redis',
-      tag: '7.4.11',
-      commit: 'aaf0ce63b3239f4b51f86ca1da8711b055721993',
-      prerelease: false,
-    });
-    expect(lock.services.redis.image).toEqual({
-      reference: 'docker.io/library/redis:7.4.11-alpine',
-      digest: 'sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7',
-      platforms: {
-        'linux/amd64': 'sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2',
-        'linux/arm64': 'sha256:1f09a89a207d794a8c61d9edfc26e7c58427de10ccef7c5d18d638df79a63b85',
-      },
-    });
+  it('pins the approved Go builder and runtime images', () => {
+    expect(lock.verifiedAt).toBe('2026-10-26T17:25:10Z');
+    expect(lock.services.gatewayBase.source.repository).toBe('docker-library/golang');
+    expect(lock.services.gatewayBase.image.reference).toBe(
+      'docker.io/library/golang:1.27-alpine',
+    );
+    expect(Object.keys(lock.services.gatewayBase.runtimeImages).sort()).toEqual([
+      'distroless',
+      'frontend',
+    ]);
+    for (const image of Object.values(lock.services.gatewayBase.runtimeImages)) {
+      expect(image.digest).toMatch(digestPattern);
+      for (const platform of requiredPlatforms) {
+        expect(image.platforms[platform]).toMatch(digestPattern);
+      }
+    }
   });
 
-  it('uses the approved upstream repositories and Rust MyUrls release', () => {
-    expect(lock.services.myurls.source).toMatchObject({
-      repository: 'keleyaa/MyUrls',
-      tag: 'v2.0.8',
-      commit: '42234e8d1085b6c1449d16f04cd61e34104037f5',
-    });
-    expect(lock.services.myurls.image).toMatchObject({
-      reference: 'ghcr.io/keleyaa/myurls:v2.0.8',
-      digest: 'sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36',
-      platforms: {
-        'linux/amd64': 'sha256:a46f3edf00074b4cf9d576305a7fa1aea5b0dd64110cf2b402f5db7a041fdb3a',
-        'linux/arm64': 'sha256:362d6d58fcecd7e6199c1d8ed2ca4f10c533a814c80655ceaf85d7a5ad250983',
-      }
-    });
+  it('pins SubConverter to its approved upstream release', () => {
     expect(lock.services.subconverter.source.repository).toBe(
       'Aethersailor/SubConverter-Extended',
     );
     expect(lock.services.subconverter.image.reference).toBe(
-      'ghcr.io/aethersailor/subconverter-extended:v1.9.4',
+      `ghcr.io/aethersailor/subconverter-extended:${lock.services.subconverter.source.tag}`,
     );
+    expect(lock.services.subconverter.container.internalPorts).toEqual([25500]);
   });
 
-  it('rejects a foreign or tag-mismatched SubConverter artifact', () => {
-    const candidate = structuredClone(lock);
-    candidate.services.subconverter.source.repository = 'untrusted/SubConverter';
-    candidate.services.subconverter.image.reference =
-      'ghcr.io/untrusted/subconverter:v9.9.9';
-
-    expect(validateVersionLocks(candidate)).toEqual(expect.arrayContaining([
-      'services.subconverter.source.repository must equal Aethersailor/SubConverter-Extended',
-      'services.subconverter.image.reference must use ghcr.io/aethersailor/subconverter-extended',
-      'services.subconverter.image.reference tag must match source.tag',
-    ]));
-  });
-
-  it('pins the Go gateway builder and runtime image inputs used by Dockerfile', async () => {
-    const fixtureDockerfile = await readFile(
-      new URL('../fixtures/conversion-upstream/Dockerfile', import.meta.url),
-      'utf8',
-    );
-    const fixtureBuilderReference = lock.services.gatewayBase.image.reference.replace(
-      'docker.io/library/',
-      '',
-    );
-
-    expect(fixtureDockerfile).toContain(
-      `FROM ${fixtureBuilderReference}@${lock.services.gatewayBase.image.digest} AS build`,
-    );
-    expect(lock.services.gatewayBase.source).toMatchObject({
-      repository: 'docker-library/golang', tag: '1.27/alpine3.24',
-    });
-    expect(lock.services.gatewayBase.image.reference).toBe('docker.io/library/golang:1.27-alpine');
-    expect(lock.services.gatewayBase.runtimeImages).toMatchObject({
-      frontend: expect.objectContaining({ reference: 'docker.io/library/node:24-alpine' }),
-      distroless: expect.objectContaining({ reference: 'gcr.io/distroless/static-debian12:nonroot' }),
-    });
-    for (const image of Object.values(lock.services.gatewayBase.runtimeImages)) {
-      expect(image.digest).toMatch(digestPattern);
-      expect(image.platforms).toEqual(
-        expect.objectContaining(
-          Object.fromEntries(
-            requiredPlatforms.map((platform) => [
-              platform,
-              expect.stringMatching(digestPattern),
-            ]),
-          ),
-        ),
-      );
-    }
-  });
-
-  it('passes the reusable production lock validator', () => {
+  it('accepts the checked-in lock without validation errors', () => {
     expect(validateVersionLocks(lock)).toEqual([]);
   });
+});
 
-  it('derives Compose and rollback runtime images from the validated lock', () => {
-    const images = resolveRuntimeImages(lock);
+describe('version lock validation', () => {
+  it('rejects missing, renamed, and additional services', () => {
+    const missing = cloneLock();
+    delete missing.services.subconverter;
+    expect(validateVersionLocks(missing)).toContain(inventoryError);
 
-    expect(images).toEqual({
-      REDIS_IMAGE: 'docker.io/library/redis:7.4.11-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7',
-      SUBCONVERTER_IMAGE: `${lock.services.subconverter.image.reference}@${lock.services.subconverter.image.digest}`,
-      MYURLS_IMAGE: `${lock.services.myurls.image.reference}@${lock.services.myurls.image.digest}`,
-    });
-    expect(renderRuntimeImageEnv(images)).toBe([
-      `REDIS_IMAGE=${images.REDIS_IMAGE}`,
-      `SUBCONVERTER_IMAGE=${images.SUBCONVERTER_IMAGE}`,
-      `MYURLS_IMAGE=${images.MYURLS_IMAGE}`,
-      '',
-    ].join('\n'));
-    expect(runtimeImagesForRollback(lock)).toEqual({
-      redis: {
-        reference: `${lock.services.redis.image.reference}@${lock.services.redis.image.digest}`,
-        digest: lock.services.redis.image.digest,
-        platforms: { ...lock.services.redis.image.platforms },
-      },
-      subconverter: {
-        reference: `${lock.services.subconverter.image.reference}@${lock.services.subconverter.image.digest}`,
-        digest: lock.services.subconverter.image.digest,
-        platforms: { ...lock.services.subconverter.image.platforms },
-      },
-      myurls: {
-        reference: `${lock.services.myurls.image.reference}@${lock.services.myurls.image.digest}`,
-        digest: lock.services.myurls.image.digest,
-        platforms: { ...lock.services.myurls.image.platforms },
-      },
-    });
+    const renamed = cloneLock();
+    renamed.services.redis = renamed.services.subconverter;
+    delete renamed.services.subconverter;
+    expect(validateVersionLocks(renamed)).toContain(inventoryError);
+
+    const additional = cloneLock();
+    additional.services.redis = structuredClone(additional.services.subconverter);
+    expect(validateVersionLocks(additional)).toContain(inventoryError);
   });
 
-  it('rejects runtime environment keys and values outside the exact contract', () => {
-    const images = resolveRuntimeImages(lock);
+  it('rejects approved repository and image drift', () => {
+    const gatewaySource = cloneLock();
+    gatewaySource.services.gatewayBase.source.repository = 'library/golang';
+    expect(validateVersionLocks(gatewaySource)).toContain(gatewayBaseSourceError);
 
-    expect(() => renderRuntimeImageEnv({ ...images, EXTRA_IMAGE: images.REDIS_IMAGE })).toThrow(
-      'Runtime image environment must contain exactly',
+    const gatewayImage = cloneLock();
+    gatewayImage.services.gatewayBase.image.reference =
+      'docker.io/library/golang:1.26-alpine';
+    expect(validateVersionLocks(gatewayImage)).toContain(gatewayBaseImageError);
+
+    const subconverterSource = cloneLock();
+    subconverterSource.services.subconverter.source.repository = 'tindy2013/subconverter';
+    expect(validateVersionLocks(subconverterSource)).toContain(subconverterSourceError);
+
+    const subconverterImage = cloneLock();
+    subconverterImage.services.subconverter.image.reference =
+      'docker.io/library/subconverter:v1.9.4';
+    expect(validateVersionLocks(subconverterImage)).toContain(subconverterImageError);
+  });
+
+  it('rejects mutable or untraceable artifacts', () => {
+    const latestTag = cloneLock();
+    latestTag.services.subconverter.source.tag = 'latest';
+    expect(validateVersionLocks(latestTag)).toContain(
+      'services.subconverter.source.tag must be a valid non-latest source tag',
     );
-    expect(() => renderRuntimeImageEnv({
-      ...images,
-      MYURLS_IMAGE: `${images.MYURLS_IMAGE}\nUNSAFE=value`,
-    })).toThrow('MYURLS_IMAGE must be an immutable sha256 image reference');
+
+    const shortCommit = cloneLock();
+    shortCommit.services.subconverter.source.commit = 'abc123';
+    expect(validateVersionLocks(shortCommit)).toContain(
+      'services.subconverter.source.commit must be a full 40-character commit',
+    );
+
+    const badDigest = cloneLock();
+    badDigest.services.subconverter.image.digest = 'sha256:nothex';
+    expect(validateVersionLocks(badDigest)).toContain(
+      'services.subconverter.image.digest must be a sha256 digest',
+    );
+
+    const missingPlatform = cloneLock();
+    delete missingPlatform.services.subconverter.image.platforms['linux/arm64'];
+    expect(validateVersionLocks(missingPlatform)).toContain(
+      'services.subconverter.image.platforms.linux/arm64 must be a sha256 digest',
+    );
+  });
+
+  it('rejects runtime image drift and non-canonical timestamps', () => {
+    const runtimeImages = cloneLock();
+    delete runtimeImages.services.gatewayBase.runtimeImages.distroless;
+    expect(validateVersionLocks(runtimeImages)).toContain(runtimeImageError);
+
+    const schema = cloneLock();
+    schema.schemaVersion = 2;
+    expect(validateVersionLocks(schema)).toContain('schemaVersion must equal 1');
+
+    const verifiedAt = cloneLock();
+    verifiedAt.verifiedAt = '2026-10-17 16:23:31';
+    expect(validateVersionLocks(verifiedAt)).toContain(verifiedAtError);
+  });
+});
+
+describe('runtime image contract', () => {
+  it('derives exactly the runtime images required by Compose', () => {
+    const images = resolveRuntimeImages(lock);
+    expect(Object.keys(images)).toEqual(['SUBCONVERTER_IMAGE']);
+    expect(images.SUBCONVERTER_IMAGE).toMatch(
+      /^ghcr\.io\/aethersailor\/subconverter-extended:v1\.9\.4@sha256:[0-9a-f]{64}$/u,
+    );
+    expect(renderRuntimeImageEnv(images)).toBe(`SUBCONVERTER_IMAGE=${images.SUBCONVERTER_IMAGE}\n`);
+  });
+
+  it('rejects runtime environments outside the exact contract', () => {
+    const images = resolveRuntimeImages(lock);
+    expect(() => renderRuntimeImageEnv({ ...images, REDIS_IMAGE: images.SUBCONVERTER_IMAGE })).toThrow(
+      /exactly: SUBCONVERTER_IMAGE/u,
+    );
+    expect(() => renderRuntimeImageEnv({})).toThrow(/exactly: SUBCONVERTER_IMAGE/u);
+    expect(() =>
+      renderRuntimeImageEnv({ SUBCONVERTER_IMAGE: 'ghcr.io/aethersailor/subconverter-extended:v1.9.4' }),
+    ).toThrow(/immutable sha256 image reference/u);
+    expect(() =>
+      renderRuntimeImageEnv({ SUBCONVERTER_IMAGE: `${images.SUBCONVERTER_IMAGE}\nREDIS_IMAGE=x` }),
+    ).toThrow(/immutable sha256 image reference/u);
+  });
+
+  it('derives rollback images only for services that remain deployed', () => {
+    expect(runtimeImagesForRollback(lock)).toEqual({
+      subconverter: {
+        reference: resolveRuntimeImages(lock).SUBCONVERTER_IMAGE,
+        digest: lock.services.subconverter.image.digest,
+        platforms: lock.services.subconverter.image.platforms,
+      },
+    });
   });
 
   it('refuses to derive runtime images from an invalid lock', () => {
-    const candidate = structuredClone(lock);
-    candidate.services.redis.image.digest = 'sha256:bad';
-
-    expect(() => resolveRuntimeImages(candidate)).toThrow(
-      'services.redis.image.digest must be a sha256 digest',
-    );
+    const invalid = cloneLock();
+    delete invalid.services.subconverter;
+    expect(() => resolveRuntimeImages(invalid)).toThrow(/Version locks are invalid/u);
+    expect(() => runtimeImagesForRollback(invalid)).toThrow(/Version locks are invalid/u);
   });
+});
 
-  it('rejects malformed locks before generating rollback images', () => {
-    const candidate = structuredClone(lock);
-    candidate.services.myurls.image = null;
-
-    expect(() => runtimeImagesForRollback(candidate)).toThrow(
-      'services.myurls.image must be an object',
-    );
-  });
-
-  it.each([
-    [
-      'an invalid image digest',
-      (candidate) => {
-        candidate.services.redis.image.digest = 'sha256:bad';
-      },
-      'services.redis.image.digest must be a sha256 digest',
-    ],
-    [
-      'an invalid platform digest',
-      (candidate) => {
-        candidate.services.redis.image.platforms['linux/arm64'] = 'sha256:bad';
-      },
-      'services.redis.image.platforms.linux/arm64 must be a sha256 digest',
-    ],
-  ])('rejects rollback generation with %s', (_label, mutate, expectedError) => {
-    const candidate = structuredClone(lock);
-    mutate(candidate);
-
-    expect(() => runtimeImagesForRollback(candidate)).toThrow(expectedError);
-  });
-
-  it('rejects a Redis source or image outside the approved 7.4.11 Alpine lock', () => {
-    const candidate = structuredClone(lock);
-    candidate.services.redis.source.tag = '8.10.1';
-    candidate.services.redis.image.reference = 'docker.io/library/redis:8.10.1';
-
-    expect(validateVersionLocks(candidate)).toEqual(expect.arrayContaining([
-      redisSourceError, redisImageError,
-    ]));
-  });
-
-  it('rejects a Gateway base image or runtime input that differs from Dockerfile', () => {
-    const candidate = structuredClone(lock);
-    candidate.services.gatewayBase.source.repository = 'nginx/nginx';
-    candidate.services.gatewayBase.image.reference = 'docker.io/nginxinc/nginx-unprivileged:1.30.4-alpine';
-    delete candidate.services.gatewayBase.runtimeImages;
-
-    expect(validateVersionLocks(candidate)).toEqual(expect.arrayContaining([
-      gatewayBaseSourceError, gatewayBaseImageError, runtimeImageError,
-    ]));
-  });
-
-  it.each([
-    ['ghcr.io/keleyaa/myurls:v2.0.8', 'v2.0.8'],
-    ['ghcr.io/keleyaa/myurls:v2.1.0', 'v2.1.0'],
-  ])('accepts the tagged MyUrls image reference %s', (reference, tag) => {
-    const candidate = structuredClone(lock);
-    candidate.services.myurls.source.tag = tag;
-    candidate.services.myurls.image.reference = reference;
-
-    expect(validateVersionLocks(candidate)).not.toContain(imageReferenceError);
-  });
-
-  it('rejects a legacy or foreign MyUrls artifact', () => {
-    const candidate = structuredClone(lock);
-    candidate.services.myurls.source.repository = 'legacy/MyUrls';
-    candidate.services.myurls.source.tag = 'v1.13.0';
-    candidate.services.myurls.image.reference = 'ghcr.io/keleyaa/myurls:v2.0.8';
-
-    expect(validateVersionLocks(candidate)).toEqual(
-      expect.arrayContaining([
-        'services.myurls.source.repository must equal keleyaa/MyUrls',
-        myurlsReleaseError,
-        'services.myurls.image.reference tag must match source.tag',
-      ]),
-    );
-  });
-
-  it('rejects a MyUrls image from an unapproved registry repository', () => {
-    const candidate = structuredClone(lock);
-    candidate.services.myurls.image.reference = 'docker.io/legacy/myurls:v2.0.8';
-
-    expect(validateVersionLocks(candidate)).toContain(
-      'services.myurls.image.reference must use ghcr.io/keleyaa/myurls',
-    );
-  });
-
-  it.each([
-    ['not a valid image :v1', imageReferenceError],
-    ['ghcr.io/keleyaa/my urls:v1', imageReferenceError],
-    ['ghcr.io/keleyaa/myurls:\tv1', imageReferenceError],
-    ['docker..io/library/redis:v1', imageReferenceError],
-    ['registry.example:99999/library/redis:v1', imageReferenceError],
-    ['ghcr.io//myurls:v1', imageReferenceError],
-    ['ghcr.io/keleyaa/myurls', imageReferenceError],
-    [
-      `ghcr.io/keleyaa/myurls@${'sha256:'.padEnd(71, 'a')}`,
-      imageReferenceError,
-    ],
-    ['ghcr.io/keleyaa/myurls:-v1', imageReferenceError],
-    ['ghcr.io/keleyaa/myurls:LATEST', 'must not use latest'],
-  ])('rejects the invalid image reference %j', (reference, expectedError) => {
-    const candidate = structuredClone(lock);
-    candidate.services.myurls.image.reference = reference;
-
-    expect(validateVersionLocks(candidate)).toEqual(
-      expect.arrayContaining([expect.stringContaining(expectedError)]),
-    );
-  });
-
-  it.each(['v2.0.8', 'v2.1.0'])(
-    'accepts the Rust MyUrls source tag %s when the image tag matches',
-    (tag) => {
-      const candidate = structuredClone(lock);
-      candidate.services.myurls.source.tag = tag;
-      candidate.services.myurls.image.reference = `ghcr.io/keleyaa/myurls:${tag}`;
-
-      expect(validateVersionLocks(candidate)).toEqual([]);
-    },
-  );
-
-  it.each(['', '   ', 'v1\n', 'LATEST'])(
-    'rejects the invalid source tag %j',
-    (tag) => {
-      const candidate = structuredClone(lock);
-      candidate.services.myurls.source.tag = tag;
-
-      expect(validateVersionLocks(candidate)).toContain(sourceTagError);
-    },
-  );
-
-  it.each(['v2.01.0', 'v2.1.00', 'v2.00.1'])(
-    'rejects the non-canonical Rust MyUrls release tag %j',
-    (tag) => {
-      const candidate = structuredClone(lock);
-      candidate.services.myurls.source.tag = tag;
-
-      expect(validateVersionLocks(candidate)).toContain(myurlsReleaseError);
-    },
-  );
-
-  it.each([
-    'nonsense',
-    '2026-08-01T10:55:34+00:00',
-    '2026-08-01T10:55:34.000Z',
-    '2026-02-30T10:55:34Z',
-  ])('rejects the non-canonical verifiedAt timestamp %j', (verifiedAt) => {
-    const candidate = structuredClone(lock);
-    candidate.verifiedAt = verifiedAt;
-
-    expect(validateVersionLocks(candidate)).toContain(verifiedAtError);
-  });
-
-  it('validates every additional image platform entry', () => {
-    const candidate = structuredClone(lock);
-    candidate.services.myurls.image.platforms['linux/ppc64le'] = 'bad';
-    candidate.services.myurls.image.platforms[''] = lock.services.redis.image.digest;
-
-    expect(validateVersionLocks(candidate)).toEqual(
-      expect.arrayContaining([
-        'services.myurls.image.platforms.linux/ppc64le must be a sha256 digest',
-        'services.myurls.image.platforms key "" must be a valid platform name',
-      ]),
-    );
-  });
-
-  it('accepts a valid additional image platform entry', () => {
-    const candidate = structuredClone(lock);
-    candidate.services.myurls.image.platforms['linux/ppc64le'] =
-      lock.services.redis.image.digest;
-
-    expect(validateVersionLocks(candidate)).toEqual([]);
-  });
-
-  it.each([
-    [
-      'missing service',
-      (candidate) => {
-        delete candidate.services.redis;
-      },
-    ],
-    [
-      'incorrectly named service',
-      (candidate) => {
-        candidate.services.myUrls = candidate.services.myurls;
-        delete candidate.services.myurls;
-      },
-    ],
-    [
-      'additional service',
-      (candidate) => {
-        candidate.services.unapproved = structuredClone(
-          candidate.services.redis,
-        );
-      },
-    ],
-  ])('rejects a %s in the service inventory', (_scenario, mutate) => {
-    const candidate = structuredClone(lock);
-    mutate(candidate);
-
-    expect(validateVersionLocks(candidate)).toContain(inventoryError);
-  });
-
-  it('reports every validation error instead of stopping at the first one', () => {
-    const invalidLock = {
-      schemaVersion: 2,
-      services: {
-        myurls: {
-          source: {
-            url: 'http://example.com/source',
-            repository: 'keleyaa/MyUrls',
-            tag: '',
-            commit: 'short',
-            prerelease: true,
-          },
-          image: {
-            reference: 'ghcr.io/keleyaa/myurls:latest',
-            digest: 'sha256:bad',
-            platforms: {},
-          },
-          container: { internalPorts: [0, 65_536] },
-        },
-      },
-    };
-
-    const errors = validateVersionLocks(invalidLock);
-
-    expect(errors.length).toBeGreaterThanOrEqual(10);
-    expect(errors).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('schemaVersion'),
-        expect.stringContaining('source.url'),
-        expect.stringContaining('source.commit'),
-        expect.stringContaining('source.prerelease'),
-        expect.stringContaining('image.reference'),
-        expect.stringContaining('linux/amd64'),
-        expect.stringContaining('linux/arm64'),
-        expect.stringContaining('internalPorts[0]'),
-        expect.stringContaining('internalPorts[1]'),
-      ]),
-    );
-  });
-
-  it('rejects image references without an explicit immutable version tag', () => {
-    const invalidLock = structuredClone(lock);
-    invalidLock.services.myurls.image.reference = 'ghcr.io/keleyaa/myurls';
-
-    expect(validateVersionLocks(invalidLock)).toContain(imageReferenceError);
-  });
-
-  it('exits successfully when the CLI validates an explicit valid lock file', async () => {
-    const validLockPath = join(temporaryDirectory, 'valid.lock.json');
-    await writeFile(validLockPath, JSON.stringify(lock));
-
-    const result = runValidatorCli(validLockPath);
-
+describe('version lock CLI', () => {
+  it('accepts the checked-in lock', () => {
+    const result = runValidatorCli(lockPath);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('Version locks are valid.');
-    expect(result.stderr).toBe('');
   });
 
-  it('exits unsuccessfully and prints every CLI validation error', async () => {
-    const invalidLockPath = join(temporaryDirectory, 'invalid.lock.json');
-    const invalidLock = {
-      schemaVersion: 2,
-      services: {
-        myurls: {
-          source: {
-            url: 'http://example.com/source',
-            repository: 'keleyaa/MyUrls',
-            tag: '',
-            commit: 'short',
-            prerelease: true,
-          },
-          image: {
-            reference: 'ghcr.io/keleyaa/myurls:latest',
-            digest: 'sha256:bad',
-            platforms: {},
-          },
-          container: { internalPorts: [0] },
-        },
-      },
-    };
-    await writeFile(invalidLockPath, JSON.stringify(invalidLock));
-
-    const result = runValidatorCli(invalidLockPath);
-
-    expect(result.status).not.toBe(0);
-    for (const expectedError of [
-      'schemaVersion',
-      inventoryError,
-      'source.url',
-      'source.commit',
-      'source.prerelease',
-      'image.reference',
-      'image.digest',
-      'linux/amd64',
-      'linux/arm64',
-      'internalPorts[0]',
-    ]) {
-      expect(result.stderr).toContain(expectedError);
-    }
+  it('exits unsuccessfully and prints every validation error', async () => {
+    const invalid = cloneLock();
+    delete invalid.services.subconverter;
+    const invalidPath = await writeLock('invalid-lock.json', invalid);
+    const result = runValidatorCli(invalidPath);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(inventoryError);
   });
 
-  it('exits unsuccessfully when the CLI cannot read its explicit lock file', () => {
-    const missingLockPath = join(temporaryDirectory, 'missing.lock.json');
+  it('renders and verifies rollback data through the CLI', () => {
+    const env = runRuntimeContractCli('env', lockPath);
+    expect(env.status).toBe(0);
+    expect(env.stdout).toBe(`SUBCONVERTER_IMAGE=${resolveRuntimeImages(lock).SUBCONVERTER_IMAGE}\n`);
 
-    const result = runValidatorCli(missingLockPath);
-
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('Unable to read version locks:');
-  });
-
-  it('renders the runtime environment through the CLI', () => {
-    const result = runRuntimeContractCli('env', lockPath);
-
-    expect(result.status).toBe(0);
-    expect(result.stdout).toBe(renderRuntimeImageEnv(resolveRuntimeImages(lock)));
-    expect(result.stderr).toBe('');
-  });
-
-  it('fails the runtime-image CLI for a missing lock file', () => {
-    const missingLockPath = join(temporaryDirectory, 'missing-runtime.lock.json');
-
-    const result = runRuntimeContractCli('rollback', missingLockPath);
-
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('Unable to read version locks:');
+    const rollback = runRuntimeContractCli('rollback', lockPath);
+    expect(rollback.status).toBe(0);
+    expect(JSON.parse(rollback.stdout)).toEqual(runtimeImagesForRollback(lock));
   });
 });

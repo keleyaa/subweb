@@ -8,8 +8,6 @@ const repositoryRoot = new URL('../../', import.meta.url);
 const temporaryDirectories = [];
 
 const lockedImages = {
-  redis: 'docker.io/library/redis:7.4.11-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7',
-  myurls: 'ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36',
   subconverter: 'ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423',
 };
 const releaseVersion = 'v1.2.3';
@@ -38,17 +36,15 @@ const composeInterpolationVariables = [
 const enabledCompose = {
   networks: {
     default: {},
-    'myurls-data': { internal: true },
-    'myurls-edge': { internal: true },
-    'redis-policy': { internal: true },
     'subconverter-egress': { internal: true },
   },
   services: {
     gateway: {
       image: dockerHubImage,
       ports: [{ host_ip: '127.0.0.1', published: '18080', target: 8080 }],
-      networks: { default: {}, 'myurls-edge': {}, 'redis-policy': {}, 'subconverter-egress': {} },
+      networks: { default: {}, 'subconverter-egress': {} },
       user: '65532:65532', read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
+      volumes: [{ type: 'volume', source: 'links-data', target: '/data' }],
       environment: {
         EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
         EGRESS_RESTRICTED_LISTEN_ADDR: '0.0.0.0:25503',
@@ -56,21 +52,11 @@ const enabledCompose = {
         SHORT_LINKS_ENABLED: 'true',
         APP_DOMAIN: 'app.example.com',
         SHORT_DOMAIN: 'short.example.com',
-        MYURLS_UPSTREAM: 'http://myurls-edge:3000',
+        SHORT_LINK_DB_PATH: '/data/links.db',
+        TURNSTILE_ENABLED: 'true',
+        TURNSTILE_SITE_KEY: 'site-key',
+        TURNSTILE_SECRET_KEY: 'secret-key',
       },
-      depends_on: {
-        redis: { condition: 'service_healthy', restart: true },
-        'myurls': { condition: 'service_healthy', restart: true },
-      },
-    },
-    'myurls': {
-      environment: { NODE_ENV: 'production', HTTPS_PROXY: 'http://gateway:25503', https_proxy: 'http://gateway:25503', NO_PROXY: '127.0.0.1,localhost', no_proxy: '127.0.0.1,localhost', PUBLIC_BASE_URL: 'https://short.example.com', TURNSTILE_HOSTNAME: 'app.example.com', TURNSTILE_ENABLED: 'true', TURNSTILE_MODE: 'cloudflare', TURNSTILE_SITE_KEY: 'site-key', TURNSTILE_SECRET_KEY: 'secret-key' },
-      image: lockedImages.myurls, networks: { 'myurls-data': {}, 'myurls-edge': {} }, user: '10001:10001',
-      read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
-    },
-    redis: {
-      image: lockedImages.redis, networks: { 'myurls-data': {}, 'redis-policy': {} }, user: '999:999',
-      read_only: true, cap_drop: ['ALL'], security_opt: ['no-new-privileges:true'],
     },
     subconverter: {
       image: lockedImages.subconverter, networks: { 'subconverter-egress': {} }, user: '101:101',
@@ -106,7 +92,6 @@ const makeFixture = async () => {
   const root = await mkdtemp(join(tmpdir(), 'subweb-image-deploy-'));
   temporaryDirectories.push(root);
   await mkdir(join(root, 'scripts/lib'), { recursive: true });
-  await mkdir(join(root, 'deploy/redis'), { recursive: true });
   await mkdir(join(root, 'bin'), { recursive: true });
   for (const file of [
     'scripts/docker-deploy.sh',
@@ -121,7 +106,6 @@ const makeFixture = async () => {
       'compose.common-services.yaml',
       'compose.disabled-short-links.yaml',
       'deploy/versions.lock.json',
-    'deploy/redis/redis.conf.template',
   ]) {
     await cp(new URL(file, repositoryRoot), join(root, file));
   }
@@ -184,7 +168,7 @@ case "$*" in
     ;;
   'compose -f compose.yaml --env-file '*" config --quiet") exit 0 ;;
   'compose -f compose.yaml --env-file '*" config --format json") render_compose "$root/compose-enabled.json" ;;
-  'compose -f compose.yaml pull gateway subconverter myurls redis')
+  'compose -f compose.yaml pull gateway subconverter')
     [ -f "$root/pull-status" ] && exit "$(cat "$root/pull-status")"
     exit 0
     ;;
@@ -271,11 +255,8 @@ describe('Docker image quick deployment', () => {
       'SHORT_LINKS_ENABLED=true',
       'CUSTOM_BACKEND_ENABLED=true',
       `SUBWEB_IMAGE=${dockerHubImage}`,
-      `REDIS_IMAGE=${lockedImages.redis}`,
       `SUBCONVERTER_IMAGE=${lockedImages.subconverter}`,
-      `MYURLS_IMAGE=${lockedImages.myurls}`,
       `IP_HASH_SECRET=${'a'.repeat(64)}`,
-      `REDIS_PASSWORD=${'b'.repeat(64)}`,
       'TURNSTILE_SITE_KEY=test-site-key',
       'TURNSTILE_SECRET_KEY=test-secret-key',
       '',
@@ -329,7 +310,7 @@ describe('Docker image quick deployment', () => {
     ));
   }, 30_000);
 
-  it('persists the selected image and pulls the three default services', async () => {
+  it('persists the selected image and pulls the two default services', async () => {
     const root = await makeFixture();
     const image = dockerHubImage;
 
@@ -338,15 +319,15 @@ describe('Docker image quick deployment', () => {
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
      const environment = await readFile(join(root, '.env'), 'utf8');
      expect(environment).toContain(`SUBWEB_IMAGE=${image}\n`);
-     expect(environment).toContain('REDIS_IMAGE=docker.io/library/redis:7.4.11-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7\n');
      expect(environment).toContain('SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423\n');
-     expect(environment).toContain('MYURLS_IMAGE=ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36\n');
+     expect(environment).not.toContain('MYURLS_IMAGE=');
+     expect(environment).not.toContain('REDIS_IMAGE=');
     const dockerLog = await readFile(join(root, 'docker.log'), 'utf8');
     expect(dockerLog.trim().split('\n')).toEqual([
       'compose version',
       expect.stringMatching(/^compose -f compose\.yaml --env-file .+ config --quiet$/u),
       expect.stringMatching(/^compose -f compose\.yaml --env-file .+ config --format json$/u),
-      'compose -f compose.yaml pull gateway subconverter myurls redis',
+      'compose -f compose.yaml pull gateway subconverter',
       'compose -f compose.yaml up -d --no-build --pull never --remove-orphans --wait',
       'compose -f compose.yaml ps',
     ]);
@@ -657,7 +638,7 @@ EOF
       'SHORT_LINKS_ENABLED=true\n',
     );
     const log = await readDockerLog(root);
-    expect(log).toContain('compose -f compose.yaml pull gateway subconverter myurls redis');
+    expect(log).toContain('compose -f compose.yaml pull gateway subconverter');
     expect(log).toContain('compose -f compose.yaml up -d --no-build --pull never --remove-orphans --wait');
     expect(log).not.toContain('compose -f compose.disabled-short-links.yaml pull');
   });
@@ -670,7 +651,7 @@ EOF
 
     expect(result.status).not.toBe(0);
     const log = await readFile(join(root, 'docker.log'), 'utf8');
-    expect(log).toContain('compose -f compose.yaml pull gateway subconverter myurls redis');
+    expect(log).toContain('compose -f compose.yaml pull gateway subconverter');
     expect(log).not.toContain('compose up');
   });
 });

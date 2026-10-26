@@ -13,19 +13,11 @@ const platformPattern =
 const canonicalUtcPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 const requiredServices = [
   'gatewayBase',
-  'myurls',
-  'redis',
   'subconverter',
 ];
 const requiredPlatforms = ['linux/amd64', 'linux/arm64'];
-const myurlsSourceRepository = 'keleyaa/MyUrls';
-const myurlsImageRepository = 'ghcr.io/keleyaa/myurls';
-const redisSourceRepository = 'redis/redis';
-const redisSourceTag = '7.4.11';
-const redisImageReference = 'docker.io/library/redis:7.4.11-alpine';
 const subconverterSourceRepository = 'Aethersailor/SubConverter-Extended';
 const subconverterImageRepository = 'ghcr.io/aethersailor/subconverter-extended';
-const myurlsReleaseTagPattern = /^v2\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u;
 const gatewayBaseSourceRepository = 'docker-library/golang';
 const gatewayBaseImageReference = 'docker.io/library/golang:1.27-alpine';
 const gatewayRuntimeImageNames = ['distroless', 'frontend'];
@@ -214,24 +206,6 @@ export function validateVersionLocks(lock) {
       if (source.prerelease !== false) {
         errors.push(`${prefix}.source.prerelease must equal false`);
       }
-      if (name === 'redis') {
-        if (source.repository !== redisSourceRepository) {
-          errors.push(`${prefix}.source.repository must equal ${redisSourceRepository}`);
-        }
-        if (source.tag !== redisSourceTag) {
-          errors.push(`${prefix}.source.tag must equal ${redisSourceTag}`);
-        }
-      }
-      if (name === 'myurls') {
-        if (source.repository !== myurlsSourceRepository) {
-          errors.push(
-            `${prefix}.source.repository must equal ${myurlsSourceRepository}`,
-          );
-        }
-        if (!myurlsReleaseTagPattern.test(source.tag ?? '')) {
-          errors.push(`${prefix}.source.tag must be a published Rust v2 release tag`);
-        }
-      }
       if (name === 'subconverter' && source.repository !== subconverterSourceRepository) {
         errors.push(
           `${prefix}.source.repository must equal ${subconverterSourceRepository}`,
@@ -240,18 +214,6 @@ export function validateVersionLocks(lock) {
     }
 
     const parsedReference = validateImageDescriptor(`${prefix}.image`, service.image, errors);
-    if (name === 'redis' && parsedReference && service.image.reference !== redisImageReference) {
-      errors.push(`${prefix}.image.reference must equal ${redisImageReference}`);
-    }
-    if (name === 'myurls' && parsedReference) {
-      const imageRepository = `${parsedReference.registry}/${parsedReference.repository}`;
-      if (imageRepository !== myurlsImageRepository) {
-        errors.push(`${prefix}.image.reference must use ${myurlsImageRepository}`);
-      }
-      if (parsedReference.tag !== service.source?.tag) {
-        errors.push(`${prefix}.image.reference tag must match source.tag`);
-      }
-    }
     if (name === 'subconverter' && parsedReference) {
       const imageRepository = `${parsedReference.registry}/${parsedReference.repository}`;
       if (imageRepository !== subconverterImageRepository) {

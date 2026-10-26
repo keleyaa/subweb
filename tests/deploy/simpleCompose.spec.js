@@ -6,9 +6,7 @@ const root = new URL('../../', import.meta.url);
 const composePath = new URL('../../compose.yaml', import.meta.url).pathname;
 const disabledComposePath = new URL('../../compose.disabled-short-links.yaml', import.meta.url).pathname;
 const runtimeImages = {
-  REDIS_IMAGE: 'docker.io/library/redis:7.4.11-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7',
   SUBCONVERTER_IMAGE: 'ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:8e067383d26d6f3580e9255e13f11a83fd3500e9a3380eb69ae99af54c29f423',
-  MYURLS_IMAGE: 'ghcr.io/keleyaa/myurls:v2.0.8@sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36',
 };
 
 const renderCompose = (file = composePath, values = {}) => {
@@ -18,7 +16,6 @@ const renderCompose = (file = composePath, values = {}) => {
     API_DOMAIN: 'api.example.com',
     API_URL: 'https://api.example.com',
     SHORT_DOMAIN: 'short.example.com',
-    REDIS_PASSWORD: 'test-redis-password',
     IP_HASH_SECRET: '0123456789abcdef'.repeat(4),
     TURNSTILE_SITE_KEY: 'test-site-key',
     TURNSTILE_SECRET_KEY: 'test-secret-key',
@@ -43,20 +40,13 @@ const renderCompose = (file = composePath, values = {}) => {
 };
 
 describe('unified Compose deployment', () => {
-  it('renders the four-service production topology with one loopback entrypoint', () => {
+  it('renders the two-service production topology with one loopback entrypoint', () => {
     const config = renderCompose();
-    expect(Object.keys(config.services).sort()).toEqual([
-      'gateway',
-      'myurls',
-      'redis',
-      'subconverter',
-    ]);
+    expect(Object.keys(config.services).sort()).toEqual(['gateway', 'subconverter']);
     expect(config.services.gateway.ports).toEqual([
       expect.objectContaining({ host_ip: '127.0.0.1', published: '18080', target: 8080 }),
     ]);
-    for (const name of ['myurls', 'redis', 'subconverter']) {
-      expect(config.services[name].ports).toBeUndefined();
-    }
+    expect(config.services.subconverter.ports).toBeUndefined();
     expect(config.services.gateway.environment).toMatchObject({
       API_URL: 'https://api.example.com',
       APP_DOMAIN: 'app.example.com',
@@ -64,26 +54,26 @@ describe('unified Compose deployment', () => {
       SHORT_DOMAIN: 'short.example.com',
       EGRESS_LISTEN_ADDR: '0.0.0.0:25502',
       SUBCONVERTER_UPSTREAM: 'http://subconverter:25500',
-      MYURLS_UPSTREAM: 'http://myurls-edge:3000',
-      REDIS_URL: 'redis://redis:6379/1',
+      SHORT_LINK_DB_PATH: '/data/links.db',
+      TURNSTILE_ENABLED: 'true',
     });
+    expect(config.services.gateway.environment.MYURLS_UPSTREAM).toBeUndefined();
+    expect(config.services.gateway.environment.REDIS_URL).toBeUndefined();
+    expect(config.services.gateway.volumes).toEqual([
+      expect.objectContaining({ source: 'links-data', target: '/data' }),
+    ]);
   });
 
   it('keeps the Gateway, data, and egress networks isolated', () => {
     const config = renderCompose();
     expect(Object.keys(config.services.gateway.networks).sort()).toEqual([
       'default',
-      'myurls-edge',
-      'redis-policy',
       'subconverter-egress',
     ]);
-    expect(Object.keys(config.services.redis.networks).sort()).toEqual(['myurls-data', 'redis-policy']);
-    for (const name of ['myurls']) {
-      expect(Object.keys(config.services[name].networks).sort()).toEqual(['myurls-data', 'myurls-edge']);
-    }
     expect(Object.keys(config.services.subconverter.networks)).toEqual(['subconverter-egress']);
-    for (const name of ['myurls-data', 'myurls-edge', 'redis-policy', 'subconverter-egress']) {
-      expect(config.networks[name].internal).toBe(true);
+    expect(config.networks['subconverter-egress'].internal).toBe(true);
+    for (const name of ['myurls-data', 'myurls-edge', 'redis-policy']) {
+      expect(config.networks[name]).toBeUndefined();
     }
   });
 
@@ -92,7 +82,7 @@ describe('unified Compose deployment', () => {
     expect(Object.keys(config.services).sort()).toEqual(['gateway', 'subconverter']);
     expect(config.services.gateway.environment.SHORT_LINKS_ENABLED).toBe('false');
     expect(config.services.gateway.environment.REDIS_URL).toBeUndefined();
-    expect(config.services.gateway.environment.REDIS_PASSWORD).toBeUndefined();
+    expect(config.services.gateway.environment.SHORT_LINK_DB_PATH).toBeUndefined();
     expect(config.networks['myurls-data']).toBeUndefined();
     expect(config.networks['redis-policy']).toBeUndefined();
   });

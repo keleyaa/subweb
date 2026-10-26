@@ -155,7 +155,7 @@ describe('VPS runtime contract', () => {
     expect(backup).toContain('sha256');
     expect(verifyService).toContain('ExecStart=/bin/sh -eu -c');
     expect(verifyTimer).toContain('OnCalendar=Sun *-*-01..07 04:15:00');
-    expect(verifyBackup).toContain('verify-redis-backup.sh');
+    expect(verifyBackup).toContain('verify-links-backup.sh');
     expect(backup).toContain('flock -n 9');
     expect(backup).toContain('BACKUP_WORKSPACE_DIRECTORY=/run/subweb-backup');
     expect(backup).toContain('mktemp -d "$BACKUP_WORKSPACE_DIRECTORY/.subweb-backup.XXXXXX"');

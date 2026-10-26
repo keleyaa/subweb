@@ -1,69 +1,52 @@
 # 运维
 
-## 日常检查
-
-公网入口由外部 TLS 反向代理负责；Compose 只发布 Gateway 的 loopback 端口。
+## 日常命令
 
 ```sh
+./scripts/subweb.sh up
 ./scripts/subweb.sh status
-./scripts/subweb.sh logs gateway
-./scripts/subweb.sh logs subconverter
-./scripts/subweb.sh logs myurls redis
+./scripts/subweb.sh logs gateway subconverter
+./scripts/subweb.sh down
 ```
 
-`status` 通过 Compose 健康检查确认服务状态。启用短链时应看到 `gateway`、`subconverter`、`myurls` 和 `redis`；关闭短链时只应看到 `gateway` 与 `subconverter`。只有 Gateway 应有宿主机端口。
+外部 TLS 反向代理不属于 Compose 运行时，只把保留 Host 的请求转发到 Gateway loopback 端口。`status` 通过 Compose 健康检查确认服务状态。短链启用与关闭都是受支持的 profile，两者都只运行 `gateway` 与 `subconverter`。只有 Gateway 应有宿主机端口。
 
-日志使用 `Asia/Shanghai`，json-file 驱动单文件 `10m`、最多 `3` 个文件。日志不应包含原始 IP、订阅 URL、Query、Token、Redis 密码或完整短码。
+## 日志
 
-默认记录策略是"正常请求有记录、健康探测不产生噪音"：
+日志使用 `Asia/Shanghai`，json-file 驱动单文件 `10m`、最多 `3` 个文件。日志不应包含原始 IP、订阅 URL、Query、Token、数据库路径或完整短码。
 
-| 服务 | 默认级别 | 记录内容 | 健康探测 |
-| --- | --- | --- | --- |
-| `gateway` | `info`（`LOG_LEVEL`） | 每个请求一行访问日志：`request_id`、host 类别、方法、路由类别、状态、耗时 | `/healthz` 与 `/readyz` 不记录 |
-| `subconverter` | `info`（entrypoint 固定） | 启动、转换请求与出站重试告警；地址与 Token 由过滤器脱敏 | 过滤器丢弃每 30 秒一次的 `path=/healthz` 行 |
-| `myurls` | `warn`（`MYURLS_LOG_LEVEL`） | 只保留警告与错误 | 不产生健康探测日志；短链的正常记录由 Gateway 访问日志覆盖 |
-| `redis` | `warning`（配置模板） | Redis 自身警告与错误 | `PING` 健康检查不产生日志 |
+| 服务 | 默认级别 | 说明 |
+| --- | --- | --- |
+| `gateway` | `info`（`LOG_LEVEL`） | 访问日志只记录路由类别，不记录 Query、订阅 URL、原始 IP 或完整短码 |
+| `subconverter` | `warning` | 保留首条可恢复出站错误，连续相同错误折叠为计数摘要 |
 
-`gateway` 的访问日志只包含路由类别（例如 `sub`、`short-create`、`short-resolve`、`static`），不记录 Query、订阅 URL、原始 IP 或完整短码；需要更少输出时把 `LOG_LEVEL` 调到 `warn` 或 `error`，访问日志会一并关闭。访问日志运行在 `info` 且不受限流保护：限流只作用于 `/sub` 与短链创建，静态资源、`404` 和外站 Host 请求都能写日志，因此未认证洪水可以在 `10m × 3` 轮转窗口内挤掉较早的记录。需要长期保留审计线索时，关闭访问日志并把容器日志转发到宿主机。`myurls` 的 `info` 会为每次健康探测写一行且无法按路由过滤，因此生产保持 `warn`；只有在排查短链问题、并接受该噪音时才临时打开。MyUrls 的 challenge/retry 元数据与 Gateway 的受控 egress 失败仍可用于排查，但不要长期开启 `verbose`：SubConverter entrypoint 会把 `print_debug_info` 强制为 `false`，不得通过卷内旧配置重新打开。
+需要更少输出时把 `LOG_LEVEL` 调到 `warn` 或 `error`，访问日志会一并关闭。访问日志运行在 `info` 且不受限流保护：限流只作用于 `/sub` 与短链创建，静态资源、`404` 和外站 Host 请求都能写日志，因此未认证洪水可以在 `10m × 3` 轮转窗口内挤掉较早的记录。
 
-SubConverter 日志会保留首条可恢复出站错误，并将连续、相同错误码的重复告警折叠为一条计数摘要；MyUrls 默认使用 `warn`，Redis 默认使用 `warning`，均保留警告和错误。其他日志仍逐条输出。
+## 数据与备份
 
-## 备份与恢复
-
-短链数据在 Redis DB `0`，Gateway 限流状态在 DB `1`。只备份 Redis RDB，不备份转换 URL 或转换结果。
+短链映射与到期时间保存在 Gateway 独占的 `links-data` 命名卷中（容器内 `/data/links.db`，SQLite WAL 模式）。只备份短链数据库，不备份转换 URL 或转换结果。
 
 ```sh
-./scripts/subweb.sh backup --output /absolute/path/backup.rdb
+./scripts/subweb.sh backup --output /absolute/path/links-$(date -u +%Y%m%dT%H%M%SZ).db
 ./scripts/subweb.sh restore \
-  --backup /absolute/path/backup.rdb \
+  --backup /absolute/path/links-20260101T000000Z.db \
   --confirm-stop-writes
 ```
 
-恢复要求短链启用、备份路径是绝对路径的普通文件，并显式确认停止写入。脚本会根据 `.env` 选择对应 Compose 文件；`.env` 中 `SHORT_LINKS_ENABLED=false` 时，备份和恢复命令会拒绝执行，且不会启动 Redis 或 MyUrls。密码只在容器内通过 `REDISCLI_AUTH` 使用。恢复前保留当前 RDB，完成后检查 Redis、Gateway、SubConverter 和唯一 `myurls` 服务的健康状态。
+- 备份通过 Gateway 自身的 `--backup-links` 子命令生成一致性快照（SQLite `VACUUM INTO`），不直接复制正在写入的数据库文件。
+- 恢复要求短链启用、备份路径是绝对路径的普通 SQLite 文件，并显式确认停止写入。
+- 恢复期间 Gateway 停止写入，完成后重新启动并等待健康检查通过；其他服务保持运行。
+- 普通 `./scripts/subweb.sh down` 只停止容器，不删除命名 volume。不要把删除 volume 作为首次故障排查步骤。
 
-普通 `./scripts/subweb.sh down` 只停止容器，不删除命名 volume；启动或升级失败不会自动删除或重写 Redis 数据。恢复失败会自动尝试使用恢复前保留的快照回滚，并在回滚失败时明确提示写入仍处于停止状态。若 Redis 7 报告 `RDB format version 15` 或其他不兼容格式，必须将其视为数据格式问题，保留原始备份并使用兼容备份或经过操作者确认的显式重置流程。不要把删除 volume 作为首次故障排查步骤。
+## 故障排查
 
-## 发布后验证
+- 短链创建 `503 dependency_unavailable`：确认 `TURNSTILE_SECRET_KEY` 有效，且 `EGRESS_ALLOWED_HOSTS` 包含 `challenges.cloudflare.com`；siteverify 经受限 `:25503` egress 访问，未列出的目标会 fail closed。
+- 短链创建 `403 challenge_required` / `challenge_invalid`：检查前端 Turnstile Site Key 与后端的 Secret Key 是否属于同一 Cloudflare 站点，且 `APP_DOMAIN` 与 widget 域名一致。
+- 短链解析 `404`：链接已过期或不存在；`SHORT_LINK_TTL_SECONDS` 默认 7776000 秒（90 天）。
+- 短链创建 `429 rate_limited`：默认每 IP 10 分钟 20 次、每天 100 次；单实例部署使用进程内计数，重启会清零。
+- Gateway 启动失败并提示数据库不可写：确认 `links-data` 卷可写；容器以 UID 65532 运行。
+- 升级后 SubConverter 行为异常：镜像变更后旧的 `subconverter-runtime` 卷会保留上一版模板，按升级提示处理，不要与短链数据库混淆。
 
-GitHub package publish job 需要 `packages: write` 权限，并先通过完整发布门禁。完整业务 smoke 由 [`verify-unified-stack.sh`](../scripts/verify-unified-stack.sh) 执行，稳定入口是：
+## 验证
 
-```sh
-npm run verify:integration
-```
-
-该验证使用真实锁定生产镜像，覆盖三 Host、静态资源与 MIME、转换策略、短链创建/解析/过期、服务独立重启、disabled profile、响应大小/超时和敏感 header 边界。Redis RDB 恢复演练仍由 [`verify-redis-operations.sh`](../scripts/verify-redis-operations.sh) 单独负责：
-
-```sh
-npm run verify:operations
-```
-
-不要用旧 Nginx、旧 Request Policy 或历史 Compose 验证脚本代替这些入口。
-
-## 资源与故障处理
-
-- Gateway unhealthy：先查看 `gateway` 日志，再确认 `.env` 中 API URL、域名和 feature flags，没有把外部代理变量误传给本地服务。
-- SubConverter unhealthy：检查 `/base` volume bootstrap、业务进程是否为非 root UID 和 `CapEff=0`，不要给容器恢复全部 capabilities。
-- MyUrls unhealthy：确认 Redis DB `0`、`PUBLIC_BASE_URL=https://${SHORT_DOMAIN}` 和 `TURNSTILE_HOSTNAME=${APP_DOMAIN}`；创建挑战需要有效的 Cloudflare 配置，且 `EGRESS_ALLOWED_HOSTS` 必须包含 `challenges.cloudflare.com`，否则 siteverify 无法经 Gateway 的受限 `:25503` egress 到达，会以 `503 dependency_unavailable` fail closed。
-- Redis unhealthy：检查密码、只读配置模板和数据 volume；不要删除 volume 作为第一步排查。若日志显示 RDB format 不兼容，先保存备份和错误信息，再按数据恢复或显式重置流程处理。
-
-维护前先记录 `git status --short` 和 Compose 状态。单台 VPS 的 systemd、主机权限、定时备份和外部 Nginx 合同见 [VPS 部署](deployment-vps.md)；升级与恢复的详细边界见 [维护与验证](maintenance.md) 和 [安全](security.md)。
+`./scripts/verify-unified-stack.sh` 使用真实锁定镜像覆盖：两服务拓扑、三 Host 路由、短链创建/解析/过期、Gateway 重启后的持久化、日志密钥泄漏检查，以及 disabled profile。Redis 与 MyUrls 已从运行时移除；旧栈迁移使用 `scripts/operations/export-redis-links.sh` 与 `migrate-shortlinks.sh`。

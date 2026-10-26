@@ -1,8 +1,8 @@
 # Docker 部署
 
-Docker 生产部署由公共服务合同 [`compose.common-services.yaml`](../compose.common-services.yaml) 和两个显式入口组合：启用短链使用 [`compose.yaml`](../compose.yaml)，关闭短链使用 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml)。Gateway 是项目自有的 Go 单二进制，负责 Host 路由、静态资源、转换请求策略、Redis 限流、MyUrls 适配和内部 HTTPS CONNECT egress。SubConverter、一个 MyUrls Rust v2 实例和 Redis 作为独立服务运行。
+Docker 生产部署由公共服务合同 [`compose.common-services.yaml`](../compose.common-services.yaml) 和两个显式入口组合：启用短链使用 [`compose.yaml`](../compose.yaml)，关闭短链使用 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml)。Gateway 是项目自有的 Go 单二进制，负责 Host 路由、静态资源、转换请求策略、限流、内嵌短链存储和内部 HTTPS CONNECT egress。SubConverter 作为独立服务运行。
 
-公网部署必须在外层 HTTPS 代理启用认证（例如 Cloudflare Access、VPN 或 Basic Auth），并且不要直接把容器端口发布到公网。若不需要短链，应关闭短链；短链目标会按 TTL 写入 Redis，持有码即可访问。
+公网部署必须在外层 HTTPS 代理启用认证（例如 Cloudflare Access、VPN 或 Basic Auth），并且不要直接把容器端口发布到公网。若不需要短链，应关闭短链；短链目标会按 TTL 写入 Gateway 的 SQLite 数据库，持有码即可访问。
 
 ## 1. 首次交互式安装
 
@@ -16,7 +16,7 @@ cd subweb
 
 向导先将该版本解析为不可变 GHCR manifest digest，再展示不含 Turnstile Secret Key 的确认摘要；只接受 `yes` 才会继续。仅启用短链时，确认后才通过既有隐藏输入流程获取 Turnstile Secret Key；随后生成权限为 `0600` 的 `.env`、校验 Compose、拉取镜像并等待服务健康。不会使用 `latest`，也没有隐式版本选择。
 
-启用短链时，Turnstile Site Key 与 Secret Key 必须由部署者提供。默认值为 `SHORT_LINKS_ENABLED=true` 与 `CUSTOM_BACKEND_ENABLED=true`；Redis 密码与 IP 哈希密钥由脚本生成或保留已有值，除非显式要求轮换，不要在部署过程中更换它们。`configure.sh` 同时从 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 生成三项外部 runtime 镜像值。
+启用短链时，Turnstile Site Key 与 Secret Key 必须由部署者提供。默认值为 `SHORT_LINKS_ENABLED=true` 与 `CUSTOM_BACKEND_ENABLED=true`；IP 哈希密钥由脚本生成或保留已有值，除非显式要求轮换，不要在部署过程中更换它。`configure.sh` 同时从 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 生成 SubConverter runtime 镜像值。
 
 ## 2. 手动验证与启动
 
@@ -27,9 +27,9 @@ cd subweb
 ./scripts/subweb.sh status
 ```
 
-启用短链时 Compose 应准确包含四个服务：`gateway`、`subconverter`、`myurls`、`redis`。只有 Gateway 发布宿主机端口，且端口绑定 `127.0.0.1`。MyUrls 使用 Redis DB `0`，Gateway 限流使用 Redis DB `1`；Redis、MyUrls 和 SubConverter 没有宿主机端口。
+启用短链时 Compose 应准确包含两个服务：`gateway`、`subconverter`。只有 Gateway 发布宿主机端口，且端口绑定 `127.0.0.1`。短链数据保存在 Gateway 独占的 `links-data` 卷中，SubConverter 没有宿主机端口。
 
-启动依赖会先等待 Gateway（包括内部 `:25502` 订阅 egress 监听，以及启用短链时的 `:25503` 受限 egress 监听）健康，再启动 SubConverter 与 MyUrls，以避免代理尚未就绪时产生启动告警。
+启动依赖会先等待 Gateway（包括内部 `:25502` 订阅 egress 监听，以及启用短链时的 `:25503` 受限 egress 监听）健康，再启动 SubConverter，以避免代理尚未就绪时产生启动告警。
 
 ## 3. 外层 TLS
 
@@ -43,7 +43,7 @@ cd subweb
 
 ## 4. 关闭短链
 
-在首次安装向导中选择 `false` 时，向导不会询问 SHORT 域名、Turnstile Site Key 或 Secret Key，也不会启动 Redis 或 MyUrls。此 profile 使用 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml)，只运行 `gateway` 和 `subconverter`；`/short-api/links` 和 APP 短码路径不可用，普通转换仍可用。
+在首次安装向导中选择 `false` 时，向导不会询问 SHORT 域名、Turnstile Site Key 或 Secret Key，也不会启用短链存储。此 profile 使用 [`compose.disabled-short-links.yaml`](../compose.disabled-short-links.yaml)，只运行 `gateway` 和 `subconverter`；`/short-api/links` 和 APP 短码路径不可用，普通转换仍可用。
 
 现有显式配置方式保留给高级或手动操作：
 
@@ -72,11 +72,11 @@ printf '%s\n' "$TURNSTILE_SECRET_KEY" | ./scripts/subweb.sh install \
   --version vX.Y.Z
 ```
 
-SubConverter、MyUrls 和 Redis 的锁定版本、平台 digest 与来源只从 [版本锁](../deploy/versions.lock.json) 的 runtime-image contract 派生，不能手工覆盖。`scripts/runtime-image-contract.mjs` 为 Compose、部署和 release rollback 生成同一组不可变引用。推送匹配 `vX.Y.Z` 的 Git tag 会自动触发 Docker release workflow；也可以通过 `workflow_dispatch` 的 `version` 输入手动补跑已有 tag。普通分支推送和 Pull Request 不会触发该工作流。
+SubConverter 的锁定版本、平台 digest 与来源只从 [版本锁](../deploy/versions.lock.json) 的 runtime-image contract 派生，不能手工覆盖。`scripts/runtime-image-contract.mjs` 为 Compose、部署和 release rollback 生成同一组不可变引用。推送匹配 `vX.Y.Z` 的 Git tag 会自动触发 Docker release workflow；也可以通过 `workflow_dispatch` 的 `version` 输入手动补跑已有 tag。普通分支推送和 Pull Request 不会触发该工作流。
 
 `subweb.sh upgrade` 会先验证 Compose/版本锁合同，再拉取镜像。不要执行 `cat .env`。
 
-生产命令要求 `.env` 是权限 `0600` 的普通文件，且不能是符号链接。`./scripts/subweb.sh down` 只停止服务，不使用 `--volumes`；启动或升级失败不会自动重置 Redis 数据。若 Redis 7 无法读取来自较新主版本的 RDB，命令会明确报告数据格式不兼容，必须使用兼容备份或由操作者确认单独的重置操作。
+生产命令要求 `.env` 是权限 `0600` 的普通文件，且不能是符号链接。`./scripts/subweb.sh down` 只停止服务，不使用 `--volumes`；启动或升级失败不会自动重置短链数据库。备份使用 Gateway 的 `--backup-links` 一致性快照；恢复必须显式确认停止写入。
 
 ## 6. 常用运维命令
 
@@ -84,14 +84,14 @@ SubConverter、MyUrls 和 Redis 的锁定版本、平台 digest 与来源只从 
 ./scripts/subweb.sh logs gateway
 ./scripts/subweb.sh down
 ./scripts/subweb.sh upgrade
-./scripts/subweb.sh backup --output /absolute/path/backup.rdb
-./scripts/subweb.sh restore --backup /absolute/path/backup.rdb --confirm-stop-writes
+./scripts/subweb.sh backup --output /absolute/path/backup.db
+./scripts/subweb.sh restore --backup /absolute/path/backup.db --confirm-stop-writes
 ```
 
-备份和恢复只在短链启用且显式确认停止写入时可用。不要将 `.env`、备份文件、Redis 密码、Turnstile 私钥或完整短码放入日志、Issue 或截图。
+备份和恢复只在短链启用且显式确认停止写入时可用。不要将 `.env`、备份文件、IP 哈希密钥、Turnstile 私钥或完整短码放入日志、Issue 或截图。
 
 ## 当前运行时版本
 
-当前启用短链的生产 profile 固定运行四个服务：`gateway`、`subconverter`、唯一的 `myurls` 和 Redis。Redis 使用 `docker.io/library/redis:7.4.11-alpine`，具体 manifest 与平台 digest 以 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 为准。
+当前启用短链的生产 profile 固定运行两个服务：`gateway` 和 `subconverter`。SubConverter 的具体 manifest 与平台 digest 以 [`deploy/versions.lock.json`](../deploy/versions.lock.json) 为准。
 
-升级前执行 `./scripts/subweb.sh verify`，升级使用 `./scripts/subweb.sh upgrade`；不要手工替换 Redis、MyUrls 或 SubConverter 的镜像 tag，也不要使用 `latest`。升级后执行 `npm run verify:integration`，确认四个服务健康且短链创建、解析和过期流程正常。
+升级前执行 `./scripts/subweb.sh verify`，升级使用 `./scripts/subweb.sh upgrade`；不要手工替换 SubConverter 的镜像 tag，也不要使用 `latest`。升级后执行 `npm run verify:integration`，确认两个服务健康且短链创建、解析和过期流程正常。

@@ -1,21 +1,21 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-10-17T16:23:31Z",
+  "verifiedAt": "2026-10-26T17:25:10Z",
   "services": {
     "gatewayBase": {
       "source": {
         "url": "https://github.com/docker-library/golang",
         "repository": "docker-library/golang",
         "tag": "1.27/alpine3.24",
-        "commit": "8380885ec449224702b989d8792d2e1470a46e89",
+        "commit": "41d9b4da70324ae7b6461ac2cc401b06719ff57d",
         "prerelease": false
       },
       "image": {
         "reference": "docker.io/library/golang:1.27-alpine",
-        "digest": "sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d",
+        "digest": "sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c",
         "platforms": {
-          "linux/amd64": "sha256:3b15ba438c60ab8fabe5fee3b11025c0049e358b31feff384648f11fc8e335f8",
-          "linux/arm64": "sha256:c2b8d9b05d9386fe1b01bab829eda3a05edb526c220e638d3c7a73671a290672"
+          "linux/amd64": "sha256:bff16a94c0b4b6d9642581e2a3aa81beb3edb940b2f5a3aac1d22c6a68cb7747",
+          "linux/arm64": "sha256:ee0dcdc452cb73890363fbef65fc333aeb0da7c24ba52f2c6428a37b0e7f4f1c"
         }
       },
       "runtimeImages": {
@@ -44,46 +44,6 @@
         ]
       }
     },
-    "myurls": {
-      "source": {
-        "url": "https://github.com/keleyaa/MyUrls",
-        "repository": "keleyaa/MyUrls",
-        "tag": "v2.0.8",
-        "commit": "42234e8d1085b6c1449d16f04cd61e34104037f5",
-        "prerelease": false
-      },
-      "image": {
-        "reference": "ghcr.io/keleyaa/myurls:v2.0.8",
-        "digest": "sha256:441aed70342b9071f4f64bdbb6fe7d659774c23f1f8bfd3db76c33936eb01d36",
-        "platforms": {
-          "linux/amd64": "sha256:a46f3edf00074b4cf9d576305a7fa1aea5b0dd64110cf2b402f5db7a041fdb3a",
-          "linux/arm64": "sha256:362d6d58fcecd7e6199c1d8ed2ca4f10c533a814c80655ceaf85d7a5ad250983"
-        }
-      },
-      "container": {
-        "internalPorts": [3000]
-      }
-    },
-    "redis": {
-      "source": {
-        "url": "https://github.com/redis/redis",
-        "repository": "redis/redis",
-        "tag": "7.4.11",
-        "commit": "aaf0ce63b3239f4b51f86ca1da8711b055721993",
-        "prerelease": false
-      },
-      "image": {
-        "reference": "docker.io/library/redis:7.4.11-alpine",
-        "digest": "sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7",
-        "platforms": {
-          "linux/amd64": "sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2",
-          "linux/arm64": "sha256:1f09a89a207d794a8c61d9edfc26e7c58427de10ccef7c5d18d638df79a63b85"
-        }
-      },
-      "container": {
-        "internalPorts": [6379]
-      }
-    },
     "subconverter": {
       "source": {
         "url": "https://github.com/Aethersailor/SubConverter-Extended",
@@ -101,7 +61,9 @@
         }
       },
       "container": {
-        "internalPorts": [25500]
+        "internalPorts": [
+          25500
+        ]
       }
     }
   }

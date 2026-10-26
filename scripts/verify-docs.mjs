@@ -50,8 +50,6 @@ export const runtimeContractFiles = [
   '.env.example',
   '.github/workflows/docker-build-release.yml',
   '.github/workflows/local-dev.yml',
-  'docs/assets/readme/subweb-hero.svg',
-  'docs/assets/readme/subweb-architecture.svg',
 ];
 
 export function verifyDocs({ root }) {
@@ -92,7 +90,7 @@ export function verifyDocs({ root }) {
     ['docs/deployment-local.md', '--env-file .runtime/local/compose.env'],
     ['docs/validation/local-dev.md', '自动契约验证使用独立的终端和运行时'],
     ['docs/deployment-docker.md', 'Turnstile Site Key 与 Secret Key 必须由部署者提供'],
-    ['docs/configuration.md', '不接受手工 `REDIS_IMAGE`、`SUBCONVERTER_IMAGE` 或 `MYURLS_IMAGE` 覆盖'],
+    ['docs/configuration.md', '不接受手工 `SUBCONVERTER_IMAGE` 覆盖'],
     ['docs/architecture-prd.md', 'npm run verify:production-readiness'],
     ['docs/maintenance.md', 'npm run verify:production-readiness'],
     ['docs/validation/docker-integration.md', '仅替换 SubConverter'],
@@ -101,11 +99,11 @@ export function verifyDocs({ root }) {
     ['docs/deployment.md', 'Gateway 发布镜像由 release workflow 独立构建'],
     ['docs/deployment-docker.md', '生产命令要求 `.env` 是权限 `0600` 的普通文件'],
     ['docs/deployment-docker.md', '`./scripts/subweb.sh down` 只停止服务，不使用 `--volumes`'],
-    ['docs/operations.md', 'RDB format version 15'],
+    ['docs/operations.md', '--backup-links'],
     ['docs/deployment-vps.md', 'subweb-backup-verify.timer'],
     ['docs/deployment-vps.md', 'BACKUP_REMOTE_MOUNT'],
     ['docs/deployment-vps.md', 'systemctl daemon-reload'],
-    ['.env.example', 'configure.sh generates REDIS_IMAGE, SUBCONVERTER_IMAGE, and MYURLS_IMAGE'],
+    ['.env.example', 'configure.sh generates SUBCONVERTER_IMAGE from deploy/versions.lock.json'],
     ['.env.example', `# SUBWEB_IMAGE=${subwebImagePlaceholder}`],
   ];
   for (const [relativeFile, expectedText] of requiredContracts) {
@@ -139,7 +137,7 @@ export function verifyDocs({ root }) {
         errors.push('env example uses a mutable Gateway image tag');
       }
     }
-    for (const variable of ['REDIS_IMAGE', 'SUBCONVERTER_IMAGE', 'MYURLS_IMAGE']) {
+    for (const variable of ['SUBCONVERTER_IMAGE']) {
       if (new RegExp(`^#?\\s*${variable}=`, 'mu').test(envExample)) {
         errors.push(`env example exposes managed runtime override: ${variable}`);
       }

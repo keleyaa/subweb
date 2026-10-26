@@ -166,10 +166,10 @@ describe('feature-flag deployment entrypoint', () => {
     const root = await makeFixture('true');
     await mkdir(join(root, 'scripts', 'operations'));
     await writeFile(
-      join(root, 'scripts', 'operations', 'restore-redis.sh'),
+      join(root, 'scripts', 'operations', 'restore-links.sh'),
       '#!/bin/sh\nprintf "compose=%s args=%s\\n" "$COMPOSE_FILE" "$*" >> "$DOCKER_CONFIG/restore.log"\n',
     );
-    await chmod(join(root, 'scripts', 'operations', 'restore-redis.sh'), 0o755);
+    await chmod(join(root, 'scripts', 'operations', 'restore-links.sh'), 0o755);
 
     const backup = join(root, 'verified.rdb');
     await writeFile(backup, 'verified backup');

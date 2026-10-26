@@ -17,12 +17,14 @@ describe('Compose-first local workflow contract', () => {
     expect(workflow).not.toContain('bootstrap.sh');
   });
 
-  it('verifies Rust MyUrls creation and redirect through the Vite proxy', async () => {
+  it('verifies short-link creation and redirect through the Vite proxy', async () => {
     const verifier = await readFile(new URL('../../scripts/verify-local-dev.sh', import.meta.url), 'utf8');
     expect(verifier).toContain('/short-api/links');
     expect(verifier).toContain('Content-Type: application/json');
     expect(verifier).toContain("status=$(curl");
     expect(verifier).toContain('Expected a 302 redirect');
+    expect(verifier).toContain("--header 'Host: short.local.test'");
+    expect(verifier).toContain('https://short.local.test/');
   });
 
   it('isolates generated local Compose values from contaminated parent release exports', async () => {
@@ -32,44 +34,22 @@ describe('Compose-first local workflow contract', () => {
     ]);
     const isolationBlock = `unset \\
   APP_DOMAIN API_DOMAIN API_URL SHORT_DOMAIN SUBWEB_PORT \\
-  REDIS_PASSWORD IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY \\
-  REDIS_IMAGE SUBCONVERTER_IMAGE MYURLS_IMAGE \\
-  MYURLS_NETWORK_SUBNET MYURLS_GATEWAY_IP MYURLS_IP MYURLS_TRUST_PROXY_CIDR`;
+  IP_HASH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY \\
+  SUBCONVERTER_IMAGE \\
+  SHORT_LINK_DB_PATH SHORT_LINK_TTL_SECONDS`;
 
     expect(verifier).toContain(isolationBlock);
     expect(verifier).toContain('export SUBWEB_LOCAL_PROJECT_NAME="subweb-local-verify-$(openssl rand -hex 6)"');
-    expect(verifier).toContain('test_network_subnet=$(SUBWEB_LOCAL_PROJECT_NAME="$SUBWEB_LOCAL_PROJECT_NAME"');
-    expect(verifier).toContain('"$script_directory/local/select-test-network.sh")');
-    expect(verifier).toContain('export LOCAL_MYURLS_NETWORK_SUBNET="$test_network_subnet"');
-    expect(verifier).toContain('export LOCAL_MYURLS_GATEWAY_IP="$test_network_prefix.2"');
-    expect(verifier).toContain('export LOCAL_MYURLS_IP="$test_network_prefix.3"');
-    expect(verifier).toContain('export LOCAL_MYURLS_TRUST_PROXY_CIDR="$LOCAL_MYURLS_GATEWAY_IP/32"');
-    expect(verifier).not.toContain('export MYURLS_NETWORK_SUBNET="$test_network_subnet"');
-    expect(common).toContain('export MYURLS_NETWORK_SUBNET="$local_myurls_network_subnet"');
-    expect(common).toContain('export MYURLS_GATEWAY_IP="$local_myurls_gateway_ip"');
-    expect(common).toContain('export MYURLS_IP="$local_myurls_ip"');
-    expect(common).toContain('export MYURLS_TRUST_PROXY_CIDR="$local_myurls_trust_proxy_cidr"');
-    expect(common).toContain('export REDIS_IMAGE="$local_redis_image"');
+    expect(verifier).toContain('"$script_directory/local/select-test-network.sh" >/dev/null');
+    expect(verifier).not.toContain('MYURLS_IMAGE');
+    expect(verifier).not.toContain('REDIS_IMAGE');
     expect(common).toContain('export SUBCONVERTER_IMAGE="$local_subconverter_image"');
-    expect(common).toContain('export MYURLS_IMAGE="$local_myurls_image"');
+    expect(common).not.toContain('export MYURLS_IMAGE');
+    expect(common).not.toContain('export REDIS_IMAGE');
+    expect(common).not.toContain('LOCAL_MYURLS_PORT');
     expect(verifier).toContain('"$script_directory/local/deps.sh" remove-volumes');
     expect(verifier.indexOf('trap cleanup EXIT HUP INT TERM')).toBeLessThan(verifier.indexOf('"$script_directory/local/deps.sh" up'));
     expect(verifier.indexOf(isolationBlock)).toBeLessThan(verifier.indexOf('"$script_directory/local/deps.sh" up'));
-  });
-
-  it('requires distinct usable host addresses inside the local MyUrls subnet', async () => {
-    const commonPath = new URL('../../scripts/local/common.sh', import.meta.url).pathname;
-    const runValidation = (subnet, gateway, myurls) => spawnSync(
-      'sh',
-      ['-c', '. "$1"; validate_local_ipv4s_in_subnet "$2" "$3" "$4"', '--', commonPath, subnet, gateway, myurls],
-      { encoding: 'utf8' },
-    );
-
-    expect(runValidation('172.30.255.0/29', '172.30.255.1', '172.30.255.6').status).toBe(0);
-    expect(runValidation('172.30.255.0/29', '172.30.255.0', '172.30.255.3').status).not.toBe(0);
-    expect(runValidation('172.30.255.0/29', '172.30.255.2', '172.30.255.7').status).not.toBe(0);
-    expect(runValidation('172.30.255.0/31', '172.30.255.0', '172.30.255.1').status).not.toBe(0);
-    expect(runValidation('172.30.255.0/32', '172.30.255.0', '172.30.255.0').status).not.toBe(0);
   });
 
   it('exits on a signal while updating the temporary local environment', async () => {
@@ -88,7 +68,7 @@ describe('Compose-first local workflow contract', () => {
         await writeFile(join(bin, command), '#!/bin/sh\nexit 0\n');
         await chmod(join(bin, command), 0o755);
       }
-      await writeFile(join(bin, 'node'), '#!/bin/sh\nprintf "REDIS_IMAGE=redis\\nSUBCONVERTER_IMAGE=subconverter\\nMYURLS_IMAGE=myurls\\n"\n');
+      await writeFile(join(bin, 'node'), '#!/bin/sh\nprintf "SUBCONVERTER_IMAGE=ghcr.io/aethersailor/subconverter-extended:v1.9.4@sha256:0000000000000000000000000000000000000000000000000000000000000000\\n"\n');
       await chmod(join(bin, 'node'), 0o755);
       await writeFile(join(bin, 'sed'), '#!/bin/sh\ncase "$*" in\n  *compose.env*) kill -TERM "$PPID"; exit 0 ;;\n  *) exec /usr/bin/sed "$@" ;;\nesac\n');
       await chmod(join(bin, 'sed'), 0o755);
@@ -106,20 +86,19 @@ describe('Compose-first local workflow contract', () => {
     }
   });
 
-  it('derives three distinct local ports and leaves Redis private', async () => {
+  it('derives two distinct local ports and keeps the embedded profile private', async () => {
     const [common, override] = await Promise.all([
       readFile(new URL('../../scripts/local/common.sh', import.meta.url), 'utf8'),
       readFile(new URL('../../compose.dev.yaml', import.meta.url), 'utf8'),
     ]);
     expect(common).toContain('LOCAL_VITE_PORT');
-    expect(common).toContain('LOCAL_MYURLS_PORT');
     expect(common).toContain('LOCAL_SUBWEB_PORT');
-    expect(override).not.toMatch(/redis:[\s\S]*?ports:/u);
-    expect(override).toContain('myurls:');
+    expect(common).not.toContain('LOCAL_MYURLS_PORT');
+    expect(override).not.toMatch(/ports:/u);
     expect(override).toContain('subconverter:');
-    expect(override).toContain('NODE_ENV: development');
     expect(override).toContain('TURNSTILE_ENABLED: "false"');
+    expect(override).not.toContain('myurls:');
+    expect(override).not.toContain('redis:');
     expect(override).not.toContain('subweb:');
-    expect(override.match(/^ {2}myurls:/gmu)).toHaveLength(1);
   });
 });

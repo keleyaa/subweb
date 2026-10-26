@@ -5,7 +5,7 @@ operations_project_root=$(CDPATH='' cd -- "$operations_script_directory/../.." &
 . "$operations_project_root/scripts/lib/docker-environment.sh"
 
 operations_fail() {
-  printf 'Redis operation error: %s\n' "$1" >&2
+  printf 'Operation error: %s\n' "$1" >&2
   exit 1
 }
 
@@ -39,18 +39,6 @@ require_private_directory() {
   mode=$(directory_mode "$1") || operations_fail 'unable to inspect output directory permissions.'
   mode_value=$((0$mode))
   [ $((mode_value & 077)) -eq 0 ] || operations_fail 'output directory must not grant group or other permissions.'
-}
-
-# 备份校验工具链使用锁文件基线的 Redis 7.4.11 Alpine 镜像，
-# 提供确定性的 redis-check-rdb 与隔离校验环境，避免校验行为随镜像漂移。
-redis_image_reference() {
-  node -e '
-const fs = require("node:fs");
-const lock = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-const image = lock.services?.redis?.image;
-if (!image?.reference || !/^sha256:[0-9a-f]{64}$/.test(image.digest ?? "")) process.exit(1);
-process.stdout.write(`${image.reference}@${image.digest}`);
-  ' "${VERSION_LOCK_FILE:-$operations_project_root/deploy/versions.lock.json}" || operations_fail 'Redis image lock is invalid.'
 }
 
 sha256_file() {

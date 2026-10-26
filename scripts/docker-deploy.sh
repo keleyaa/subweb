@@ -256,11 +256,7 @@ SUBWEB_ENV_LOCK_HELD=1 \
   SUBWEB_VERSION_LOCK_TOKEN=$DEPLOY_VERSION_LOCK_TOKEN \
   SHORT_LINKS_ENABLED=$short_links_enabled COMPOSE_VALIDATION_FILE=$compose_file \
   "$SCRIPT_DIRECTORY/validate-compose.sh"
-if [ "$short_links_enabled" = true ]; then
-  compose pull gateway subconverter myurls redis
-else
-  compose pull gateway subconverter
-fi
+compose pull gateway subconverter
 compose up -d --no-build --pull never --remove-orphans --wait
 compose ps
 

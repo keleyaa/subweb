@@ -239,16 +239,16 @@ func (handler gatewayHandler) serveApp(writer http.ResponseWriter, request *http
 			writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
 			return
 		}
-		if request.Method != http.MethodPost {
-			writeMethodNotAllowed(writer, requestID, http.MethodPost)
-			return
-		}
 		shortLinks := handler.deps.AppShortLinks
 		if shortLinks == nil {
 			shortLinks = handler.deps.ShortLinks
 		}
 		if shortLinks == nil {
 			writeStatusProblem(writer, requestID, http.StatusNotFound, "not_found")
+			return
+		}
+		if request.Method != http.MethodPost {
+			writeMethodNotAllowed(writer, requestID, http.MethodPost)
 			return
 		}
 		handler.serveDependency(shortLinks, writer, request, requestID, handler.cfg.AppDomain)

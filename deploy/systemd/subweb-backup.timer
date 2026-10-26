@@ -1,5 +1,5 @@
 [Unit]
-Description=Run the Subweb Redis backup
+Description=Run the Subweb short-link database backup
 
 [Timer]
 OnCalendar=*-*-* 03:15:00

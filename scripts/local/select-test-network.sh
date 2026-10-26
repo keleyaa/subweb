@@ -26,7 +26,7 @@ cleanup() {
 }
 trap cleanup 0 HUP INT TERM
 
-network_name=${project_name}_myurls-edge
+network_name=${project_name}_default
 network_suffix=255
 while [ "$network_suffix" -ge 240 ]; do
   subnet="172.30.$network_suffix.0/29"
@@ -35,7 +35,7 @@ while [ "$network_suffix" -ge 240 ]; do
     --internal \
     --subnet "$subnet" \
     --label "com.docker.compose.project=$project_name" \
-    --label 'com.docker.compose.network=myurls-edge' \
+    --label 'com.docker.compose.network=default' \
     "$network_name" >/dev/null 2>&1; then
     printf '%s\n' "$subnet"
     exit 0

@@ -26,23 +26,22 @@ describe('Docker runtime contract', () => {
     await expect(access(rootFile('start.sh'))).rejects.toThrow();
   });
 
-  it('provides a four-service Compose deployment with one loopback entrypoint', async () => {
+  it('provides a two-service Compose deployment with one loopback entrypoint', async () => {
     const [compose, commonServices] = await Promise.all([
       readFile(rootFile('compose.yaml'), 'utf8'),
       readFile(rootFile('compose.common-services.yaml'), 'utf8'),
     ]);
 
     expect(compose).toContain('gateway:');
-    expect(compose).toContain('myurls:');
-    expect(compose).toContain('redis:');
     expect(compose).toContain('subconverter:');
     expect(compose).toContain('file: compose.common-services.yaml');
+    expect(compose).not.toContain('myurls:');
+    expect(compose).not.toContain('redis:');
     expect(compose).not.toContain('request-policy:');
     expect(compose).not.toContain('profiles:');
-    expect(compose).toContain('redis-data:');
-    expect(compose).toContain(
-      'image: "${MYURLS_IMAGE:?Generate deployment configuration with scripts/configure.sh}"',
-    );
+    expect(compose).toContain('links-data:');
+    expect(compose).toContain('SHORT_LINK_DB_PATH: /data/links.db');
+    expect(compose).toContain('TURNSTILE_SECRET_KEY');
 
     expect(commonServices).toContain('x-runtime-environment: &runtime-environment');
     expect(commonServices).toContain('TZ: Asia/Shanghai');
@@ -127,7 +126,8 @@ describe('Docker runtime contract', () => {
     expect(workflow).toContain('rm -f .env');
     expect(workflow).not.toMatch(/upload-artifact[\s\S]{0,500}(?:\.env|fullchain\.pem|privkey\.pem|compose\.log|services\.log)/);
     expect(workflow).toContain('aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25');
-    expect(workflow).toContain('trivyignores: .trivyignore.redis');
+    expect(workflow).toContain('trivyignores: .trivyignore.subconverter');
+    expect(workflow).not.toContain('trivyignores: .trivyignore.redis');
     // Every image scan must pin the scanner version: the action default can
     // move ahead of the version the repository verifies with, and an unrelated
     // scanner upgrade must not decide release scope.
@@ -136,7 +136,7 @@ describe('Docker runtime contract', () => {
     expect(pinnedScannerVersions).toBe(trivySteps);
     const finalImageScan = workflow.slice(
       workflow.indexOf('- name: Scan final image'),
-      workflow.indexOf('- name: Scan external runtime images (Redis)'),
+      workflow.indexOf('- name: Scan external runtime images (SubConverter-Extended)'),
     );
     const releaseCandidateScan = workflow.slice(
       workflow.indexOf('- name: Scan release candidate'),
@@ -171,9 +171,9 @@ describe('Docker runtime contract', () => {
     expect(workflow).toContain('tags: ghcr.io/${{ env.GHCR_IMAGE }}:${{ steps.tag.outputs.version }}');
     expect(workflow).not.toContain('steps.tag.outputs.short_sha');
     expect(workflow).toContain('Resolve external runtime images');
-    expect(workflow).toContain('image-ref: ${{ env.REDIS_IMAGE }}');
     expect(workflow).toContain('image-ref: ${{ env.SUBCONVERTER_IMAGE }}');
-    expect(workflow).toContain('image-ref: ${{ env.MYURLS_IMAGE }}');
+    expect(workflow).not.toContain('image-ref: ${{ env.REDIS_IMAGE }}');
+    expect(workflow).not.toContain('image-ref: ${{ env.MYURLS_IMAGE }}');
     expect(workflow).toContain('Scan release candidate');
     expect(workflow).toContain('docker buildx imagetools create');
     expect(workflow).toContain('releaseRef: $release_ref');

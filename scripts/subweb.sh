@@ -207,20 +207,18 @@ case "$command_name" in
     ;;
   backup)
     [ "$short_links_enabled" = true ] || fail 'backup requires SHORT_LINKS_ENABLED=true.'
-    compose ps --services --filter status=running | grep -qx redis \
-      || fail 'Redis must be running before backup.'
-    run_operation "$SCRIPT_DIRECTORY/operations/backup-redis.sh" "$@"
+    run_operation "$SCRIPT_DIRECTORY/operations/backup-links.sh" "$@"
     ;;
   restore)
     [ "$short_links_enabled" = true ] || fail 'restore requires SHORT_LINKS_ENABLED=true.'
     [ "$#" -eq 3 ] && [ "$1" = --backup ] && [ "$3" = --confirm-stop-writes ] \
-      || fail 'usage: subweb.sh restore --backup /absolute/path.rdb --confirm-stop-writes'
+      || fail 'usage: subweb.sh restore --backup /absolute/path.db --confirm-stop-writes'
     case "$2" in
       /*) ;;
       *) fail 'restore backup must be an absolute path.' ;;
     esac
     [ -f "$2" ] && [ ! -L "$2" ] || fail 'restore backup must be a regular file and not a symlink.'
-    run_operation "$SCRIPT_DIRECTORY/operations/restore-redis.sh" --backup "$2" --confirm-stop-writes
+    run_operation "$SCRIPT_DIRECTORY/operations/restore-links.sh" --backup "$2" --confirm-stop-writes
     ;;
   upgrade)
      [ "$#" -eq 0 ] || fail 'upgrade does not accept extra arguments.'
@@ -246,11 +244,7 @@ case "$command_name" in
      ENV_FILE=$upgrade_env_file
      export SUBWEB_ENV_FILE="$ENV_FILE"
       validate_compose
-    if [ "$short_links_enabled" = true ]; then
-      compose pull gateway subconverter myurls redis
-    else
-      compose pull gateway subconverter
-    fi
+    compose pull gateway subconverter
     compose up -d --no-build --pull never --remove-orphans --wait
     # Docker seeds a named volume from the image only while that volume is
     # empty, so an upgraded SubConverter keeps the previous image's /base tree

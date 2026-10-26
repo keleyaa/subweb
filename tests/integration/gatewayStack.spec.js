@@ -6,9 +6,6 @@ const root = new URL('../../', import.meta.url).pathname;
 const verifier = new URL('../../scripts/verify-integrated-stack.sh', import.meta.url).pathname;
 const testCompose = new URL('../../compose.test.yaml', import.meta.url).pathname;
 const unifiedVerifier = new URL('../../scripts/verify-unified-stack.sh', import.meta.url).pathname;
-const fixtureCompose = new URL('../../compose.fixture.yaml', import.meta.url).pathname;
-const fixtureDockerfile = new URL('../../tests/fixtures/conversion-upstream/Dockerfile', import.meta.url).pathname;
-const fixtureSource = new URL('../../tests/fixtures/conversion-upstream/main.go', import.meta.url).pathname;
 
 describe('unified Docker Gateway stack entrypoint', () => {
   it.each([
@@ -41,14 +38,11 @@ describe('unified Docker Gateway stack entrypoint', () => {
       'request app.test',
       'request api.app.test',
       'request short.test',
-      'application/manifest+json',
-      'CUSTOM_BACKEND_ENABLED=false',
-      'Authorization',
-      'X-Forwarded-For',
-      'myurls',
+      'short-api/links',
+      'short.test',
       'subconverter',
       'gateway',
-      'redis',
+      'disabled profile',
     ]) {
       expect(source).toContain(contract);
     }
@@ -62,34 +56,18 @@ describe('unified Docker Gateway stack entrypoint', () => {
     }
   });
 
-  it('keeps the published production MyUrls image contract for the unified stack', async () => {
-    const source = await readFile(testCompose, 'utf8');
-
-    expect(source).toContain('NODE_ENV: production');
-    expect(source).toContain('TURNSTILE_MODE: cloudflare');
-    expect(source).toContain('CREATE_DIRECT_LIMIT_10M: "5"');
-    expect(source).not.toContain('TURNSTILE_MODE: test');
-    expect(source).not.toContain('TEST_STORE');
-  });
-
-  it('uses an isolated fixture profile for deterministic dependency-boundary limits', async () => {
-    const [compose, dockerfile, source, verifierSource] = await Promise.all([
-      readFile(fixtureCompose, 'utf8'),
-      readFile(fixtureDockerfile, 'utf8'),
-      readFile(fixtureSource, 'utf8'),
-      readFile(unifiedVerifier, 'utf8'),
+  it('keeps the embedded short-link contract for the unified stack', async () => {
+    const [production, test] = await Promise.all([
+      readFile(new URL('../../compose.yaml', import.meta.url), 'utf8'),
+      readFile(testCompose, 'utf8'),
     ]);
 
-    expect(compose).toContain('subconverter:');
-    expect(compose).toContain('CONVERSION_REQUEST_TIMEOUT_MS: "400"');
-    expect(compose).toContain('CONVERSION_DNS_TIMEOUT_MS: "100"');
-    expect(compose).toContain('CONVERSION_EGRESS_CONNECT_TIMEOUT_MS: "200"');
-    expect(compose).toContain('CONVERSION_MAX_RESPONSE_BYTES: "1024"');
-    expect(dockerfile).toContain('golang:1.27-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d');
-    expect(source).toContain('fixture://echo');
-    expect(source).toContain('fixture://slow');
-    expect(source).toContain('fixture://large');
-    expect(verifierSource).toContain('fixture_node_uri');
+    expect(production).toContain('SHORT_LINK_DB_PATH: /data/links.db');
+    expect(production).toContain('TURNSTILE_ENABLED: "true"');
+    expect(production).not.toContain('MYURLS_UPSTREAM');
+    expect(production).not.toContain('REDIS_URL');
+    expect(test).toContain('TURNSTILE_ENABLED: "false"');
+    expect(test).not.toContain('TEST_STORE');
   });
 
   it('generates a local SubConverter default external config instead of a bundled or remote one', async () => {

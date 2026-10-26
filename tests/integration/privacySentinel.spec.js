@@ -1,42 +1,17 @@
-import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
-const root = new URL('../../', import.meta.url).pathname;
-const verifier = new URL('../../scripts/verify-redis-operations.sh', import.meta.url).pathname;
-const dockerIntegrationEnabled = process.env.RUN_DOCKER_INTEGRATION === '1';
+const unifiedVerifier = new URL('../../scripts/verify-unified-stack.sh', import.meta.url).pathname;
 
 describe('integrated stack privacy sentinel', () => {
-  it('scans every service log without printing sensitive values', async () => {
-    const source = await readFile(verifier, 'utf8');
+  it('scans service logs for secrets without printing sensitive values', async () => {
+    const source = await readFile(unifiedVerifier, 'utf8');
 
-    for (const service of ['gateway', 'myurls', 'subconverter', 'redis']) {
-      expect(source).toContain(service);
-    }
+    expect(source).toContain('docker compose logs --no-log-prefix gateway');
+    expect(source).toContain('$ip_hash_secret');
     expect(source).toContain('umask 077');
-    expect(source).toContain('REDISCLI_AUTH');
-    expect(source).toContain('subconverter_runs_as_101');
-    expect(source).toContain('run_docker_environment docker compose --env-file "$env_file"');
-    expect(source).not.toContain('COMPOSE_ENV_FILES');
-    expect(source).not.toMatch(/printf[^\n]*"\$(?:sentinel_value|secret_value|password|ip_hash_secret)"/i);
-    expect(source).not.toMatch(/set\s+-x/);
+    expect(source).not.toMatch(/set\s+-x/u);
+    expect(source).not.toMatch(/printf[^\n]*"\$(?:sentinel_value|secret_value|password|ip_hash_secret)"/iu);
+    expect(source).not.toContain('REDISCLI_AUTH');
   });
-
-  it.skipIf(!dockerIntegrationEnabled)(
-    'keeps the subscription sentinel and internal token out of all service logs and output',
-    () => {
-      const result = spawnSync('sh', [verifier], {
-        cwd: root,
-        encoding: 'utf8',
-        timeout: 12 * 60 * 1000,
-        maxBuffer: 1024 * 1024,
-      });
-
-      expect(result.status, result.stderr).toBe(0);
-      expect(`${result.stdout}\n${result.stderr}`).toContain(
-        'Unified Redis backup, restore, and service recovery verification passed.',
-      );
-    },
-    12 * 60 * 1000,
-  );
 });

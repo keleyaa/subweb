@@ -158,7 +158,7 @@ case "$backup" in
     [ "$identity_permissions" = 600 ] || fail 'AGE_IDENTITY_FILE must be mode 0600.'
     command -v age >/dev/null 2>&1 || fail 'age is required for encrypted backup verification.'
     validate_backup_destination
-    verified_backup=$verification_directory/decrypted.rdb
+    verified_backup=$verification_directory/decrypted.db
     age --decrypt --identity "$AGE_IDENTITY_FILE" -o "$verified_backup" "$backup_snapshot" \
       || fail 'unable to decrypt backup.'
     [ -f "$verified_backup" ] && [ ! -L "$verified_backup" ] \
@@ -177,5 +177,5 @@ current_verified_backup_identity=$(backup_file_identity "$verified_backup") \
 [ "$current_verified_backup_identity" = "$verified_backup_identity" ] \
   || fail 'verified backup changed before it could be bound into Docker.'
 COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-subweb} \
-  "$PROJECT_ROOT/scripts/operations/verify-redis-backup.sh" --backup "$verified_backup"
-printf 'Redis backup restore verification passed: %s\n' "$backup"
+  "$PROJECT_ROOT/scripts/operations/verify-links-backup.sh" --backup "$verified_backup"
+printf 'Short-link backup verification passed: %s\n' "$backup"

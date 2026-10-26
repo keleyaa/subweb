@@ -20,7 +20,6 @@ node_modules
 .runtime/
 /.runtime/local/
 runtime-config/
-redis-data/
 *.pem
 *.key
 # local env files
@@ -45,3 +44,6 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# Local Go build output
+services/gateway/gateway

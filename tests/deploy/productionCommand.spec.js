@@ -198,7 +198,7 @@ exec /bin/rm "$@"
     await writeFile(envFile, 'SHORT_LINKS_ENABLED=true\n', { mode: 0o600 });
     await writeFile(backup, 'verified backup');
     await mkdir(operationsDirectory, { recursive: true });
-    for (const name of ['backup-redis.sh', 'restore-redis.sh']) {
+    for (const name of ['backup-links.sh', 'restore-links.sh']) {
       await writeFile(join(operationsDirectory, name), `#!/bin/sh
 printf '%s compose=%s snapshot=%s project=%s app=%s api=%s image=%s\\n' \\
   "$(basename "$0")" "\${COMPOSE_FILE-}" "\${SUBWEB_ENV_FILE-}" \\
@@ -224,8 +224,8 @@ printf '%s compose=%s snapshot=%s project=%s app=%s api=%s image=%s\\n' \\
     expect(backupResult.status, backupResult.stderr).toBe(0);
     expect(restoreResult.status, restoreResult.stderr).toBe(0);
     const log = await readFile(operationLog, 'utf8');
-    expect(log).toMatch(/backup-redis\.sh compose=compose\.yaml snapshot=\S*subweb-env\.\S+ project= app= api= image=\n/u);
-    expect(log).toMatch(/restore-redis\.sh compose=compose\.yaml snapshot=\S*subweb-env\.\S+ project= app= api= image=\n/u);
+    expect(log).toMatch(/backup-links\.sh compose=compose\.yaml snapshot=\S*subweb-env\.\S+ project= app= api= image=\n/u);
+    expect(log).toMatch(/restore-links\.sh compose=compose\.yaml snapshot=\S*subweb-env\.\S+ project= app= api= image=\n/u);
   });
 
   it('clears inherited locked external image variables before invoking Compose', async () => {

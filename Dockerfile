@@ -6,7 +6,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM golang:1.27-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS gateway-build
+FROM golang:1.27-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS gateway-build
 
 RUN apk add --no-cache ca-certificates tzdata
 
@@ -17,6 +17,8 @@ RUN go mod download
 COPY services/gateway .
 RUN go test ./...
 RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/gateway ./cmd/gateway
+# The short-link SQLite volume inherits this directory's ownership on first use.
+RUN mkdir -p /out/data
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 
@@ -29,6 +31,7 @@ COPY --from=frontend-build --chown=65532:65532 /app/dist /app/dist
 COPY --from=gateway-build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=gateway-build /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=gateway-build --chown=65532:65532 /out/gateway /app/gateway
+COPY --from=gateway-build --chown=65532:65532 /out/data /data
 
 USER 65532:65532
 WORKDIR /app
