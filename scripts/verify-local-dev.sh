@@ -14,8 +14,10 @@ export SUBWEB_LOCAL_PROJECT_NAME="subweb-local-verify-$(openssl rand -hex 6)"
 SUBWEB_LOCAL_PROJECT_NAME="$SUBWEB_LOCAL_PROJECT_NAME" \
   "$script_directory/local/select-test-network.sh" >/dev/null
 create_body=
+vite_log=
 cleanup() {
   [ -z "$create_body" ] || rm -f "$create_body"
+  [ -z "$vite_log" ] || rm -f "$vite_log"
   if [ -n "${vite_pid:-}" ]; then
     pkill -P "$vite_pid" >/dev/null 2>&1 || true
     kill "$vite_pid" >/dev/null 2>&1 || true
@@ -24,6 +26,17 @@ cleanup() {
   COMPOSE_PROJECT_NAME="$SUBWEB_LOCAL_PROJECT_NAME" "$script_directory/local/deps.sh" remove-volumes >/dev/null 2>&1 || true
 }
 trap cleanup EXIT HUP INT TERM
+
+dump_diagnostics() {
+  printf '%s\n' "local diagnostics: $1" >&2
+  if [ -n "$vite_log" ] && [ -f "$vite_log" ]; then
+    printf '%s\n' '--- vite log ---' >&2
+    tail -30 "$vite_log" >&2 || true
+  fi
+  printf '%s\n' '--- gateway log ---' >&2
+  docker logs --tail 40 "${SUBWEB_LOCAL_PROJECT_NAME}-gateway-1" >&2 2>&1 || true
+}
+
 "$script_directory/local/deps.sh" up
 
 # Pick a free port unless the caller pins one, so a stale dev server cannot
@@ -41,11 +54,19 @@ server.listen(0, "127.0.0.1", () => {
 ') || { printf '%s\n' 'Unable to reserve a local Vite port.' >&2; exit 1; }
 fi
 local_subweb_port=${LOCAL_SUBWEB_PORT:-18081}
+vite_log=$(mktemp "${TMPDIR:-/tmp}/subweb-local-vite.XXXXXX") \
+  || { printf '%s\n' 'Unable to create a temporary Vite log file.' >&2; exit 1; }
 cd "$project_root"
 VITE_LOCAL_SUBCONVERTER_URL="http://127.0.0.1:$local_subweb_port" \
 LOCAL_SUBWEB_PORT="$local_subweb_port" \
-  ./node_modules/.bin/vite --host 127.0.0.1 --port "$local_vite_port" --strictPort >/dev/null 2>&1 &
+  ./node_modules/.bin/vite --host 127.0.0.1 --port "$local_vite_port" --strictPort >"$vite_log" 2>&1 &
 vite_pid=$!
+
+direct_status=$(curl --connect-timeout 5 --max-time 15 \
+  --silent --output /dev/null --write-out '%{http_code}' \
+  -H 'Host: app.local.test' "http://127.0.0.1:$local_subweb_port/healthz")
+[ "$direct_status" = 200 ] \
+  || { dump_diagnostics "gateway health probe returned $direct_status"; exit 1; }
 
 http_connect_timeout_seconds=5
 http_max_time_seconds=15
@@ -78,7 +99,7 @@ process.stdout.write(payload.code);
   fi
   attempt=$((attempt + 1))
   [ "$attempt" -lt 20 ] \
-    || { printf 'Short-link creation did not succeed (last status %s).\n' "$create_status" >&2; exit 1; }
+    || { dump_diagnostics "short-link creation returned $create_status"; exit 1; }
   sleep 0.5
 done
 
