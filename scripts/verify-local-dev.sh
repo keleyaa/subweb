@@ -11,8 +11,6 @@ unset \
   SUBCONVERTER_IMAGE \
   SHORT_LINK_DB_PATH SHORT_LINK_TTL_SECONDS
 export SUBWEB_LOCAL_PROJECT_NAME="subweb-local-verify-$(openssl rand -hex 6)"
-SUBWEB_LOCAL_PROJECT_NAME="$SUBWEB_LOCAL_PROJECT_NAME" \
-  "$script_directory/local/select-test-network.sh" >/dev/null
 create_body=
 vite_log=
 cleanup() {
@@ -33,6 +31,9 @@ dump_diagnostics() {
     printf '%s\n' '--- vite log ---' >&2
     tail -30 "$vite_log" >&2 || true
   fi
+  printf '%s\n' '--- compose ps ---' >&2
+  COMPOSE_PROJECT_NAME=$SUBWEB_LOCAL_PROJECT_NAME docker compose \
+    --env-file "$project_root/.runtime/local/compose.env" ps >&2 2>&1 || true
   printf '%s\n' '--- gateway log ---' >&2
   docker logs --tail 40 "${SUBWEB_LOCAL_PROJECT_NAME}-gateway-1" >&2 2>&1 || true
 }
@@ -62,11 +63,16 @@ LOCAL_SUBWEB_PORT="$local_subweb_port" \
   ./node_modules/.bin/vite --host 127.0.0.1 --port "$local_vite_port" --strictPort >"$vite_log" 2>&1 &
 vite_pid=$!
 
+published_gateway=$(COMPOSE_PROJECT_NAME=$SUBWEB_LOCAL_PROJECT_NAME docker compose \
+  --env-file "$project_root/.runtime/local/compose.env" port gateway 8080 || true)
+[ "$published_gateway" = "127.0.0.1:$local_subweb_port" ] \
+  || { dump_diagnostics "gateway published ${published_gateway:-nothing} instead of 127.0.0.1:$local_subweb_port"; exit 1; }
+
 direct_status=$(curl --connect-timeout 5 --max-time 15 \
   --silent --output /dev/null --write-out '%{http_code}' \
-  -H 'Host: app.local.test' "http://127.0.0.1:$local_subweb_port/healthz")
+  -H 'Host: app.local.test' "http://127.0.0.1:$local_subweb_port/healthz" || true)
 [ "$direct_status" = 200 ] \
-  || { dump_diagnostics "gateway health probe returned $direct_status"; exit 1; }
+  || { dump_diagnostics "gateway health probe returned ${direct_status:-unreachable}"; exit 1; }
 
 http_connect_timeout_seconds=5
 http_max_time_seconds=15

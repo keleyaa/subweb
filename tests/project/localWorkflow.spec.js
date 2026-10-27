@@ -40,7 +40,6 @@ describe('Compose-first local workflow contract', () => {
 
     expect(verifier).toContain(isolationBlock);
     expect(verifier).toContain('export SUBWEB_LOCAL_PROJECT_NAME="subweb-local-verify-$(openssl rand -hex 6)"');
-    expect(verifier).toContain('"$script_directory/local/select-test-network.sh" >/dev/null');
     expect(verifier).not.toContain('MYURLS_IMAGE');
     expect(verifier).not.toContain('REDIS_IMAGE');
     expect(common).toContain('export SUBCONVERTER_IMAGE="$local_subconverter_image"');

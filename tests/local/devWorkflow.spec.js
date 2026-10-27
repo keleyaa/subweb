@@ -26,7 +26,9 @@ describe('Compose-first local development workflow', () => {
     expect(common).toContain('export LOCAL_VITE_PORT="$local_vite_port"');
     expect(common).toContain('temporary_env=$local_env_file.tmp.$$');
     expect(common).toContain('API_URL=http://127.0.0.1:$local_subweb_port');
-    expect(dependencies).toContain('docker compose up -d --build --remove-orphans --wait gateway subconverter');
+    expect(dependencies).toMatch(
+      /docker compose --env-file "\$local_env_file" up -d --build --remove-orphans --wait gateway subconverter/u,
+    );
     expect(override).toContain('TURNSTILE_ENABLED: "false"');
     expect(dependencies).toContain('Local dependencies are ready.');
     expect(vite).toContain('Number.isInteger(localGatewayPortNumber)');
@@ -129,7 +131,7 @@ printf '%s\\n' \\
     const dependencies = await read('scripts/local/deps.sh');
 
     const stopBranch = dependencies.slice(dependencies.indexOf('  down)'));
-    expect(stopBranch).toContain('docker compose stop gateway subconverter');
+    expect(stopBranch).toContain('docker compose --env-file "$local_env_file" stop gateway subconverter');
     expect(stopBranch).not.toContain('down --volumes');
     expect(stopBranch).not.toContain('volume rm');
   });
@@ -142,8 +144,8 @@ printf '%s\\n' \\
 
     expect(verifier).toContain('"$script_directory/local/deps.sh" remove-volumes');
     expect(dependencies).toContain('remove-volumes)');
-    expect(dependencies).toContain('docker compose down --remove-orphans');
-    expect(dependencies).toContain('docker compose down --volumes --remove-orphans');
+    expect(dependencies).toContain('docker compose --env-file "$local_env_file" down --remove-orphans');
+    expect(dependencies).toContain('docker compose --env-file "$local_env_file" down --volumes --remove-orphans');
     expect(dependencies).toContain('remove-volumes is restricted to verifier-owned projects.');
   });
 });
